@@ -39,10 +39,10 @@ function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: 
         <div className="card" style={{ maxWidth: 460, width: '100%', padding: 32, textAlign: 'center' }}>
           <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 20px' }} />
           <h2 style={{ margin: '0 0 12px', fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))', letterSpacing: '-0.01em' }}>
-            No tienes un contrato asignado
+            No tiene un contrato asignado
           </h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-            Actualmente no tienes un contrato asignado para seguimiento. Cuando Gestión te asigne uno, la información aparecerá aquí.
+            Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la información aparecerá aquí.
           </p>
           <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--text-muted)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
@@ -114,7 +114,7 @@ export default function SupervisorPanel({
 
   useEffect(() => {
     if (newContractNotif) {
-      setChatMsgs(prev => [...prev, { role: 'ai', text: 'Gestión acaba de asignar un nuevo contrato. Revisa la pestaña Alertas para ver los detalles.' }])
+      setChatMsgs(prev => [...prev, { role: 'ai', text: 'Gestión asignó un nuevo contrato. Revise la pestaña Alertas para ver los detalles.' }])
     }
   }, [newContractNotif])
 
@@ -233,7 +233,7 @@ export default function SupervisorPanel({
     const lower = text.toLowerCase()
     const match = CHAT_RESPONSES.find(([k]) => lower.includes(k))
     setTimeout(() => {
-      setChatMsgs(prev => [...prev, { role: 'ai', text: match ? match[1] : `Entendido. Si tienes preguntas sobre el contrato ${contrato?.numeroContrato ?? ''}, estoy aquí para ayudarte.` }])
+      setChatMsgs(prev => [...prev, { role: 'ai', text: match ? match[1] : `Entendido. Si tiene preguntas sobre el contrato ${contrato?.numeroContrato ?? ''}, estoy a su disposición para ayudarle.` }])
     }, 600)
   }
 
@@ -242,7 +242,7 @@ export default function SupervisorPanel({
     const lower = q.toLowerCase()
     const match = CHAT_RESPONSES.find(([k]) => lower.includes(k))
     setTimeout(() => {
-      setChatMsgs(prev => [...prev, { role: 'ai', text: match ? match[1] : `Estoy aquí para ayudarte con el contrato ${contrato?.numeroContrato ?? ''}.` }])
+      setChatMsgs(prev => [...prev, { role: 'ai', text: match ? match[1] : `Estoy a su disposición para ayudarle con el contrato ${contrato?.numeroContrato ?? ''}.` }])
     }, 500)
   }
 
@@ -553,7 +553,7 @@ export default function SupervisorPanel({
                 <span style={{ color: 'var(--text-muted)', fontSize: 14, paddingTop: 8, fontFamily: 'var(--font-mono)' }}>+</span>
                 <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') sendChat() }}
-                  placeholder="Escribe una orden o pregunta a la IA..."
+                  placeholder="Escriba una orden o pregunta a la IA..."
                   style={{ flex: 1, padding: '8px 12px' }} />
                 <button className="btn-green" onClick={sendChat} style={{ padding: '8px 14px', fontSize: 13 }}>→</button>
               </div>
@@ -570,7 +570,7 @@ export default function SupervisorPanel({
               <AlertCard
                 severity="info"
                 title="Nuevo contrato asignado"
-                desc="Gestión asignó un nuevo contrato. Revisa el Panel Principal para ver los detalles actualizados."
+                desc="Gestión asignó un nuevo contrato. Revise el Panel Principal para ver los detalles actualizados."
                 onAction={undefined}
               />
             )}
@@ -713,7 +713,7 @@ function ProminentAlerts({ alerts, blink, onDismiss, onResolve }: {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontWeight: 800, fontSize: 16,
         }}>✓</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>Al día</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>Sin alertas pendientes</div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
           Sin alertas activas en este contrato
         </div>

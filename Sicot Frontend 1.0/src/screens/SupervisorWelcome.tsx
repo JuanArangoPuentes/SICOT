@@ -30,7 +30,7 @@ export default function SupervisorWelcome({ contrato, onVerContrato, onTutorial 
             <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 16px' }} />
             <h2 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))', letterSpacing: '-0.01em' }}>Bienvenido a SICOT.</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 16px' }}>
-              Tienes un contrato asignado — te acompañaré paso a paso en su ejecución.
+              Tiene un contrato asignado — le acompañaré paso a paso en su ejecución.
             </p>
             <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 13, color: 'var(--accent-tech)', fontFamily: 'var(--font-mono)', letterSpacing: '0.03em' }}>
               {contrato.numeroContrato}
@@ -64,9 +64,9 @@ export default function SupervisorWelcome({ contrato, onVerContrato, onTutorial 
         </span>
         <div className="card" style={{ maxWidth: 420, width: '100%', padding: 28, textAlign: 'center' }}>
           <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 16px' }} />
-          <h2 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))', letterSpacing: '-0.01em' }}>No tienes un contrato asignado</h2>
+          <h2 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))', letterSpacing: '-0.01em' }}>No tiene un contrato asignado</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 20px' }}>
-            Actualmente no tienes un contrato asignado para seguimiento. Cuando Gestión te asigne uno, la información aparecerá aquí.
+            Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la información aparecerá aquí.
           </p>
           <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--text-muted)' }}>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>

@@ -38,7 +38,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
   const attempt = async () => {
     if (busy) return
     const correo = email.trim().toLowerCase()
-    if (!correo || !password) { setError('Ingresa correo y contraseña.'); return }
+    if (!correo || !password) { setError('Ingrese correo y contraseña.'); return }
     setBusy(true)
     setError('')
     try {
@@ -262,9 +262,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
           {/* Help link */}
           <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <button disabled title="Contacta a la Unidad de Gestión Contractual para restablecer tu contraseña"
+            <button disabled title="Contacte a la Unidad de Gestión Contractual para restablecer su contraseña"
               style={{ background: 'none', border: 'none', color: s.textMuted, fontSize: 12, cursor: 'not-allowed', textDecoration: 'underline', opacity: 0.65 }}>
-              ¿Olvidaste tu contraseña?
+              ¿Olvidó su contraseña?
             </button>
           </div>
 

@@ -238,8 +238,8 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
           {contratos.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
               <IconClipboardList size={26} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no tienes contratos registrados</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carga una ficha de contrato para que el Copiloto la procese automáticamente.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no tiene contratos registrados</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargue una ficha de contrato para que el Copiloto la procese automáticamente.</div>
             </div>
           )}
           {/* Data rows */}
@@ -278,12 +278,12 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
                   onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                   <IconFileText size={34} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
                   <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
-                    Haz clic para seleccionar el documento<br />
+                    Haga clic para seleccionar el documento<br />
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF, DOCX — max 20 MB</span>
                   </p>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
-                  Nota: en el prototipo la lectura se simula con datos de ejemplo precargados.
+                  Nota: la lectura automática del documento estará disponible en una fase posterior del sistema; los datos que se muestran a continuación corresponden a un ejemplo precargado.
                 </p>
               </div>
             )}
@@ -349,7 +349,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
             {uploadState === 'review' && (
               <div>
                 <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, fontSize: 13, color: 'var(--accent)' }}>
-                  ✓ Documento analizado. Revisa, corrige y confirma los datos extraídos.
+                  ✓ Documento analizado. Revise, corrija y confirme los datos extraídos.
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[
@@ -419,7 +419,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
             {uploadState === 'done' && (
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
                 <IconCheckCircle size={44} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
-                <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>¡Contrato asignado!</p>
+                <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>Contrato asignado.</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
                   {tipo} · {centro.split(' — ')[0]} — {lastProcessedContract?.supervisor ?? '—'} ha sido notificado.
                 </p>

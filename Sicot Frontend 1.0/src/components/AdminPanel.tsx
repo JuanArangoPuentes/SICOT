@@ -72,6 +72,17 @@ const randomPassword = () => {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
+// Codifica las credenciales en la URL de una página estática (public/credenciales.html)
+// que las decodifica y las muestra en el dispositivo que escanea el QR — nunca pasan por
+// un servidor (van en el fragmento #, que el navegador no envía en las peticiones HTTP).
+const buildCredencialesUrl = (data: { nombre: string; correo: string; password: string; rol: string }) => {
+  const payload = JSON.stringify({ ...data, generadoEn: new Date().toISOString() })
+  const bytes = new TextEncoder().encode(payload)
+  let binary = ''
+  bytes.forEach(b => { binary += String.fromCharCode(b) })
+  return `${window.location.origin}/credenciales.html#${btoa(binary)}`
+}
+
 type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
 
 export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usuario: AuthResponse; onLogout: () => void; onOpenSettings: () => void }) {
@@ -179,7 +190,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
               <div style={{ height: 260 }}>
                 {ACTIVIDAD.length === 0 ? (
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '0 20px' }}>
-                    Aquí verás tus estadísticas cuando tengas contratos activos.
+                    Las estadísticas se mostrarán en este panel cuando existan contratos activos.
                   </div>
                 ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -217,7 +228,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                 <div style={{ padding: '40px 16px', textAlign: 'center' }}>
                   <IconClipboardList size={28} style={{ opacity: 0.4, margin: '0 auto 10px' }} />
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no hay formatos cargados</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usa "+ Cargar formato" para subir los formatos oficiales (PDF, DOCX o XLSX).</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Utilice "+ Cargar formato" para cargar los formatos oficiales (PDF, DOCX o XLSX).</div>
                 </div>
               )}
               {formatos.map(f => (
@@ -295,7 +306,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                 <div style={{ padding: '40px 16px', textAlign: 'center' }}>
                   <IconSignature size={26} style={{ opacity: 0.4, margin: '0 auto 10px', color: 'var(--text-muted)' }} />
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no hay firmas asignadas</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usa "+ Asignar firma" o el botón "Asignar firma" en Gestión de Usuarios.</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Utilice "+ Asignar firma" o el botón "Asignar firma" en Gestión de Usuarios.</div>
                 </div>
               )}
               {firmas.map(f => (
@@ -514,7 +525,8 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
         }
         setEnviandoCorreo(false)
       } else if (entrega === 'qr') {
-        setQrDataUrl(await QRCode.toDataURL(`SICOT\nCorreo: ${creado.email}\nContraseña temporal: ${pw}`, { width: 190, margin: 1 }))
+        const url = buildCredencialesUrl({ nombre: creado.nombre, correo: creado.email, password: pw, rol: ROL_LABEL[creado.rol] })
+        setQrDataUrl(await QRCode.toDataURL(url, { width: 190, margin: 1 }))
       }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo crear el usuario.')
@@ -553,17 +565,17 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
               border: `1px solid ${enviandoCorreo ? 'var(--border)' : envioCorreo?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
             }}>
               {enviandoCorreo && 'Enviando correo…'}
-              {!enviandoCorreo && envioCorreo?.enviado && `Correo enviado de verdad a ${usuarioCreado.email}.`}
+              {!enviandoCorreo && envioCorreo?.enviado && `Correo enviado a ${usuarioCreado.email}.`}
               {!enviandoCorreo && envioCorreo && !envioCorreo.enviado && (
-                <>No se pudo enviar el correo: {envioCorreo.error}. Copiá la contraseña de abajo y compartila manualmente.</>
+                <>No fue posible enviar el correo: {envioCorreo.error}. Copie la contraseña que aparece a continuación y compártala de forma manual.</>
               )}
             </div>
           )}
 
           {entrega === 'whatsapp' && (
             <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left', background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-              El envío automático por WhatsApp/SMS todavía no está disponible. Copiá la contraseña de
-              abajo y compartila vos por WhatsApp/SMS a {tel || 'el número indicado'}.
+              El envío automático por WhatsApp/SMS aún no está disponible. Copie la contraseña que
+              aparece a continuación y compártala manualmente por WhatsApp o SMS al número {tel || 'indicado'}.
             </div>
           )}
 
@@ -571,8 +583,8 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
             <div style={{ marginTop: 14, textAlign: 'center' }}>
               {qrDataUrl
                 ? <img src={qrDataUrl} alt="Código QR con las credenciales" width={190} height={190} style={{ margin: '0 auto', borderRadius: 8, display: 'block' }} />
-                : <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generando QR…</p>}
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Escaneá o hacé una captura de pantalla — el QR es real, generado en el momento.</p>
+                : <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generando código QR…</p>}
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Escanee el código o guarde la imagen — al abrirlo se muestra una página con las credenciales de acceso.</p>
             </div>
           )}
 
@@ -581,7 +593,7 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
           </div>
 
           <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }} onClick={cerrar}>
-            Listo
+            Aceptar
           </button>
         </div>
       </Modal>
@@ -729,7 +741,7 @@ function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: 
             Cuenta: {creada.usuarioNombre} ({creada.usuarioEmail})
           </p>
           <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 18 }} onClick={confirmar}>
-            Listo
+            Aceptar
           </button>
         </div>
       )}

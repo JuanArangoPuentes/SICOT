@@ -83,25 +83,25 @@ export const STEPS_INITIAL: Step[] = [
 ]
 
 export const TUTORIAL: Record<string, string> = {
-  welcome: `Este es tu panel de supervisión. Cuando se te asigne un contrato, aquí verás las etapas del proceso GCCON-P-010 y el paso activo que te corresponde. Haz clic en cada etapa para ver el detalle y comenzar.`,
-  '3.1': 'GCCON-P-010 · Etapa Inspección: Ve a bodega y verifica físicamente que todos los materiales del contrato hayan llegado. Revisa el estado de embalaje y registra novedades. Cuando termines, haz clic en "Marcar completado".',
-  '3.2': 'Carga las fotos de bodega con georreferenciación activa. Documenta cada caja o pallet. Las imágenes quedarán como evidencia formal en el expediente SIGEP. Cuando termines, haz clic en "Marcar completado".',
-  '3.3': 'Compara la cantidad y calidad recibida contra la ficha técnica del contrato. Anota cualquier discrepancia — afectará el Informe de Supervisión GCCON-F-031. Cuando termines, haz clic en "Marcar completado".',
-  '3.4': 'Ya generé el Informe de Supervisión GCCON-F-031 con los datos verificados en los pasos anteriores — cantidades, estado, fechas y número de contrato incluidos. Solo necesito tu firma electrónica para registrarlo oficialmente. Haz clic en "Firmar documento".',
-  step3done: '¡Excelente! Completaste el Paso 3 — Inspección. El Informe GCCON-F-031 quedó firmado y registrado en el expediente. Ahora avanzamos al Paso 4: Recepción formal con el Acta GIL-F-010.',
+  welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá las etapas del proceso GCCON-P-010 y el paso activo que le corresponde. Haga clic en cada etapa para ver el detalle y comenzar.`,
+  '3.1': 'GCCON-P-010 · Etapa Inspección: Diríjase a bodega y verifique físicamente que todos los materiales del contrato hayan llegado. Revise el estado de embalaje y registre las novedades. Cuando termine, haga clic en "Marcar completado".',
+  '3.2': 'Cargue las fotos de bodega con georreferenciación activa. Documente cada caja o pallet. Las imágenes quedarán como evidencia formal en el expediente SIGEP. Cuando termine, haga clic en "Marcar completado".',
+  '3.3': 'Compare la cantidad y calidad recibida contra la ficha técnica del contrato. Anote cualquier discrepancia — afectará el Informe de Supervisión GCCON-F-031. Cuando termine, haga clic en "Marcar completado".',
+  '3.4': 'Ya generé el Informe de Supervisión GCCON-F-031 con los datos verificados en los pasos anteriores — cantidades, estado, fechas y número de contrato incluidos. Solo necesito su firma electrónica para registrarlo oficialmente. Haga clic en "Firmar documento".',
+  step3done: 'Ha completado el Paso 3 — Inspección. El Informe GCCON-F-031 quedó firmado y registrado en el expediente. Ahora avanzamos al Paso 4: Recepción formal con el Acta GIL-F-010.',
 }
 
 export const CHAT_RESPONSES: Array<[string, string]> = [
   ['cómo crear un contrato', 'El rol de Gestión carga la ficha del contrato desde su panel. El Copiloto extrae los datos automáticamente y los asigna al Supervisor designado.'],
-  ['qué documentos necesito', 'Para el Paso 3 activo (Inspección) necesitas verificar la entrega física, cargar evidencia fotográfica y comparar con la ficha técnica. Yo genero el Informe GCCON-F-031 automáticamente; tú solo lo firmas.'],
-  ['iniciar paso 1', 'Los Pasos 1 y 2 ya están completados — incluyen estudios previos, suscripción SECOP II, designación de supervisor y el Acta de Inicio GCCON-F-018 que ya firmaste.'],
+  ['qué documentos necesito', 'Para el Paso 3 activo (Inspección) necesita verificar la entrega física, cargar evidencia fotográfica y comparar con la ficha técnica. Yo genero el Informe GCCON-F-031 automáticamente; usted solo lo firma.'],
+  ['iniciar paso 1', 'Los Pasos 1 y 2 ya están completados — incluyen estudios previos, suscripción SECOP II, designación de supervisor y el Acta de Inicio GCCON-F-018 que ya firmó.'],
   ['cómo conectar secop', 'La publicación en SECOP II corresponde a la Unidad de Contratación. El botón "Conectar SECOP II" en la barra superior está disponible para consultar el estado del contrato.'],
   ['gccon-m-002', 'El GCCON-M-002 es el Manual de Supervisión e Interventoría del SENA. Define las responsabilidades del supervisor en cada etapa del contrato: Inicio, Inspección, Recepción, Certificación y Cierre.'],
   ['gccon-f-018', 'El GCCON-F-018 es el Acta de Inicio del Contrato. Ya está firmada (Paso 2, sub-paso 2.7) — el Copiloto la generó con los datos del contratista, fechas y alcance.'],
-  ['gil-f-010', 'El GIL-F-010 es el Acta de Recibo a Satisfacción de Bienes. La genero automáticamente con los datos del Paso 4 — tú solo la firmas en el subpaso 4.3.'],
-  ['gccon-f-031', 'El GCCON-F-031 es el Informe de Supervisión Unificado. Lo genero automáticamente con el resultado de la inspección (Paso 3) — tú solo firmas en el subpaso 3.4.'],
-  ['esucon', 'El ESUCON es el Certificado del Supervisor de Contratación. Lo genero junto con el Oficio SCM en el Paso 5 (Certificación) — tú solo firmas el subpaso 5.3.'],
-  ['gccon-f-030', 'El GCCON-F-030 es el Acta de Liquidación del Contrato. La genero en el Paso 6 (Cierre) con los valores finales, deducciones y cumplimiento — tú firmas en el subpaso 6.3.'],
+  ['gil-f-010', 'El GIL-F-010 es el Acta de Recibo a Satisfacción de Bienes. La genero automáticamente con los datos del Paso 4 — usted solo la firma en el subpaso 4.3.'],
+  ['gccon-f-031', 'El GCCON-F-031 es el Informe de Supervisión Unificado. Lo genero automáticamente con el resultado de la inspección (Paso 3) — usted solo firma en el subpaso 3.4.'],
+  ['esucon', 'El ESUCON es el Certificado del Supervisor de Contratación. Lo genero junto con el Oficio SCM en el Paso 5 (Certificación) — usted solo firma el subpaso 5.3.'],
+  ['gccon-f-030', 'El GCCON-F-030 es el Acta de Liquidación del Contrato. La genero en el Paso 6 (Cierre) con los valores finales, deducciones y cumplimiento — usted firma en el subpaso 6.3.'],
 ]
 
 // Formal documents the Copiloto generates — tracked for the Documentos tab (GCCON-P-010)
