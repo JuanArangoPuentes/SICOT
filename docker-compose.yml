@@ -1,6 +1,23 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# SICOT — orquestación local con Docker Desktop
+#
+#   docker compose up -d --build     levanta los 4 contenedores
+#   docker compose ps                 ver estado/salud de cada uno
+#   docker compose logs -f backend    seguir logs de un servicio
+#   docker compose down               apagar (agregar -v para borrar la BD)
+#
+# Copie .env.example a .env en esta misma carpeta para sobrescribir los
+# valores de desarrollo por defecto (contraseñas, JWT_SECRET, etc.).
+# ═══════════════════════════════════════════════════════════════════════════
+name: sicot
+
 services:
   db:
     image: postgres:18-alpine
+    container_name: sicot-db
+    labels:
+      org.opencontainers.image.title: "SICOT · PostgreSQL"
+      org.opencontainers.image.description: "Base de datos 'sicot' (esquema gestionado por Flyway desde el backend)"
     environment:
       POSTGRES_DB: sicot
       POSTGRES_USER: sicot
@@ -17,8 +34,28 @@ services:
       timeout: 5s
       retries: 10
 
+  adminer:
+    image: adminer:4
+    container_name: sicot-adminer
+    labels:
+      org.opencontainers.image.title: "SICOT · Panel PostgreSQL"
+      org.opencontainers.image.description: "Adminer — explorar tablas/datos de la BD 'sicot' desde el navegador"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Precarga el campo "Servidor" del login de Adminer con el nombre del
+      # servicio de Docker (resuelto por la red interna de compose).
+      ADMINER_DEFAULT_SERVER: db
+    ports:
+      - "8081:8080"
+
   backend:
     build: ./sicot-backend
+    container_name: sicot-backend
+    labels:
+      org.opencontainers.image.title: "SICOT · Backend"
+      org.opencontainers.image.description: "API Spring Boot (JWT) — Swagger en /swagger-ui.html"
     depends_on:
       db:
         condition: service_healthy
@@ -44,10 +81,21 @@ services:
         # El navegador del usuario llama a esta URL directamente, por eso debe
         # ser la URL alcanzable desde el host (no el nombre del servicio interno).
         VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+    container_name: sicot-frontend
+    labels:
+      org.opencontainers.image.title: "SICOT · Frontend"
+      org.opencontainers.image.description: "UI React servida por nginx — http://localhost:8443"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "8443:8443"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8443/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
 volumes:
   sicot_db_data:
