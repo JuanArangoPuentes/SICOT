@@ -1,5 +1,6 @@
 {
-  "description": "This web application streamlines task execution by allowing users to input prompts and receive precise, actionable responses, enhancing productivity.",
+  "title": "SICOT — Centro Tecnológico del Mobiliario (SENA)",
+  "description": "Sistema Inteligente para la Gestión y Acompañamiento de Contratos del Centro Tecnológico del Mobiliario (SENA).",
   "robots": {
     "index": false
   },

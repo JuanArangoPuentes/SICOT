@@ -3,6 +3,7 @@
 
 import { avatarGlyph, usePrefs } from '@/prefs'
 import { SicotBadge } from '@/components/ui'
+import { IconPlay } from '@/components/icons'
 import type { ContratoResponse } from '@/services/api/types'
 
 export default function SupervisorWelcome({ contrato, onVerContrato, onTutorial }: {
@@ -37,13 +38,13 @@ export default function SupervisorWelcome({ contrato, onVerContrato, onTutorial 
             <button className="btn-green" onClick={onVerContrato} style={{ width: '100%', padding: '12px 0', fontSize: 15 }}>
               Ver mi contrato asignado →
             </button>
-            <button className="btn-ghost" onClick={onTutorial} style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 10 }}>
-              ▶ Iniciar tutorial guiado
+            <button className="btn-ghost" onClick={onTutorial} style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <IconPlay size={10} /> Iniciar tutorial guiado
             </button>
           </div>
         </div>
         <div style={{ padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}>? Ayuda</button>
+          <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ padding: '4px 10px', fontSize: 12, opacity: 0.5, cursor: 'not-allowed' }}>? Ayuda</button>
         </div>
       </div>
     )
@@ -71,13 +72,13 @@ export default function SupervisorWelcome({ contrato, onVerContrato, onTutorial 
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
             <div>Esperando asignación de Gestión y Contratación</div>
           </div>
-          <button className="btn-ghost" onClick={onTutorial} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
-            ▶ Ver tutorial del proceso
+          <button className="btn-ghost" onClick={onTutorial} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <IconPlay size={10} /> Ver tutorial del proceso
           </button>
         </div>
       </div>
       <div style={{ padding: '10px 20px', display: 'flex', justifyContent: 'flex-end' }}>
-        <button className="btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}>? Ayuda</button>
+        <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ padding: '4px 10px', fontSize: 12, opacity: 0.5, cursor: 'not-allowed' }}>? Ayuda</button>
       </div>
     </div>
   )

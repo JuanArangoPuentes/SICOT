@@ -6,6 +6,7 @@ import { useState, useRef, useEffect } from 'react'
 import { avatarGlyph, usePrefs } from '@/prefs'
 import Registros, { type Registro } from '@/components/Registros'
 import { Chip, SicotBadge, StageProgressBar, UserMenu, type LiveAlert, type Stage } from '@/components/ui'
+import { IconPlay, IconSettings } from '@/components/icons'
 import { AI_GENERATED_DOCS, TUTORIAL, CHAT_RESPONSES, FORMAL_DOCS } from '@/data/contractFlow'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type { AuthResponse, AlertaResponse, ContratoResponse, DocumentoResponse } from '@/services/api/types'
@@ -29,7 +30,7 @@ function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: 
         <SicotBadge small />
         <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 4 }}>Panel Supervisor</span>
         <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12 }}>⚙ Configuración</button>
+        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={13} /> Configuración</button>
         <UserMenu label={usuario.nombre} email={usuario.email} onLogout={onLogout} />
       </div>
 
@@ -47,8 +48,8 @@ function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: 
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
             <div>Esperando asignación de Gestión y Contratación</div>
           </div>
-          <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
-            ▶ Ver tutorial del proceso
+          <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <IconPlay size={10} /> Ver tutorial del proceso
           </button>
         </div>
       </div>
@@ -334,8 +335,8 @@ export default function SupervisorPanel({
           title="La publicación en SECOP II corresponde a la Unidad de Contratación">
           Conectar SECOP II
         </button>
-        <button className="btn-ghost" onClick={onStartTour} style={{ padding: '5px 12px', fontSize: 12 }}>▶ Tutorial</button>
-        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12 }}>⚙ Configuración</button>
+        <button className="btn-ghost" onClick={onStartTour} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlay size={10} /> Tutorial</button>
+        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={13} /> Configuración</button>
         <UserMenu label={usuario.nombre} email={usuario.email} onLogout={onLogout} />
       </div>
 
@@ -680,8 +681,8 @@ export default function SupervisorPanel({
 
       {/* Bottom bar */}
       <div style={{ display: 'flex', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0, borderRight: '1px solid var(--border)' }}>Ayuda SENA</button>
-        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0 }}>Manual GCCON-M-002</button>
+        <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0, borderRight: '1px solid var(--border)', opacity: 0.5, cursor: 'not-allowed' }}>Ayuda SENA</button>
+        <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0, opacity: 0.5, cursor: 'not-allowed' }}>Manual GCCON-M-002</button>
       </div>
     </div>
   )

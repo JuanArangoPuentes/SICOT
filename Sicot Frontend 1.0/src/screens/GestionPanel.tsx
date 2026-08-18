@@ -4,6 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { Chip, SicotBadge, UserMenu, type ChipType } from '@/components/ui'
+import { IconCheckCircle, IconClipboardList, IconFileText, IconLoader, IconPlay, IconSettings, IconUpload } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato } from '@/services/api/types'
 import { getContratos, crearContrato } from '@/services/contratoService'
@@ -184,8 +185,8 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
         <SicotBadge small />
         <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 4 }}>Panel Gestión</span>
         <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={onStartTour} style={{ padding: '5px 12px', fontSize: 12 }}>▶ Tutorial</button>
-        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12 }}>⚙ Configuración</button>
+        <button className="btn-ghost" onClick={onStartTour} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlay size={10} /> Tutorial</button>
+        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={13} /> Configuración</button>
         <UserMenu label={usuario.nombre} email={usuario.email} avatarColor="#7c3aed" avatarTextColor="white" onLogout={onLogout} />
       </div>
 
@@ -225,7 +226,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
           {/* Empty state */}
           {contratos.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
-              <div style={{ fontSize: 28, marginBottom: 8, opacity: 0.5 }}>📋</div>
+              <IconClipboardList size={26} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no tienes contratos registrados</div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Carga una ficha de contrato para que el Copiloto la procese automáticamente.</div>
             </div>
@@ -264,7 +265,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
                   style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }}
                   onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-dim)')}
                   onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-                  <div style={{ fontSize: 36, marginBottom: 12 }}>📄</div>
+                  <IconFileText size={34} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
                   <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
                     Haz clic para seleccionar el documento<br />
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF, DOCX — max 20 MB</span>
@@ -278,7 +279,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
 
             {uploadState === 'uploading' && (
               <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <div style={{ fontSize: 36, marginBottom: 16 }}>⬆</div>
+                <IconUpload size={32} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
                 <p style={{ fontSize: 14, marginBottom: 12 }}>Subiendo documento...</p>
                 <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent)', borderRadius: 2, transition: 'width 0.12s' }} />
@@ -289,7 +290,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
 
             {uploadState === 'analyzing' && (
               <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                <div style={{ fontSize: 36, marginBottom: 16, display: 'inline-block', animation: 'spin 1s linear infinite' }}>🔄</div>
+                <IconLoader size={30} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
                 <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600 }}>Analizando documento...</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>El Copiloto IA está extrayendo los datos del contrato</p>
               </div>
@@ -303,7 +304,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
                   </div>
                   <div style={{ padding: '14px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <span>✅</span>
+                      <IconCheckCircle size={16} style={{ color: 'var(--accent)' }} />
                       <strong style={{ fontSize: 14 }}>Suministro de Bienes</strong>
                       <Chip text="Menor cuantía" type="document" />
                     </div>
@@ -402,7 +403,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
 
             {uploadState === 'done' && (
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+                <IconCheckCircle size={44} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
                 <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>¡Contrato asignado!</p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
                   {tipo} · {centro.split(' — ')[0]} — {lastProcessedContract?.supervisor ?? '—'} ha sido notificado.

@@ -27,6 +27,8 @@ CREATE DATABASE sicot OWNER sicot;
 El esquema se crea automáticamente con **Flyway** al primer arranque:
 - `V1__create_initial_schema.sql` — esquema (usuarios, contratos, etapas, subetapas, documentos, alertas, registros)
 - `V2__seed_dev_data.sql` — datos de desarrollo (3 contratos de ejemplo con el flujo GCCON-P-010)
+- `V3__clear_demo_transactional_data.sql` — limpia los datos transaccionales de ejemplo (deja el esquema y los usuarios)
+- `V4__create_formatos_documentales.sql` — catálogo de formatos documentales oficiales (carga real de archivos)
 
 Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataInitializer` con contraseñas codificadas en BCrypt:
 
@@ -78,9 +80,13 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 | PATCH | `/api/contratos/{id}/supervisor` · `/api/contratos/{id}/estado` | GESTION, ADMINISTRADOR |
 | GET | `/api/contratos/{id}/etapas`, `/api/etapas/{id}/subetapas` | autenticados |
 | PATCH | `/api/subetapas/{id}/estado` | SUPERVISOR, GESTION, ADMINISTRADOR |
-| GET | `/api/contratos/{id}/documentos` | autenticados (carga real de archivos en fase posterior) |
+| GET | `/api/contratos/{id}/documentos` | autenticados (carga real de archivos por contrato en fase posterior) |
 | GET/PATCH | `/api/contratos/{id}/alertas`, `/api/alertas/{id}/leida` | autenticados |
 | GET | `/api/contratos/{id}/registros`, `/api/registros` | autenticados (todos: ADMINISTRADOR) |
+| GET | `/api/formatos` | autenticados |
+| POST | `/api/formatos` (multipart: `codigo`, `nombre`, `archivo`) | ADMINISTRADOR |
+| GET | `/api/formatos/{id}/archivo` (descarga real del archivo) | autenticados |
+| DELETE | `/api/formatos/{id}` | ADMINISTRADOR |
 
 **Reglas de negocio destacadas:**
 - Al cambiar el estado de una subetapa se recalcula automáticamente el porcentaje y estado de su etapa (todas COMPLETADA → etapa COMPLETADA 100%).
@@ -113,7 +119,8 @@ Las pruebas de integración usan **H2 en memoria** (perfil `test`); las migracio
 
 ## 9. Pendiente (fases siguientes)
 
-- Carga y descarga real de documentos (evidencias) con almacenamiento en disco
+- Carga y descarga real de documentos **por contrato** (evidencias) — el catálogo general de
+  formatos documentales (`/api/formatos`) ya tiene carga/descarga real
 - Integración SECOP II (consulta de procesos)
 - Firma electrónica de documentos (GCCON-F-018, GCCON-F-031, GIL-F-010, …)
 - Asistente IA local (Llama/Qwen) + RAG (Qdrant/pgvector)

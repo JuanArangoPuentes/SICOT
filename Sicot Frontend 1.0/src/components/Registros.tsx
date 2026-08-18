@@ -20,7 +20,6 @@ export default function Registros({ extra }: { extra: Registro[] }) {
   const [destinatario, setDestinatario] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
-  const [descargado, setDescargado] = useState(false)
 
   const all = useMemo(() => [...REGISTROS_BASE, ...extra], [extra])
 
@@ -51,9 +50,9 @@ export default function Registros({ extra }: { extra: Registro[] }) {
             Historial de comunicaciones y firmas del contrato · {filtrados.length} de {all.length} registros
           </p>
         </div>
-        <button className="btn-ghost" style={{ padding: '8px 14px', fontSize: 12 }}
-          onClick={() => { setDescargado(true); setTimeout(() => setDescargado(false), 2400) }}>
-          {descargado ? '✓ Log generado (PDF)' : '⭳ Descargar Log Completo'}
+        <button className="btn-ghost" disabled title="La exportación a PDF se habilita en una fase posterior"
+          style={{ padding: '8px 14px', fontSize: 12, opacity: 0.5, cursor: 'not-allowed' }}>
+          Descargar Log Completo
         </button>
       </div>
 

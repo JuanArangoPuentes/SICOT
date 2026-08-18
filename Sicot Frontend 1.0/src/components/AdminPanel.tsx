@@ -1,26 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Chip, Field, Modal, SicotBadge, UserMenu, type ChipType } from './ui'
-import type { AuthResponse, Rol, UsuarioResponse } from '@/services/api/types'
+import { IconCheckCircle, IconClipboardList, IconDownload, IconLock, IconSettings, IconSignature, IconTrash, IconUpload } from './icons'
+import type { AuthResponse, EstadoFormato, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
 import { getUsuarios, crearUsuario, cambiarEstadoUsuario } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
+import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
 import { ApiError } from '@/services/api/client'
+import { formatBytes, formatFecha } from '@/services/format'
 
 // ─── Datos base ───────────────────────────────────────────────────────────────
-
-type DocEstado = 'vigente' | 'sugerido' | 'conflicto'
-
-interface DocRow {
-  code: string
-  name: string
-  version: string
-  updated: string
-  estado: DocEstado
-}
-
-// Catálogo de formatos oficiales — vacío por defecto (mock: no expuesto por la API).
-// Se puebla al cargar los formatos GCCON/GIL/ESUCON/GRF reales del sistema.
-const DOCS_INICIAL: DocRow[] = []
 
 interface UserRow {
   id: string
@@ -62,10 +51,9 @@ const mapUser = (u: UsuarioResponse): UserRow => ({
   centros: '—',
 })
 
-const DOC_CHIP: Record<DocEstado, { label: string; type: ChipType }> = {
-  vigente: { label: 'Vigente', type: 'vigente' },
-  sugerido: { label: 'Cambios sugeridos (IA)', type: 'sugerido' },
-  conflicto: { label: 'Conflicto detectado', type: 'conflicto' },
+const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
+  VIGENTE: { label: 'Vigente', type: 'vigente' },
+  OBSOLETO: { label: 'Obsoleto', type: 'inactive' },
 }
 
 const randomPassword = () => {
@@ -77,20 +65,23 @@ type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
 
 export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usuario: AuthResponse; onLogout: () => void; onOpenSettings: () => void }) {
   const [tab, setTab] = useState<AdminTab>('dashboard')
-  const [docs, setDocs] = useState(DOCS_INICIAL)
+  const [formatos, setFormatos] = useState<FormatoDocumentalResponse[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
   const [firmas, setFirmas] = useState(FIRMAS_INICIAL)
 
-  const [uploadDoc, setUploadDoc] = useState<DocRow | null>(null)
-  const [previewDoc, setPreviewDoc] = useState<DocRow | null>(null)
-  const [historyDoc, setHistoryDoc] = useState<DocRow | null>(null)
+  const [formatoModalOpen, setFormatoModalOpen] = useState(false)
+  const [formatoAReemplazar, setFormatoAReemplazar] = useState<FormatoDocumentalResponse | null>(null)
   const [newUser, setNewUser] = useState(false)
   const [newFirma, setNewFirma] = useState<string | null>(null)
 
   const [contratosActivos, setContratosActivos] = useState(0)
   const [totalContratos, setTotalContratos] = useState(0)
 
-  // Datos reales: usuarios y contratos (GET /api/usuarios, GET /api/contratos)
+  const cargarFormatos = () => {
+    getFormatos().then(setFormatos).catch(() => {})
+  }
+
+  // Datos reales: usuarios, contratos y catálogo de formatos documentales
   useEffect(() => {
     let cancelado = false
     getUsuarios()
@@ -103,6 +94,9 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         setContratosActivos(lista.filter(c => c.estado === 'ACTIVO').length)
       })
       .catch(() => {})
+    getFormatos()
+      .then(lista => { if (!cancelado) setFormatos(lista) })
+      .catch(() => {})
     return () => { cancelado = true }
   }, [])
 
@@ -113,7 +107,15 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
     } catch { /* el chip conserva el estado real si el backend rechaza */ }
   }
 
-  const alertasSistema = docs.filter(d => d.estado !== 'vigente').length
+  const eliminarFormatoRow = async (f: FormatoDocumentalResponse) => {
+    if (!window.confirm(`¿Eliminar "${f.codigo} — ${f.nombre}" del catálogo? Esta acción no se puede deshacer.`)) return
+    try {
+      await eliminarFormato(f.id)
+      setFormatos(fs => fs.filter(x => x.id !== f.id))
+    } catch { /* si el backend rechaza, la fila se conserva */ }
+  }
+
+  const formatosObsoletos = formatos.filter(f => f.estado === 'OBSOLETO').length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
@@ -122,7 +124,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         <SicotBadge small />
         <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 4 }}>Interfaz de Administrador</span>
         <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12 }}>⚙ Configuración</button>
+        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={13} /> Configuración</button>
         <UserMenu label={usuario.nombre} email={usuario.email} avatarColor="var(--alert-leve)" avatarTextColor="#1a1400" onLogout={onLogout} />
       </div>
 
@@ -141,8 +143,8 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
               <Widget label="Contratos activos" value={String(contratosActivos)} hint={`${totalContratos} registrados en total`} />
               <Widget label="Usuarios activos" value={String(users.filter(u => u.activo).length)} hint={`${users.length} registrados en total`} />
-              <Widget label="Documentos vigentes" value={`${docs.filter(d => d.estado === 'vigente').length}/${docs.length}`} hint="Formatos oficiales cargados" />
-              <Widget label="Alertas del sistema" value={String(alertasSistema)} hint="Requieren revisión documental" tone={alertasSistema ? 'warn' : 'ok'} />
+              <Widget label="Formatos vigentes" value={`${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint="Formatos oficiales cargados" />
+              <Widget label="Formatos obsoletos" value={String(formatosObsoletos)} hint="Requieren reemplazo por una versión vigente" tone={formatosObsoletos ? 'warn' : 'ok'} />
             </div>
 
             <div className="card" style={{ padding: '16px 18px' }}>
@@ -179,22 +181,41 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {tab === 'documentos' && (
           <>
             <SectionHead title="Gestión de Documentos"
-              desc="Centro de control para actualizar los formatos y archivos oficiales del sistema." />
+              desc="Catálogo real de formatos oficiales (GCCON, GIL, ESUCON y demás formatos institucionales). Los archivos que cargues aquí quedan disponibles para descarga real."
+              action={<button className="btn-green" onClick={() => { setFormatoAReemplazar(null); setFormatoModalOpen(true) }} style={{ padding: '8px 14px', fontSize: 12 }}>+ Cargar formato</button>} />
             <div className="card" style={{ overflow: 'hidden' }}>
-              <GridRow header cols="150px 1fr 100px 140px 190px 250px">
-                <span>TIPO</span><span>NOMBRE</span><span>VERSIÓN</span><span>ACTUALIZACIÓN</span><span>ESTADO</span><span>ACCIONES</span>
+              <GridRow header cols="140px 1fr 80px 150px 150px 250px">
+                <span>CÓDIGO</span><span>NOMBRE</span><span>VERSIÓN</span><span>ACTUALIZADO</span><span>ESTADO</span><span>ACCIONES</span>
               </GridRow>
-              {docs.map(d => (
-                <GridRow key={d.code} cols="150px 1fr 100px 140px 190px 250px">
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{d.code}</span>
-                  <span style={{ fontSize: 12 }}>{d.name}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{d.version}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{d.updated}</span>
-                  <Chip text={DOC_CHIP[d.estado].label} type={DOC_CHIP[d.estado].type} />
+              {formatos.length === 0 && (
+                <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                  <IconClipboardList size={28} style={{ opacity: 0.4, margin: '0 auto 10px' }} />
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no hay formatos cargados</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usa "+ Cargar formato" para subir los formatos oficiales (PDF, DOCX o XLSX).</div>
+                </div>
+              )}
+              {formatos.map(f => (
+                <GridRow key={f.id} cols="140px 1fr 80px 150px 150px 250px">
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{f.codigo}</span>
+                  <span style={{ fontSize: 12 }}>
+                    {f.nombre}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {f.tipoArchivo} · {formatBytes(f.tamanioBytes)}{f.subidoPorNombre ? ` · ${f.subidoPorNombre}` : ''}
+                    </div>
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }}>{f.version}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{formatFecha(f.fechaActualizacion)}</span>
+                  <Chip text={FORMATO_CHIP[f.estado].label} type={FORMATO_CHIP[f.estado].type} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <MiniBtn onClick={() => setPreviewDoc(d)}>Ver versión</MiniBtn>
-                    <MiniBtn onClick={() => setUploadDoc(d)} accent>Cargar nueva</MiniBtn>
-                    <MiniBtn onClick={() => setHistoryDoc(d)}>Historial</MiniBtn>
+                    <MiniBtn onClick={() => descargarFormato(f.id, f.nombreArchivo).catch(() => {})}>
+                      <IconDownload size={11} /> Descargar
+                    </MiniBtn>
+                    <MiniBtn onClick={() => { setFormatoAReemplazar(f); setFormatoModalOpen(true) }} accent>
+                      <IconUpload size={11} /> Nueva versión
+                    </MiniBtn>
+                    <MiniBtn onClick={() => eliminarFormatoRow(f)}>
+                      <IconTrash size={11} /> Eliminar
+                    </MiniBtn>
                   </span>
                 </GridRow>
               ))}
@@ -220,7 +241,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                   <span style={{ fontSize: 12 }}>{u.rol}</span>
                   <Chip text={u.activo ? 'Activo' : 'Inactivo'} type={u.activo ? 'vigente' : 'inactive'} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <MiniBtn onClick={() => setNewFirma(u.nombre)}>Resetear clave</MiniBtn>
+                    <MiniBtn onClick={() => {}} disabled title="El restablecimiento de contraseña se habilita en una fase posterior">Resetear clave</MiniBtn>
                     <MiniBtn onClick={() => toggleActivo(u)}>
                       {u.activo ? 'Desactivar' : 'Reactivar'}
                     </MiniBtn>
@@ -248,7 +269,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{f.fecha}</span>
                   <Chip text={f.activa ? 'Vigente' : 'Revocada'} type={f.activa ? 'vigente' : 'inactive'} />
                   <span style={{ display: 'flex', gap: 6 }}>
-                    <MiniBtn onClick={() => undefined}>Descargar .p7s</MiniBtn>
+                    <MiniBtn onClick={() => {}} disabled title="La firma electrónica real se habilita en una fase posterior">Descargar .p7s</MiniBtn>
                     <MiniBtn onClick={() => setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: !x.activa } : x))}>
                       {f.activa ? 'Revocar' : 'Restaurar'}
                     </MiniBtn>
@@ -260,44 +281,12 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         )}
       </div>
 
-      {previewDoc && (
-        <Modal title={`${previewDoc.code} — versión actual`} onClose={() => setPreviewDoc(null)}>
-          <div style={{ border: '1px solid var(--border)', borderRadius: 10, background: 'var(--bg-input)', padding: 22, fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.9, color: 'var(--text-secondary)' }}>
-            <div style={{ color: 'var(--accent)', fontWeight: 500 }}>SERVICIO NACIONAL DE APRENDIZAJE — SENA</div>
-            <div>{previewDoc.name}</div>
-            <div>Código: {previewDoc.code} · Versión: {previewDoc.version}</div>
-            <div>Última actualización: {previewDoc.updated}</div>
-            <div style={{ marginTop: 14, color: 'var(--text-muted)' }}>
-              [Vista previa del formato oficial. En el prototipo se muestra la cabecera normalizada del documento.]
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {historyDoc && (
-        <Modal title={`Historial de versiones — ${historyDoc.code}`} onClose={() => setHistoryDoc(null)}>
-          {[
-            { v: historyDoc.version, f: historyDoc.updated, nota: 'Versión vigente en el sistema' },
-            { v: 'v' + (Number(historyDoc.version.slice(1)) - 1), f: '11/09/2024', nota: 'Ajuste de campos de identificación del proveedor' },
-            { v: 'v' + (Number(historyDoc.version.slice(1)) - 2), f: '02/02/2024', nota: 'Actualización del encabezado institucional' },
-          ].map(h => (
-            <div key={h.v} style={{ display: 'flex', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent)', fontSize: 12, width: 40 }}>{h.v}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-secondary)', width: 96 }}>{h.f}</span>
-              <span style={{ fontSize: 12, flex: 1 }}>{h.nota}</span>
-            </div>
-          ))}
-        </Modal>
-      )}
-
-      {uploadDoc && (
-        <UploadDocModal doc={uploadDoc} onClose={() => setUploadDoc(null)}
-          onConfirm={estado => {
-            setDocs(ds => ds.map(d => d.code === uploadDoc.code
-              ? { ...d, estado, version: 'v' + (Number(d.version.slice(1)) + 1), updated: new Date().toLocaleDateString('es-CO') }
-              : d))
-            setUploadDoc(null)
-          }} />
+      {formatoModalOpen && (
+        <FormatoModal
+          formatoExistente={formatoAReemplazar}
+          onClose={() => setFormatoModalOpen(false)}
+          onUploaded={() => { setFormatoModalOpen(false); cargarFormatos() }}
+        />
       )}
 
       {newUser && (
@@ -351,75 +340,94 @@ function GridRow({ cols, header, children }: { cols: string; header?: boolean; c
   )
 }
 
-function MiniBtn({ children, onClick, accent }: { children: React.ReactNode; onClick: () => void; accent?: boolean }) {
+function MiniBtn({ children, onClick, accent, disabled, title }: {
+  children: React.ReactNode; onClick: () => void; accent?: boolean; disabled?: boolean; title?: string
+}) {
   return (
-    <button onClick={onClick} style={{
+    <button onClick={onClick} disabled={disabled} title={title} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
       background: accent ? 'var(--accent-soft)' : 'transparent',
       border: `1px solid ${accent ? 'var(--accent-line)' : 'var(--border)'}`,
-      color: accent ? 'var(--accent)' : 'var(--text-secondary)',
-      borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: 'pointer',
+      color: disabled ? 'var(--text-muted)' : accent ? 'var(--accent)' : 'var(--text-secondary)',
+      borderRadius: 6, padding: '4px 9px', fontSize: 11, cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.55 : 1,
       fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap',
     }}>{children}</button>
   )
 }
 
-// ─── Modal: cargar nueva versión con análisis IA ──────────────────────────────
+// ─── Modal: cargar formato documental (real — sin simulaciones) ───────────────
 
-function UploadDocModal({ doc, onClose, onConfirm }: { doc: DocRow; onClose: () => void; onConfirm: (estado: DocEstado) => void }) {
-  const [phase, setPhase] = useState<'select' | 'analyzing' | 'result'>('select')
+function FormatoModal({ formatoExistente, onClose, onUploaded }: {
+  formatoExistente: FormatoDocumentalResponse | null
+  onClose: () => void
+  onUploaded: () => void
+}) {
+  const [codigo, setCodigo] = useState(formatoExistente?.codigo ?? '')
+  const [nombre, setNombre] = useState(formatoExistente?.nombre ?? '')
+  const [archivo, setArchivo] = useState<File | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
 
-  const start = () => {
-    setPhase('analyzing')
-    setTimeout(() => setPhase('result'), 1800)
+  const esNuevoVersion = formatoExistente !== null
+
+  const subir = async () => {
+    if (busy) return
+    if (!codigo.trim()) { setError('El código del formato es obligatorio (ej. GCCON-F-031).'); return }
+    if (!nombre.trim()) { setError('El nombre del formato es obligatorio.'); return }
+    if (!archivo) { setError('Selecciona un archivo PDF, DOCX o XLSX.'); return }
+    setError('')
+    setBusy(true)
+    try {
+      await subirFormato(codigo.trim(), nombre.trim(), archivo)
+      setDone(true)
+      setTimeout(onUploaded, 900)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo cargar el archivo.')
+      setBusy(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <Modal title="Formato cargado" onClose={onClose} width={460}>
+        <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
+          <IconUpload size={40} style={{ color: 'var(--accent)', margin: '0 auto 10px' }} />
+          <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '0 0 4px' }}>
+            {esNuevoVersion ? 'Nueva versión cargada correctamente' : 'Formato agregado al catálogo'}
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{codigo} — {nombre}</p>
+        </div>
+      </Modal>
+    )
   }
 
   return (
-    <Modal title={`Cargar nueva versión — ${doc.code}`} onClose={onClose} width={560}>
-      {phase === 'select' && (
-        <div onClick={start}
-          style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '38px 20px', textAlign: 'center', cursor: 'pointer' }}>
-          <div style={{ fontSize: 32, marginBottom: 10 }}>📄</div>
-          <p style={{ margin: 0, fontSize: 14, color: 'var(--text-secondary)' }}>
-            Haz clic para seleccionar el archivo<br />
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF o DOCX — máx 20 MB</span>
-          </p>
-        </div>
-      )}
+    <Modal title={esNuevoVersion ? `Cargar nueva versión — ${formatoExistente!.codigo}` : 'Cargar nuevo formato'} onClose={onClose} width={520}>
+      <Field label="Código del formato (ej. GCCON-F-031)">
+        <input type="text" value={codigo} disabled={esNuevoVersion}
+          onChange={e => setCodigo(e.target.value)} placeholder="GCCON-F-031"
+          style={{ width: '100%', padding: '9px 10px', fontFamily: 'var(--font-mono)', opacity: esNuevoVersion ? 0.65 : 1 }} />
+      </Field>
+      <Field label="Nombre del formato">
+        <input type="text" value={nombre} onChange={e => setNombre(e.target.value)}
+          placeholder="Informe de supervisión" style={{ width: '100%', padding: '9px 10px' }} />
+      </Field>
+      <Field label="Archivo (PDF, DOCX o XLSX — máx 20 MB)">
+        <input type="file" accept=".pdf,.docx,.xlsx"
+          onChange={e => setArchivo(e.target.files?.[0] ?? null)}
+          style={{ width: '100%', fontSize: 13, color: 'var(--text-secondary)' }} />
+      </Field>
 
-      {phase === 'analyzing' && (
-        <div style={{ textAlign: 'center', padding: '34px 0' }}>
-          <div style={{ fontSize: 32, marginBottom: 14, display: 'inline-block', animation: 'spin 1s linear infinite' }}>🔄</div>
-          <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600, margin: 0 }}>Analizando cambios...</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>Comparando la estructura contra la versión {doc.version}</p>
-        </div>
-      )}
+      {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '4px 0 10px' }}>{error}</p>}
 
-      {phase === 'result' && (
-        <>
-          <div className="card" style={{ padding: 0, overflow: 'hidden', borderColor: 'var(--accent-line)' }}>
-            <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--accent)' }}>
-              🤖 ANÁLISIS IA — CAMBIOS DETECTADOS
-            </div>
-            {[
-              { icon: '✅', color: 'var(--accent)', title: 'Campo "PROVEEDOR" — formato correcto', body: 'Coincide con la estructura del expediente digital.' },
-              { icon: '⚠️', color: 'var(--alert-leve)', title: 'Campo "FECHA" — recomendación', body: 'Usar formato DD/MM/AAAA para mantener consistencia con el expediente.' },
-              { icon: '🔴', color: 'var(--alert-critica)', title: 'Conflicto detectado', body: `El campo "VALOR EJECUTADO" no existe en GCCON-F-031 y puede romper la consistencia entre formatos. Recomendación: revisar con el área jurídica antes de publicar.` },
-            ].map(r => (
-              <div key={r.title} style={{ display: 'flex', gap: 10, padding: '12px 14px', borderBottom: '1px solid var(--border)' }}>
-                <span style={{ fontSize: 14 }}>{r.icon}</span>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: r.color }}>{r.title}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2, lineHeight: 1.5 }}>{r.body}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => onConfirm('conflicto')}>Revisar cambios</button>
-            <button className="btn-green" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={() => onConfirm('sugerido')}>Cargar igualmente</button>
-          </div>
-        </>
-      )}
+      <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-green" style={{ flex: 2, padding: '10px 0', fontSize: 13, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }} onClick={subir} disabled={busy}>
+          {busy ? 'Cargando…' : esNuevoVersion ? 'Cargar nueva versión' : 'Cargar formato'}
+        </button>
+      </div>
     </Modal>
   )
 }
@@ -470,7 +478,7 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
     return (
       <Modal title="Usuario creado" onClose={onClose} width={460}>
         <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
-          <div style={{ fontSize: 42 }}>✅</div>
+          <IconCheckCircle size={40} style={{ color: 'var(--accent)', margin: '0 auto 8px' }} />
           <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '8px 0 4px' }}>Usuario creado exitosamente</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Notificación enviada a {correo}
@@ -581,7 +589,7 @@ function NewFirmaModal({ nombre, onClose, onCreate }: { nombre: string; onClose:
 
       {phase === 'gen' && (
         <div style={{ textAlign: 'center', padding: '34px 0' }}>
-          <div style={{ fontSize: 32, marginBottom: 14, display: 'inline-block', animation: 'spin 1s linear infinite' }}>🔐</div>
+          <IconLock size={30} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
           <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600, margin: 0 }}>Generando firma única...</p>
           <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>Cifrando datos con el certificado institucional</p>
         </div>
@@ -589,15 +597,15 @@ function NewFirmaModal({ nombre, onClose, onCreate }: { nombre: string; onClose:
 
       {phase === 'done' && (
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 40 }}>✍</div>
+          <IconSignature size={34} style={{ color: 'var(--accent)', margin: '0 auto 6px' }} />
           <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma electrónica generada: {firmaId}</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Archivo <span style={{ fontFamily: 'var(--font-mono)' }}>{firmaId}.p7s</span> listo para entrega.
           </p>
           <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }}
+            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={() => onCreate({ id: 'f' + Date.now(), usuario: n || 'Sin nombre', firmaId, fecha: new Date().toLocaleString('es-CO'), activa: true })}>
-              ⭳ Descargar firma
+              <IconDownload size={12} /> Descargar firma
             </button>
             <button className="btn-green" style={{ flex: 1, padding: '10px 0', fontSize: 13 }}
               onClick={() => onCreate({ id: 'f' + Date.now(), usuario: n || 'Sin nombre', firmaId, fecha: new Date().toLocaleString('es-CO'), activa: true })}>

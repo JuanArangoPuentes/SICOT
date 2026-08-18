@@ -27,8 +27,10 @@ public class UsuarioController {
         this.usuarioService = usuarioService;
     }
 
-    @Operation(summary = "Listar usuarios")
+    @Operation(summary = "Listar usuarios",
+            description = "GESTION también puede listar (solo lectura) para poder asignar supervisores a un contrato.")
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'GESTION')")
     public ResponseEntity<List<UsuarioResponse>> listar() {
         return ResponseEntity.ok(usuarioService.listar());
     }

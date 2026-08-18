@@ -1,10 +1,12 @@
 # SICOT — Frontend
 
-Prototipo exportado desde Figma Make, limpio de datos de ejemplo y reorganizado en módulos.
-**El resultado visual/funcional es idéntico al de Figma Make** — esta reestructuración solo
-mueve código a distintos archivos; no reescribe estilos, JSX ni lógica.
+Frontend de SICOT (React 19 + TypeScript + Vite + Tailwind CSS v4), integrado contra el
+backend real de Spring Boot — sin datos simulados: lo que se ve viene de la API o de un
+estado vacío honesto cuando la API todavía no tiene información.
 
 ## Cómo correrlo
+
+Requiere el backend (`sicot-backend`) corriendo en `http://localhost:8080` y PostgreSQL activo.
 
 ```bash
 npm install
@@ -13,12 +15,14 @@ npm run dev
 
 Abre la URL que indique la terminal (por defecto http://localhost:8443).
 
-## Cuentas de acceso (demo)
+## Cuentas de acceso (desarrollo)
 
-- `supervisor@soy.sena.edu.co` → Panel Supervisor
-- `gestion@soy.sena.edu.co` → Panel Gestión y Contratación
+El login es real y valida contraseña contra el backend (BCrypt + JWT). Usuarios de desarrollo
+(creados por `DataInitializer` en el backend, ver `sicot-backend/README.md` para las claves):
+
 - `administrador@soy.sena.edu.co` → Panel Administrador
-- Contraseña: cualquier valor (el login del prototipo no valida contraseña, solo el correo)
+- `gestion@soy.sena.edu.co` → Panel Gestión y Contratación
+- `supervisor@soy.sena.edu.co` → Panel Supervisor
 
 ## Estructura
 

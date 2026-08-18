@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -48,6 +50,17 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class})
     public ResponseEntity<ErrorResponse> badRequest(Exception ex, WebRequest request) {
         return build("Solicitud inválida. Revise los parámetros o el cuerpo de la petición.",
+                HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> archivoDemasiadoGrande(MaxUploadSizeExceededException ex, WebRequest request) {
+        return build("El archivo supera el tamaño máximo permitido.", HttpStatus.BAD_REQUEST, request);
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> parteFaltante(MissingServletRequestPartException ex, WebRequest request) {
+        return build("Falta un campo obligatorio en la solicitud: " + ex.getRequestPartName() + ".",
                 HttpStatus.BAD_REQUEST, request);
     }
 

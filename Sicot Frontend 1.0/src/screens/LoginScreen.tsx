@@ -262,7 +262,8 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
           {/* Help link */}
           <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <button style={{ background: 'none', border: 'none', color: s.textMuted, fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+            <button disabled title="Contacta a la Unidad de Gestión Contractual para restablecer tu contraseña"
+              style={{ background: 'none', border: 'none', color: s.textMuted, fontSize: 12, cursor: 'not-allowed', textDecoration: 'underline', opacity: 0.65 }}>
               ¿Olvidaste tu contraseña?
             </button>
           </div>

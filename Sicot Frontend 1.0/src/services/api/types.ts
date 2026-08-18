@@ -135,6 +135,23 @@ export interface RegistroResponse {
   fecha: string
 }
 
+// ─── Formatos documentales (catálogo del Administrador) ──────────────────────
+
+export type EstadoFormato = 'VIGENTE' | 'OBSOLETO'
+
+export interface FormatoDocumentalResponse {
+  id: number
+  codigo: string
+  nombre: string
+  version: string
+  tipoArchivo: TipoDocumento
+  nombreArchivo: string
+  tamanioBytes: number
+  estado: EstadoFormato
+  subidoPorNombre: string | null
+  fechaActualizacion: string
+}
+
 // ─── Errores (ErrorResponse del backend) ─────────────────────────────────────
 
 export interface ErrorResponse {

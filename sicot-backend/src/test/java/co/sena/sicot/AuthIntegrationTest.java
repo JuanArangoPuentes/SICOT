@@ -126,8 +126,9 @@ class AuthIntegrationTest {
                                 """))
                 .andExpect(status().isForbidden());
 
+        // GESTION sí puede listar (solo lectura) para poder asignar supervisores a un contrato.
         mockMvc.perform(get("/api/usuarios").header("Authorization", "Bearer " + gestionToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test
