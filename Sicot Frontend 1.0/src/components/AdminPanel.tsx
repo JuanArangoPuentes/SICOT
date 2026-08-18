@@ -21,9 +21,11 @@ interface UserRow {
   centros: string
 }
 
-interface FirmaRow { id: string; usuario: string; firmaId: string; fecha: string; activa: boolean }
+interface FirmaRow { id: string; usuarioId: string; usuario: string; correo: string; firmaId: string; fecha: string; activa: boolean }
 
-// Firmas electrónicas emitidas — vacío por defecto (mock: módulo no expuesto por la API)
+// Firmas electrónicas asignadas — vacío por defecto (mock: módulo no expuesto por la API).
+// Asigna un identificador de firma de referencia a una cuenta real; la integración con un
+// proveedor de firma electrónica (PKI) real queda para una fase posterior.
 const FIRMAS_INICIAL: FirmaRow[] = []
 
 // Actividad de los últimos 30 días — vacío hasta tener datos reales de uso (mock)
@@ -72,7 +74,8 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
   const [formatoModalOpen, setFormatoModalOpen] = useState(false)
   const [formatoAReemplazar, setFormatoAReemplazar] = useState<FormatoDocumentalResponse | null>(null)
   const [newUser, setNewUser] = useState(false)
-  const [newFirma, setNewFirma] = useState<string | null>(null)
+  const [firmaModalOpen, setFirmaModalOpen] = useState(false)
+  const [firmaUsuarioPreseleccionado, setFirmaUsuarioPreseleccionado] = useState<UserRow | null>(null)
 
   const [contratosActivos, setContratosActivos] = useState(0)
   const [totalContratos, setTotalContratos] = useState(0)
@@ -241,6 +244,9 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                   <span style={{ fontSize: 12 }}>{u.rol}</span>
                   <Chip text={u.activo ? 'Activo' : 'Inactivo'} type={u.activo ? 'vigente' : 'inactive'} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <MiniBtn onClick={() => { setFirmaUsuarioPreseleccionado(u); setFirmaModalOpen(true) }}>
+                      <IconSignature size={11} /> Asignar firma
+                    </MiniBtn>
                     <MiniBtn onClick={() => {}} disabled title="El restablecimiento de contraseña se habilita en una fase posterior">Resetear clave</MiniBtn>
                     <MiniBtn onClick={() => toggleActivo(u)}>
                       {u.activo ? 'Desactivar' : 'Reactivar'}
@@ -256,20 +262,27 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {tab === 'firmas' && (
           <>
             <SectionHead title="Firmas Electrónicas"
-              desc="Crear, asignar y gestionar las firmas digitales del sistema. Los datos se almacenan cifrados."
-              action={<button className="btn-green" onClick={() => setNewFirma('')} style={{ padding: '8px 14px', fontSize: 12 }}>+ Generar firma</button>} />
+              desc="Asigna una firma electrónica a las cuentas que administras (Administrador, Gestión, Supervisor). Referencia interna por ahora — la integración con un proveedor de firma electrónica (PKI) real queda para una fase posterior."
+              action={<button className="btn-green" onClick={() => { setFirmaUsuarioPreseleccionado(null); setFirmaModalOpen(true) }} style={{ padding: '8px 14px', fontSize: 12 }}>+ Asignar firma</button>} />
             <div className="card" style={{ overflow: 'hidden' }}>
-              <GridRow header cols="1fr 190px 190px 120px 200px">
-                <span>USUARIO</span><span>FIRMA ID</span><span>FECHA CREACIÓN</span><span>ESTADO</span><span>ACCIONES</span>
+              <GridRow header cols="1fr 260px 190px 190px 120px 160px">
+                <span>USUARIO</span><span>CORREO</span><span>FIRMA ID</span><span>FECHA ASIGNACIÓN</span><span>ESTADO</span><span>ACCIONES</span>
               </GridRow>
+              {firmas.length === 0 && (
+                <div style={{ padding: '40px 16px', textAlign: 'center' }}>
+                  <IconSignature size={26} style={{ opacity: 0.4, margin: '0 auto 10px', color: 'var(--text-muted)' }} />
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no hay firmas asignadas</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usa "+ Asignar firma" o el botón "Asignar firma" en Gestión de Usuarios.</div>
+                </div>
+              )}
               {firmas.map(f => (
-                <GridRow key={f.id} cols="1fr 190px 190px 120px 200px">
+                <GridRow key={f.id} cols="1fr 260px 190px 190px 120px 160px">
                   <span style={{ fontSize: 12 }}>{f.usuario}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{f.correo}</span>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent)' }}>{f.firmaId}</span>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{f.fecha}</span>
                   <Chip text={f.activa ? 'Vigente' : 'Revocada'} type={f.activa ? 'vigente' : 'inactive'} />
                   <span style={{ display: 'flex', gap: 6 }}>
-                    <MiniBtn onClick={() => {}} disabled title="La firma electrónica real se habilita en una fase posterior">Descargar .p7s</MiniBtn>
                     <MiniBtn onClick={() => setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: !x.activa } : x))}>
                       {f.activa ? 'Revocar' : 'Restaurar'}
                     </MiniBtn>
@@ -294,9 +307,13 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
           onCreate={u => { setUsers(us => [...us, u]); setNewUser(false) }} />
       )}
 
-      {newFirma !== null && (
-        <NewFirmaModal nombre={newFirma} onClose={() => setNewFirma(null)}
-          onCreate={f => { setFirmas(fs => [...fs, f]); setNewFirma(null) }} />
+      {firmaModalOpen && (
+        <NewFirmaModal
+          usuarios={users}
+          usuarioPreseleccionado={firmaUsuarioPreseleccionado}
+          onClose={() => setFirmaModalOpen(false)}
+          onCreate={f => { setFirmas(fs => [...fs, f]); setFirmaModalOpen(false) }}
+        />
       )}
     </div>
   )
@@ -548,73 +565,87 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
 
 // ─── Modal: generar firma electrónica ─────────────────────────────────────────
 
-function NewFirmaModal({ nombre, onClose, onCreate }: { nombre: string; onClose: () => void; onCreate: (f: FirmaRow) => void }) {
-  const [n, setN] = useState(nombre)
-  const [correo, setCorreo] = useState(nombre ? '' : '')
-  const [tel, setTel] = useState('')
-  const [cargo, setCargo] = useState('Supervisor')
-  const [doc, setDoc] = useState('')
+function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: {
+  usuarios: UserRow[]
+  usuarioPreseleccionado: UserRow | null
+  onClose: () => void
+  onCreate: (f: FirmaRow) => void
+}) {
+  const activos = usuarios.filter(u => u.activo)
+  const [usuarioId, setUsuarioId] = useState(usuarioPreseleccionado?.id ?? String(activos[0]?.id ?? ''))
   const [phase, setPhase] = useState<'form' | 'gen' | 'done'>('form')
   const [firmaId] = useState('FIRMA-' + Math.random().toString(16).slice(2, 8).toUpperCase())
 
+  const seleccionado = activos.find(u => u.id === usuarioId) ?? null
+
   const generar = () => {
+    if (!seleccionado) return
     setPhase('gen')
-    setTimeout(() => setPhase('done'), 1500)
+    setTimeout(() => setPhase('done'), 1200)
+  }
+
+  const confirmar = () => {
+    if (!seleccionado) return
+    onCreate({
+      id: 'f' + Date.now(),
+      usuarioId: seleccionado.id,
+      usuario: seleccionado.nombre,
+      correo: seleccionado.correo,
+      firmaId,
+      fecha: new Date().toLocaleString('es-CO'),
+      activa: true,
+    })
   }
 
   return (
-    <Modal title="Generar firma electrónica" onClose={onClose} width={520}>
+    <Modal title="Asignar firma electrónica" onClose={onClose} width={480}>
       {phase === 'form' && (
         <>
-          <Field label="Nombre completo">
-            <input type="text" value={n} onChange={e => setN(e.target.value)} style={{ width: '100%', padding: '9px 10px' }} />
-          </Field>
-          <Field label="Correo institucional">
-            <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} placeholder="usuario@soy.sena.edu.co" style={{ width: '100%', padding: '9px 10px' }} />
-          </Field>
-          <Field label="Número de teléfono (opcional)">
-            <input type="text" value={tel} onChange={e => setTel(e.target.value)} style={{ width: '100%', padding: '9px 10px' }} />
-          </Field>
-          <Field label="Cargo">
-            <select value={cargo} onChange={e => setCargo(e.target.value)}>
-              <option>Supervisor</option><option>Gestor de Contratación</option><option>Administrador</option><option>Otro</option>
-            </select>
-          </Field>
-          <Field label="Datos adicionales — Cédula / NIT (opcional, cifrado)">
-            <input type="text" value={doc} onChange={e => setDoc(e.target.value)} style={{ width: '100%', padding: '9px 10px' }} />
-          </Field>
-          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13 }} onClick={generar}>Generar firma</button>
+          {activos.length === 0 ? (
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay cuentas activas disponibles para asignar una firma.</p>
+          ) : (
+            <Field label="Cuenta">
+              <select value={usuarioId} onChange={e => setUsuarioId(e.target.value)}>
+                {activos.map(u => <option key={u.id} value={u.id}>{u.nombre} — {u.rol}</option>)}
+              </select>
+            </Field>
+          )}
+
+          {seleccionado && (
+            <div className="card" style={{ padding: '10px 14px', marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+              {seleccionado.correo} · {seleccionado.cargo}
+            </div>
+          )}
+
+          <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 14px', lineHeight: 1.5 }}>
+            Esto asigna un identificador de firma de referencia a la cuenta. La integración con
+            un proveedor real de firma electrónica (PKI) se implementa en una fase posterior.
+          </p>
+
+          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, opacity: seleccionado ? 1 : 0.6 }}
+            onClick={generar} disabled={!seleccionado}>
+            Asignar firma
+          </button>
         </>
       )}
 
       {phase === 'gen' && (
         <div style={{ textAlign: 'center', padding: '34px 0' }}>
           <IconLock size={30} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
-          <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600, margin: 0 }}>Generando firma única...</p>
-          <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>Cifrando datos con el certificado institucional</p>
+          <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600, margin: 0 }}>Asignando firma...</p>
         </div>
       )}
 
-      {phase === 'done' && (
+      {phase === 'done' && seleccionado && (
         <div style={{ textAlign: 'center' }}>
           <IconSignature size={34} style={{ color: 'var(--accent)', margin: '0 auto 6px' }} />
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma electrónica generada: {firmaId}</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma {firmaId} asignada</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Archivo <span style={{ fontFamily: 'var(--font-mono)' }}>{firmaId}.p7s</span> listo para entrega.
+            Cuenta: {seleccionado.nombre} ({seleccionado.correo})
           </p>
-          <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-              onClick={() => onCreate({ id: 'f' + Date.now(), usuario: n || 'Sin nombre', firmaId, fecha: new Date().toLocaleString('es-CO'), activa: true })}>
-              <IconDownload size={12} /> Descargar firma
-            </button>
-            <button className="btn-green" style={{ flex: 1, padding: '10px 0', fontSize: 13 }}
-              onClick={() => onCreate({ id: 'f' + Date.now(), usuario: n || 'Sin nombre', firmaId, fecha: new Date().toLocaleString('es-CO'), activa: true })}>
-              Enviar al usuario
-            </button>
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10 }}>
-            Se enviará a {correo || 'el correo institucional registrado'}{tel ? ` y por SMS a ${tel}` : ''}.
-          </p>
+          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 18 }} onClick={confirmar}>
+            Listo
+          </button>
         </div>
       )}
     </Modal>
