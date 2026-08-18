@@ -491,14 +491,14 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
   const [tel, setTel] = useState('')
   const [rol, setRol] = useState('Supervisor')
   const [centros, setCentros] = useState<string[]>(['920510'])
-  const [entrega, setEntrega] = useState<'correo' | 'whatsapp' | 'qr'>('correo')
+  const [entrega, setEntrega] = useState<'correo' | 'sms' | 'qr'>('correo')
   const [pw] = useState(randomPassword())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [usuarioCreado, setUsuarioCreado] = useState<UsuarioResponse | null>(null)
-  const [envioCorreo, setEnvioCorreo] = useState<{ enviado: boolean; error: string | null } | null>(null)
-  const [enviandoCorreo, setEnviandoCorreo] = useState(false)
+  const [envioResultado, setEnvioResultado] = useState<{ enviado: boolean; error: string | null } | null>(null)
+  const [enviandoCredenciales, setEnviandoCredenciales] = useState(false)
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   const ROL_MAP: Record<string, Rol> = { Supervisor: 'SUPERVISOR', 'Gestor de Contratación': 'GESTION', Administrador: 'ADMINISTRADOR' }
@@ -516,14 +516,14 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
       setDone(true)
       setBusy(false)
 
-      if (entrega === 'correo') {
-        setEnviandoCorreo(true)
+      if (entrega === 'correo' || entrega === 'sms') {
+        setEnviandoCredenciales(true)
         try {
-          setEnvioCorreo(await enviarCredenciales(creado.id, { password: pw }))
+          setEnvioResultado(await enviarCredenciales(creado.id, { password: pw, metodo: entrega === 'correo' ? 'CORREO' : 'SMS' }))
         } catch {
-          setEnvioCorreo({ enviado: false, error: 'No se pudo contactar al servidor.' })
+          setEnvioResultado({ enviado: false, error: 'No se pudo contactar al servidor.' })
         }
-        setEnviandoCorreo(false)
+        setEnviandoCredenciales(false)
       } else if (entrega === 'qr') {
         const url = buildCredencialesUrl({ nombre: creado.nombre, correo: creado.email, password: pw, rol: ROL_LABEL[creado.rol] })
         setQrDataUrl(await QRCode.toDataURL(url, { width: 190, margin: 1 }))
@@ -558,24 +558,19 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
           <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '8px 0 4px' }}>Usuario creado exitosamente</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{usuarioCreado.nombre} — {usuarioCreado.email}</p>
 
-          {entrega === 'correo' && (
+          {(entrega === 'correo' || entrega === 'sms') && (
             <div style={{
               marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
-              background: enviandoCorreo ? 'var(--bg-surface)' : envioCorreo?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
-              border: `1px solid ${enviandoCorreo ? 'var(--border)' : envioCorreo?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
+              background: enviandoCredenciales ? 'var(--bg-surface)' : envioResultado?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
+              border: `1px solid ${enviandoCredenciales ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
             }}>
-              {enviandoCorreo && 'Enviando correo…'}
-              {!enviandoCorreo && envioCorreo?.enviado && `Correo enviado a ${usuarioCreado.email}.`}
-              {!enviandoCorreo && envioCorreo && !envioCorreo.enviado && (
-                <>No fue posible enviar el correo: {envioCorreo.error}. Copie la contraseña que aparece a continuación y compártala de forma manual.</>
+              {enviandoCredenciales && (entrega === 'correo' ? 'Enviando correo…' : 'Enviando SMS…')}
+              {!enviandoCredenciales && envioResultado?.enviado && (
+                entrega === 'correo' ? `Correo enviado a ${usuarioCreado.email}.` : `SMS enviado a ${usuarioCreado.telefono ?? tel}.`
               )}
-            </div>
-          )}
-
-          {entrega === 'whatsapp' && (
-            <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left', background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-              El envío automático por WhatsApp/SMS aún no está disponible. Copie la contraseña que
-              aparece a continuación y compártala manualmente por WhatsApp o SMS al número {tel || 'indicado'}.
+              {!enviandoCredenciales && envioResultado && !envioResultado.enviado && (
+                <>No fue posible enviar {entrega === 'correo' ? 'el correo' : 'el SMS'}: {envioResultado.error}. Copie la contraseña que aparece a continuación y compártala de forma manual.</>
+              )}
             </div>
           )}
 
@@ -636,7 +631,7 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
 
       <Field label="Método de entrega de credenciales">
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>
-          {([['correo', 'Correo institucional'], ['whatsapp', 'WhatsApp / SMS'], ['qr', 'Mostrar QR']] as const).map(([v, l]) => (
+          {([['correo', 'Correo institucional'], ['sms', 'SMS'], ['qr', 'Mostrar QR']] as const).map(([v, l]) => (
             <label key={v} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
               <input type="radio" name="entrega" checked={entrega === v} onChange={() => setEntrega(v)} />{l}
             </label>

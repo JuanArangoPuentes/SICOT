@@ -41,8 +41,11 @@ export interface CambiarEstadoUsuarioRequest {
   activo: boolean
 }
 
+export type MetodoEntregaCredenciales = 'CORREO' | 'SMS'
+
 export interface EnviarCredencialesRequest {
   password: string
+  metodo: MetodoEntregaCredenciales
 }
 
 export interface EnviarCredencialesResponse {

@@ -63,11 +63,11 @@ public class UsuarioController {
         return ResponseEntity.ok(usuarioService.cambiarEstado(id, request));
     }
 
-    @Operation(summary = "Enviar credenciales por correo",
-            description = "Envío real vía SMTP. Si el correo no está configurado o falla, responde enviado=false con el error real — nunca finge éxito.")
+    @Operation(summary = "Enviar credenciales por correo o SMS",
+            description = "Envío real vía SMTP o Twilio según el método indicado. Si no está configurado o falla, responde enviado=false con el error real — nunca finge éxito.")
     @PostMapping("/{id}/enviar-credenciales")
     public ResponseEntity<EnviarCredencialesResponse> enviarCredenciales(@PathVariable Long id,
                                                                          @Valid @RequestBody EnviarCredencialesRequest request) {
-        return ResponseEntity.ok(usuarioService.enviarCredenciales(id, request.password()));
+        return ResponseEntity.ok(usuarioService.enviarCredenciales(id, request));
     }
 }
