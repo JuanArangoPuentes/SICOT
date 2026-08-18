@@ -1,0 +1,136 @@
+package co.sena.sicot.service;
+
+import co.sena.sicot.dto.contrato.ActualizarContratoRequest;
+import co.sena.sicot.dto.contrato.AsignarSupervisorRequest;
+import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
+import co.sena.sicot.dto.contrato.ContratoResponse;
+import co.sena.sicot.dto.contrato.CrearContratoRequest;
+import co.sena.sicot.entity.Contrato;
+import co.sena.sicot.entity.Usuario;
+import co.sena.sicot.entity.enums.EstadoContrato;
+import co.sena.sicot.exception.BusinessException;
+import co.sena.sicot.exception.ResourceNotFoundException;
+import co.sena.sicot.mapper.ContratoMapper;
+import co.sena.sicot.repository.ContratoRepository;
+import co.sena.sicot.repository.UsuarioRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+public class ContratoService {
+
+    private final ContratoRepository contratoRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final RegistroService registroService;
+
+    public ContratoService(ContratoRepository contratoRepository,
+                           UsuarioRepository usuarioRepository,
+                           RegistroService registroService) {
+        this.contratoRepository = contratoRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.registroService = registroService;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ContratoResponse> listar(Long supervisorId, EstadoContrato estado) {
+        List<Contrato> contratos;
+        if (supervisorId != null && estado != null) {
+            contratos = contratoRepository.findBySupervisorIdAndEstado(supervisorId, estado);
+        } else if (supervisorId != null) {
+            contratos = contratoRepository.findBySupervisorId(supervisorId);
+        } else if (estado != null) {
+            contratos = contratoRepository.findByEstado(estado);
+        } else {
+            contratos = contratoRepository.findAll();
+        }
+        return contratos.stream().map(ContratoMapper::toResponse).toList();
+    }
+
+    @Transactional(readOnly = true)
+    public ContratoResponse obtener(Long id) {
+        return ContratoMapper.toResponse(buscar(id));
+    }
+
+    @Transactional
+    public ContratoResponse crear(CrearContratoRequest request) {
+        String numero = request.numeroContrato().trim();
+        if (contratoRepository.existsByNumeroContrato(numero)) {
+            throw new BusinessException("Ya existe un contrato con el número " + numero + ".");
+        }
+        if (request.fechaFin() != null && request.fechaInicio() != null
+                && request.fechaFin().isBefore(request.fechaInicio())) {
+            throw new BusinessException("La fecha de fin no puede ser anterior a la fecha de inicio.");
+        }
+
+        Contrato contrato = new Contrato();
+        contrato.setNumeroContrato(numero);
+        contrato.setObjeto(request.objeto().trim());
+        contrato.setValor(request.valor());
+        contrato.setFechaInicio(request.fechaInicio());
+        contrato.setFechaFin(request.fechaFin());
+        contrato.setEstado(EstadoContrato.BORRADOR);
+        if (request.supervisorId() != null) {
+            contrato.setSupervisor(usuarioRepository.findById(request.supervisorId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId())));
+        }
+        Contrato guardado = contratoRepository.save(contrato);
+        registroService.registrar(guardado, "CONTRATO_CREADO",
+                "Contrato " + numero + " creado en estado BORRADOR.");
+        return ContratoMapper.toResponse(guardado);
+    }
+
+    @Transactional
+    public ContratoResponse actualizar(Long id, ActualizarContratoRequest request) {
+        Contrato contrato = buscar(id);
+        String numero = request.numeroContrato().trim();
+        if (contratoRepository.existsByNumeroContratoAndIdNot(numero, id)) {
+            throw new BusinessException("Ya existe un contrato con el número " + numero + ".");
+        }
+        if (request.fechaFin() != null && request.fechaInicio() != null
+                && request.fechaFin().isBefore(request.fechaInicio())) {
+            throw new BusinessException("La fecha de fin no puede ser anterior a la fecha de inicio.");
+        }
+        contrato.setNumeroContrato(numero);
+        contrato.setObjeto(request.objeto().trim());
+        contrato.setValor(request.valor());
+        contrato.setFechaInicio(request.fechaInicio());
+        contrato.setFechaFin(request.fechaFin());
+        Contrato guardado = contratoRepository.save(contrato);
+        registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
+                "Se actualizó la información general del contrato " + numero + ".");
+        return ContratoMapper.toResponse(guardado);
+    }
+
+    @Transactional
+    public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
+        Contrato contrato = buscar(id);
+        Usuario supervisor = usuarioRepository.findById(request.supervisorId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId()));
+        if (supervisor.getRol() != null && !supervisor.getRol().name().equals("SUPERVISOR")) {
+            throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
+        }
+        contrato.setSupervisor(supervisor);
+        Contrato guardado = contratoRepository.save(contrato);
+        registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
+                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        return ContratoMapper.toResponse(guardado);
+    }
+
+    @Transactional
+    public ContratoResponse cambiarEstado(Long id, CambiarEstadoContratoRequest request) {
+        Contrato contrato = buscar(id);
+        contrato.setEstado(request.estado());
+        Contrato guardado = contratoRepository.save(contrato);
+        registroService.registrar(guardado, "ESTADO_CAMBIADO",
+                "Estado del contrato cambiado a " + request.estado().name() + ".");
+        return ContratoMapper.toResponse(guardado);
+    }
+
+    @Transactional(readOnly = true)
+    public Contrato buscar(Long id) {
+        return contratoRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("Contrato", id));
+    }
+}

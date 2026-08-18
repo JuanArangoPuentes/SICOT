@@ -1,0 +1,68 @@
+   TABLA    
+------------
+ DOCUMENTOS
+(1 row)
+
+ id | contrato_id | subetapa_id |                 nombre                 |  tipo  |  estado   |         fecha_subida          
+----+-------------+-------------+----------------------------------------+--------+-----------+-------------------------------
+  1 |           1 |           7 | Acta de Inicio — GCCON-F-018           | PDF    | APROBADO  | 2026-08-11 09:09:10.771166-05
+  2 |           1 |          13 | Estudios previos — GCCON-F-046         | PDF    | APROBADO  | 2026-08-11 09:09:10.771166-05
+  3 |           1 |          15 | Registro fotográfico de entrega Lote 1 | IMAGEN | APROBADO  | 2026-08-11 09:09:10.771166-05
+  4 |           1 |             | Ficha técnica del bien                 | PDF    | PENDIENTE | 2026-08-11 09:09:10.771166-05
+(4 rows)
+
+  TABLA  
+---------
+ ALERTAS
+(1 row)
+
+ id | contrato_id |     tipo     | prioridad |                               mensaje                               | leida |        fecha_creacion         
+----+-------------+--------------+-----------+---------------------------------------------------------------------+-------+-------------------------------
+  1 |           1 | VENCIMIENTO  | ALTA      | El contrato vence el 2025-12-19. Faltan menos de 30 días.           | t     | 2026-08-11 09:09:10.771166-05
+  2 |           1 | DOCUMENTO    | MEDIA     | Falta el Informe de Supervisión GCCON-F-031 (subetapa 3.4).         | t     | 2026-08-11 09:09:10.771166-05
+  3 |           1 | CRONOGRAMA   | BAJA      | La subetapa 3.3 (Comparación vs. ficha técnica) está en curso.      | t     | 2026-08-11 09:09:10.771166-05
+  4 |           1 | RECORDATORIO | MEDIA     | Verificar la factura electrónica antes de la recepción (GIL-F-010). | t     | 2026-08-11 09:09:10.771166-05
+  5 |           3 | FIRMA        | ALTA      | Pendiente de firma del Acta de Inicio tras la suspensión.           | f     | 2026-08-11 09:09:10.771166-05
+(5 rows)
+
+   TABLA   
+-----------
+ REGISTROS
+(1 row)
+
+ id | contrato_id | usuario_id |       accion        |                                  descripcion                                   |             fecha             
+----+-------------+------------+---------------------+--------------------------------------------------------------------------------+-------------------------------
+  1 |           1 |            | CONTRATO_CREADO     | Contrato creado a partir de la orden de compra SECOP II.                       | 2026-04-13 09:09:10.771166-05
+  2 |           1 |            | SUPERVISOR_ASIGNADO | Designación formal de supervisor mediante comunicación interna.                | 2026-04-23 09:09:10.771166-05
+  3 |           1 |            | ETAPA_COMPLETADA    | Etapa 1 "INICIO — Estudios y Suscripción" completada al 100%.                  | 2026-04-28 09:09:10.771166-05
+  4 |           1 |            | DOCUMENTO_SUBIDO    | Acta de Inicio GCCON-F-018 firmada y registrada.                               | 2026-05-08 09:09:10.771166-05
+  5 |           1 |            | ETAPA_EN_CURSO      | Etapa 3 "INSPECCIÓN" iniciada: verificación de entrega en bodega.              | 2026-08-01 09:09:10.771166-05
+  7 |           1 |          3 | ETAPA_ACTUALIZADA   | Etapa 3 (INSPECCIÓN — Monitoreo y Ejecución) ahora está en EN_CURSO al 75%.    | 2026-08-11 09:12:31.220932-05
+  9 |           1 |          3 | ETAPA_ACTUALIZADA   | Etapa 3 (INSPECCIÓN — Monitoreo y Ejecución) ahora está en COMPLETADA al 100%. | 2026-08-11 14:02:14.541708-05
+ 10 |           1 |          3 | ETAPA_ACTUALIZADA   | Etapa 3 (INSPECCIÓN — Monitoreo y Ejecución) ahora está en EN_CURSO al 75%.    | 2026-08-11 14:02:14.734698-05
+  6 |           2 |            | CONTRATO_CREADO     | Contrato creado en estado borrador para estructuración.                        | 2026-08-08 09:09:10.771166-05
+  8 |           4 |          2 | CONTRATO_CREADO     | Contrato CO1.PCCNTR.PRUEBA.FASE9 creado en estado BORRADOR.                    | 2026-08-11 13:51:22.161796-05
+ 11 |           5 |          2 | CONTRATO_CREADO     | Contrato CO1.PCCNTR.PRUEBA.AUDITORIA creado en estado BORRADOR.                | 2026-08-11 14:02:34.069151-05
+(11 rows)
+
+         TABLA         
+-----------------------
+ FLYWAY_SCHEMA_HISTORY
+(1 row)
+
+ installed_rank | version |      description      |            script             | success | installed_by |        installed_on        
+----------------+---------+-----------------------+-------------------------------+---------+--------------+----------------------------
+              1 | 1       | create initial schema | V1__create_initial_schema.sql | t       | sicot        | 2026-08-11 09:09:10.499978
+              2 | 2       | seed dev data         | V2__seed_dev_data.sql         | t       | sicot        | 2026-08-11 09:09:10.737752
+(2 rows)
+
+ TABLA  
+--------
+ COUNTS
+(1 row)
+
+ usuarios | contratos | etapas | subetapas | documentos | alertas | registros 
+----------+-----------+--------+-----------+------------+---------+-----------
+        4 |         5 |      9 |        32 |          4 |       5 |        11
+(1 row)
+

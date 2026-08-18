@@ -1,0 +1,335 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+@import 'tailwindcss';
+
+/* ── Design tokens — Tema SENA: Blanco + Verde Institucional (default) ── */
+:root {
+  --bg-base:    #FFFFFF;
+  --bg-card:    #F4FAF5;
+  --bg-surface: #EAF4EC;
+  --bg-input:   #FFFFFF;
+  --border:        #C2DCC6;
+  --border-active: #39B54A;
+  --grid-line:  rgba(57, 181, 74, 0.07);
+
+  --accent:          #39B54A;
+  --accent-emphasis: #2C9A3C;
+  --accent-dim:      rgba(57, 181, 74, 0.65);
+  --accent-glow:     rgba(57, 181, 74, 0.16);
+  --accent-soft:     rgba(57, 181, 74, 0.08);
+  --accent-line:     rgba(57, 181, 74, 0.22);
+  --accent-tech:     #9A6A10;
+
+  --text-primary:   #0C1A0E;
+  --text-secondary: #3A6641;
+  --text-muted:     #7AAB80;
+
+  --chip-purple-bg: rgba(60, 140, 120, 0.12);
+  --chip-purple:    #2B8A72;
+  --chip-blue-bg:   rgba(20, 130, 160, 0.12);
+  --chip-blue:      #126E8F;
+  --chip-gray-bg:   rgba(80, 110, 85, 0.1);
+  --chip-gray:      #556B58;
+  --chip-green-bg:  rgba(57, 181, 74, 0.1);
+  --chip-green:     #278034;
+
+  --alert-leve:    #B8780A;
+  --alert-critica: #C83030;
+
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-ui:      'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono:    'IBM Plex Mono', 'Courier New', monospace;
+  --font-base:    15px;
+  --font-weight-base: 400;
+  --t: 200ms;
+
+  --step-pending: #C2DCC6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: var(--font-base);
+  font-weight: var(--font-weight-base);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Cuadrícula técnica ── */
+.grid-bg {
+  background-color: var(--bg-base);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Animated pulse on the login identity panel grid */
+.grid-bg-animated {
+  background-color: var(--bg-base);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  animation: gridPulse 6s ease-in-out infinite;
+}
+
+@keyframes gridPulse {
+  0%, 100% { background-image:
+    linear-gradient(rgba(57,181,74,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,181,74,0.06) 1px, transparent 1px);
+  }
+  50% { background-image:
+    linear-gradient(rgba(57,181,74,0.13) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(57,181,74,0.13) 1px, transparent 1px);
+  }
+}
+
+/* ── Typography ── */
+.font-display { font-family: var(--font-display); }
+.font-mono    { font-family: var(--font-mono); }
+.text-tech    { font-family: var(--font-mono); color: var(--accent-tech); }
+
+/* ── Cards ── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+.card:hover { border-color: var(--accent-line); }
+
+/* Document card with left-status strip */
+.card-doc {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  border-left: 3px solid var(--accent);
+  transition: border-color var(--t), box-shadow var(--t), transform var(--t);
+}
+.card-doc:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+
+.surface {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+/* ── Buttons ── */
+.btn-green {
+  background: var(--accent);
+  color: #03200D;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: opacity var(--t), transform 100ms;
+}
+.btn-green:hover   { opacity: 0.9; transform: translateY(-1px); }
+.btn-green:active  { transform: scale(0.98); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: border-color var(--t), color var(--t);
+}
+.btn-ghost:hover  { border-color: var(--accent-dim); color: var(--text-primary); }
+.btn-ghost:active { transform: scale(0.98); }
+
+/* Focus ring — always visible, AA-compliant */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Form elements ── */
+input[type="text"],
+input[type="email"],
+input[type="password"] {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  outline: none;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+input:focus { border-color: var(--border-active); box-shadow: 0 0 0 3px var(--accent-glow); }
+input::placeholder { color: var(--text-muted); }
+
+select, textarea {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  padding: 9px 10px;
+  outline: none;
+  width: 100%;
+}
+select:focus, textarea:focus { border-color: var(--border-active); box-shadow: 0 0 0 3px var(--accent-glow); }
+input[type="range"]    { width: 100%; accent-color: var(--accent); }
+input[type="color"]    { width: 100%; height: 34px; padding: 2px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; }
+input[type="checkbox"],
+input[type="radio"]    { accent-color: var(--accent); }
+
+/* ── Chip ── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+/* ── Tabs ── */
+.tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: color var(--t), border-color var(--t);
+}
+.tab-btn:hover  { color: var(--text-secondary); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Copiloto chat bubbles — asymmetric corners ── */
+.copiloto-msg {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  /* More rounded on right = AI side */
+  border-radius: 4px 14px 14px 14px;
+  padding: 12px 16px;
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.user-msg {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  /* More rounded on left = user side */
+  border-radius: 14px 4px 14px 14px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+/* ── Steps ── */
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background var(--t);
+}
+.step-row:hover { background: var(--accent-soft); }
+
+.substep-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  transition: background var(--t);
+}
+.substep-row.active-tutorial {
+  background: rgba(34, 197, 139, 0.06);
+  border: 1px solid rgba(34, 197, 139, 0.22);
+}
+
+/* ── Alerts ── */
+@keyframes blinkSlow { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+@keyframes blinkFast { 0%, 100% { opacity: 0.5;  } 50% { opacity: 1; } }
+.blink-slow { animation: blinkSlow 1.5s ease-in-out infinite; }
+.blink-fast { animation: blinkFast 0.7s ease-in-out infinite; }
+
+/* Alert glow ring (dark theme) */
+.alert-glow-ring {
+  box-shadow: 0 0 0 3px var(--accent-glow), 0 0 12px var(--accent-glow);
+  border-radius: 50%;
+}
+
+/* ── Legacy stage tooltip ── */
+.stage-seg { position: relative; cursor: pointer; }
+.stage-tip {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 180px;
+  background: var(--bg-surface);
+  border: 1px solid var(--accent-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t);
+  z-index: 30;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+}
+.stage-seg:hover .stage-tip { opacity: 1; }
+
+/* ── Avatar ── */
+@keyframes breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes spin     { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+.avatar-float { animation: breathe 3.4s ease-in-out infinite; }
+.fade-in-up   { animation: fadeInUp 200ms ease-out both; }
+
+/* ── Motion accessibility ── */
+@media (prefers-reduced-motion: reduce) {
+  .blink-slow, .blink-fast, .avatar-float { animation: none; }
+  * { transition-duration: 50ms !important; }
+}
+.no-hover *:hover { transition: none !important; }
+.no-hover .blink-slow, .no-hover .blink-fast { animation: none; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 2px; }
+
+/* ── Utilities ── */
+.modal-panel { max-height: 88vh; overflow-y: auto; }
+
+/* ── Responsive ── */
+@media (max-width: 1000px) {
+  .split-panel  { flex-direction: column !important; }
+  .split-aside  { width: 100% !important; border-left: none !important; border-top: 1px solid var(--border); }
+  .data-grid    { grid-template-columns: 1fr !important; gap: 4px !important; }
+}
+
+/* Login split panel mobile */
+@media (max-width: 767px) {
+  .login-identity  { height: 120px !important; flex: none !important; }
+  .login-identity .identity-tagline { display: none !important; }
+  .login-form-panel { flex: 1 !important; }
+}
