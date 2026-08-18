@@ -27,14 +27,12 @@ public class UsuarioService {
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
-    private final SmsService smsService;
 
     public UsuarioService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-                          EmailService emailService, SmsService smsService) {
+                          EmailService emailService) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
-        this.smsService = smsService;
     }
 
     @Transactional(readOnly = true)
@@ -99,13 +97,10 @@ public class UsuarioService {
     public EnviarCredencialesResponse enviarCredenciales(Long id, EnviarCredencialesRequest request) {
         Usuario usuario = buscar(id);
         try {
-            switch (request.metodo()) {
-                case CORREO -> emailService.enviarCredenciales(usuario.getEmail(), usuario.getNombre(), request.password());
-                case SMS -> smsService.enviarCredenciales(usuario.getTelefono(), usuario.getNombre(), request.password());
-            }
+            emailService.enviarCredenciales(usuario.getEmail(), usuario.getNombre(), request.password());
             return new EnviarCredencialesResponse(true, null);
         } catch (Exception e) {
-            log.warn("No se pudo enviar credenciales ({}) a la cuenta {}: {}", request.metodo(), usuario.getEmail(), e.getMessage());
+            log.warn("No se pudo enviar credenciales por correo a {}: {}", usuario.getEmail(), e.getMessage());
             return new EnviarCredencialesResponse(false, e.getMessage());
         }
     }

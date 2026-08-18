@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import QRCode from 'qrcode'
 import { Chip, Field, Modal, SicotBadge, UserMenu, type ChipType } from './ui'
 import { IconCheckCircle, IconClipboardList, IconDownload, IconLock, IconSettings, IconSignature, IconTrash, IconUpload } from './icons'
 import type { AuthResponse, EstadoFormato, FirmaResponse, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
@@ -70,17 +69,6 @@ const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
 const randomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#$%&'
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-}
-
-// Codifica las credenciales en la URL de una página estática (public/credenciales.html)
-// que las decodifica y las muestra en el dispositivo que escanea el QR — nunca pasan por
-// un servidor (van en el fragmento #, que el navegador no envía en las peticiones HTTP).
-const buildCredencialesUrl = (data: { nombre: string; correo: string; password: string; rol: string }) => {
-  const payload = JSON.stringify({ ...data, generadoEn: new Date().toISOString() })
-  const bytes = new TextEncoder().encode(payload)
-  let binary = ''
-  bytes.forEach(b => { binary += String.fromCharCode(b) })
-  return `${window.location.origin}/credenciales.html#${btoa(binary)}`
 }
 
 type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
@@ -491,7 +479,6 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
   const [tel, setTel] = useState('')
   const [rol, setRol] = useState('Supervisor')
   const [centros, setCentros] = useState<string[]>(['920510'])
-  const [entrega, setEntrega] = useState<'correo' | 'sms' | 'qr'>('correo')
   const [pw] = useState(randomPassword())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -499,7 +486,6 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
   const [usuarioCreado, setUsuarioCreado] = useState<UsuarioResponse | null>(null)
   const [envioResultado, setEnvioResultado] = useState<{ enviado: boolean; error: string | null } | null>(null)
   const [enviandoCredenciales, setEnviandoCredenciales] = useState(false)
-  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   const ROL_MAP: Record<string, Rol> = { Supervisor: 'SUPERVISOR', 'Gestor de Contratación': 'GESTION', Administrador: 'ADMINISTRADOR' }
 
@@ -516,18 +502,13 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
       setDone(true)
       setBusy(false)
 
-      if (entrega === 'correo' || entrega === 'sms') {
-        setEnviandoCredenciales(true)
-        try {
-          setEnvioResultado(await enviarCredenciales(creado.id, { password: pw, metodo: entrega === 'correo' ? 'CORREO' : 'SMS' }))
-        } catch {
-          setEnvioResultado({ enviado: false, error: 'No se pudo contactar al servidor.' })
-        }
-        setEnviandoCredenciales(false)
-      } else if (entrega === 'qr') {
-        const url = buildCredencialesUrl({ nombre: creado.nombre, correo: creado.email, password: pw, rol: ROL_LABEL[creado.rol] })
-        setQrDataUrl(await QRCode.toDataURL(url, { width: 190, margin: 1 }))
+      setEnviandoCredenciales(true)
+      try {
+        setEnvioResultado(await enviarCredenciales(creado.id, { password: pw }))
+      } catch {
+        setEnvioResultado({ enviado: false, error: 'No se pudo contactar al servidor.' })
       }
+      setEnviandoCredenciales(false)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo crear el usuario.')
       setBusy(false)
@@ -558,30 +539,17 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
           <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '8px 0 4px' }}>Usuario creado exitosamente</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{usuarioCreado.nombre} — {usuarioCreado.email}</p>
 
-          {(entrega === 'correo' || entrega === 'sms') && (
-            <div style={{
-              marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
-              background: enviandoCredenciales ? 'var(--bg-surface)' : envioResultado?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
-              border: `1px solid ${enviandoCredenciales ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
-            }}>
-              {enviandoCredenciales && (entrega === 'correo' ? 'Enviando correo…' : 'Enviando SMS…')}
-              {!enviandoCredenciales && envioResultado?.enviado && (
-                entrega === 'correo' ? `Correo enviado a ${usuarioCreado.email}.` : `SMS enviado a ${usuarioCreado.telefono ?? tel}.`
-              )}
-              {!enviandoCredenciales && envioResultado && !envioResultado.enviado && (
-                <>No fue posible enviar {entrega === 'correo' ? 'el correo' : 'el SMS'}: {envioResultado.error}. Copie la contraseña que aparece a continuación y compártala de forma manual.</>
-              )}
-            </div>
-          )}
-
-          {entrega === 'qr' && (
-            <div style={{ marginTop: 14, textAlign: 'center' }}>
-              {qrDataUrl
-                ? <img src={qrDataUrl} alt="Código QR con las credenciales" width={190} height={190} style={{ margin: '0 auto', borderRadius: 8, display: 'block' }} />
-                : <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generando código QR…</p>}
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Escanee el código o guarde la imagen — al abrirlo se muestra una página con las credenciales de acceso.</p>
-            </div>
-          )}
+          <div style={{
+            marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
+            background: enviandoCredenciales ? 'var(--bg-surface)' : envioResultado?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
+            border: `1px solid ${enviandoCredenciales ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
+          }}>
+            {enviandoCredenciales && 'Enviando correo…'}
+            {!enviandoCredenciales && envioResultado?.enviado && `Correo enviado a ${usuarioCreado.email}.`}
+            {!enviandoCredenciales && envioResultado && !envioResultado.enviado && (
+              <>No fue posible enviar el correo: {envioResultado.error}. Copie la contraseña que aparece a continuación y compártala de forma manual.</>
+            )}
+          </div>
 
           <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left' }}>
             Contraseña temporal: <span style={{ fontFamily: 'var(--font-mono)' }}>{pw}</span>
@@ -626,18 +594,8 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
       <div className="card" style={{ padding: '12px 14px', margin: '4px 0 12px', borderColor: 'var(--accent-line)' }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>CONTRASEÑA TEMPORAL (se muestra una sola vez)</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, letterSpacing: '0.06em' }}>{pw}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Generada automáticamente · 12 caracteres · almacenada (cifrada)</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Generada automáticamente · 12 caracteres · almacenada (cifrada) · se envía por correo institucional al crear</div>
       </div>
-
-      <Field label="Método de entrega de credenciales">
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>
-          {([['correo', 'Correo institucional'], ['sms', 'SMS'], ['qr', 'Mostrar QR']] as const).map(([v, l]) => (
-            <label key={v} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="radio" name="entrega" checked={entrega === v} onChange={() => setEntrega(v)} />{l}
-            </label>
-          ))}
-        </div>
-      </Field>
 
       {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '0 0 10px' }}>{error}</p>}
 
