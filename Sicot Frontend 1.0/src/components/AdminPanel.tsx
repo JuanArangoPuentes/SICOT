@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import QRCode from 'qrcode'
 import { Chip, Field, Modal, SicotBadge, UserMenu, type ChipType } from './ui'
 import { IconCheckCircle, IconClipboardList, IconDownload, IconLock, IconSettings, IconSignature, IconTrash, IconUpload } from './icons'
-import type { AuthResponse, EstadoFormato, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
-import { getUsuarios, crearUsuario, cambiarEstadoUsuario } from '@/services/usuarioService'
+import type { AuthResponse, EstadoFormato, FirmaResponse, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
+import { getUsuarios, crearUsuario, cambiarEstadoUsuario, enviarCredenciales } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
 import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
+import { getFirmas, crearFirma, cambiarEstadoFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { formatBytes, formatFecha } from '@/services/format'
 
@@ -15,6 +17,7 @@ interface UserRow {
   id: string
   nombre: string
   correo: string
+  telefono: string
   cargo: string
   rol: string
   activo: boolean
@@ -22,11 +25,6 @@ interface UserRow {
 }
 
 interface FirmaRow { id: string; usuarioId: string; usuario: string; correo: string; firmaId: string; fecha: string; activa: boolean }
-
-// Firmas electrónicas asignadas — vacío por defecto (mock: módulo no expuesto por la API).
-// Asigna un identificador de firma de referencia a una cuenta real; la integración con un
-// proveedor de firma electrónica (PKI) real queda para una fase posterior.
-const FIRMAS_INICIAL: FirmaRow[] = []
 
 // Actividad de los últimos 30 días — vacío hasta tener datos reales de uso (mock)
 const ACTIVIDAD: { dia: string; creados: number; supervisados: number; cerrados: number }[] = []
@@ -47,10 +45,21 @@ const mapUser = (u: UsuarioResponse): UserRow => ({
   id: String(u.id),
   nombre: u.nombre,
   correo: u.email,
+  telefono: u.telefono ?? '—',
   cargo: ROL_CARGO[u.rol],
   rol: ROL_LABEL[u.rol],
   activo: u.activo,
   centros: '—',
+})
+
+const mapFirma = (f: FirmaResponse): FirmaRow => ({
+  id: String(f.id),
+  usuarioId: String(f.usuarioId),
+  usuario: f.usuarioNombre,
+  correo: f.usuarioEmail,
+  firmaId: f.firmaId,
+  fecha: formatFecha(f.fechaAsignacion),
+  activa: f.activa,
 })
 
 const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
@@ -69,7 +78,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
   const [tab, setTab] = useState<AdminTab>('dashboard')
   const [formatos, setFormatos] = useState<FormatoDocumentalResponse[]>([])
   const [users, setUsers] = useState<UserRow[]>([])
-  const [firmas, setFirmas] = useState(FIRMAS_INICIAL)
+  const [firmas, setFirmas] = useState<FirmaRow[]>([])
 
   const [formatoModalOpen, setFormatoModalOpen] = useState(false)
   const [formatoAReemplazar, setFormatoAReemplazar] = useState<FormatoDocumentalResponse | null>(null)
@@ -84,7 +93,11 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
     getFormatos().then(setFormatos).catch(() => {})
   }
 
-  // Datos reales: usuarios, contratos y catálogo de formatos documentales
+  const cargarFirmas = () => {
+    getFirmas().then(lista => setFirmas(lista.map(mapFirma))).catch(() => {})
+  }
+
+  // Datos reales: usuarios, contratos, catálogo de formatos y firmas asignadas
   useEffect(() => {
     let cancelado = false
     getUsuarios()
@@ -100,6 +113,9 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
     getFormatos()
       .then(lista => { if (!cancelado) setFormatos(lista) })
       .catch(() => {})
+    getFirmas()
+      .then(lista => { if (!cancelado) setFirmas(lista.map(mapFirma)) })
+      .catch(() => {})
     return () => { cancelado = true }
   }, [])
 
@@ -108,6 +124,13 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers(us => us.map(x => x.id === u.id ? { ...x, activo: actualizado.activo } : x))
     } catch { /* el chip conserva el estado real si el backend rechaza */ }
+  }
+
+  const toggleFirma = async (f: FirmaRow) => {
+    try {
+      const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
+      setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: actualizada.activa } : x))
+    } catch { /* la fila conserva el estado real si el backend rechaza */ }
   }
 
   const eliminarFormatoRow = async (f: FormatoDocumentalResponse) => {
@@ -239,7 +262,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
               {users.map(u => (
                 <GridRow key={u.id} cols="1fr 260px 150px 190px 110px 220px">
                   <span style={{ fontSize: 12 }}>{u.nombre}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Centros: {u.centros}</div></span>
-                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.correo}</span>
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.correo}<div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.telefono}</div></span>
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{u.cargo}</span>
                   <span style={{ fontSize: 12 }}>{u.rol}</span>
                   <Chip text={u.activo ? 'Activo' : 'Inactivo'} type={u.activo ? 'vigente' : 'inactive'} />
@@ -283,7 +306,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                   <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{f.fecha}</span>
                   <Chip text={f.activa ? 'Vigente' : 'Revocada'} type={f.activa ? 'vigente' : 'inactive'} />
                   <span style={{ display: 'flex', gap: 6 }}>
-                    <MiniBtn onClick={() => setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: !x.activa } : x))}>
+                    <MiniBtn onClick={() => toggleFirma(f)}>
                       {f.activa ? 'Revocar' : 'Restaurar'}
                     </MiniBtn>
                   </span>
@@ -462,6 +485,10 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const [usuarioCreado, setUsuarioCreado] = useState<UsuarioResponse | null>(null)
+  const [envioCorreo, setEnvioCorreo] = useState<{ enviado: boolean; error: string | null } | null>(null)
+  const [enviandoCorreo, setEnviandoCorreo] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
 
   const ROL_MAP: Record<string, Rol> = { Supervisor: 'SUPERVISOR', 'Gestor de Contratación': 'GESTION', Administrador: 'ADMINISTRADOR' }
 
@@ -469,39 +496,93 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
     if (busy) return
     if (!nombre.trim()) { setError('El nombre completo es obligatorio.'); return }
     if (!correo.endsWith('@soy.sena.edu.co')) { setError('El correo debe pertenecer al dominio @soy.sena.edu.co'); return }
+    if (!tel.trim()) { setError('El número de teléfono es obligatorio.'); return }
     setError('')
     setBusy(true)
     try {
-      const creado = await crearUsuario({ nombre: nombre.trim(), email: correo.trim(), password: pw, rol: ROL_MAP[rol] })
+      const creado = await crearUsuario({ nombre: nombre.trim(), email: correo.trim(), password: pw, telefono: tel.trim(), rol: ROL_MAP[rol] })
+      setUsuarioCreado(creado)
       setDone(true)
-      setTimeout(() => onCreate({
-        id: String(creado.id),
-        nombre: creado.nombre,
-        correo: creado.email,
-        cargo: ROL_CARGO[creado.rol],
-        rol: ROL_LABEL[creado.rol],
-        activo: creado.activo,
-        centros: centros.join(', ') || '—',
-      }), 1600)
+      setBusy(false)
+
+      if (entrega === 'correo') {
+        setEnviandoCorreo(true)
+        try {
+          setEnvioCorreo(await enviarCredenciales(creado.id, { password: pw }))
+        } catch {
+          setEnvioCorreo({ enviado: false, error: 'No se pudo contactar al servidor.' })
+        }
+        setEnviandoCorreo(false)
+      } else if (entrega === 'qr') {
+        setQrDataUrl(await QRCode.toDataURL(`SICOT\nCorreo: ${creado.email}\nContraseña temporal: ${pw}`, { width: 190, margin: 1 }))
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudo crear el usuario.')
       setBusy(false)
     }
   }
 
+  const cerrar = () => {
+    if (!usuarioCreado) return
+    onCreate({
+      id: String(usuarioCreado.id),
+      nombre: usuarioCreado.nombre,
+      correo: usuarioCreado.email,
+      telefono: usuarioCreado.telefono ?? '—',
+      cargo: ROL_CARGO[usuarioCreado.rol],
+      rol: ROL_LABEL[usuarioCreado.rol],
+      activo: usuarioCreado.activo,
+      centros: centros.join(', ') || '—',
+    })
+  }
+
   const CENTROS = ['920510', '920511', '920512', '920520']
 
-  if (done) {
+  if (done && usuarioCreado) {
     return (
-      <Modal title="Usuario creado" onClose={onClose} width={460}>
+      <Modal title="Usuario creado" onClose={cerrar} width={460}>
         <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
           <IconCheckCircle size={40} style={{ color: 'var(--accent)', margin: '0 auto 8px' }} />
           <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '8px 0 4px' }}>Usuario creado exitosamente</p>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Notificación enviada a {correo}
-            {entrega === 'whatsapp' && tel ? ` y por WhatsApp/SMS a ${tel}` : ''}
-            {entrega === 'qr' ? ' — código QR generado para descarga de credenciales' : ''}.
-          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{usuarioCreado.nombre} — {usuarioCreado.email}</p>
+
+          {entrega === 'correo' && (
+            <div style={{
+              marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
+              background: enviandoCorreo ? 'var(--bg-surface)' : envioCorreo?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
+              border: `1px solid ${enviandoCorreo ? 'var(--border)' : envioCorreo?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
+            }}>
+              {enviandoCorreo && 'Enviando correo…'}
+              {!enviandoCorreo && envioCorreo?.enviado && `Correo enviado de verdad a ${usuarioCreado.email}.`}
+              {!enviandoCorreo && envioCorreo && !envioCorreo.enviado && (
+                <>No se pudo enviar el correo: {envioCorreo.error}. Copiá la contraseña de abajo y compartila manualmente.</>
+              )}
+            </div>
+          )}
+
+          {entrega === 'whatsapp' && (
+            <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left', background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              El envío automático por WhatsApp/SMS todavía no está disponible. Copiá la contraseña de
+              abajo y compartila vos por WhatsApp/SMS a {tel || 'el número indicado'}.
+            </div>
+          )}
+
+          {entrega === 'qr' && (
+            <div style={{ marginTop: 14, textAlign: 'center' }}>
+              {qrDataUrl
+                ? <img src={qrDataUrl} alt="Código QR con las credenciales" width={190} height={190} style={{ margin: '0 auto', borderRadius: 8, display: 'block' }} />
+                : <p style={{ fontSize: 12, color: 'var(--text-muted)' }}>Generando QR…</p>}
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Escaneá o hacé una captura de pantalla — el QR es real, generado en el momento.</p>
+            </div>
+          )}
+
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left' }}>
+            Contraseña temporal: <span style={{ fontFamily: 'var(--font-mono)' }}>{pw}</span>
+          </div>
+
+          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }} onClick={cerrar}>
+            Listo
+          </button>
         </div>
       </Modal>
     )
@@ -515,7 +596,7 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
       <Field label="Correo institucional (@soy.sena.edu.co)">
         <input type="email" value={correo} onChange={e => setCorreo(e.target.value)} placeholder="usuario@soy.sena.edu.co" style={{ width: '100%', padding: '9px 10px' }} />
       </Field>
-      <Field label="Número de teléfono (opcional)">
+      <Field label="Número de teléfono (requerido)">
         <input type="text" value={tel} onChange={e => setTel(e.target.value)} placeholder="300 000 0000" style={{ width: '100%', padding: '9px 10px' }} />
       </Field>
       <Field label="Cargo">
@@ -574,27 +655,28 @@ function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: 
   const activos = usuarios.filter(u => u.activo)
   const [usuarioId, setUsuarioId] = useState(usuarioPreseleccionado?.id ?? String(activos[0]?.id ?? ''))
   const [phase, setPhase] = useState<'form' | 'gen' | 'done'>('form')
-  const [firmaId] = useState('FIRMA-' + Math.random().toString(16).slice(2, 8).toUpperCase())
+  const [creada, setCreada] = useState<FirmaResponse | null>(null)
+  const [error, setError] = useState('')
 
   const seleccionado = activos.find(u => u.id === usuarioId) ?? null
 
-  const generar = () => {
+  const generar = async () => {
     if (!seleccionado) return
+    setError('')
     setPhase('gen')
-    setTimeout(() => setPhase('done'), 1200)
+    try {
+      const resultado = await crearFirma({ usuarioId: Number(seleccionado.id) })
+      setCreada(resultado)
+      setPhase('done')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo asignar la firma.')
+      setPhase('form')
+    }
   }
 
   const confirmar = () => {
-    if (!seleccionado) return
-    onCreate({
-      id: 'f' + Date.now(),
-      usuarioId: seleccionado.id,
-      usuario: seleccionado.nombre,
-      correo: seleccionado.correo,
-      firmaId,
-      fecha: new Date().toLocaleString('es-CO'),
-      activa: true,
-    })
+    if (!creada) return
+    onCreate(mapFirma(creada))
   }
 
   return (
@@ -618,9 +700,12 @@ function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: 
           )}
 
           <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 14px', lineHeight: 1.5 }}>
-            Esto asigna un identificador de firma de referencia a la cuenta. La integración con
-            un proveedor real de firma electrónica (PKI) se implementa en una fase posterior.
+            Esto asigna un identificador de firma de referencia a la cuenta y queda guardado en
+            el sistema. La integración con un proveedor real de firma electrónica (PKI) se
+            implementa en una fase posterior.
           </p>
+
+          {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '0 0 10px' }}>{error}</p>}
 
           <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, opacity: seleccionado ? 1 : 0.6 }}
             onClick={generar} disabled={!seleccionado}>
@@ -636,12 +721,12 @@ function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: 
         </div>
       )}
 
-      {phase === 'done' && seleccionado && (
+      {phase === 'done' && creada && (
         <div style={{ textAlign: 'center' }}>
           <IconSignature size={34} style={{ color: 'var(--accent)', margin: '0 auto 6px' }} />
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma {firmaId} asignada</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma {creada.firmaId} asignada</p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
-            Cuenta: {seleccionado.nombre} ({seleccionado.correo})
+            Cuenta: {creada.usuarioNombre} ({creada.usuarioEmail})
           </p>
           <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 18 }} onClick={confirmar}>
             Listo

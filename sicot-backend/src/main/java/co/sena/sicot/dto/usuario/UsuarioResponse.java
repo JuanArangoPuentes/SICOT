@@ -8,6 +8,7 @@ public record UsuarioResponse(
         Long id,
         String nombre,
         String email,
+        String telefono,
         Rol rol,
         boolean activo,
         Instant fechaCreacion

@@ -3,6 +3,8 @@ package co.sena.sicot.controller;
 import co.sena.sicot.dto.usuario.ActualizarUsuarioRequest;
 import co.sena.sicot.dto.usuario.CambiarEstadoUsuarioRequest;
 import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
+import co.sena.sicot.dto.usuario.EnviarCredencialesRequest;
+import co.sena.sicot.dto.usuario.EnviarCredencialesResponse;
 import co.sena.sicot.dto.usuario.UsuarioResponse;
 import co.sena.sicot.service.UsuarioService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -59,5 +61,13 @@ public class UsuarioController {
     public ResponseEntity<UsuarioResponse> cambiarEstado(@PathVariable Long id,
                                                          @Valid @RequestBody CambiarEstadoUsuarioRequest request) {
         return ResponseEntity.ok(usuarioService.cambiarEstado(id, request));
+    }
+
+    @Operation(summary = "Enviar credenciales por correo",
+            description = "Envío real vía SMTP. Si el correo no está configurado o falla, responde enviado=false con el error real — nunca finge éxito.")
+    @PostMapping("/{id}/enviar-credenciales")
+    public ResponseEntity<EnviarCredencialesResponse> enviarCredenciales(@PathVariable Long id,
+                                                                         @Valid @RequestBody EnviarCredencialesRequest request) {
+        return ResponseEntity.ok(usuarioService.enviarCredenciales(id, request.password()));
     }
 }

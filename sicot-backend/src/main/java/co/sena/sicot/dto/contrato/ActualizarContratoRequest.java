@@ -22,6 +22,23 @@ public record ActualizarContratoRequest(
 
         LocalDate fechaInicio,
 
-        LocalDate fechaFin
+        LocalDate fechaFin,
+
+        // ── Identificación real del contrato (Acta de Inicio / Informe de Supervisión SENA) ──
+        String tipoContrato,
+
+        String contratista,
+
+        String contratistaNit,
+
+        String representanteLegal,
+
+        String lugarEjecucion,
+
+        String numeroRegistroPresupuestal,
+
+        LocalDate fechaRegistroPresupuestal,
+
+        String centroCosto
 ) {
 }

@@ -110,6 +110,31 @@ class ContratoIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void crearContratoConCamposDeIdentificacionLosPersiste() throws Exception {
+        String gestionToken = login("gestion@soy.sena.edu.co", "Gestion123*");
+
+        mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + gestionToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.TEST-ID","objeto":"Prueba de campos reales",
+                                 "valor":5000000,"tipoContrato":"Suministro de Bienes",
+                                 "contratista":"Proveedor de Prueba S.A.S.","contratistaNit":"900123456-7",
+                                 "representanteLegal":"Alguien Responsable","lugarEjecucion":"Itagüí, Antioquia",
+                                 "numeroRegistroPresupuestal":"11125","fechaRegistroPresupuestal":"2026-02-07",
+                                 "centroCosto":"920510 — CTMA Formación"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tipoContrato").value("Suministro de Bienes"))
+                .andExpect(jsonPath("$.contratista").value("Proveedor de Prueba S.A.S."))
+                .andExpect(jsonPath("$.contratistaNit").value("900123456-7"))
+                .andExpect(jsonPath("$.representanteLegal").value("Alguien Responsable"))
+                .andExpect(jsonPath("$.lugarEjecucion").value("Itagüí, Antioquia"))
+                .andExpect(jsonPath("$.numeroRegistroPresupuestal").value("11125"))
+                .andExpect(jsonPath("$.centroCosto").value("920510 — CTMA Formación"));
+    }
+
     private String login(String email, String password) throws Exception {
         String body = loginBody(email, password);
         return objectMapper.readValue(body, AuthResponse.class).token();

@@ -33,6 +33,7 @@ export interface CrearUsuarioRequest {
   nombre: string
   email: string
   password: string
+  telefono: string
   rol: Rol
 }
 
@@ -40,13 +41,45 @@ export interface CambiarEstadoUsuarioRequest {
   activo: boolean
 }
 
+export interface EnviarCredencialesRequest {
+  password: string
+}
+
+export interface EnviarCredencialesResponse {
+  enviado: boolean
+  error: string | null
+}
+
 export interface UsuarioResponse {
   id: number
   nombre: string
   email: string
+  telefono: string | null
   rol: Rol
   activo: boolean
   fechaCreacion: string
+}
+
+// ─── Firmas electrónicas ─────────────────────────────────────────────────────
+
+export interface CrearFirmaRequest {
+  usuarioId: number
+}
+
+export interface CambiarEstadoFirmaRequest {
+  activa: boolean
+}
+
+export interface FirmaResponse {
+  id: number
+  usuarioId: number
+  usuarioNombre: string
+  usuarioEmail: string
+  firmaId: string
+  activa: boolean
+  asignadoPorId: number | null
+  asignadoPorNombre: string | null
+  fechaAsignacion: string
 }
 
 // ─── Contratos ───────────────────────────────────────────────────────────────
@@ -58,6 +91,15 @@ export interface CrearContratoRequest {
   fechaInicio: string | null
   fechaFin: string | null
   supervisorId: number | null
+  // Identificación real (Acta de Inicio / Informe de Supervisión SENA) — opcionales
+  tipoContrato?: string | null
+  contratista?: string | null
+  contratistaNit?: string | null
+  representanteLegal?: string | null
+  lugarEjecucion?: string | null
+  numeroRegistroPresupuestal?: string | null
+  fechaRegistroPresupuestal?: string | null
+  centroCosto?: string | null
 }
 
 export interface ContratoResponse {
@@ -71,6 +113,14 @@ export interface ContratoResponse {
   supervisorId: number | null
   supervisorNombre: string | null
   supervisorEmail: string | null
+  tipoContrato: string | null
+  contratista: string | null
+  contratistaNit: string | null
+  representanteLegal: string | null
+  lugarEjecucion: string | null
+  numeroRegistroPresupuestal: string | null
+  fechaRegistroPresupuestal: string | null
+  centroCosto: string | null
   fechaCreacion: string
 }
 

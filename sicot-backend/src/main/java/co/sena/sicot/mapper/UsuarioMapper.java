@@ -9,7 +9,7 @@ public final class UsuarioMapper {
     }
 
     public static UsuarioResponse toResponse(Usuario u) {
-        return new UsuarioResponse(u.getId(), u.getNombre(), u.getEmail(), u.getRol(),
+        return new UsuarioResponse(u.getId(), u.getNombre(), u.getEmail(), u.getTelefono(), u.getRol(),
                 u.isActivo(), u.getFechaCreacion());
     }
 }

@@ -24,6 +24,9 @@ public class Usuario {
     @Column(nullable = false, length = 100)
     private String password;
 
+    @Column(length = 20)
+    private String telefono;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Rol rol;
@@ -50,6 +53,9 @@ public class Usuario {
 
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+
+    public String getTelefono() { return telefono; }
+    public void setTelefono(String telefono) { this.telefono = telefono; }
 
     public Rol getRol() { return rol; }
     public void setRol(Rol rol) { this.rol = rol; }

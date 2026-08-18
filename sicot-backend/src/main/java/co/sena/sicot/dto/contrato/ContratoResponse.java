@@ -17,6 +17,14 @@ public record ContratoResponse(
         Long supervisorId,
         String supervisorNombre,
         String supervisorEmail,
+        String tipoContrato,
+        String contratista,
+        String contratistaNit,
+        String representanteLegal,
+        String lugarEjecucion,
+        String numeroRegistroPresupuestal,
+        LocalDate fechaRegistroPresupuestal,
+        String centroCosto,
         Instant fechaCreacion
 ) {
 }

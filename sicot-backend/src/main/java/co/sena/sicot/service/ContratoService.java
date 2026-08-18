@@ -71,6 +71,14 @@ public class ContratoService {
         contrato.setFechaInicio(request.fechaInicio());
         contrato.setFechaFin(request.fechaFin());
         contrato.setEstado(EstadoContrato.BORRADOR);
+        contrato.setTipoContrato(request.tipoContrato());
+        contrato.setContratista(request.contratista());
+        contrato.setContratistaNit(request.contratistaNit());
+        contrato.setRepresentanteLegal(request.representanteLegal());
+        contrato.setLugarEjecucion(request.lugarEjecucion());
+        contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
+        contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
+        contrato.setCentroCosto(request.centroCosto());
         if (request.supervisorId() != null) {
             contrato.setSupervisor(usuarioRepository.findById(request.supervisorId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId())));
@@ -97,6 +105,14 @@ public class ContratoService {
         contrato.setValor(request.valor());
         contrato.setFechaInicio(request.fechaInicio());
         contrato.setFechaFin(request.fechaFin());
+        contrato.setTipoContrato(request.tipoContrato());
+        contrato.setContratista(request.contratista());
+        contrato.setContratistaNit(request.contratistaNit());
+        contrato.setRepresentanteLegal(request.representanteLegal());
+        contrato.setLugarEjecucion(request.lugarEjecucion());
+        contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
+        contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
+        contrato.setCentroCosto(request.centroCosto());
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
                 "Se actualizó la información general del contrato " + numero + ".");

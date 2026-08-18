@@ -22,6 +22,14 @@ public final class ContratoMapper {
                 sup != null ? sup.getId() : null,
                 sup != null ? sup.getNombre() : null,
                 sup != null ? sup.getEmail() : null,
+                c.getTipoContrato(),
+                c.getContratista(),
+                c.getContratistaNit(),
+                c.getRepresentanteLegal(),
+                c.getLugarEjecucion(),
+                c.getNumeroRegistroPresupuestal(),
+                c.getFechaRegistroPresupuestal(),
+                c.getCentroCosto(),
                 c.getFechaCreacion());
     }
 }

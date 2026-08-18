@@ -98,6 +98,10 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
   const [proveedor, setProveedor] = useState('')
   const [valor, setValor] = useState('')
   const [vigencia, setVigencia] = useState('')
+  const [nit, setNit] = useState('')
+  const [representanteLegal, setRepresentanteLegal] = useState('')
+  const [lugarEjecucion, setLugarEjecucion] = useState('')
+  const [registroPresupuestal, setRegistroPresupuestal] = useState('')
 
   // Tabla de contratos reales (GET /api/contratos)
   useEffect(() => {
@@ -160,6 +164,13 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
         fechaInicio: vig.inicio,
         fechaFin: vig.fin,
         supervisorId: supervisor ? Number(supervisor) : null,
+        tipoContrato: tipo,
+        contratista: proveedor.trim() || null,
+        contratistaNit: nit.trim() || null,
+        representanteLegal: representanteLegal.trim() || null,
+        lugarEjecucion: lugarEjecucion.trim() || null,
+        numeroRegistroPresupuestal: registroPresupuestal.trim() || null,
+        centroCosto: centro,
       })
       setUploadState('done')
       const sup = supervisores.find(s => String(s.id) === supervisor)
@@ -344,9 +355,13 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
                   {[
                     { label: 'ID Contrato', value: idContrato, onChange: setIdContrato, mono: true },
                     { label: 'Objeto', value: objeto, onChange: setObjeto, mono: false },
-                    { label: 'Proveedor', value: proveedor, onChange: setProveedor, mono: false },
+                    { label: 'Proveedor / Contratista', value: proveedor, onChange: setProveedor, mono: false },
+                    { label: 'NIT o CC del contratista', value: nit, onChange: setNit, mono: true },
+                    { label: 'Representante legal', value: representanteLegal, onChange: setRepresentanteLegal, mono: false },
                     { label: 'Valor', value: valor, onChange: setValor, mono: true },
                     { label: 'Vigencia (dd/mm/aaaa – dd/mm/aaaa)', value: vigencia, onChange: setVigencia, mono: false },
+                    { label: 'Lugar de ejecución', value: lugarEjecucion, onChange: setLugarEjecucion, mono: false },
+                    { label: 'Número de registro presupuestal', value: registroPresupuestal, onChange: setRegistroPresupuestal, mono: true },
                   ].map(f => (
                     <div key={f.label}>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>

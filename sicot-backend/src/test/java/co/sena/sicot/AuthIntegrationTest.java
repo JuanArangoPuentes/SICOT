@@ -62,7 +62,7 @@ class AuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"Inactivo Test","email":"inactivo@soy.sena.edu.co",
-                                 "password":"ClaveTest123","rol":"SUPERVISOR"}
+                                 "password":"ClaveTest123","telefono":"3000000000","rol":"SUPERVISOR"}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", notNullValue()));
@@ -109,7 +109,7 @@ class AuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"No Auth","email":"noauth@soy.sena.edu.co",
-                                 "password":"ClaveTest123","rol":"SUPERVISOR"}
+                                 "password":"ClaveTest123","telefono":"3000000000","rol":"SUPERVISOR"}
                                 """))
                 .andExpect(status().isUnauthorized());
     }
@@ -122,13 +122,39 @@ class AuthIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"nombre":"No Permitido","email":"nopermitido@soy.sena.edu.co",
-                                 "password":"ClaveTest123","rol":"SUPERVISOR"}
+                                 "password":"ClaveTest123","telefono":"3000000000","rol":"SUPERVISOR"}
                                 """))
                 .andExpect(status().isForbidden());
 
         // GESTION sí puede listar (solo lectura) para poder asignar supervisores a un contrato.
         mockMvc.perform(get("/api/usuarios").header("Authorization", "Bearer " + gestionToken))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void crearUsuarioSinTelefonoEsRechazadoYConTelefonoLoPersiste() throws Exception {
+        String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
+
+        // Sin teléfono -> 400 (obligatorio)
+        mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Sin Telefono","email":"sintelefono@soy.sena.edu.co",
+                                 "password":"ClaveTest123","telefono":"","rol":"SUPERVISOR"}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        // Con teléfono -> se crea y el valor real vuelve en la respuesta
+        mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Con Telefono","email":"contelefono@soy.sena.edu.co",
+                                 "password":"ClaveTest123","telefono":"3001234567","rol":"SUPERVISOR"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.telefono").value("3001234567"));
     }
 
     @Test

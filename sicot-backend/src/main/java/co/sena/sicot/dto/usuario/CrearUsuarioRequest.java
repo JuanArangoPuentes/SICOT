@@ -20,6 +20,10 @@ public record CrearUsuarioRequest(
         @Size(min = 8, max = 100, message = "La contraseña debe tener entre 8 y 100 caracteres.")
         String password,
 
+        @NotBlank(message = "El número de teléfono es obligatorio.")
+        @Size(max = 20, message = "El teléfono no puede superar 20 caracteres.")
+        String telefono,
+
         @NotNull(message = "El rol es obligatorio.")
         Rol rol
 ) {

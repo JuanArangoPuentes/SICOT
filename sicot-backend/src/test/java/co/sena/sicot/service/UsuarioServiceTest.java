@@ -38,7 +38,7 @@ class UsuarioServiceTest {
         when(usuarioRepository.existsByEmail("duplicado@soy.sena.edu.co")).thenReturn(true);
 
         CrearUsuarioRequest request = new CrearUsuarioRequest(
-                "Duplicado", "duplicado@soy.sena.edu.co", "ClaveTest123", Rol.SUPERVISOR);
+                "Duplicado", "duplicado@soy.sena.edu.co", "ClaveTest123", "3000000000", Rol.SUPERVISOR);
 
         assertThatThrownBy(() -> usuarioService.crear(request))
                 .isInstanceOf(BusinessException.class)
@@ -59,7 +59,7 @@ class UsuarioServiceTest {
         });
 
         CrearUsuarioRequest request = new CrearUsuarioRequest(
-                "Nuevo Supervisor", "nuevo@soy.sena.edu.co", "ClaveTest123", Rol.SUPERVISOR);
+                "Nuevo Supervisor", "nuevo@soy.sena.edu.co", "ClaveTest123", "3000000000", Rol.SUPERVISOR);
 
         var response = usuarioService.crear(request);
 
@@ -74,7 +74,7 @@ class UsuarioServiceTest {
         when(usuarioRepository.findById(555L)).thenReturn(Optional.empty());
 
         ActualizarUsuarioRequest request = new ActualizarUsuarioRequest(
-                "Nombre", "email@soy.sena.edu.co", null, Rol.GESTION);
+                "Nombre", "email@soy.sena.edu.co", null, "3000000000", Rol.GESTION);
 
         assertThatThrownBy(() -> usuarioService.actualizar(555L, request))
                 .isInstanceOf(ResourceNotFoundException.class);

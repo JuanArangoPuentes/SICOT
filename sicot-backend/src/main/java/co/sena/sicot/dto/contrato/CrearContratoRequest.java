@@ -24,6 +24,24 @@ public record CrearContratoRequest(
 
         LocalDate fechaFin,
 
-        Long supervisorId
+        Long supervisorId,
+
+        // ── Identificación real del contrato (Acta de Inicio / Informe de Supervisión SENA) ──
+        // Opcionales: un contrato en BORRADOR no siempre los tiene todavía.
+        String tipoContrato,
+
+        String contratista,
+
+        String contratistaNit,
+
+        String representanteLegal,
+
+        String lugarEjecucion,
+
+        String numeroRegistroPresupuestal,
+
+        LocalDate fechaRegistroPresupuestal,
+
+        String centroCosto
 ) {
 }

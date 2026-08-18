@@ -1,7 +1,13 @@
 // Servicio de usuarios — administración de usuarios (requiere rol ADMINISTRADOR).
 
 import { apiFetch } from './api/client'
-import type { CambiarEstadoUsuarioRequest, CrearUsuarioRequest, UsuarioResponse } from './api/types'
+import type {
+  CambiarEstadoUsuarioRequest,
+  CrearUsuarioRequest,
+  EnviarCredencialesRequest,
+  EnviarCredencialesResponse,
+  UsuarioResponse,
+} from './api/types'
 
 export function getUsuarios(): Promise<UsuarioResponse[]> {
   return apiFetch<UsuarioResponse[]>('/api/usuarios')
@@ -18,6 +24,16 @@ export function crearUsuario(request: CrearUsuarioRequest): Promise<UsuarioRespo
 export function cambiarEstadoUsuario(id: number, request: CambiarEstadoUsuarioRequest): Promise<UsuarioResponse> {
   return apiFetch<UsuarioResponse>(`/api/usuarios/${id}/estado`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+}
+
+// Envío real de correo (SMTP) — devuelve enviado:false con el error real si
+// el correo no está configurado o falla, nunca finge éxito.
+export function enviarCredenciales(id: number, request: EnviarCredencialesRequest): Promise<EnviarCredencialesResponse> {
+  return apiFetch<EnviarCredencialesResponse>(`/api/usuarios/${id}/enviar-credenciales`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   })

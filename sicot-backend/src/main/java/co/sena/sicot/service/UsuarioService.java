@@ -3,12 +3,15 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.usuario.ActualizarUsuarioRequest;
 import co.sena.sicot.dto.usuario.CambiarEstadoUsuarioRequest;
 import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
+import co.sena.sicot.dto.usuario.EnviarCredencialesResponse;
 import co.sena.sicot.dto.usuario.UsuarioResponse;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.UsuarioMapper;
 import co.sena.sicot.repository.UsuarioRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,12 +21,17 @@ import java.util.List;
 @Service
 public class UsuarioService {
 
+    private static final Logger log = LoggerFactory.getLogger(UsuarioService.class);
+
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
-    public UsuarioService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder) {
+    public UsuarioService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
+                          EmailService emailService) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @Transactional(readOnly = true)
@@ -48,6 +56,7 @@ public class UsuarioService {
         usuario.setNombre(request.nombre().trim());
         usuario.setEmail(email);
         usuario.setPassword(passwordEncoder.encode(request.password()));
+        usuario.setTelefono(request.telefono().trim());
         usuario.setRol(request.rol());
         usuario.setActivo(true);
         return UsuarioMapper.toResponse(usuarioRepository.save(usuario));
@@ -62,6 +71,7 @@ public class UsuarioService {
         }
         usuario.setNombre(request.nombre().trim());
         usuario.setEmail(email);
+        usuario.setTelefono(request.telefono().trim());
         usuario.setRol(request.rol());
         if (request.password() != null && !request.password().isBlank()) {
             usuario.setPassword(passwordEncoder.encode(request.password()));
@@ -80,6 +90,18 @@ public class UsuarioService {
         }
         usuario.setActivo(request.activo());
         return UsuarioMapper.toResponse(usuarioRepository.save(usuario));
+    }
+
+    @Transactional(readOnly = true)
+    public EnviarCredencialesResponse enviarCredenciales(Long id, String password) {
+        Usuario usuario = buscar(id);
+        try {
+            emailService.enviarCredenciales(usuario.getEmail(), usuario.getNombre(), password);
+            return new EnviarCredencialesResponse(true, null);
+        } catch (Exception e) {
+            log.warn("No se pudo enviar credenciales a {}: {}", usuario.getEmail(), e.getMessage());
+            return new EnviarCredencialesResponse(false, e.getMessage());
+        }
     }
 
     @Transactional(readOnly = true)
