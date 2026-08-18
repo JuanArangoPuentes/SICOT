@@ -3,7 +3,7 @@
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios visuales.
 
 import { useEffect, useState } from 'react'
-import { Chip, SicotBadge, UserMenu, type ChipType } from '@/components/ui'
+import { Chip, Modal, SicotBadge, UserMenu, type ChipType } from '@/components/ui'
 import { IconCheckCircle, IconClipboardList, IconFileText, IconLoader, IconPlay, IconSettings, IconUpload } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato } from '@/services/api/types'
@@ -261,15 +261,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
 
       {/* Upload modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 24 }}>
-          <div className="card" style={{ width: '100%', maxWidth: 480, padding: 28 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Cargar nueva ficha de contrato</h3>
-              {uploadState !== 'done' && (
-                <button onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 20, cursor: 'pointer', padding: 0 }}>×</button>
-              )}
-            </div>
-
+        <Modal title="Cargar nueva ficha de contrato" onClose={() => setShowModal(false)} width={480} hideClose={uploadState === 'done'}>
             {uploadState === 'idle' && (
               <div>
                 <div onClick={handleFileSelect}
@@ -425,8 +417,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
                 </p>
               </div>
             )}
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

@@ -317,9 +317,6 @@ input[type="radio"]    { accent-color: var(--accent); }
 ::-webkit-scrollbar-track  { background: transparent; }
 ::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 2px; }
 
-/* ── Utilities ── */
-.modal-panel { max-height: 88vh; overflow-y: auto; }
-
 /* ── Responsive ── */
 @media (max-width: 1000px) {
   .split-panel  { flex-direction: column !important; }

@@ -285,21 +285,27 @@ export function AlertRail({ alerts, blink, onDismiss, onOpen }: {
 
 // ─── Modal genérico ───────────────────────────────────────────────────────────
 
-export function Modal({ title, onClose, width = 520, children }: {
+export function Modal({ title, onClose, width = 520, hideClose = false, children }: {
   title: string
   onClose: () => void
   width?: number
+  hideClose?: boolean
   children: React.ReactNode
 }) {
   return (
     <div onClick={onClose}
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
-      <div className="card modal-panel" onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: width, padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 12 }}>
+      <div className="card" onClick={e => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: width, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '24px 24px 18px', flexShrink: 0 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+          {!hideClose && (
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+          )}
         </div>
-        {children}
+        <div style={{ overflowY: 'auto', padding: '0 24px 24px' }}>
+          {children}
+        </div>
       </div>
     </div>
   )
