@@ -72,6 +72,16 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Ollama corre en el HOST (no en un contenedor propio — necesitaría GPU
+      # pasada al contenedor, mucho más complejo). "localhost" desde dentro
+      # del contenedor apunta al contenedor mismo, así que se usa el nombre
+      # especial que Docker resuelve al host. extra_hosts de abajo es lo que
+      # hace que ese nombre funcione también en Docker nativo de Linux (en
+      # Docker Desktop de Windows/Mac ya funciona sin eso).
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "8080:8080"
     healthcheck:
