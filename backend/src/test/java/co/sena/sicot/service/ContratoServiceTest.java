@@ -31,6 +31,9 @@ class ContratoServiceTest {
     @Mock
     private RegistroService registroService;
 
+    @Mock
+    private co.sena.sicot.repository.EtapaRepository etapaRepository;
+
     @InjectMocks
     private ContratoService contratoService;
 

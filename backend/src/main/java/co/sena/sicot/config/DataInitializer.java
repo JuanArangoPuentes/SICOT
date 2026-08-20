@@ -8,15 +8,22 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
 
 /**
  * Crea los usuarios iniciales de desarrollo (SOLO cuando la tabla está vacía).
- * Las contraseñas son de prueba — cámbielas en producción.
+ * Contraseñas de prueba, conocidas y publicadas en el README — por eso este
+ * bean queda restringido a los perfiles "dev" y "test": en cualquier otro
+ * entorno (incluido el servidor remoto de producción) NUNCA debe sembrar
+ * estas cuentas, aunque la tabla de usuarios esté vacía en el primer
+ * arranque. "test" se incluye porque las pruebas de integración
+ * (@ActiveProfiles("test")) inician sesión con estas mismas cuentas.
  */
 @Configuration
+@Profile({"dev", "test"})
 public class DataInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);

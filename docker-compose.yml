@@ -60,6 +60,10 @@ services:
       db:
         condition: service_healthy
     environment:
+      # "dev" siembra los usuarios de prueba (contraseñas conocidas). En el
+      # servidor remoto de producción, fije SPRING_PROFILES_ACTIVE=prod (o
+      # cualquier valor distinto de "dev") en el .env de la raíz.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:postgresql://db:5432/sicot
       DB_USERNAME: sicot
       DB_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}

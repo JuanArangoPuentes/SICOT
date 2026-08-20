@@ -44,6 +44,7 @@ Copie `.env.example` a un `.env` (o exporte las variables) — los valores por d
 
 | Variable | Descripción |
 |---|---|
+| `SPRING_PROFILES_ACTIVE` | `dev` por defecto (siembra los usuarios de prueba de la tabla de abajo). El servidor remoto de producción **debe** fijarlo a otro valor (p. ej. `prod`) para que esas cuentas conocidas nunca se creen ahí |
 | `DB_URL` | URL JDBC (por defecto `jdbc:postgresql://localhost:5432/sicot`) |
 | `DB_USERNAME` / `DB_PASSWORD` | Credenciales de la base |
 | `JWT_SECRET` | Clave HMAC-SHA256 ≥ 32 bytes **en Base64** (`openssl rand -base64 48`) |
