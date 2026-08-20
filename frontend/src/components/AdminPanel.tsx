@@ -25,7 +25,9 @@ interface UserRow {
 
 interface FirmaRow { id: string; usuarioId: string; usuario: string; correo: string; firmaId: string; fecha: string; activa: boolean }
 
-// Actividad de los últimos 30 días — vacío hasta tener datos reales de uso (mock)
+// Actividad de los últimos 30 días — sin endpoint de estadísticas agregadas
+// todavía; se deja vacío a propósito (estado honesto) en vez de inventar
+// números. El panel ya maneja el caso vacío mostrando un mensaje, no un mock.
 const ACTIVIDAD: { dia: string; creados: number; supervisados: number; cerrados: number }[] = []
 
 const ROL_LABEL: Record<Rol, string> = {
