@@ -32,10 +32,17 @@ public class EtapaService {
         this.registroService = registroService;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<EtapaResponse> listarPorContrato(Long contratoId) {
-        contratoService.buscar(contratoId);
-        return etapaRepository.findByContratoIdOrderByNumeroAsc(contratoId).stream()
+        Contrato contrato = contratoService.buscar(contratoId);
+        List<Etapa> etapas = etapaRepository.findByContratoIdOrderByNumeroAsc(contratoId);
+        // Contratos creados antes de que se agregara el seeding automático (ver
+        // ContratoService.crear) quedaron sin etapas. Se completan aquí, de forma
+        // perezosa e idempotente, en vez de requerir una migración de datos manual.
+        if (etapas.isEmpty()) {
+            etapas = etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(contrato));
+        }
+        return etapas.stream()
                 .map(EtapaMapper::toResponse)
                 .toList();
     }

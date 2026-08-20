@@ -4,7 +4,7 @@ Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contrato
 
 Spring Boot 3.x · Java 21 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
-> ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos (solo consulta) y auditoría. Las integraciones externas (SECOP II, firma electrónica, OCR, IA/Ollama, correo) se implementarán en fases posteriores.
+> ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos, auditoría, **Copiloto IA real (Ollama)** — extracción de datos de contrato, chat conversacional con memoria, redacción de documentos formales —, firma electrónica (referencia interna) y entrega de credenciales por correo. Pendiente: integración SECOP II y OCR de documentos escaneados.
 
 ---
 
@@ -49,7 +49,24 @@ Copie `.env.example` a un `.env` (o exporte las variables) — los valores por d
 | `JWT_SECRET` | Clave HMAC-SHA256 ≥ 32 bytes **en Base64** (`openssl rand -base64 48`) |
 | `JWT_EXPIRATION_MS` | Vigencia del token en ms (por defecto 8 h) |
 | `CORS_ALLOWED_ORIGINS` | Orígenes permitidos separados por coma |
+| `MAIL_HOST` / `MAIL_PORT` / `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_FROM` | Entrega real de credenciales por correo — sin esto, el envío falla honestamente en vez de fingir éxito |
+| `OLLAMA_URL` | URL del servidor Ollama (por defecto `http://localhost:11434` — debe correr en la misma máquina que este backend) |
+| `OLLAMA_MODEL` | Modelo a usar — ver "Elegir el modelo de Ollama" abajo |
+| `OLLAMA_TIMEOUT_SECONDS` | Tiempo máximo de espera por una respuesta de la IA (por defecto 900 = 15 min, para máquinas sin GPU) |
 | `PORT` | Puerto HTTP (por defecto 8080) |
+
+### Elegir el modelo de Ollama
+
+SICOT nunca llama a un servicio de IA pago — todo corre en un Ollama local, en la misma
+máquina que este backend. Qué modelo usar depende del hardware de esa máquina:
+
+| Máquina | Modelo recomendado | Por qué |
+|---|---|---|
+| Servidor sin GPU (uso remoto de Gestión/Administrador — extracción ocasional de datos) | `qwen2.5-coder:7b` (por defecto) | Chico, corre aceptable en CPU; la extracción es una acción esporádica, no interactiva |
+| Máquina del Supervisor con GPU potente (chat interactivo del Copiloto) | `qwen2.5:32b` | Modelos de ~30-40B siguen instrucciones de forma mucho más confiable que los de 7B — necesario para el chat conversacional, no solo para extraer datos |
+
+Para cambiar de modelo: `ollama pull <modelo>` en esa máquina, y ajustar `OLLAMA_MODEL` en
+su `.env`. No requiere ningún cambio de código — el backend es agnóstico al modelo.
 
 ## 4. Ejecutar
 
@@ -119,11 +136,10 @@ Las pruebas de integración usan **H2 en memoria** (perfil `test`); las migracio
 
 ## 9. Pendiente (fases siguientes)
 
-- Carga y descarga real de documentos **por contrato** (evidencias) — el catálogo general de
-  formatos documentales (`/api/formatos`) ya tiene carga/descarga real
 - Integración SECOP II (consulta de procesos)
-- Firma electrónica de documentos (GCCON-F-018, GCCON-F-031, GIL-F-010, …)
-- Asistente IA local (Llama/Qwen) + RAG (Qdrant/pgvector)
-- OCR de documentos (PaddleOCR)
-- Notificaciones por correo (Outlook)
-- Despliegue (docker-compose, variables de entorno reales, HTTPS)
+- Firma electrónica con proveedor PKI real (hoy es una referencia interna registrada en el
+  sistema, no una integración con un proveedor externo de firma)
+- OCR de documentos escaneados sin texto legible (PaddleOCR)
+- RAG (base vectorial) para que el Copiloto consulte documentos largos en vez de solo el
+  contexto que ya recibe en el prompt
+- Despliegue del lado "remoto" (servidor de la sala) con HTTPS y dominio propio

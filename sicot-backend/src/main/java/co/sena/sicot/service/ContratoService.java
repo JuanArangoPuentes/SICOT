@@ -12,6 +12,7 @@ import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.ContratoMapper;
 import co.sena.sicot.repository.ContratoRepository;
+import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.UsuarioRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,13 +25,16 @@ public class ContratoService {
     private final ContratoRepository contratoRepository;
     private final UsuarioRepository usuarioRepository;
     private final RegistroService registroService;
+    private final EtapaRepository etapaRepository;
 
     public ContratoService(ContratoRepository contratoRepository,
                            UsuarioRepository usuarioRepository,
-                           RegistroService registroService) {
+                           RegistroService registroService,
+                           EtapaRepository etapaRepository) {
         this.contratoRepository = contratoRepository;
         this.usuarioRepository = usuarioRepository;
         this.registroService = registroService;
+        this.etapaRepository = etapaRepository;
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +88,7 @@ public class ContratoService {
                     .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId())));
         }
         Contrato guardado = contratoRepository.save(contrato);
+        etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
         registroService.registrar(guardado, "CONTRATO_CREADO",
                 "Contrato " + numero + " creado en estado BORRADOR.");
         return ContratoMapper.toResponse(guardado);

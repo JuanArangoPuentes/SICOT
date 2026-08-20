@@ -3,6 +3,7 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.firma.CambiarEstadoFirmaRequest;
 import co.sena.sicot.dto.firma.CrearFirmaRequest;
 import co.sena.sicot.dto.firma.FirmaResponse;
+import co.sena.sicot.dto.firma.MiFirmaResponse;
 import co.sena.sicot.entity.FirmaElectronica;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.exception.ResourceNotFoundException;
@@ -29,6 +30,14 @@ public class FirmaElectronicaService {
         this.firmaRepository = firmaRepository;
         this.usuarioRepository = usuarioRepository;
         this.registroService = registroService;
+    }
+
+    @Transactional(readOnly = true)
+    public MiFirmaResponse miFirma() {
+        Usuario usuario = SecurityUtils.currentUsuario();
+        return firmaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
+                .map(f -> new MiFirmaResponse(true, f.getFirmaId()))
+                .orElseGet(() -> new MiFirmaResponse(false, null));
     }
 
     @Transactional(readOnly = true)

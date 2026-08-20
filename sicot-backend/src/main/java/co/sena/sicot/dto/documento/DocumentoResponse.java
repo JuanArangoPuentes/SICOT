@@ -13,6 +13,11 @@ public record DocumentoResponse(
         TipoDocumento tipo,
         String rutaArchivo,
         EstadoDocumento estado,
+        Long tamanioBytes,
+        boolean generadoPorIa,
+        String firmaId,
+        Instant fechaFirma,
+        String subidoPorNombre,
         Instant fechaSubida
 ) {
 }

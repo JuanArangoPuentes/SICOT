@@ -17,6 +17,11 @@ public final class DocumentoMapper {
                 d.getTipo(),
                 d.getRutaArchivo(),
                 d.getEstado(),
+                d.getTamanioBytes(),
+                d.isGeneradoPorIa(),
+                d.getFirmaId(),
+                d.getFechaFirma(),
+                d.getSubidoPor() != null ? d.getSubidoPor().getNombre() : null,
                 d.getFechaSubida());
     }
 }

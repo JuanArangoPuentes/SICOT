@@ -108,6 +108,13 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Extracción de texto de PDF (servicio de IA: lectura de documentos reales) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

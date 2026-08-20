@@ -4,7 +4,9 @@ import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
 
@@ -38,6 +40,31 @@ public class Documento {
     @Column(nullable = false, length = 20)
     private EstadoDocumento estado = EstadoDocumento.PENDIENTE;
 
+    @Column(name = "content_type", length = 100)
+    private String contentType;
+
+    @JdbcTypeCode(SqlTypes.VARBINARY)
+    private byte[] contenido;
+
+    @Column(name = "tamanio_bytes")
+    private Long tamanioBytes;
+
+    // true = el Copiloto IA generó este documento; el usuario solo lo firma.
+    @Column(name = "generado_por_ia", nullable = false)
+    private boolean generadoPorIa = false;
+
+    // Referencia a FirmaElectronica.firmaId de quien firmó (no es FK: la
+    // firma pertenece a la cuenta, se copia aquí como evidencia histórica).
+    @Column(name = "firma_id", length = 50)
+    private String firmaId;
+
+    @Column(name = "fecha_firma")
+    private Instant fechaFirma;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "subido_por_id")
+    private Usuario subidoPor;
+
     @CreationTimestamp
     @Column(name = "fecha_subida", nullable = false, updatable = false)
     private Instant fechaSubida;
@@ -66,6 +93,27 @@ public class Documento {
 
     public EstadoDocumento getEstado() { return estado; }
     public void setEstado(EstadoDocumento estado) { this.estado = estado; }
+
+    public String getContentType() { return contentType; }
+    public void setContentType(String contentType) { this.contentType = contentType; }
+
+    public byte[] getContenido() { return contenido; }
+    public void setContenido(byte[] contenido) { this.contenido = contenido; }
+
+    public Long getTamanioBytes() { return tamanioBytes; }
+    public void setTamanioBytes(Long tamanioBytes) { this.tamanioBytes = tamanioBytes; }
+
+    public boolean isGeneradoPorIa() { return generadoPorIa; }
+    public void setGeneradoPorIa(boolean generadoPorIa) { this.generadoPorIa = generadoPorIa; }
+
+    public String getFirmaId() { return firmaId; }
+    public void setFirmaId(String firmaId) { this.firmaId = firmaId; }
+
+    public Instant getFechaFirma() { return fechaFirma; }
+    public void setFechaFirma(Instant fechaFirma) { this.fechaFirma = fechaFirma; }
+
+    public Usuario getSubidoPor() { return subidoPor; }
+    public void setSubidoPor(Usuario subidoPor) { this.subidoPor = subidoPor; }
 
     public Instant getFechaSubida() { return fechaSubida; }
     public Instant getFechaActualizacion() { return fechaActualizacion; }

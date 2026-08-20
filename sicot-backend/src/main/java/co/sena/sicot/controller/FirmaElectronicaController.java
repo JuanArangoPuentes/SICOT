@@ -3,6 +3,7 @@ package co.sena.sicot.controller;
 import co.sena.sicot.dto.firma.CambiarEstadoFirmaRequest;
 import co.sena.sicot.dto.firma.CrearFirmaRequest;
 import co.sena.sicot.dto.firma.FirmaResponse;
+import co.sena.sicot.dto.firma.MiFirmaResponse;
 import co.sena.sicot.service.FirmaElectronicaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,14 @@ public class FirmaElectronicaController {
     @GetMapping
     public ResponseEntity<List<FirmaResponse>> listar() {
         return ResponseEntity.ok(firmaService.listar());
+    }
+
+    @Operation(summary = "Consultar si la cuenta actual tiene una firma electrónica activa asignada",
+            description = "Cualquier usuario autenticado puede consultar su propia firma (no requiere rol ADMINISTRADOR).")
+    @GetMapping("/mia")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<MiFirmaResponse> miFirma() {
+        return ResponseEntity.ok(firmaService.miFirma());
     }
 
     @Operation(summary = "Asignar firma electrónica a una cuenta")

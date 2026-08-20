@@ -1,6 +1,8 @@
 package co.sena.sicot.exception;
 
 import jakarta.validation.ConstraintViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,8 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> notFound(ResourceNotFoundException ex, WebRequest request) {
@@ -79,6 +83,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> generic(Exception ex, WebRequest request) {
+        // No se expone el detalle al cliente (evita filtrar stack traces),
+        // pero sí queda en el log del servidor para poder diagnosticar.
+        log.error("Error interno no controlado en {}", request.getDescription(false), ex);
         return build("Ocurrió un error interno del servidor.", HttpStatus.INTERNAL_SERVER_ERROR, request);
     }
 
