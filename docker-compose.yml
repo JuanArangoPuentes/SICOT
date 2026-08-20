@@ -51,7 +51,7 @@ services:
       - "8081:8080"
 
   backend:
-    build: ./sicot-backend
+    build: ./backend
     container_name: sicot-backend
     labels:
       org.opencontainers.image.title: "SICOT · Backend"
@@ -93,7 +93,7 @@ services:
 
   frontend:
     build:
-      context: ./Sicot Frontend 1.0
+      context: ./frontend
       args:
         # El navegador del usuario llama a esta URL directamente, por eso debe
         # ser la URL alcanzable desde el host (no el nombre del servicio interno).

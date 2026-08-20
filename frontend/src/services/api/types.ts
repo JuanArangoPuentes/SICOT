@@ -1,5 +1,5 @@
 // Tipos de la API del backend SICOT — espejo de los DTO de co.sena.sicot.dto.
-// Fuente de verdad: sicot-backend (Spring Boot 3.5.3, puerto 8080).
+// Fuente de verdad: el backend (Spring Boot 3.5.3, puerto 8080).
 
 export type Rol = 'ADMINISTRADOR' | 'GESTION' | 'SUPERVISOR'
 export type EstadoContrato = 'BORRADOR' | 'ACTIVO' | 'SUSPENDIDO' | 'FINALIZADO' | 'CANCELADO'

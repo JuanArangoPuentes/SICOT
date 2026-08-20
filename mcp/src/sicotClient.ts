@@ -1,4 +1,4 @@
-// Cliente delgado contra la API REST real de sicot-backend. No reimplementa
+// Cliente delgado contra la API REST real del backend. No reimplementa
 // ninguna regla de negocio: cada función es un llamado 1:1 a un endpoint
 // existente. La autenticación se hace una vez (o al recibir 401) con las
 // credenciales configuradas por variables de entorno.

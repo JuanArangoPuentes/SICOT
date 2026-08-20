@@ -10,7 +10,7 @@ honesto.
 
 ```
 ┌───────────────────────┐        ┌───────────────────────┐        ┌────────────────┐
-│  Sicot Frontend 1.0    │ ─────▶ │     sicot-backend      │ ─────▶ │   PostgreSQL   │
+│       frontend         │ ─────▶ │        backend         │ ─────▶ │   PostgreSQL   │
 │  React 19 + Vite + TS  │  HTTP  │  Spring Boot 3 + JWT   │  JDBC  │   BD: sicot    │
 │  :8443                 │ ◀───── │  :8080                 │ ◀───── │                │
 └───────────────────────┘  JSON  └───────────────────────┘        └────────────────┘
@@ -18,7 +18,7 @@ honesto.
                                             │ mismos endpoints REST,
                                             │ como una cuenta real
                                   ┌───────────────────────┐
-                                  │       sicot-mcp        │
+                                  │          mcp           │
                                   │  servidor MCP para IA  │
                                   │  (Claude Desktop/Code) │
                                   └───────────────────────┘
@@ -26,9 +26,9 @@ honesto.
 
 | Carpeta | Qué es | README |
 |---|---|---|
-| [`Sicot Frontend 1.0/`](./Sicot%20Frontend%201.0) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./Sicot%20Frontend%201.0/README.md) |
-| [`sicot-backend/`](./sicot-backend) | API en Spring Boot 3 + Java 21 + PostgreSQL + JWT | [Backend](./sicot-backend/README.md) |
-| [`sicot-mcp/`](./sicot-mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./sicot-mcp/README.md) |
+| [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 3 + Java 21 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/fases/`](./docs/fases) | Reportes de inspección/checkpoint por fase del proyecto | — |
 | [`docs/auditorias/`](./docs/auditorias) | Auditorías de datos/BD (consultas y resultados) | — |
 
@@ -67,9 +67,9 @@ docker compose down -v            # apagar y borrar también los datos de Postgr
 ## Correr sin Docker (desarrollo día a día)
 
 1. PostgreSQL nativo en `localhost:5432`, base `sicot` (detalle en
-   [`sicot-backend/README.md`](./sicot-backend/README.md)).
-2. Backend: `cd sicot-backend && mvn spring-boot:run` → http://localhost:8080
-3. Frontend: `cd "Sicot Frontend 1.0" && npm install && npm run dev` → http://localhost:8443
+   [`backend/README.md`](./backend/README.md)).
+2. Backend: `cd backend && mvn spring-boot:run` → http://localhost:8080
+3. Frontend: `cd frontend && npm install && npm run dev` → http://localhost:8443
 
 ## Cuentas de desarrollo
 
@@ -79,7 +79,7 @@ docker compose down -v            # apagar y borrar también los datos de Postgr
 | `gestion@soy.sena.edu.co` | GESTION |
 | `supervisor@soy.sena.edu.co` | SUPERVISOR |
 
-Contraseñas en [`sicot-backend/README.md`](./sicot-backend/README.md). Son exclusivamente de
+Contraseñas en [`backend/README.md`](./backend/README.md). Son exclusivamente de
 desarrollo/demo — nunca deben usarse en producción.
 
 ## Reglas del proyecto

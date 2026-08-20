@@ -1,5 +1,5 @@
-// Servidor MCP de SICOT — envoltorio delgado sobre la API real de
-// sicot-backend. Cada herramienta es un llamado 1:1 a un endpoint existente;
+// Servidor MCP de SICOT — envoltorio delgado sobre la API real del
+// backend. Cada herramienta es un llamado 1:1 a un endpoint existente;
 // ninguna regla de negocio se reimplementa aquí (la fuente de verdad sigue
 // siendo el backend). Curado a un subconjunto de alto valor en vez de
 // exponer las ~25 rutas mecánicamente — ver README.md para el criterio.

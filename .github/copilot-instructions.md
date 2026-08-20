@@ -12,8 +12,9 @@ El proyecto está dividido en:
 
 ```text
 SICOT
-├── Sicot Frontend 1.0
-└── sicot-backend
+├── frontend
+├── backend
+└── mcp
 ```
 
 El workspace contiene ambos proyectos y deben tratarse como un único sistema.

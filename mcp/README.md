@@ -1,6 +1,6 @@
 # SICOT MCP
 
-Servidor MCP (Model Context Protocol) delgado sobre la API real de `sicot-backend`. No
+Servidor MCP (Model Context Protocol) delgado sobre la API real del backend. No
 reimplementa ninguna regla de negocio: cada herramienta es un llamado 1:1 a un endpoint que ya
 existe y ya está probado. La fuente de verdad sigue siendo el backend — este paquete es solo
 plomería para que un asistente de IA (Claude Desktop, Claude Code, etc.) pueda leer y operar
@@ -14,7 +14,7 @@ herramientas de alto valor (lectura de contratos/etapas/alertas/formatos/usuario
 las escrituras que no dependen de reglas de negocio aún sin definir: crear contrato, asignar
 supervisor, avanzar una subetapa, marcar alerta leída). Deliberadamente **no** incluye:
 administración de cuentas (crear/editar/activar usuarios), cambio de estado de contrato (el
-backend todavía no valida transiciones — ver `sicot-backend/README.md`), ni carga de formatos
+backend todavía no valida transiciones — ver `backend/README.md`), ni carga de formatos
 (archivo binario, se puede agregar después con el mismo patrón).
 
 ## Configuración
@@ -52,7 +52,7 @@ Agregar en la configuración de servidores MCP (`claude_desktop_config.json` o e
   "mcpServers": {
     "sicot": {
       "command": "node",
-      "args": ["C:/Users/juant/Downloads/Proyecto SICOT/sicot-mcp/dist/index.js"],
+      "args": ["C:/Users/juant/Downloads/Proyecto SICOT/mcp/dist/index.js"],
       "env": {
         "SICOT_API_URL": "http://localhost:8080",
         "SICOT_EMAIL": "administrador@soy.sena.edu.co",
@@ -67,4 +67,4 @@ Agregar en la configuración de servidores MCP (`claude_desktop_config.json` o e
 
 Cada herramienta en `src/index.ts` sigue el mismo patrón: `server.registerTool(nombre, { description, inputSchema }, handler)`,
 donde el handler llama `sicotFetch` (en `src/sicotClient.ts`) contra una ruta que **ya existe** en
-`sicot-backend`. No agregar una herramienta para un endpoint que no existe todavía.
+el backend. No agregar una herramienta para un endpoint que no existe todavía.

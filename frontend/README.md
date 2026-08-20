@@ -6,7 +6,7 @@ estado vacío honesto cuando la API todavía no tiene información.
 
 ## Cómo correrlo
 
-Requiere el backend (`sicot-backend`) corriendo en `http://localhost:8080` y PostgreSQL activo.
+Requiere el backend corriendo en `http://localhost:8080` y PostgreSQL activo.
 
 ```bash
 npm install
@@ -18,7 +18,7 @@ Abre la URL que indique la terminal (por defecto http://localhost:8443).
 ## Cuentas de acceso (desarrollo)
 
 El login es real y valida contraseña contra el backend (BCrypt + JWT). Usuarios de desarrollo
-(creados por `DataInitializer` en el backend, ver `sicot-backend/README.md` para las claves):
+(creados por `DataInitializer` en el backend, ver `backend/README.md` para las claves):
 
 - `administrador@soy.sena.edu.co` → Panel Administrador
 - `gestion@soy.sena.edu.co` → Panel Gestión y Contratación
