@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
+import { AvatarIcon } from './icons'
 
 type Section = 'presets' | 'manual' | 'copiloto'
 
@@ -139,11 +140,17 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
                 style={{
                   background: prefs.avatarId === a.id ? 'var(--accent-soft)' : 'transparent',
                   border: `1px solid ${prefs.avatarId === a.id ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 10, padding: '12px 10px', cursor: 'pointer', textAlign: 'center',
+                  borderRadius: 10, padding: '14px 10px', cursor: 'pointer', textAlign: 'center',
                   color: 'var(--text-primary)', fontFamily: 'var(--font-ui)',
                 }}>
-                <div style={{ fontSize: 26 }}>{a.glyph}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 6 }}>{a.label}</div>
+                <div style={{
+                  width: 44, height: 44, margin: '0 auto', borderRadius: '50%', color: 'var(--accent)',
+                  background: 'var(--bg-card)', border: '1.5px solid var(--accent-line)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  <AvatarIcon id={a.id} size={22} />
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8 }}>{a.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.35 }}>{a.desc}</div>
               </button>
             ))}

@@ -1,7 +1,7 @@
 // Tipos de dominio compartidos por toda la aplicación SICOT.
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
 
-export type Screen = 'login' | 'supervisor-welcome' | 'supervisor-panel' | 'gestion-panel' | 'admin-panel'
+export type Screen = 'login' | 'supervisor-panel' | 'gestion-panel' | 'admin-panel'
 export type Tab = 'panel' | 'alertas' | 'documentos' | 'registros'
 export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
 

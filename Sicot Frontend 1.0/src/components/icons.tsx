@@ -114,6 +114,17 @@ export function IconSignature({ size = 34, style, className }: IconProps) {
   )
 }
 
+export function IconUsers({ size = 20, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  )
+}
+
 export function IconAlertTriangle({ size = 16, style, className }: IconProps) {
   return (
     <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -122,4 +133,79 @@ export function IconAlertTriangle({ size = 16, style, className }: IconProps) {
       <line x1="12" y1="17" x2="12.01" y2="17" />
     </svg>
   )
+}
+
+// ─── Avatares del Copiloto — un ícono con carácter propio por personaje,
+// en vez de una letra suelta, manteniendo el mismo trazo lineal del resto
+// del set. ────────────────────────────────────────────────────────────────
+
+export function IconAvatarProfesional({ size = 24, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="7.5" r="3.3" />
+      <path d="M5 21v-1.2A5.8 5.8 0 0 1 10.8 14h2.4A5.8 5.8 0 0 1 19 19.8V21" />
+      <path d="M10.4 14.4 12 17l1.6-2.6" />
+      <path d="M12 17v3.4" />
+    </svg>
+  )
+}
+
+export function IconAvatarLegal({ size = 24, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="2.5" x2="12" y2="19" />
+      <line x1="5" y1="6.5" x2="19" y2="6.5" />
+      <path d="M5 6.5 2.2 12.2a2.9 2.9 0 0 0 5.6 0Z" />
+      <path d="M19 6.5l-2.8 5.7a2.9 2.9 0 0 0 5.6 0Z" />
+      <path d="M8 21h8" />
+      <circle cx="12" cy="2.3" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+export function IconAvatarBot({ size = 24, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4.5" y="8.5" width="15" height="11" rx="3.5" />
+      <line x1="12" y1="3.2" x2="12" y2="8.5" />
+      <circle cx="12" cy="2.4" r="1.1" fill="currentColor" stroke="none" />
+      <circle cx="9.2" cy="14" r="1.2" fill="currentColor" stroke="none" />
+      <circle cx="14.8" cy="14" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M9 17.3c1 .8 4 .8 6 0" />
+    </svg>
+  )
+}
+
+export function IconAvatarGestor({ size = 24, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4.5" y="3.5" width="15" height="18" rx="2.2" />
+      <path d="M9 3.5V3a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v.5" />
+      <path d="M8.3 12.5l2.1 2.1 4.3-4.3" />
+      <line x1="8" y1="17.5" x2="16" y2="17.5" />
+    </svg>
+  )
+}
+
+export function IconAvatarSena({ size = 24, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2.2 4.3 5.1v6.1c0 5.2 3.4 8.9 7.7 10.6 4.3-1.7 7.7-5.4 7.7-10.6V5.1Z" />
+      <path d="M12 7.6l1.15 2.35 2.55.4-1.85 1.85.45 2.55L12 13.6l-2.3 1.15.45-2.55-1.85-1.85 2.55-.4Z" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** Ícono activo del Copiloto — según el avatar elegido en Configuración. Sustituye a la letra suelta que se usaba antes. */
+export function AvatarIcon({ id, size = 24, style, className }: IconProps & { id: string }) {
+  const props = { size, style, className }
+  switch (id) {
+    case 'profesional': return <IconAvatarProfesional {...props} />
+    case 'legal': return <IconAvatarLegal {...props} />
+    case 'bot': return <IconAvatarBot {...props} />
+    case 'gestor': return <IconAvatarGestor {...props} />
+    case 'sena': return <IconAvatarSena {...props} />
+    case 'custom': return <IconUpload {...props} />
+    default: return <IconAvatarBot {...props} />
+  }
 }

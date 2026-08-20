@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Chip, Field, Modal, SicotBadge, UserMenu, type ChipType } from './ui'
-import { IconCheckCircle, IconClipboardList, IconDownload, IconLock, IconSettings, IconSignature, IconTrash, IconUpload } from './icons'
+import { Chip, Field, Modal, TopBar, type ChipType } from './ui'
+import { IconAlertTriangle, IconCheckCircle, IconClipboardList, IconDownload, IconFileText, IconLock, IconSignature, IconTrash, IconUpload, IconUsers } from './icons'
 import type { AuthResponse, EstadoFormato, FirmaResponse, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
 import { getUsuarios, crearUsuario, cambiarEstadoUsuario, enviarCredenciales } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
@@ -145,13 +145,8 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
       {/* Barra superior */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', height: 52, borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-        <SicotBadge small />
-        <span style={{ fontSize: 11, color: 'var(--text-muted)', padding: '2px 8px', border: '1px solid var(--border)', borderRadius: 4 }}>Interfaz de Administrador</span>
-        <div style={{ flex: 1 }} />
-        <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '5px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconSettings size={13} /> Configuración</button>
-        <UserMenu label={usuario.nombre} email={usuario.email} avatarColor="var(--alert-leve)" avatarTextColor="#1a1400" onLogout={onLogout} />
-      </div>
+      <TopBar badge="Interfaz de Administrador" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout}
+        avatarColor="var(--alert-leve)" avatarTextColor="#1a1400" />
 
       {/* Pestañas */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', flexShrink: 0, overflowX: 'auto' }}>
@@ -165,11 +160,15 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {/* ── Panel de control ── */}
         {tab === 'dashboard' && (
           <>
+            <div style={{ marginBottom: 18 }}>
+              <div className="eyebrow">Vista general</div>
+              <h3 style={{ fontSize: 18 }}>Panel de Control</h3>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <Widget label="Contratos activos" value={String(contratosActivos)} hint={`${totalContratos} registrados en total`} />
-              <Widget label="Usuarios activos" value={String(users.filter(u => u.activo).length)} hint={`${users.length} registrados en total`} />
-              <Widget label="Formatos vigentes" value={`${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint="Formatos oficiales cargados" />
-              <Widget label="Formatos obsoletos" value={String(formatosObsoletos)} hint="Requieren reemplazo por una versión vigente" tone={formatosObsoletos ? 'warn' : 'ok'} />
+              <Widget icon={<IconClipboardList size={17} />} label="Contratos activos" value={String(contratosActivos)} hint={`${totalContratos} registrados en total`} />
+              <Widget icon={<IconUsers size={17} />} label="Usuarios activos" value={String(users.filter(u => u.activo).length)} hint={`${users.length} registrados en total`} />
+              <Widget icon={<IconFileText size={17} />} label="Formatos vigentes" value={`${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint="Formatos oficiales cargados" />
+              <Widget icon={<IconAlertTriangle size={17} />} label="Formatos obsoletos" value={String(formatosObsoletos)} hint="Requieren reemplazo por una versión vigente" tone={formatosObsoletos ? 'warn' : 'ok'} />
             </div>
 
             <div className="card" style={{ padding: '16px 18px' }}>
@@ -205,7 +204,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {/* ── Documentos ── */}
         {tab === 'documentos' && (
           <>
-            <SectionHead title="Gestión de Documentos"
+            <SectionHead icon={<IconClipboardList size={16} />} title="Gestión de Documentos"
               desc="Catálogo real de formatos oficiales (GCCON, GIL, ESUCON y demás formatos institucionales). Los archivos que cargues aquí quedan disponibles para descarga real."
               action={<button className="btn-green" onClick={() => { setFormatoAReemplazar(null); setFormatoModalOpen(true) }} style={{ padding: '8px 14px', fontSize: 12 }}>+ Cargar formato</button>} />
             <div className="card" style={{ overflow: 'hidden' }}>
@@ -251,7 +250,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {/* ── Usuarios ── */}
         {tab === 'usuarios' && (
           <>
-            <SectionHead title="Gestión de Usuarios"
+            <SectionHead icon={<IconUsers size={16} />} title="Gestión de Usuarios"
               desc="Crear, editar y desactivar supervisores y personal de gestión."
               action={<button className="btn-green" onClick={() => setNewUser(true)} style={{ padding: '8px 14px', fontSize: 12 }}>+ Nuevo usuario</button>} />
             <div className="card" style={{ overflow: 'hidden' }}>
@@ -283,7 +282,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
         {/* ── Firmas ── */}
         {tab === 'firmas' && (
           <>
-            <SectionHead title="Firmas Electrónicas"
+            <SectionHead icon={<IconSignature size={16} />} title="Firmas Electrónicas"
               desc="Asigna una firma electrónica a las cuentas que administras (Administrador, Gestión, Supervisor). Referencia interna por ahora — la integración con un proveedor de firma electrónica (PKI) real queda para una fase posterior."
               action={<button className="btn-green" onClick={() => { setFirmaUsuarioPreseleccionado(null); setFirmaModalOpen(true) }} style={{ padding: '8px 14px', fontSize: 12 }}>+ Asignar firma</button>} />
             <div className="card" style={{ overflow: 'hidden' }}>
@@ -343,22 +342,41 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
 
 // ─── Piezas ───────────────────────────────────────────────────────────────────
 
-function Widget({ label, value, hint, tone = 'ok' }: { label: string; value: string; hint: string; tone?: 'ok' | 'warn' }) {
+function Widget({ icon, label, value, hint, tone = 'ok' }: { icon?: React.ReactNode; label: string; value: string; hint: string; tone?: 'ok' | 'warn' }) {
+  const tint = tone === 'warn' ? 'var(--alert-leve)' : 'var(--accent)'
   return (
-    <div className="card" style={{ padding: '14px 16px', borderColor: tone === 'warn' ? 'rgba(255,215,0,0.3)' : 'var(--border)' }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontSize: 30, fontWeight: 700, color: tone === 'warn' ? 'var(--alert-leve)' : 'var(--accent)', lineHeight: 1.25, fontFamily: 'var(--font-mono)' }}>{value}</div>
+    <div className={`stat-card${tone === 'warn' ? ' warn' : ''}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        {icon && (
+          <div style={{
+            width: 30, height: 30, borderRadius: 8, flexShrink: 0, color: tint,
+            background: tone === 'warn' ? 'rgba(184,120,10,0.12)' : 'var(--accent-soft)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>{icon}</div>
+        )}
+        <div style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>{label}</div>
+      </div>
+      <div style={{ fontSize: 32, fontWeight: 700, color: tint, lineHeight: 1.3, fontFamily: 'var(--font-display)', margin: '2px 0' }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{hint}</div>
     </div>
   )
 }
 
-function SectionHead({ title, desc, action }: { title: string; desc: string; action?: React.ReactNode }) {
+function SectionHead({ icon, title, desc, action }: { icon?: React.ReactNode; title: string; desc: string; action?: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-      <div>
-        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>{title}</h3>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 620 }}>{desc}</p>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        {icon && (
+          <div style={{
+            width: 34, height: 34, borderRadius: 9, flexShrink: 0, marginTop: 1, color: 'var(--accent)',
+            background: 'var(--accent-soft)', border: '1px solid var(--accent-line)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>{icon}</div>
+        )}
+        <div>
+          <h3 style={{ margin: '0 0 4px', fontSize: 16 }}>{title}</h3>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 620 }}>{desc}</p>
+        </div>
       </div>
       {action}
     </div>
@@ -367,7 +385,7 @@ function SectionHead({ title, desc, action }: { title: string; desc: string; act
 
 function GridRow({ cols, header, children }: { cols: string; header?: boolean; children: React.ReactNode }) {
   return (
-    <div className="data-grid" style={{
+    <div className={header ? 'data-grid' : 'data-grid data-grid-row'} style={{
       display: 'grid', gridTemplateColumns: cols, gap: 12, alignItems: 'center',
       padding: header ? '10px 16px' : '12px 16px',
       borderBottom: '1px solid var(--border)',

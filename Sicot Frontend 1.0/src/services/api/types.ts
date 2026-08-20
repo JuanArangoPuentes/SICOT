@@ -70,6 +70,11 @@ export interface CambiarEstadoFirmaRequest {
   activa: boolean
 }
 
+export interface MiFirmaResponse {
+  tieneFirmaActiva: boolean
+  firmaId: string | null
+}
+
 export interface FirmaResponse {
   id: number
   usuarioId: number
@@ -158,7 +163,41 @@ export interface DocumentoResponse {
   tipo: TipoDocumento
   rutaArchivo: string
   estado: EstadoDocumento
+  tamanioBytes: number | null
+  generadoPorIa: boolean
+  firmaId: string | null
+  fechaFirma: string | null
+  subidoPorNombre: string | null
   fechaSubida: string
+}
+
+// ─── IA (Ollama local) ────────────────────────────────────────────────────────
+
+export interface ExtraccionContratoResponse {
+  idContrato: string | null
+  objeto: string | null
+  proveedor: string | null
+  nit: string | null
+  representanteLegal: string | null
+  valor: string | null
+  vigenciaInicio: string | null
+  vigenciaFin: string | null
+  lugarEjecucion: string | null
+  registroPresupuestal: string | null
+  tipoContrato: string | null
+}
+
+export interface GenerarDocumentoRequest {
+  tipo: string
+  subetapaId: number | null
+}
+
+export interface ChatRequest {
+  pregunta: string
+}
+
+export interface ChatResponse {
+  respuesta: string
 }
 
 // ─── Alertas ─────────────────────────────────────────────────────────────────

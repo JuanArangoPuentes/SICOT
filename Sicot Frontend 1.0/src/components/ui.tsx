@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import senaLogo from '@/imports/image.png'
+import { IconSettings } from './icons'
 
 // ─── Marca institucional ──────────────────────────────────────────────────────
 
@@ -18,7 +19,7 @@ export function SenaLogo({ size = 72 }: { size?: number }) {
   )
 }
 
-export function SicotBadge({ small }: { small?: boolean }) {
+export function SicotBadge({ small, onDark }: { small?: boolean; onDark?: boolean }) {
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: small ? 7 : 9 }}>
       <SenaLogo size={small ? 22 : 30} />
@@ -26,17 +27,42 @@ export function SicotBadge({ small }: { small?: boolean }) {
         <span style={{
           display: 'block',
           fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontSize: small ? 13 : 15, fontWeight: 700, color: 'var(--text-primary)',
+          fontSize: small ? 13 : 15, fontWeight: 700, color: onDark ? '#ffffff' : 'var(--text-primary)',
           letterSpacing: '-0.01em', lineHeight: 1.1,
         }}>
           SICOT
         </span>
         {!small && (
-          <span style={{ display: 'block', fontSize: 9, fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.08em', lineHeight: 1 }}>
+          <span style={{ display: 'block', fontSize: 9, fontWeight: 500, color: onDark ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', letterSpacing: '0.08em', lineHeight: 1 }}>
             CTMA · SENA
           </span>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Barra superior (compartida por todos los paneles) ────────────────────────
+
+export function TopBar({ badge, actions, usuario, onOpenSettings, onLogout, avatarColor, avatarTextColor }: {
+  badge: string
+  actions?: React.ReactNode
+  usuario: { nombre: string; email: string }
+  onOpenSettings: () => void
+  onLogout: () => void
+  avatarColor?: string
+  avatarTextColor?: string
+}) {
+  return (
+    <div className="topbar">
+      <SicotBadge small onDark />
+      <span className="topbar-badge">{badge}</span>
+      <div style={{ flex: 1 }} />
+      {actions}
+      <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '6px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <IconSettings size={13} /> Configuración
+      </button>
+      <UserMenu label={usuario.nombre} email={usuario.email} avatarColor={avatarColor} avatarTextColor={avatarTextColor} onLogout={onLogout} />
     </div>
   )
 }
@@ -63,7 +89,12 @@ export function Chip({ text, type }: { text: string; type: ChipType }) {
     inactive: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
   }
   const s = map[type]
-  return <span className="chip" style={{ background: s.bg, color: s.color }}>{text}</span>
+  return (
+    <span className="chip" style={{ background: s.bg, color: s.color }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor', marginRight: 5, flexShrink: 0 }} />
+      {text}
+    </span>
+  )
 }
 
 // ─── Barra de progreso (etapas) ───────────────────────────────────────────────
@@ -225,7 +256,7 @@ export function StageProgressBar({ stages, onStageClick }: {
 
 export interface LiveAlert {
   id: string
-  severity: 'leve' | 'critica'
+  severity: 'ok' | 'leve' | 'critica'
   text: string
 }
 
@@ -294,16 +325,17 @@ export function Modal({ title, onClose, width = 520, hideClose = false, children
 }) {
   return (
     <div onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.78)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(6,14,8,0.72)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
       <div className="card" onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: width, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '24px 24px 18px', flexShrink: 0 }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display, var(--font-ui))' }}>{title}</h3>
+        style={{ width: '100%', maxWidth: width, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 16, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
+        <div style={{ height: 4, flexShrink: 0, background: 'linear-gradient(90deg, var(--accent) 0%, var(--accent-emphasis) 100%)' }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+          <h3 style={{ fontSize: 16 }}>{title}</h3>
           {!hideClose && (
             <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
           )}
         </div>
-        <div style={{ overflowY: 'auto', padding: '0 24px 24px' }}>
+        <div style={{ overflowY: 'auto', padding: '20px 24px 24px' }}>
           {children}
         </div>
       </div>
@@ -344,14 +376,19 @@ export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTe
   return (
     <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
       <div
-        style={{ width: 32, height: 32, borderRadius: '50%', background: avatarColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700, color: avatarTextColor, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}
+        style={{
+          width: 32, height: 32, borderRadius: '50%', background: avatarColor,
+          border: '2px solid rgba(255,255,255,0.9)', boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
+          color: avatarTextColor, cursor: 'pointer', userSelect: 'none', flexShrink: 0,
+        }}
         onClick={() => setOpen(v => !v)}
       >
         {label[0].toUpperCase()}
       </div>
       <div style={{ lineHeight: 1.3, cursor: 'pointer' }} onClick={() => setOpen(v => !v)}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>{label}</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{email}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>{label}</div>
+        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.78)' }}>{email}</div>
       </div>
       {open && (
         <div style={{

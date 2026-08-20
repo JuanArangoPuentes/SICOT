@@ -45,7 +45,8 @@ export default function Registros({ extra }: { extra: Registro[] }) {
     <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 700 }}>Registros</h3>
+          <div className="eyebrow">Trazabilidad del contrato</div>
+          <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>Registros</h3>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
             Historial de comunicaciones y firmas del contrato · {filtrados.length} de {all.length} registros
           </p>

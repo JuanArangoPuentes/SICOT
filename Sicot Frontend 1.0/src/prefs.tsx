@@ -45,8 +45,8 @@ export const DEFAULT_PREFS: Prefs = {
   colorAccentTech: '#9A6A10',
   colorSecondary:  '#126E8F',
   colorBackground: '#FFFFFF',
-  colorBgCard:     '#F4FAF5',
-  colorBgSurface:  '#EAF4EC',
+  colorBgCard:     '#FFFFFF',
+  colorBgSurface:  '#F3F7F3',
   colorBgInput:    '#FFFFFF',
   colorBorder:     '#C2DCC6',
   colorText:       '#0C1A0E',
@@ -80,8 +80,8 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       colorEmphasis:      '#2C9A3C',
       colorAccentTech:    '#9A6A10',
       colorBackground:    '#FFFFFF',
-      colorBgCard:        '#F4FAF5',
-      colorBgSurface:     '#EAF4EC',
+      colorBgCard:        '#FFFFFF',
+      colorBgSurface:     '#F3F7F3',
       colorBgInput:       '#FFFFFF',
       colorBorder:        '#C2DCC6',
       colorText:          '#0C1A0E',
@@ -158,18 +158,14 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
   },
 }
 
-export const AVATARS: Array<{ id: string; label: string; glyph: string; desc: string }> = [
-  { id: 'profesional', label: 'Asistente Profesional', glyph: 'P', desc: 'Figura minimalista, traje azul' },
-  { id: 'legal',       label: 'Experto Legal',          glyph: 'L', desc: 'Lentes y portapapeles' },
-  { id: 'bot',         label: 'Bot Amigable',           glyph: 'IA', desc: 'Diseño futurista y cálido' },
-  { id: 'gestor',      label: 'Gestor Eficiente',       glyph: 'G', desc: 'Estilo corporativo moderno' },
-  { id: 'sena',        label: 'Especialista SENA',      glyph: 'S', desc: 'Con branding institucional' },
-  { id: 'custom',      label: 'Avatar Personalizado',   glyph: '+', desc: 'Sube una imagen de 200×200 px' },
+export const AVATARS: Array<{ id: string; label: string; desc: string }> = [
+  { id: 'profesional', label: 'Asistente Profesional', desc: 'Figura minimalista, traje azul' },
+  { id: 'legal',       label: 'Experto Legal',          desc: 'Lentes y portapapeles' },
+  { id: 'bot',         label: 'Bot Amigable',           desc: 'Diseño futurista y cálido' },
+  { id: 'gestor',      label: 'Gestor Eficiente',       desc: 'Estilo corporativo moderno' },
+  { id: 'sena',        label: 'Especialista SENA',      desc: 'Con branding institucional' },
+  { id: 'custom',      label: 'Avatar Personalizado',   desc: 'Sube una imagen de 200×200 px' },
 ]
-
-export function avatarGlyph(id: string) {
-  return AVATARS.find(a => a.id === id)?.glyph ?? 'IA'
-}
 
 export const FONT_OPTIONS = ['IBM Plex Sans', 'Space Grotesk', 'IBM Plex Mono']
 

@@ -5,8 +5,8 @@
 /* ── Design tokens — Tema SENA: Blanco + Verde Institucional (default) ── */
 :root {
   --bg-base:    #FFFFFF;
-  --bg-card:    #F4FAF5;
-  --bg-surface: #EAF4EC;
+  --bg-card:    #FFFFFF;
+  --bg-surface: #F3F7F3;
   --bg-input:   #FFFFFF;
   --border:        #C2DCC6;
   --border-active: #39B54A;
@@ -32,6 +32,8 @@
   --chip-gray:      #556B58;
   --chip-green-bg:  rgba(57, 181, 74, 0.1);
   --chip-green:     #278034;
+  --chip-red-bg:    rgba(200, 48, 48, 0.1);
+  --chip-red:       #C83030;
 
   --alert-leve:    #B8780A;
   --alert-critica: #C83030;
@@ -44,6 +46,12 @@
   --t: 200ms;
 
   --step-pending: #C2DCC6;
+
+  /* Elevación — sombras neutras (funcionan sobre cualquier preset de color) */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.10), 0 2px 6px rgba(0,0,0,0.06);
+  --shadow-lg: 0 20px 48px rgba(0,0,0,0.18), 0 6px 16px rgba(0,0,0,0.08);
 }
 
 * { box-sizing: border-box; }
@@ -57,6 +65,14 @@ body {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Jerarquía tipográfica — encabezados en la fuente de marca por defecto ── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+  font-weight: 700;
+  margin: 0;
 }
 
 /* ── Cuadrícula técnica ── */
@@ -98,20 +114,22 @@ body {
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--t), box-shadow var(--t);
 }
-.card:hover { border-color: var(--accent-line); }
+.card:hover { border-color: var(--accent-line); box-shadow: var(--shadow-md); }
 
 /* Document card with left-status strip */
 .card-doc {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   border-left: 3px solid var(--accent);
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--t), box-shadow var(--t), transform var(--t);
 }
-.card-doc:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,0,0,0.25); }
+.card-doc:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 
 .surface {
   background: var(--bg-surface);
@@ -121,17 +139,19 @@ body {
 
 /* ── Buttons ── */
 .btn-green {
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent) 0%, var(--accent-emphasis) 100%);
+  background-color: var(--accent);
   color: #03200D;
   font-weight: 600;
   border: none;
   border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-ui);
-  transition: opacity var(--t), transform 100ms;
+  box-shadow: var(--shadow-xs);
+  transition: opacity var(--t), transform 100ms, box-shadow var(--t);
 }
-.btn-green:hover   { opacity: 0.9; transform: translateY(-1px); }
-.btn-green:active  { transform: scale(0.98); }
+.btn-green:hover   { opacity: 0.94; transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-green:active  { transform: translateY(0) scale(0.98); box-shadow: var(--shadow-xs); }
 
 .btn-ghost {
   background: transparent;
@@ -140,9 +160,9 @@ body {
   border-radius: 8px;
   cursor: pointer;
   font-family: var(--font-ui);
-  transition: border-color var(--t), color var(--t);
+  transition: border-color var(--t), color var(--t), background var(--t);
 }
-.btn-ghost:hover  { border-color: var(--accent-dim); color: var(--text-primary); }
+.btn-ghost:hover  { border-color: var(--accent-dim); color: var(--text-primary); background: var(--accent-soft); }
 .btn-ghost:active { transform: scale(0.98); }
 
 /* Focus ring — always visible, AA-compliant */
@@ -188,10 +208,10 @@ input[type="radio"]    { accent-color: var(--accent); }
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -201,16 +221,107 @@ input[type="radio"]    { accent-color: var(--accent); }
   background: transparent;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 10px 16px;
+  border-radius: 8px 8px 0 0;
+  padding: 11px 18px;
   font-size: 14px;
   font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
   font-family: var(--font-ui);
-  transition: color var(--t), border-color var(--t);
+  transition: color var(--t), border-color var(--t), background var(--t);
 }
-.tab-btn:hover  { color: var(--text-secondary); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn:hover  { color: var(--text-secondary); background: var(--accent-soft); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; background: var(--accent-soft); }
+
+/* ── Barra superior compartida (todos los paneles) — verde SENA sólido,
+   igual al panel de identidad del login, no un tinte pálido ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 22px;
+  height: 60px;
+  flex-shrink: 0;
+  background:
+    linear-gradient(rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.055) 1px, transparent 1px),
+    linear-gradient(135deg, var(--accent) 0%, var(--accent-emphasis) 100%);
+  background-size: 26px 26px, 26px 26px, 100% 100%;
+  /* Respaldo sólido: si el navegador no compone el degradado (modo de alto
+     contraste de Windows, extensiones de accesibilidad, etc.), el texto
+     blanco de esta barra sigue siendo legible en vez de quedar invisible. */
+  background-color: var(--accent);
+  border-bottom: 1px solid rgba(0,0,0,0.10);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 10;
+}
+.topbar-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.92);
+  padding: 4px 11px;
+  border: 1px solid rgba(255,255,255,0.32);
+  background: rgba(255,255,255,0.14);
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.topbar .btn-ghost {
+  color: rgba(255,255,255,0.92);
+  border-color: rgba(255,255,255,0.32);
+}
+.topbar .btn-ghost:hover {
+  color: #ffffff;
+  border-color: rgba(255,255,255,0.6);
+  background: rgba(255,255,255,0.16);
+}
+
+/* ── Tarjetas de estadística (dashboards) ── */
+.stat-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  overflow: hidden;
+  transition: box-shadow var(--t), border-color var(--t), transform var(--t);
+}
+.stat-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-emphasis));
+}
+.stat-card.warn::before { background: linear-gradient(90deg, var(--alert-leve), #E0A840); }
+.stat-card:hover { box-shadow: var(--shadow-md); border-color: var(--accent-line); transform: translateY(-2px); }
+
+/* ── Filas de tabla con hover (data-grid) ── */
+.data-grid-row:hover { background: var(--accent-soft); }
+.data-grid:not(.data-grid-row) {
+  background: var(--bg-surface);
+}
+
+/* ── Kicker / eyebrow — etiqueta corta sobre un título de sección ── */
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 6px;
+}
+.eyebrow::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-emphasis));
+  flex-shrink: 0;
+}
 
 /* ── Copiloto chat bubbles — asymmetric corners ── */
 .copiloto-msg {
@@ -313,9 +424,10 @@ input[type="radio"]    { accent-color: var(--accent); }
 .no-hover .blink-slow, .no-hover .blink-fast { animation: none; }
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar        { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track  { background: transparent; }
-::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent-dim); }
 
 /* ── Responsive ── */
 @media (max-width: 1000px) {

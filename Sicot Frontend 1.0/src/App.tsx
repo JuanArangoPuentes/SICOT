@@ -10,7 +10,6 @@ import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
 import type { Registro } from '@/components/Registros'
 import LoginScreen from '@/screens/LoginScreen'
-import SupervisorWelcome from '@/screens/SupervisorWelcome'
 import SupervisorPanel from '@/screens/SupervisorPanel'
 import GestionPanel from '@/screens/GestionPanel'
 import type { Screen, Step } from '@/types/domain'
@@ -38,7 +37,7 @@ const TOUR_GESTION: TourStep[] = [
 ]
 
 const screenFor = (u: AuthResponse): Screen => {
-  if (u.rol === 'SUPERVISOR') return 'supervisor-welcome'
+  if (u.rol === 'SUPERVISOR') return 'supervisor-panel'
   if (u.rol === 'ADMINISTRADOR') return 'admin-panel'
   return 'gestion-panel'
 }
@@ -58,6 +57,10 @@ function AppInner() {
   const [tourActive, setTourActive] = useState(false)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [contrato, setContrato] = useState<ContratoResponse | null>(null)
+  // true mientras se consulta el contrato real del supervisor — evita que el
+  // panel muestre "sin contrato asignado" por un instante antes de que la
+  // respuesta real llegue.
+  const [cargandoContrato, setCargandoContrato] = useState(false)
 
   const addRegistro = (r: Registro) =>
     setRegistros(prev => (prev.some(x => x.id === r.id) ? prev : [...prev, r]))
@@ -66,9 +69,11 @@ function AppInner() {
   useEffect(() => {
     if (!session || session.rol !== 'SUPERVISOR') {
       setContrato(null)
+      setCargandoContrato(false)
       return
     }
     let cancelado = false
+    setCargandoContrato(true)
     getContratos(session.usuarioId)
       .then(lista => {
         if (cancelado) return
@@ -77,6 +82,9 @@ function AppInner() {
       })
       .catch(() => {
         if (!cancelado) setContrato(null)
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoContrato(false)
       })
     return () => { cancelado = true }
   }, [session])
@@ -127,13 +135,6 @@ function AppInner() {
   return (
     <>
       {screen === 'login' && <LoginScreen onLogin={handleLogin} />}
-      {screen === 'supervisor-welcome' && (
-        <SupervisorWelcome
-          contrato={contrato}
-          onVerContrato={() => setScreen('supervisor-panel')}
-          onTutorial={() => { setScreen('supervisor-panel'); setTimeout(() => setTourActive(true), 400) }}
-        />
-      )}
       {screen === 'supervisor-panel' && session && (
         <SupervisorPanel
           steps={steps}
@@ -141,6 +142,7 @@ function AppInner() {
           newContractNotif={newContractNotif}
           usuario={session}
           contrato={contrato}
+          cargandoContrato={cargandoContrato}
           onLogout={logout}
           onOpenSettings={() => setSettingsOpen(true)}
           onStartTour={() => setTourActive(true)}

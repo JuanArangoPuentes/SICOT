@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { avatarGlyph, usePrefs } from '@/prefs'
+import { usePrefs } from '@/prefs'
+import { AvatarIcon } from './icons'
 
 export interface TourStep {
   selector: string
@@ -23,7 +24,6 @@ export default function AvatarLayer({ tour, tourActive, onTourEnd, onOpenChat }:
   const [rect, setRect] = useState<DOMRect | null>(null)
   const [reaction, setReaction] = useState<string | null>(null)
 
-  const glyph = avatarGlyph(prefs.avatarId)
   const followerOn = prefs.avatarMode === 'follower' && !tourActive
 
   // Follower: sigue el cursor con retardo y vuelve a la esquina al quedar inactivo
@@ -75,11 +75,11 @@ export default function AvatarLayer({ tour, tourActive, onTourEnd, onOpenChat }:
           transition: 'top 300ms cubic-bezier(0.4,0,0.2,1), left 300ms cubic-bezier(0.4,0,0.2,1)',
         }}>
           <div className="avatar-float" style={{
-            width: 76, height: 76, borderRadius: '50%', flexShrink: 0, fontSize: 34,
+            width: 76, height: 76, borderRadius: '50%', flexShrink: 0, color: 'var(--accent)',
             background: 'var(--bg-card)', border: '2px solid var(--accent)',
             boxShadow: '0 0 32px var(--accent-glow)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>{glyph}</div>
+          }}><AvatarIcon id={prefs.avatarId} size={34} /></div>
           <div className="card" style={{ maxWidth: 300, padding: '14px 16px', borderColor: 'var(--accent-line)' }}>
             <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--accent)', marginBottom: 6 }}>
               {prefs.avatarName.toUpperCase()} · PASO {step + 1}/{tour.length}
@@ -108,12 +108,13 @@ export default function AvatarLayer({ tour, tourActive, onTourEnd, onOpenChat }:
       className="avatar-float fade-in-up"
       style={{
         position: 'fixed', zIndex: 180, top: pos.y, left: pos.x,
-        width: 64, height: 64, borderRadius: '50%', fontSize: 28, cursor: 'pointer',
+        width: 64, height: 64, borderRadius: '50%', fontSize: 28, cursor: 'pointer', color: 'var(--accent)',
         background: 'var(--bg-card)', border: '2px solid var(--accent)',
         boxShadow: '0 0 28px var(--accent-glow)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'top 320ms cubic-bezier(0.4,0,0.2,1), left 320ms cubic-bezier(0.4,0,0.2,1)',
       }}>
-      {reaction ?? glyph}
+      {reaction ?? <AvatarIcon id={prefs.avatarId} size={28} />}
     </button>
   )
 }
