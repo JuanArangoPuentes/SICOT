@@ -18,12 +18,28 @@
 # CORS_ALLOWED_ORIGINS deben apuntar a la IP/dominio real del servidor, no a
 # "localhost" — ver .env.example. Si se cambia VITE_API_URL hay que
 # reconstruir el frontend (queda horneado en el build de Vite).
+#
+# DB_PASSWORD pasa de tener un valor de conveniencia por defecto (base,
+# "sicot_dev_password") a ser obligatorio: si el .env no lo define, este
+# override hace que `docker compose ... config`/`up` se niegue a arrancar
+# con un mensaje claro, en vez de arrancar tranquilamente con la contraseña
+# de desarrollo expuesta — mismo criterio que ya aplica JWT_SECRET.
 # ═══════════════════════════════════════════════════════════════════════════
 
 services:
   db:
-    ports: []
+    # "!reset" (no un simple "[]") porque Compose combina listas entre
+    # archivos por defecto — un "ports: []" normal se fusiona con la lista del
+    # archivo base y NO la vacía. "!reset" es la sintaxis de Compose que sí
+    # borra lo heredado.
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
+
+  backend:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
 
   adminer:
     profiles: ["tools"]
-    ports: []
+    ports: !reset []

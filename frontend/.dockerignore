@@ -1,9 +1,10 @@
 node_modules/
 dist/
-.git/
 *.log
 e2e/
-.figma/
+# .figma/ NO se ignora: vite.config.ts importa .figma/make/site.json como
+# configuración real del build (título/descripción/robots de la página) —
+# excluirla del contexto de build rompe `npm run build` dentro de Docker.
 .env.development
 playwright-report/
 test-results/
