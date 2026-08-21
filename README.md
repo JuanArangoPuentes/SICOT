@@ -64,6 +64,42 @@ docker compose down               # apagar
 docker compose down -v            # apagar y borrar también los datos de Postgres
 ```
 
+## Despliegue en producción (multi-máquina)
+
+El comando de arriba (`docker compose up`) está pensado para desarrollo en una
+sola máquina: publica el puerto de Postgres y levanta Adminer sin
+autenticación, cosas razonables en un laptop de desarrollo pero no en un
+servidor real. Para un despliegue de verdad (accesible desde otras máquinas
+de la red o de Internet):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+Esto añade (ver [`docker-compose.prod.yml`](./docker-compose.prod.yml)):
+- Postgres deja de publicar su puerto al host — solo el backend le habla,
+  por la red interna de Docker.
+- Adminer no arranca por defecto (agregar `--profile tools` al comando de
+  arriba para usarlo puntualmente).
+
+Antes de levantar así, en el `.env` de esta carpeta:
+1. Fijar `SPRING_PROFILES_ACTIVE=prod` (evita que se creen las cuentas de
+   prueba y restringe Swagger — ver `backend/src/main/resources/application-prod.properties`).
+2. Fijar `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` a la IP/dominio **real** del
+   servidor, no `localhost` — de lo contrario el frontend, ya compilado con
+   `localhost` incrustado, no podrá hablarle al backend desde ninguna otra
+   máquina. Ver los comentarios en [`.env.example`](./.env.example).
+3. Si alguien no puede conectarse desde otra máquina de la red (síntoma
+   típico: "no me conecta a la base de datos" o el navegador se cuelga
+   cargando), revisar primero el Firewall de Windows/Linux de la máquina que
+   corre Docker Desktop — debe permitir conexiones entrantes en los puertos
+   publicados (8443, 8080). El puerto de Postgres ya no es alcanzable desde
+   fuera con el override de producción, así que no debería intentarse
+   conectar ahí directamente.
+
+Backup/restauración de la base de datos: ver
+[`docs/despliegue/BACKUP_Y_RESTAURACION.md`](./docs/despliegue/BACKUP_Y_RESTAURACION.md).
+
 ## Correr sin Docker (desarrollo día a día)
 
 1. PostgreSQL nativo en `localhost:5432`, base `sicot` (detalle en
