@@ -11,3 +11,7 @@ logs/
 *.log
 .claude-replay.*
 .tmp-*
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/

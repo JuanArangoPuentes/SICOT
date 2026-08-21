@@ -85,9 +85,8 @@ const isoADisplay = (iso: string | null | undefined): string => {
   return `${d}/${m}/${y}`
 }
 
-export default function GestionPanel({ usuario, onNewContractAssigned, onLogout, onOpenSettings, onStartTour }: {
+export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStartTour }: {
   usuario: AuthResponse
-  onNewContractAssigned: () => void
   onLogout: () => void
   onOpenSettings: () => void
   onStartTour: () => void
@@ -128,7 +127,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
       .then(lista => {
         if (!cancelado) setContratos(lista.map(mapContratoRow))
       })
-      .catch(() => {})
+      .catch(err => console.error('No se pudieron cargar los contratos:', err))
     return () => { cancelado = true }
   }, [])
 
@@ -143,7 +142,7 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
         setSupervisores(sups)
         setSupervisor(String(sups[0]?.id ?? ''))
       })
-      .catch(() => {})
+      .catch(err => console.error('No se pudieron cargar los supervisores:', err))
     return () => { cancelado = true }
   }, [])
 
@@ -226,7 +225,6 @@ export default function GestionPanel({ usuario, onNewContractAssigned, onLogout,
       setContratos(lista.map(mapContratoRow))
       setTimeout(() => {
         setShowModal(false)
-        onNewContractAssigned()
       }, 1200)
     } catch (e) {
       setErrorCrear(e instanceof ApiError ? e.message : 'No se pudo crear el contrato.')
