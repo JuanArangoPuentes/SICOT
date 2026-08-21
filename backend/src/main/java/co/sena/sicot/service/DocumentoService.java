@@ -22,34 +22,26 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 
 @Service
 public class DocumentoService {
-
-    private static final long TAMANIO_MAXIMO_BYTES = 20L * 1024 * 1024; // 20 MB
-
-    private static final Map<String, TipoDocumento> EXTENSIONES_PERMITIDAS = Map.of(
-            "pdf", TipoDocumento.PDF,
-            "docx", TipoDocumento.DOCX,
-            "xlsx", TipoDocumento.XLSX
-    );
 
     private final DocumentoRepository documentoRepository;
     private final ContratoService contratoService;
     private final SubetapaRepository subetapaRepository;
     private final FirmaElectronicaRepository firmaElectronicaRepository;
     private final RegistroService registroService;
+    private final ArchivoValidator archivoValidator;
 
     public DocumentoService(DocumentoRepository documentoRepository, ContratoService contratoService,
                              SubetapaRepository subetapaRepository, FirmaElectronicaRepository firmaElectronicaRepository,
-                             RegistroService registroService) {
+                             RegistroService registroService, ArchivoValidator archivoValidator) {
         this.documentoRepository = documentoRepository;
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
         this.firmaElectronicaRepository = firmaElectronicaRepository;
         this.registroService = registroService;
+        this.archivoValidator = archivoValidator;
     }
 
     @Transactional(readOnly = true)
@@ -72,10 +64,8 @@ public class DocumentoService {
         if (archivo == null || archivo.isEmpty()) {
             throw new BusinessException("Debe seleccionar un archivo para cargar.");
         }
-        if (archivo.getSize() > TAMANIO_MAXIMO_BYTES) {
-            throw new BusinessException("El archivo supera el tamaño máximo permitido de 20 MB.");
-        }
-        TipoDocumento tipo = tipoDeArchivo(archivo.getOriginalFilename());
+        archivoValidator.validarTamanio(archivo);
+        TipoDocumento tipo = archivoValidator.tipoDeArchivo(archivo);
 
         Documento documento = new Documento();
         documento.setContrato(contrato);
@@ -84,7 +74,7 @@ public class DocumentoService {
         }
         documento.setNombre(nombreLimpio);
         documento.setTipo(tipo);
-        documento.setContentType(contentTypeDe(tipo, archivo.getContentType()));
+        documento.setContentType(archivoValidator.contentTypeDe(tipo, archivo.getContentType()));
         documento.setTamanioBytes(archivo.getSize());
         documento.setEstado(EstadoDocumento.PENDIENTE);
         documento.setSubidoPor(SecurityUtils.currentUsuario());
@@ -100,8 +90,10 @@ public class DocumentoService {
 
     @Transactional(readOnly = true)
     public Documento buscarConContenido(Long id) {
-        return documentoRepository.findById(id)
+        Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Documento", id));
+        SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
+        return documento;
     }
 
     @Transactional
@@ -111,12 +103,8 @@ public class DocumentoService {
         if (documento.getFirmaId() != null) {
             throw new BusinessException("Este documento ya fue firmado.");
         }
+        SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
         var usuario = SecurityUtils.currentUsuario();
-        var contratoSupervisor = documento.getContrato().getSupervisor();
-        boolean esSupervisorDelContrato = contratoSupervisor != null && contratoSupervisor.getId().equals(usuario.getId());
-        if (usuario.getRol().name().equals("SUPERVISOR") && !esSupervisorDelContrato) {
-            throw new BusinessException("Solo el supervisor asignado a este contrato puede firmar este documento.");
-        }
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(
                         "No tiene una firma electrónica activa asignada. Solicítela al Administrador."));
@@ -136,31 +124,4 @@ public class DocumentoService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
     }
 
-    private TipoDocumento tipoDeArchivo(String nombreArchivo) {
-        String extension = extensionDe(nombreArchivo);
-        TipoDocumento tipo = EXTENSIONES_PERMITIDAS.get(extension);
-        if (tipo == null) {
-            throw new BusinessException("Formato de archivo no permitido. Solo se aceptan PDF, DOCX o XLSX.");
-        }
-        return tipo;
-    }
-
-    private String extensionDe(String nombreArchivo) {
-        if (nombreArchivo == null) return "";
-        int punto = nombreArchivo.lastIndexOf('.');
-        return punto < 0 ? "" : nombreArchivo.substring(punto + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private String contentTypeDe(TipoDocumento tipo, String contentTypeDetectado) {
-        if (contentTypeDetectado != null && !contentTypeDetectado.isBlank()
-                && !contentTypeDetectado.equals("application/octet-stream")) {
-            return contentTypeDetectado;
-        }
-        return switch (tipo) {
-            case PDF -> "application/pdf";
-            case DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            case XLSX -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            default -> "application/octet-stream";
-        };
-    }
 }

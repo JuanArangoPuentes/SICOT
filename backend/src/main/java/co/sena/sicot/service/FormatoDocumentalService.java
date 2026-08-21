@@ -17,23 +17,16 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 @Service
 public class FormatoDocumentalService {
 
-    private static final long TAMANIO_MAXIMO_BYTES = 20L * 1024 * 1024; // 20 MB
-
-    private static final Map<String, TipoDocumento> EXTENSIONES_PERMITIDAS = Map.of(
-            "pdf", TipoDocumento.PDF,
-            "docx", TipoDocumento.DOCX,
-            "xlsx", TipoDocumento.XLSX
-    );
-
     private final FormatoDocumentalRepository formatoRepository;
+    private final ArchivoValidator archivoValidator;
 
-    public FormatoDocumentalService(FormatoDocumentalRepository formatoRepository) {
+    public FormatoDocumentalService(FormatoDocumentalRepository formatoRepository, ArchivoValidator archivoValidator) {
         this.formatoRepository = formatoRepository;
+        this.archivoValidator = archivoValidator;
     }
 
     @Transactional(readOnly = true)
@@ -56,11 +49,9 @@ public class FormatoDocumentalService {
         if (archivo == null || archivo.isEmpty()) {
             throw new BusinessException("Debe seleccionar un archivo para cargar.");
         }
-        if (archivo.getSize() > TAMANIO_MAXIMO_BYTES) {
-            throw new BusinessException("El archivo supera el tamaño máximo permitido de 20 MB.");
-        }
+        archivoValidator.validarTamanio(archivo);
 
-        TipoDocumento tipo = tipoDeArchivo(archivo.getOriginalFilename());
+        TipoDocumento tipo = archivoValidator.tipoDeArchivo(archivo);
 
         FormatoDocumental formato = formatoRepository.findByCodigoIgnoreCase(codigoLimpio)
                 .orElseGet(FormatoDocumental::new);
@@ -71,7 +62,7 @@ public class FormatoDocumentalService {
         formato.setVersion(siguienteVersion(esNuevo ? null : formato.getVersion()));
         formato.setTipoArchivo(tipo);
         formato.setNombreArchivo(archivo.getOriginalFilename());
-        formato.setContentType(contentTypeDe(tipo, archivo.getContentType()));
+        formato.setContentType(archivoValidator.contentTypeDe(tipo, archivo.getContentType()));
         formato.setTamanioBytes(archivo.getSize());
         formato.setEstado(EstadoFormato.VIGENTE);
         formato.setSubidoPor(SecurityUtils.currentUsuario());
@@ -97,34 +88,6 @@ public class FormatoDocumentalService {
             throw ResourceNotFoundException.of("Formato documental", id);
         }
         formatoRepository.deleteById(id);
-    }
-
-    private TipoDocumento tipoDeArchivo(String nombreArchivo) {
-        String extension = extensionDe(nombreArchivo);
-        TipoDocumento tipo = EXTENSIONES_PERMITIDAS.get(extension);
-        if (tipo == null) {
-            throw new BusinessException("Formato de archivo no permitido. Solo se aceptan PDF, DOCX o XLSX.");
-        }
-        return tipo;
-    }
-
-    private String extensionDe(String nombreArchivo) {
-        if (nombreArchivo == null) return "";
-        int punto = nombreArchivo.lastIndexOf('.');
-        return punto < 0 ? "" : nombreArchivo.substring(punto + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private String contentTypeDe(TipoDocumento tipo, String contentTypeDetectado) {
-        if (contentTypeDetectado != null && !contentTypeDetectado.isBlank()
-                && !contentTypeDetectado.equals("application/octet-stream")) {
-            return contentTypeDetectado;
-        }
-        return switch (tipo) {
-            case PDF -> "application/pdf";
-            case DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            case XLSX -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            default -> "application/octet-stream";
-        };
     }
 
     private String siguienteVersion(String versionActual) {

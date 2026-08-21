@@ -11,6 +11,7 @@ import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.EtapaMapper;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.SubetapaRepository;
+import co.sena.sicot.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,8 @@ public class EtapaService {
 
     @Transactional(readOnly = true)
     public List<SubetapaResponse> listarSubetapas(Long etapaId) {
+        Etapa etapa = buscar(etapaId);
+        SecurityUtils.verificarAccesoAlContrato(etapa.getContrato());
         return subetapaRepository.findByEtapaIdOrderByCodigoAsc(etapaId).stream()
                 .map(EtapaMapper::toSubetapaResponse)
                 .toList();
@@ -68,6 +71,7 @@ public class EtapaService {
     public SubetapaResponse cambiarEstadoSubetapa(Long subetapaId, EstadoSubetapa nuevoEstado) {
         Subetapa subetapa = subetapaRepository.findById(subetapaId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
+        SecurityUtils.verificarAccesoAlContrato(subetapa.getEtapa().getContrato());
         subetapa.setEstado(nuevoEstado);
         subetapaRepository.save(subetapa);
         recalcularEtapa(subetapa.getEtapa());

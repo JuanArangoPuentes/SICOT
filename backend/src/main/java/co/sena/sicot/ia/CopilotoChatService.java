@@ -3,15 +3,11 @@ package co.sena.sicot.ia;
 import co.sena.sicot.dto.etapa.EtapaResponse;
 import co.sena.sicot.dto.ia.ChatRequest.ChatTurno;
 import co.sena.sicot.entity.Contrato;
-import co.sena.sicot.entity.Usuario;
-import co.sena.sicot.exception.BusinessException;
-import co.sena.sicot.security.SecurityUtils;
 import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.EtapaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -90,21 +86,25 @@ public class CopilotoChatService {
     // tiempo de respuesta) con historial que ya no es relevante.
     private static final int MAX_TURNOS_HISTORIAL = 8;
 
-    @Transactional
     public String responder(Long contratoId, String pregunta) {
         return responder(contratoId, pregunta, null);
     }
 
-    @Transactional
+    // Sin @Transactional a propósito: ollamaClient.generar() más abajo puede
+    // tardar hasta sicot.ia.timeout-seconds (900s por defecto). Si este método
+    // mantuviera una transacción abierta durante esa llamada, retendría una
+    // conexión del pool de Hikari (10 por defecto) todo ese tiempo — con solo
+    // un puñado de preguntas al Copiloto simultáneas se agotaría el pool
+    // entero y toda la aplicación (login, listar contratos, etc.) quedaría
+    // congelada, no solo el chat. contratoService.buscar() y
+    // etapaService.listarPorContrato() ya son transaccionales por su cuenta
+    // (son otros beans), así que cada lectura sigue teniendo su propia
+    // transacción corta — solo que ninguna queda abierta durante la llamada a
+    // Ollama.
     public String responder(Long contratoId, String pregunta, List<ChatTurno> historial) {
+        // ContratoService.buscar ya exige que, si quien llama es SUPERVISOR, sea
+        // el supervisor asignado a este contrato (ver SecurityUtils.verificarAccesoAlContrato).
         Contrato contrato = contratoService.buscar(contratoId);
-        Usuario usuario = SecurityUtils.currentUsuario();
-        boolean esSupervisorDelContrato = contrato.getSupervisor() != null
-                && contrato.getSupervisor().getId().equals(usuario.getId());
-        if (usuario.getRol().name().equals("SUPERVISOR") && !esSupervisorDelContrato) {
-            throw new BusinessException("Solo el supervisor asignado a este contrato puede usar el Copiloto aquí.");
-        }
-
         List<EtapaResponse> etapas = etapaService.listarPorContrato(contratoId);
 
         String datosContrato = """
