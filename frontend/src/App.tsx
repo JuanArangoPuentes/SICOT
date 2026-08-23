@@ -39,7 +39,8 @@ const TOUR_GESTION: TourStep[] = [
 const screenFor = (u: AuthResponse): Screen => {
   if (u.rol === 'SUPERVISOR') return 'supervisor-panel'
   if (u.rol === 'ADMINISTRADOR') return 'admin-panel'
-  return 'gestion-panel'
+  if (u.rol === 'GESTION') return 'gestion-panel'
+  return 'login'
 }
 
 function AppInner() {
@@ -61,8 +62,11 @@ function AppInner() {
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
 
-  const addRegistro = (r: Registro) =>
-    setRegistros(prev => (prev.some(x => x.id === r.id) ? prev : [...prev, r]))
+  const refreshRegistros = async () => {
+    if (!contrato) return
+    const lista = await getRegistrosContrato(contrato.id)
+    setRegistros(mapRegistros(lista))
+  }
 
   // Contrato asignado al supervisor (rol SUPERVISOR): el ACTIVO si existe.
   useEffect(() => {
@@ -145,7 +149,7 @@ function AppInner() {
           onOpenSettings={() => setSettingsOpen(true)}
           onStartTour={() => setTourActive(true)}
           registros={registros}
-          addRegistro={addRegistro}
+          onRefreshRegistros={refreshRegistros}
         />
       )}
       {screen === 'gestion-panel' && session && (

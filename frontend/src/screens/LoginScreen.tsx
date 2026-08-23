@@ -186,13 +186,13 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
           {/* Email field */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: s.textSecondary, marginBottom: 6 }}>
+            <label htmlFor="login-email" style={{ display: 'block', fontSize: 12, fontWeight: 500, color: s.textSecondary, marginBottom: 6 }}>
               Correo institucional
             </label>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: s.textMuted, fontSize: 13, fontFamily: 'var(--font-mono)' }}>@</span>
               <input
-                type="email" value={email}
+                id="login-email" name="email" autoComplete="username" type="email" value={email}
                 onChange={e => setEmail(e.target.value)} onKeyDown={handleKey}
                 placeholder="correo@soy.sena.edu.co"
                 style={{
@@ -210,13 +210,13 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
           {/* Password field */}
           <div style={{ marginBottom: 6 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 500, color: s.textSecondary, marginBottom: 6 }}>
+            <label htmlFor="login-password" style={{ display: 'block', fontSize: 12, fontWeight: 500, color: s.textSecondary, marginBottom: 6 }}>
               Contraseña
             </label>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: s.textMuted, fontSize: 11, fontFamily: 'var(--font-mono)', letterSpacing: '-0.04em' }}>••</span>
               <input
-                type={showPw ? 'text' : 'password'} value={password}
+                id="login-password" name="password" autoComplete="current-password" type={showPw ? 'text' : 'password'} value={password}
                 onChange={e => setPassword(e.target.value)} onKeyDown={handleKey}
                 placeholder="••••••••••"
                 style={{
@@ -229,18 +229,20 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
                 onFocus={e => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(57,181,74,0.15)` }}
                 onBlur={e  => { e.currentTarget.style.borderColor = s.border; e.currentTarget.style.boxShadow = 'none' }}
               />
-              <button onClick={() => setShowPw(v => !v)} style={{
+              <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'} style={{
                 position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
                 background: 'none', border: 'none', color: s.textMuted,
                 cursor: 'pointer', fontSize: 14, padding: 0,
               }}>
-                <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.04em' }}>{showPw ? 'OCU' : 'VER'}</span>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  {showPw ? <><path d="M3 3l18 18" /><path d="M10.6 10.6a2 2 0 0 0 2.8 2.8" /><path d="M9.9 4.2A10.8 10.8 0 0 1 12 4c5 0 8.7 4 10 8a11.8 11.8 0 0 1-3.1 4.8" /><path d="M6.6 6.6C4.8 7.8 3.5 9.7 2 12c1.3 4 5 8 10 8 1 0 2-.2 2.9-.5" /></> : <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>}
+                </svg>
               </button>
             </div>
           </div>
 
           {error && (
-            <div style={{
+            <div role="alert" aria-live="polite" style={{
               fontSize: 12, color: '#C83030', margin: '8px 0 0',
               padding: '8px 12px', background: 'rgba(200,48,48,0.06)',
               border: '1px solid rgba(200,48,48,0.2)', borderRadius: 6,

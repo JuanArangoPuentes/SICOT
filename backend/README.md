@@ -2,7 +2,7 @@
 
 Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contratos** (SENA — Centro Tecnológico del Mobiliario).
 
-Spring Boot 3.x · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
+Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 > ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos, auditoría, **Copiloto IA real (Ollama)** — extracción de datos de contrato, chat conversacional con memoria, redacción de documentos formales —, firma electrónica (referencia interna) y entrega de credenciales por correo. Pendiente: integración SECOP II y OCR de documentos escaneados.
 
@@ -18,17 +18,24 @@ Spring Boot 3.x · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 ## 2. Base de datos
 
+En una base nueva, Flyway aplica una unica migracion de estructura:
+`V1__create_sicot_schema.sql`. No se insertan datos transaccionales de ejemplo
+ni se ejecutan migraciones destructivas. Las cuentas demo solo se crean con el
+perfil `dev` mediante `DataInitializer`.
+
+Para recrear una base local Docker desde cero, detenga el stack y elimine solo
+su volumen local (`docker compose down -v`). Nunca ejecute ese comando sobre
+una base productiva.
+
 ```sql
 -- (con el usuario superusuario de PostgreSQL)
 CREATE USER sicot WITH PASSWORD 'sicot_dev_password';
 CREATE DATABASE sicot OWNER sicot;
 ```
 
-El esquema se crea automáticamente con **Flyway** al primer arranque:
-- `V1__create_initial_schema.sql` — esquema (usuarios, contratos, etapas, subetapas, documentos, alertas, registros)
-- `V2__seed_dev_data.sql` — datos de desarrollo (3 contratos de ejemplo con el flujo GCCON-P-010)
-- `V3__clear_demo_transactional_data.sql` — limpia los datos transaccionales de ejemplo (deja el esquema y los usuarios)
-- `V4__create_formatos_documentales.sql` — catálogo de formatos documentales oficiales (carga real de archivos)
+El esquema se crea automáticamente con **Flyway** al primer arranque mediante
+`V1__create_sicot_schema.sql`. Esta linea base contiene estructura, constraints
+e indices, pero no inserta ni elimina datos transaccionales demo.
 
 Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataInitializer` con contraseñas codificadas en BCrypt:
 

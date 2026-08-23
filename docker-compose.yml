@@ -23,11 +23,8 @@ services:
       POSTGRES_USER: sicot
       POSTGRES_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}
     volumes:
-      # Postgres 18+ espera el volumen montado en /var/lib/postgresql (no en
-      # .../data como en versiones anteriores) y guarda los datos en una
-      # subcarpeta versionada ahí adentro — montarlo en .../data hace que la
-      # imagen vea contenido "ajeno" (hasta el lost+found que Linux crea solo
-      # en un volumen nuevo) y se niegue a arrancar.
+      # PostgreSQL 18 stores data below this parent directory using a
+      # major-version-specific subdirectory.
       - sicot_db_data:/var/lib/postgresql
     ports:
       # 5433 en el host para no chocar con un PostgreSQL nativo ya corriendo
@@ -84,12 +81,8 @@ services:
       DB_URL: jdbc:postgresql://db:5432/sicot
       DB_USERNAME: sicot
       DB_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}
-      # Sin valor de respaldo aquí: si no se define en el .env, el backend
-      # arranca en perfil "dev" (ver más abajo) y usa su propio secreto de
-      # conveniencia SOLO para desarrollo (application-dev.properties) — nunca
-      # el de este archivo, que además ya no lo tiene.
-      JWT_SECRET: ${JWT_SECRET:-}
-      CORS_ALLOWED_ORIGINS: http://localhost:8443,http://127.0.0.1:8443
+      JWT_SECRET: ${JWT_SECRET:-ZGl2ZWxvcG1lbnQtc2ljb3Qtc2VjcmV0by1qd3Qta2V5LW11eS1sYXJnbzY0LWJ5dGVzLXNlZ3Vybw==}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443}
       # Correo real (entrega de credenciales) — sin esto configurado en el .env
       # de la raíz, el envío falla honestamente en vez de fingir éxito.
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}
