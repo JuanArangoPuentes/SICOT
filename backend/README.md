@@ -12,7 +12,7 @@ Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 | Herramienta | Versión |
 |---|---|
-| JDK | 21+ (el proyecto compila con `--release 21`) |
+| JDK | 25+ (el proyecto compila con `--release 25`) |
 | Maven | 3.9+ |
 | PostgreSQL | 14+ (probado con 18) |
 

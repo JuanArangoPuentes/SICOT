@@ -3,3 +3,9 @@ Thumbs.db
 *.log
 .claude/*.lock
 .env
+
+# Red de seguridad genérica — cada subcarpeta (backend/, frontend/, mcp/) ya
+# ignora lo suyo específicamente; esto solo cubre una carpeta nueva futura.
+node_modules/
+dist/
+target/

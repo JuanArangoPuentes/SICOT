@@ -15,7 +15,6 @@ import co.sena.sicot.service.ContratoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -49,7 +48,12 @@ public class GeneracionDocumentoService {
         this.pdfWriter = pdfWriter;
     }
 
-    @Transactional
+    // Sin @Transactional a propósito — mismo motivo que CopilotoChatService.responder:
+    // ollamaClient.generar() puede tardar hasta 15 minutos y no debe retener
+    // una conexión del pool de Hikari todo ese tiempo. contratoService.buscar,
+    // subetapaRepository.findById y documentoRepository.save siguen siendo
+    // transaccionales por su cuenta (cada uno abre y cierra su propia
+    // transacción corta); solo la espera a Ollama queda fuera de todas ellas.
     public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave) {
         PlantillaDocumentoIA plantilla = PlantillaDocumentoIA.CATALOGO.get(tipoClave);
         if (plantilla == null) {

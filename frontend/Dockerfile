@@ -14,7 +14,10 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM nginx:1.27-alpine
+# Imagen "unprivileged": nginx corre como usuario no-root desde el arranque
+# (mismo patrón que backend/Dockerfile). Funciona sin cambios porque ya
+# escuchamos en el puerto 8443, no privilegiado.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY --from=build /build/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
