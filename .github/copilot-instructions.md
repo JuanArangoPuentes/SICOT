@@ -59,7 +59,7 @@ Nunca modificar por comodidad algo que ya funciona.
 
 ## Backend
 
-* Java 21
+* Java 25
 * Spring Boot 3.5.3
 * Spring Web
 * Spring Data JPA

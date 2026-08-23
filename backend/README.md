@@ -2,7 +2,7 @@
 
 Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contratos** (SENA — Centro Tecnológico del Mobiliario).
 
-Spring Boot 3.x · Java 21 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
+Spring Boot 3.x · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 > ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos, auditoría, **Copiloto IA real (Ollama)** — extracción de datos de contrato, chat conversacional con memoria, redacción de documentos formales —, firma electrónica (referencia interna) y entrega de credenciales por correo. Pendiente: integración SECOP II y OCR de documentos escaneados.
 
@@ -12,7 +12,7 @@ Spring Boot 3.x · Java 21 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 | Herramienta | Versión |
 |---|---|
-| JDK | 21+ (el proyecto compila con `--release 21`) |
+| JDK | 25+ (el proyecto compila con `--release 25`) |
 | Maven | 3.9+ |
 | PostgreSQL | 14+ (probado con 18) |
 
