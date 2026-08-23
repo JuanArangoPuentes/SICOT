@@ -52,7 +52,6 @@ function AppInner() {
   // ejemplo como etapas reales: sin contrato el estado queda vacío y el panel
   // lo reemplaza al cargar las etapas del contrato asignado.
   const [steps, setSteps] = useState<Step[]>([])
-  const [newContractNotif, setNewContractNotif] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [tourActive, setTourActive] = useState(false)
   const [registros, setRegistros] = useState<Registro[]>([])
@@ -139,7 +138,6 @@ function AppInner() {
         <SupervisorPanel
           steps={steps}
           setSteps={setSteps}
-          newContractNotif={newContractNotif}
           usuario={session}
           contrato={contrato}
           cargandoContrato={cargandoContrato}
@@ -153,7 +151,6 @@ function AppInner() {
       {screen === 'gestion-panel' && session && (
         <GestionPanel
           usuario={session}
-          onNewContractAssigned={() => setNewContractNotif(true)}
           onLogout={logout}
           onOpenSettings={() => setSettingsOpen(true)}
           onStartTour={() => setTourActive(true)}

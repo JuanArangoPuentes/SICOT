@@ -52,7 +52,7 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
                 borderRadius: 10, padding: '12px 14px', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: 'var(--font-ui)',
               }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: (PRESETS[id].patch as any).colorPrimary ?? 'var(--accent)' }} />
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: PRESETS[id].patch.colorPrimary ?? 'var(--accent)' }} />
                 <strong style={{ fontSize: 13 }}>{PRESETS[id].label}</strong>
                 {prefs.preset === id && <span style={{ fontSize: 10, color: 'var(--accent)' }}>ACTIVO</span>}
               </div>

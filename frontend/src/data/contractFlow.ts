@@ -1,21 +1,10 @@
 // Datos y contenidos del flujo de supervisión GCCON-P-010.
 // Esta es la configuración/base de conocimiento del proceso (etapas, textos del
 // tutorial, respuestas del copiloto, catálogo de documentos formales) — NO son
-// datos de un contrato de ejemplo. Los valores de instancia (CONTRACT) llegan
-// vacíos: deben poblarse desde la API/base de datos real.
+// datos de un contrato de ejemplo.
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
 
 import type { Step } from '@/types/domain'
-
-export const CONTRACT = {
-  id: '',
-  object: '',
-  value: '',
-  startDate: '',
-  endDate: '',
-  supervisor: '',
-  supervisorEmail: 'supervisor@soy.sena.edu.co',
-}
 
 // Sub-steps where the Copiloto generates the document; supervisor only signs.
 // Corregido contra fuentes reales (Datos SICOT, ver memoria de proyecto

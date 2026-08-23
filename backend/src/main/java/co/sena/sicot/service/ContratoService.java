@@ -10,10 +10,12 @@ import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
+import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.mapper.ContratoMapper;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.UsuarioRepository;
+import co.sena.sicot.security.SecurityUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,14 @@ public class ContratoService {
 
     @Transactional(readOnly = true)
     public List<ContratoResponse> listar(Long supervisorId, EstadoContrato estado) {
+        Usuario actual = SecurityUtils.currentUsuario();
+        if (actual != null && actual.getRol() == Rol.SUPERVISOR) {
+            // Un supervisor solo puede listar SUS propios contratos — se ignora
+            // cualquier supervisorId que haya pedido en la consulta para que no
+            // pueda ver los contratos de otro supervisor con solo cambiar el
+            // parámetro, y sin filtro no ve el listado completo del sistema.
+            supervisorId = actual.getId();
+        }
         List<Contrato> contratos;
         if (supervisorId != null && estado != null) {
             contratos = contratoRepository.findBySupervisorIdAndEstado(supervisorId, estado);
@@ -151,7 +161,9 @@ public class ContratoService {
 
     @Transactional(readOnly = true)
     public Contrato buscar(Long id) {
-        return contratoRepository.findById(id)
+        Contrato contrato = contratoRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Contrato", id));
+        SecurityUtils.verificarAccesoAlContrato(contrato);
+        return contrato;
     }
 }

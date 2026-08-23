@@ -118,11 +118,10 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 export default function SupervisorPanel({
-  steps, setSteps, newContractNotif, usuario, contrato, cargandoContrato, onLogout, onOpenSettings, onStartTour, registros, addRegistro,
+  steps, setSteps, usuario, contrato, cargandoContrato, onLogout, onOpenSettings, onStartTour, registros, addRegistro,
 }: {
   steps: Step[]
   setSteps: (s: Step[]) => void
-  newContractNotif: boolean
   usuario: AuthResponse
   contrato: ContratoResponse | null
   cargandoContrato: boolean
@@ -163,12 +162,6 @@ export default function SupervisorPanel({
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMsgs])
 
-  useEffect(() => {
-    if (newContractNotif) {
-      setChatMsgs(prev => [...prev, { role: 'ai', text: 'Gestión asignó un nuevo contrato. Revise la pestaña Alertas para ver los detalles.' }])
-    }
-  }, [newContractNotif])
-
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)
   useEffect(() => {
     if (!contrato) return
@@ -177,7 +170,7 @@ export default function SupervisorPanel({
       .then(etapas => {
         if (!cancelado) setSteps(mapEtapas(etapas))
       })
-      .catch(() => { /* se conserva el estado actual */ })
+      .catch(err => console.error('No se pudieron cargar las etapas del contrato:', err))
     return () => { cancelado = true }
   }, [contrato, setSteps])
 
@@ -193,7 +186,7 @@ export default function SupervisorPanel({
       .then(lista => {
         if (!cancelado) setAlertasApi(lista.filter(a => !a.leida))
       })
-      .catch(() => { })
+      .catch(err => console.error('No se pudieron cargar las alertas del contrato:', err))
     return () => { cancelado = true }
   }, [contrato])
 
@@ -209,7 +202,7 @@ export default function SupervisorPanel({
       .then(lista => {
         if (!cancelado) setDocsContrato(lista)
       })
-      .catch(() => { })
+      .catch(err => console.error('No se pudieron cargar los documentos del contrato:', err))
     return () => { cancelado = true }
   }, [contrato])
 
@@ -260,7 +253,8 @@ export default function SupervisorPanel({
           asunto: `${doc.name}${doc.code !== 'PENDIENTE_DE_DEFINIR' ? ' ' + doc.code : ''} — firma electrónica ${firmado.firmaId ?? ''}`,
           estado: 'Firmado',
         })
-        getDocumentosContrato(contrato.id).then(setDocsContrato).catch(() => { })
+        getDocumentosContrato(contrato.id).then(setDocsContrato)
+          .catch(err => console.error('Firma registrada, pero no se pudo refrescar la lista de documentos:', err))
       } catch (e) {
         setProcesandoFirma(null)
         const mensaje = e instanceof ApiError ? e.message : 'No se pudo generar o firmar el documento con el Copiloto IA.'
@@ -497,7 +491,7 @@ export default function SupervisorPanel({
     setDismissed(prev => new Set(prev).add(id))
     if (id.startsWith('api-')) {
       const apiId = Number(id.slice(4))
-      marcarAlertaLeida(apiId).catch(() => { })
+      marcarAlertaLeida(apiId).catch(err => console.error('No se pudo marcar la alerta como leída:', err))
       setAlertasApi(prev => prev.filter(a => a.id !== apiId))
     }
   }
@@ -517,16 +511,7 @@ export default function SupervisorPanel({
     }
     if (alertId.startsWith('cronograma-') && activeStep) {
       setTab('panel'); setExpandedSteps(new Set([activeStep.id]))
-      return
     }
-    const actions: Record<string, () => void> = {
-      'a-031': () => { setTab('panel'); setExpandedSteps(new Set([3])); setActiveSubStep('3.4'); setTutorialMode(true) },
-      'a-gil': () => { setTab('panel'); setExpandedSteps(new Set([4])) },
-      'a-p4': () => { setTab('panel'); setExpandedSteps(new Set([4])) },
-      'a-venc': () => { setTab('panel'); setExpandedSteps(new Set([6])) },
-      'a-new': () => setTab('alertas'),
-    }
-    actions[alertId]?.()
   }
 
   // Mientras se consulta el contrato real todavía no sabemos si hay uno o no
@@ -551,7 +536,7 @@ export default function SupervisorPanel({
         {(['panel', 'alertas', 'documentos', 'registros'] as Tab[]).map(t => (
           <button key={t} data-tour={`tab-${t}`} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
             {t === 'panel' ? 'Panel Principal'
-              : t === 'alertas' ? (<span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>Alertas{newContractNotif && <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--alert-critica)', display: 'inline-block' }} />}</span>)
+              : t === 'alertas' ? 'Alertas'
                 : t === 'documentos' ? 'Documentos'
                   : 'Registros'}
           </button>
@@ -802,15 +787,6 @@ export default function SupervisorPanel({
               <h3 style={{ fontSize: 18 }}>Alertas del contrato {contrato?.numeroContrato ?? ''}</h3>
             </div>
 
-            {newContractNotif && (
-              <AlertCard
-                severity="info"
-                title="Nuevo contrato asignado"
-                desc="Gestión asignó un nuevo contrato. Revise el Panel Principal para ver los detalles actualizados."
-                onAction={undefined}
-              />
-            )}
-
             {alertaCronograma && (
               <AlertCard
                 severity={alertaCronograma.severity === 'ok' ? 'ok' : alertaCronograma.severity === 'critica' ? 'urgent' : 'attention'}
@@ -836,7 +812,7 @@ export default function SupervisorPanel({
               )
             })}
 
-            {alertasApi.filter(a => !a.leida).length === 0 && !newContractNotif && !alertaCronograma && (
+            {alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
               <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: '#03200D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>✓</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Sin alertas activas</div>
@@ -926,7 +902,10 @@ export default function SupervisorPanel({
                         <Chip text={estado.text} type={estado.type} />
                         {contrato && (
                           <button
-                            onClick={() => descargarDocumento(contrato.id, doc.id, doc.nombre).catch(() => { })}
+                            onClick={() => descargarDocumento(contrato.id, doc.id, doc.nombre).catch(err => {
+                              console.error('No se pudo descargar el documento:', err)
+                              window.alert('No se pudo descargar el documento. Intente de nuevo en un momento.')
+                            })}
                             style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>
                             Descargar
                           </button>

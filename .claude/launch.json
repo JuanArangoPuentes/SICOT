@@ -4,7 +4,7 @@
     {
       "name": "sicot-frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "Sicot Frontend 1.0"],
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
       "port": 8443
     }
   ]

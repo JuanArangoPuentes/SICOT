@@ -45,7 +45,7 @@ class EtapaServiceTest {
 
     @BeforeEach
     void setUp() {
-        RegistroService registroService = new RegistroService(registroRepository);
+        RegistroService registroService = new RegistroService(registroRepository, contratoRepository);
         ContratoService contratoService = new ContratoService(contratoRepository,
                 null, registroService, etapaRepository);
         etapaService = new EtapaService(etapaRepository, subetapaRepository,
