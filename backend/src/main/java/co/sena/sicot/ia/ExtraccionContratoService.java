@@ -58,9 +58,10 @@ public class ExtraccionContratoService {
     }
 
     private ExtraccionContratoResponse extraerDeUnArchivo(MultipartFile archivo) {
-        String nombreArchivo = archivo.getOriginalFilename() == null ? "" : archivo.getOriginalFilename().toLowerCase();
+        String nombreOriginal = archivo.getOriginalFilename();
+        String nombreArchivo = nombreOriginal == null ? "" : nombreOriginal.toLowerCase();
         if (!nombreArchivo.endsWith(".pdf")) {
-            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", archivo.getOriginalFilename());
+            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", nombreOriginal);
             return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
         }
 

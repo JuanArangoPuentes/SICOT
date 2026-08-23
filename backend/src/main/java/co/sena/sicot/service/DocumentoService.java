@@ -70,7 +70,7 @@ public class DocumentoService {
         Documento documento = new Documento();
         documento.setContrato(contrato);
         if (subetapaId != null) {
-            documento.setSubetapa(buscarSubetapa(subetapaId));
+            documento.setSubetapa(buscarSubetapaDelContrato(subetapaId, contrato));
         }
         documento.setNombre(nombreLimpio);
         documento.setTipo(tipo);
@@ -119,9 +119,13 @@ public class DocumentoService {
         return DocumentoMapper.toResponse(guardado);
     }
 
-    private Subetapa buscarSubetapa(Long subetapaId) {
-        return subetapaRepository.findById(subetapaId)
+    private Subetapa buscarSubetapaDelContrato(Long subetapaId, Contrato contrato) {
+        Subetapa subetapa = subetapaRepository.findById(subetapaId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
+        if (!subetapa.getEtapa().getContrato().getId().equals(contrato.getId())) {
+            throw new BusinessException("La subetapa indicada no pertenece al contrato.");
+        }
+        return subetapa;
     }
 
 }

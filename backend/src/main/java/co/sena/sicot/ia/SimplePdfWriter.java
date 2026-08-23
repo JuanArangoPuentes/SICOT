@@ -16,6 +16,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Genera el PDF real de un documento formal redactado por el Copiloto IA:
@@ -39,12 +40,11 @@ public class SimplePdfWriter {
 
     private static final Color VERDE_SENA = new Color(57, 181, 74);
     private static final Color VERDE_ENFASIS = new Color(44, 154, 60);
-    private static final Color GRIS_TEXTO = new Color(58, 102, 65);
     private static final Color GRIS_TENUE = new Color(122, 171, 128);
     private static final Color NEGRO_TEXTO = new Color(12, 26, 14);
 
     private static final DateTimeFormatter FECHA_LARGA =
-            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", new java.util.Locale("es", "CO"));
+            DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", Locale.of("es", "CO"));
 
     public byte[] generar(String titulo, List<String> parrafos) {
         return generar(titulo, null, null, null, null, parrafos);

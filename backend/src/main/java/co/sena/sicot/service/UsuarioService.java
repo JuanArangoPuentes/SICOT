@@ -86,7 +86,7 @@ public class UsuarioService {
         if (usuario.getRol() != null
                 && !request.activo()
                 && usuario.getRol().name().equals("ADMINISTRADOR")
-                && usuarioRepository.count() <= 1) {
+                && usuarioRepository.countByRolAndActivoTrue(usuario.getRol()) <= 1) {
             throw new BusinessException("No se puede desactivar el único administrador del sistema.");
         }
         usuario.setActivo(request.activo());

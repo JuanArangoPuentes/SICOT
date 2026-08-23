@@ -10,7 +10,6 @@ import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.repository.SubetapaRepository;
-import co.sena.sicot.repository.UsuarioRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

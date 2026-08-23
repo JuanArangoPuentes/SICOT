@@ -92,4 +92,18 @@ class UsuarioServiceTest {
 
         assertThat(response.activo()).isFalse();
     }
+
+    @Test
+    void noPermiteDesactivarAlUltimoAdministradorActivo() {
+        Usuario administrador = new Usuario();
+        administrador.setId(1L);
+        administrador.setRol(Rol.ADMINISTRADOR);
+        administrador.setActivo(true);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(administrador));
+        when(usuarioRepository.countByRolAndActivoTrue(Rol.ADMINISTRADOR)).thenReturn(1L);
+
+        assertThatThrownBy(() -> usuarioService.cambiarEstado(1L, new CambiarEstadoUsuarioRequest(false)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("único administrador");
+    }
 }

@@ -94,8 +94,7 @@ public class ContratoService {
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
         if (request.supervisorId() != null) {
-            contrato.setSupervisor(usuarioRepository.findById(request.supervisorId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId())));
+            contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
         }
         Contrato guardado = contratoRepository.save(contrato);
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
@@ -137,11 +136,7 @@ public class ContratoService {
     @Transactional
     public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
         Contrato contrato = buscar(id);
-        Usuario supervisor = usuarioRepository.findById(request.supervisorId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId()));
-        if (supervisor.getRol() != null && !supervisor.getRol().name().equals("SUPERVISOR")) {
-            throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
-        }
+        Usuario supervisor = buscarSupervisor(request.supervisorId());
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
@@ -165,5 +160,14 @@ public class ContratoService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Contrato", id));
         SecurityUtils.verificarAccesoAlContrato(contrato);
         return contrato;
+    }
+
+    private Usuario buscarSupervisor(Long supervisorId) {
+        Usuario supervisor = usuarioRepository.findById(supervisorId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", supervisorId));
+        if (supervisor.getRol() != Rol.SUPERVISOR) {
+            throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
+        }
+        return supervisor;
     }
 }
