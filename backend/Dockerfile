@@ -1,5 +1,5 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-25 AS build
 WORKDIR /build
 
 # Cache dependencies separately from source so code edits don't re-download.
@@ -10,7 +10,7 @@ COPY src/ src/
 RUN mvn -B clean package -DskipTests
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S sicot && adduser -S sicot -G sicot

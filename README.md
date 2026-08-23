@@ -27,7 +27,7 @@ honesto.
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3 + Java 21 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/fases/`](./docs/fases) | Reportes de inspección/checkpoint por fase del proyecto | — |
 | [`docs/auditorias/`](./docs/auditorias) | Auditorías de datos/BD (consultas y resultados) | — |
