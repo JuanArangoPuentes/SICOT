@@ -1,0 +1,45 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# SICOT — endurecimiento para producción (override sobre docker-compose.yml)
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Qué cambia respecto al archivo base (pensado para desarrollo en una sola
+# máquina):
+#   - Postgres deja de publicar su puerto al host: solo el backend, que está
+#     en la misma red interna de Docker, puede hablarle por el nombre de
+#     servicio "db". Nadie en la LAN/Internet puede conectarse directo a la
+#     base de datos saltándose el backend y su capa de JWT.
+#   - Adminer (panel visual de la BD, sin autenticación propia) ya no arranca
+#     por defecto — queda detrás del profile "tools". Para usarlo puntualmente
+#     en el servidor (con acceso restringido, p. ej. por túnel SSH), agregar
+#     `--profile tools` al comando de arriba.
+#
+# Recordatorio importante (no lo resuelve este archivo): VITE_API_URL y
+# CORS_ALLOWED_ORIGINS deben apuntar a la IP/dominio real del servidor, no a
+# "localhost" — ver .env.example. Si se cambia VITE_API_URL hay que
+# reconstruir el frontend (queda horneado en el build de Vite).
+#
+# DB_PASSWORD pasa de tener un valor de conveniencia por defecto (base,
+# "sicot_dev_password") a ser obligatorio: si el .env no lo define, este
+# override hace que `docker compose ... config`/`up` se niegue a arrancar
+# con un mensaje claro, en vez de arrancar tranquilamente con la contraseña
+# de desarrollo expuesta — mismo criterio que ya aplica JWT_SECRET.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  db:
+    # "!reset" (no un simple "[]") porque Compose combina listas entre
+    # archivos por defecto — un "ports: []" normal se fusiona con la lista del
+    # archivo base y NO la vacía. "!reset" es la sintaxis de Compose que sí
+    # borra lo heredado.
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
+
+  backend:
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
+
+  adminer:
+    profiles: ["tools"]
+    ports: !reset []

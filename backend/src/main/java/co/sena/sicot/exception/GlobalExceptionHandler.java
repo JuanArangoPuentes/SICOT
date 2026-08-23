@@ -38,6 +38,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ErrorResponse> accessDenied(AccessDeniedException ex, WebRequest request) {
+        log.warn("Acceso denegado en {}: {}", request.getDescription(false).replace("uri=", ""), ex.getMessage());
         return build("No tiene permisos para realizar esta operación.", HttpStatus.FORBIDDEN, request);
     }
 

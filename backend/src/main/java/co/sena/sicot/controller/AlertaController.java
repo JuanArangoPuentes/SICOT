@@ -29,6 +29,7 @@ public class AlertaController {
 
     @Operation(summary = "Listar todas las alertas")
     @GetMapping("/alertas")
+    @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<List<AlertaResponse>> listarTodas() {
         return ResponseEntity.ok(alertaService.listarTodas());
     }
