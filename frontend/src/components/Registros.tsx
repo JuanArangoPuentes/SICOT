@@ -10,9 +10,6 @@ export interface Registro {
   estado: 'Entregado' | 'Leído' | 'Firmado'
 }
 
-// Historial de comunicaciones y firmas — vacío por defecto (empty state)
-export const REGISTROS_BASE: Registro[] = []
-
 const TIPOS = ['Todos', 'Correo Enviado', 'Firma', 'Notificación'] as const
 
 export default function Registros({ extra }: { extra: Registro[] }) {
@@ -21,7 +18,7 @@ export default function Registros({ extra }: { extra: Registro[] }) {
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
 
-  const all = useMemo(() => [...REGISTROS_BASE, ...extra], [extra])
+  const all = useMemo(() => extra, [extra])
 
   const toDate = (f: string) => {
     const [d, m, y] = f.slice(0, 10).split('/')

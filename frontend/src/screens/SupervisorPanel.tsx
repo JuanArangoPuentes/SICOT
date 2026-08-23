@@ -118,7 +118,7 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 export default function SupervisorPanel({
-  steps, setSteps, newContractNotif, usuario, contrato, cargandoContrato, onLogout, onOpenSettings, onStartTour, registros, addRegistro,
+  steps, setSteps, newContractNotif, usuario, contrato, cargandoContrato, onLogout, onOpenSettings, onStartTour, registros, onRefreshRegistros,
 }: {
   steps: Step[]
   setSteps: (s: Step[]) => void
@@ -130,7 +130,7 @@ export default function SupervisorPanel({
   onOpenSettings: () => void
   onStartTour: () => void
   registros: Registro[]
-  addRegistro: (r: Registro) => void
+  onRefreshRegistros: () => Promise<void>
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -156,7 +156,6 @@ export default function SupervisorPanel({
   // puede tardar, así que se deshabilita el envío en vez de dejar que se
   // acumulen preguntas superpuestas.
   const [pensando, setPensando] = useState(false)
-  const [confirmed, setConfirmed] = useState(true)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -251,15 +250,8 @@ export default function SupervisorPanel({
       setProcesandoFirma(subStepId)
       try {
         const generado = await generarDocumento(contrato.id, { tipo: doc.tipo, subetapaId: sub?.apiId ?? null })
-        const firmado = await firmarDocumento(contrato.id, generado.id)
-        addRegistro({
-          id: 'sig-' + subStepId,
-          tipo: 'Firma',
-          destinatario: `${contrato?.supervisorNombre ?? ''} — Supervisor`,
-          fecha: new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(',', ''),
-          asunto: `${doc.name}${doc.code !== 'PENDIENTE_DE_DEFINIR' ? ' ' + doc.code : ''} — firma electrónica ${firmado.firmaId ?? ''}`,
-          estado: 'Firmado',
-        })
+        await firmarDocumento(contrato.id, generado.id)
+        await onRefreshRegistros()
         getDocumentosContrato(contrato.id).then(setDocsContrato).catch(() => { })
       } catch (e) {
         setProcesandoFirma(null)
@@ -610,10 +602,6 @@ export default function SupervisorPanel({
                       Valor: <strong>{formatCOP(contrato?.valor)}</strong> · {formatFecha(contrato?.fechaInicio)} – {formatFecha(contrato?.fechaFin)}
                     </div>
                   </div>
-                  {confirmed
-                    ? <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--accent)', fontSize: 12, fontWeight: 500, flexShrink: 0 }}>✓ Recepción confirmada</div>
-                    : <button className="btn-green" onClick={() => setConfirmed(true)} style={{ padding: '6px 14px', fontSize: 12, flexShrink: 0 }}>Confirmar recepción</button>
-                  }
                 </div>
               </div>
 

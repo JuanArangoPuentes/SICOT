@@ -498,7 +498,6 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
   const [correo, setCorreo] = useState('')
   const [tel, setTel] = useState('')
   const [rol, setRol] = useState('Supervisor')
-  const [centros, setCentros] = useState<string[]>(['920510'])
   const [pw] = useState(randomPassword())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -545,11 +544,9 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
       cargo: ROL_CARGO[usuarioCreado.rol],
       rol: ROL_LABEL[usuarioCreado.rol],
       activo: usuarioCreado.activo,
-      centros: centros.join(', ') || '—',
+      centros: '—',
     })
   }
-
-  const CENTROS = ['920510', '920511', '920512', '920520']
 
   if (done && usuarioCreado) {
     return (
@@ -599,18 +596,6 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
           <option>Supervisor</option><option>Gestor de Contratación</option><option>Administrador</option>
         </select>
       </Field>
-      <Field label="Centros de costo asignados">
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>
-          {CENTROS.map(c => (
-            <label key={c} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-              <input type="checkbox" checked={centros.includes(c)}
-                onChange={() => setCentros(v => v.includes(c) ? v.filter(x => x !== c) : [...v, c])} />
-              {c}
-            </label>
-          ))}
-        </div>
-      </Field>
-
       <div className="card" style={{ padding: '12px 14px', margin: '4px 0 12px', borderColor: 'var(--accent-line)' }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--accent)', marginBottom: 6 }}>CONTRASEÑA TEMPORAL (se muestra una sola vez)</div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, letterSpacing: '0.06em' }}>{pw}</div>

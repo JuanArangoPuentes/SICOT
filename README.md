@@ -27,12 +27,17 @@ honesto.
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3 + Java 21 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 3.5.12 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/fases/`](./docs/fases) | Reportes de inspección/checkpoint por fase del proyecto | — |
 | [`docs/auditorias/`](./docs/auditorias) | Auditorías de datos/BD (consultas y resultados) | — |
 
 ## Correr todo con Docker (recomendado)
+
+La base de datos se crea y versiona con Flyway desde el backend. Una instalacion
+nueva aplica el esquema de `backend/src/main/resources/db/migration` y no carga
+datos transaccionales demo. Los usuarios de desarrollo solo aparecen con el
+perfil `dev`.
 
 Requiere [Docker Desktop](https://www.docker.com/products/docker-desktop/) abierto y corriendo.
 Desde la raíz del repo:

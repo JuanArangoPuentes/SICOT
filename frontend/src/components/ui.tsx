@@ -324,15 +324,15 @@ export function Modal({ title, onClose, width = 520, hideClose = false, children
   children: React.ReactNode
 }) {
   return (
-    <div onClick={onClose}
+    <div role="presentation" onClick={onClose}
       style={{ position: 'fixed', inset: 0, background: 'rgba(6,14,8,0.72)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
-      <div className="card" onClick={e => e.stopPropagation()}
+      <div className="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={e => e.stopPropagation()}
         style={{ width: '100%', maxWidth: width, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 16, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
         <div style={{ height: 4, flexShrink: 0, background: 'linear-gradient(90deg, var(--accent) 0%, var(--accent-emphasis) 100%)' }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <h3 style={{ fontSize: 16 }}>{title}</h3>
+          <h3 id="modal-title" style={{ fontSize: 16 }}>{title}</h3>
           {!hideClose && (
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
+            <button type="button" onClick={onClose} aria-label="Cerrar ventana" title="Cerrar" style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 22, cursor: 'pointer', padding: 0, lineHeight: 1 }}>×</button>
           )}
         </div>
         <div style={{ overflowY: 'auto', padding: '20px 24px 24px' }}>
@@ -375,21 +375,20 @@ export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTe
 
   return (
     <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div
+      <button type="button" aria-expanded={open} aria-label={`Abrir menú de ${label}`} onClick={() => setOpen(v => !v)}
         style={{
           width: 32, height: 32, borderRadius: '50%', background: avatarColor,
           border: '2px solid rgba(255,255,255,0.9)', boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
           color: avatarTextColor, cursor: 'pointer', userSelect: 'none', flexShrink: 0,
         }}
-        onClick={() => setOpen(v => !v)}
       >
         {label[0].toUpperCase()}
-      </div>
-      <div style={{ lineHeight: 1.3, cursor: 'pointer' }} onClick={() => setOpen(v => !v)}>
+      </button>
+      <button type="button" aria-expanded={open} aria-label={`Abrir menú de ${label}`} style={{ lineHeight: 1.3, cursor: 'pointer', background: 'none', border: 'none', padding: 0, textAlign: 'left' }} onClick={() => setOpen(v => !v)}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>{label}</div>
         <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.78)' }}>{email}</div>
-      </div>
+      </button>
       {open && (
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 6,
