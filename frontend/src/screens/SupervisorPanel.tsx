@@ -118,7 +118,16 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 export default function SupervisorPanel({
-  steps, setSteps, newContractNotif, usuario, contrato, cargandoContrato, onLogout, onOpenSettings, onStartTour, registros, onRefreshRegistros,
+  steps,
+  setSteps,
+  usuario,
+  contrato,
+  cargandoContrato,
+  onLogout,
+  onOpenSettings,
+  onStartTour,
+  registros,
+  onRefreshRegistros,
 }: {
   steps: Step[]
   setSteps: (s: Step[]) => void
