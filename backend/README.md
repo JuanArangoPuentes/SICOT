@@ -18,10 +18,20 @@ Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 ## 2. Base de datos
 
-En una base nueva, Flyway aplica una unica migracion de estructura:
-`V1__create_sicot_schema.sql`. No se insertan datos transaccionales de ejemplo
-ni se ejecutan migraciones destructivas. Las cuentas demo solo se crean con el
-perfil `dev` mediante `DataInitializer`.
+En una base nueva, Flyway aplica dos migraciones:
+
+| Archivo | Qué hace |
+|---|---|
+| `V1__create_sicot_schema.sql` | Línea base completa: tablas, constraints e índices |
+| `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha en `alertas` y `registros` (los usa la paginación) |
+
+La numeración salta de `V1` a `V9` a propósito: las migraciones `V1`–`V8`
+originales se consolidaron en la nueva `V1`, y `V9` se conservó porque ya se
+había aplicado en bases existentes. **No hay migraciones perdidas.**
+
+No se insertan datos transaccionales de ejemplo ni se ejecutan migraciones
+destructivas. Las cuentas demo solo se crean con el perfil `dev` mediante
+`DataInitializer`.
 
 Para recrear una base local Docker desde cero, detenga el stack y elimine solo
 su volumen local (`docker compose down -v`). Nunca ejecute ese comando sobre
@@ -33,9 +43,9 @@ CREATE USER sicot WITH PASSWORD 'sicot_dev_password';
 CREATE DATABASE sicot OWNER sicot;
 ```
 
-El esquema se crea automáticamente con **Flyway** al primer arranque mediante
-`V1__create_sicot_schema.sql`. Esta linea base contiene estructura, constraints
-e indices, pero no inserta ni elimina datos transaccionales demo.
+El esquema se crea automáticamente con **Flyway** al primer arranque. La línea
+base contiene estructura, constraints e índices, pero no inserta ni elimina
+datos transaccionales demo.
 
 Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataInitializer` con contraseñas codificadas en BCrypt:
 

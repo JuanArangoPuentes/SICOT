@@ -52,7 +52,7 @@ Agregar en la configuración de servidores MCP (`claude_desktop_config.json` o e
   "mcpServers": {
     "sicot": {
       "command": "node",
-      "args": ["C:/Users/juant/Downloads/Proyecto SICOT/mcp/dist/index.js"],
+      "args": ["<RUTA-AL-REPO>/mcp/dist/index.js"],
       "env": {
         "SICOT_API_URL": "http://localhost:8080",
         "SICOT_EMAIL": "administrador@soy.sena.edu.co",

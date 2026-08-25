@@ -29,6 +29,9 @@ honesto.
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
 | [`backend/`](./backend) | API en Spring Boot 3.5.12 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
+| [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
+| [`docs/operations/`](./docs/operations) | Operación día a día (base de datos local) | — |
+| [`docs/despliegue/`](./docs/despliegue) | Backup y restauración | — |
 | [`docs/fases/`](./docs/fases) | Reportes de inspección/checkpoint por fase del proyecto | — |
 | [`docs/auditorias/`](./docs/auditorias) | Auditorías de datos/BD (consultas y resultados) | — |
 
@@ -111,6 +114,14 @@ Backup/restauración de la base de datos: ver
    [`backend/README.md`](./backend/README.md)).
 2. Backend: `cd backend && mvn spring-boot:run` → http://localhost:8080
 3. Frontend: `cd frontend && npm install && npm run dev` → http://localhost:8443
+
+> ⚠️ **Son dos bases de datos distintas, no la misma vista desde dos puertos.**
+> El Postgres **nativo** (`localhost:5432`) que usa este modo y el Postgres **del contenedor**
+> (`localhost:5433`, servicio `sicot-db` de `docker compose`) son instancias independientes con
+> datos independientes: un contrato creado en una **no** aparece en la otra. Si alguien reporta
+> que "los datos desaparecieron", lo primero a verificar es contra cuál de las dos está
+> corriendo el backend (variable `DB_URL`). Elija un modo y quédese en él durante una sesión de
+> trabajo; no los mezcle.
 
 ## Cuentas de desarrollo
 
