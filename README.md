@@ -138,4 +138,23 @@ desarrollo/demo — nunca deben usarse en producción.
 
 Las reglas de estabilidad, alcance y "no inventar" que gobiernan este repo están en
 [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) y aplican a cualquier
-persona o agente que contribuya.
+persona o agente que contribuya. Su §33 define además qué áreas tienen responsable asignado.
+
+## Integración continua
+
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) corre en cada PR hacia `develop` o
+`master`: pruebas del backend (`mvnw verify`) y chequeo de tipos + build del frontend. Un PR
+con la CI en rojo no se mergea. La suite end-to-end de Playwright queda fuera de esa compuerta
+porque necesita backend, PostgreSQL y las cuentas del perfil `dev`; se corre a mano con
+`npm run test:e2e`.
+
+## Herramientas de desarrollo asistido (opcional)
+
+El repo no versiona la maquinaria de asistentes de IA — es regenerable y no todo el equipo usa
+el mismo. Si quiere los flujos de trabajo de GSD sobre este proyecto:
+
+```bash
+npx @opengsd/gsd-core@latest --local --claude
+```
+
+Instala bajo `.claude/`, que está ignorado por git salvo `launch.json`.

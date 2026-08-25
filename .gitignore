@@ -10,12 +10,19 @@ dist/
 target/
 
 # --- Herramientas de agentes de IA (locales, no se comparten) -----------------
-# `.claude/launch.json` SÍ se versiona (configura el arranque del proyecto);
-# todo lo demás bajo .claude/ es estado local de cada máquina.
-.claude/*.lock
-.claude/skills/
-.claude/worktrees/
-.claude/settings.local.json
+# Se ignora TODO .claude/ salvo `launch.json`, que sí es configuración del
+# proyecto (define cómo se arranca el frontend).
+#
+# La regla se escribe en negativo a propósito: estas herramientas (GSD, Spec
+# Kit, worktrees de agentes...) instalan y renombran carpetas con frecuencia, y
+# una lista de exclusiones concretas se queda corta enseguida — así fue como
+# estuvieron a punto de commitearse 41 archivos de una de ellas.
+#
+# GSD en particular instala ~12 MB de maquinaria regenerable; no tiene sentido
+# versionarla, y no todo el equipo usa el mismo asistente. Para instalarla:
+#   npx @opengsd/gsd-core@latest --local --claude
+.claude/*
+!.claude/launch.json
 
 # --- Entornos de desarrollo ---------------------------------------------------
 .idea/
