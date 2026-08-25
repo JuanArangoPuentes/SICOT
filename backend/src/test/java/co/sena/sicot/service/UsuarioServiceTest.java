@@ -106,4 +106,47 @@ class UsuarioServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("único administrador");
     }
+
+    /**
+     * La guarda existía solo en {@code cambiarEstado}, así que el último
+     * administrador podía degradarse a sí mismo cambiándose el rol y dejar el
+     * sistema sin ninguna cuenta capaz de entrar a /api/usuarios — es decir,
+     * irrecuperable por la API.
+     */
+    @Test
+    void noPermiteQuitarleElRolAlUltimoAdministradorActivo() {
+        Usuario administrador = new Usuario();
+        administrador.setId(1L);
+        administrador.setRol(Rol.ADMINISTRADOR);
+        administrador.setActivo(true);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(administrador));
+        when(usuarioRepository.existsByEmailAndIdNot("admin@soy.sena.edu.co", 1L)).thenReturn(false);
+        when(usuarioRepository.countByRolAndActivoTrue(Rol.ADMINISTRADOR)).thenReturn(1L);
+
+        ActualizarUsuarioRequest degradar = new ActualizarUsuarioRequest(
+                "Administrador", "admin@soy.sena.edu.co", null, "3000000000", Rol.SUPERVISOR);
+
+        assertThatThrownBy(() -> usuarioService.actualizar(1L, degradar))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("único administrador");
+    }
+
+    @Test
+    void permiteEditarAlUltimoAdministradorMientrasSigaSiendoAdministrador() {
+        Usuario administrador = new Usuario();
+        administrador.setId(1L);
+        administrador.setRol(Rol.ADMINISTRADOR);
+        administrador.setActivo(true);
+        when(usuarioRepository.findById(1L)).thenReturn(Optional.of(administrador));
+        when(usuarioRepository.existsByEmailAndIdNot("admin@soy.sena.edu.co", 1L)).thenReturn(false);
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ActualizarUsuarioRequest cambioDeNombre = new ActualizarUsuarioRequest(
+                "Administrador SICOT", "admin@soy.sena.edu.co", null, "3000000000", Rol.ADMINISTRADOR);
+
+        var response = usuarioService.actualizar(1L, cambioDeNombre);
+
+        assertThat(response.nombre()).isEqualTo("Administrador SICOT");
+        assertThat(response.rol()).isEqualTo(Rol.ADMINISTRADOR);
+    }
 }

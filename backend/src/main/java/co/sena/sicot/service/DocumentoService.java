@@ -120,12 +120,11 @@ public class DocumentoService {
     }
 
     private Subetapa buscarSubetapaDelContrato(Long subetapaId, Contrato contrato) {
-        Subetapa subetapa = subetapaRepository.findById(subetapaId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
-        if (!subetapa.getEtapa().getContrato().getId().equals(contrato.getId())) {
-            throw new BusinessException("La subetapa indicada no pertenece al contrato.");
-        }
-        return subetapa;
+        // La pertenencia al contrato es parte de la consulta, no una
+        // comprobación posterior — ver SubetapaRepository.
+        return subetapaRepository.findByIdAndEtapaContratoId(subetapaId, contrato.getId())
+                .orElseThrow(() -> new BusinessException(
+                        "La subetapa indicada no existe o no pertenece a este contrato."));
     }
 
 }
