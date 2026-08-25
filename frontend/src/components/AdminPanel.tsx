@@ -113,56 +113,76 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
   const [contratosActivos, setContratosActivos] = useState(0)
   const [totalContratos, setTotalContratos] = useState(0)
 
+  // Las consultas que fallan NO pueden pintarse como un cero medido: un
+  // dashboard que muestra "0 contratos activos" porque la API no respondió es
+  // indistinguible de uno que muestra un cero real, y lleva a decisiones
+  // equivocadas. Cuando falla se muestra un guion y un aviso.
+  const [errorDatos, setErrorDatos] = useState(false)
+  // Errores de las acciones sobre filas (activar usuario, revocar firma,
+  // eliminar formato). Antes se tragaban en silencio: se hacía clic y no pasaba
+  // absolutamente nada, sin explicación.
+  const [errorAccion, setErrorAccion] = useState('')
+
   const cargarFormatos = () => {
-    getFormatos().then(setFormatos).catch(() => {})
+    getFormatos().then(setFormatos).catch(() => setErrorDatos(true))
   }
 
   const cargarFirmas = () => {
-    getFirmas().then(lista => setFirmas(lista.map(mapFirma))).catch(() => {})
+    getFirmas().then(lista => setFirmas(lista.map(mapFirma))).catch(() => setErrorDatos(true))
   }
 
   // Datos reales: usuarios, contratos, catálogo de formatos y firmas asignadas
   useEffect(() => {
     let cancelado = false
+    const fallo = () => { if (!cancelado) setErrorDatos(true) }
     getUsuarios()
       .then(lista => { if (!cancelado) setUsers(lista.map(mapUser)) })
-      .catch(() => {})
+      .catch(fallo)
     getContratos()
       .then(lista => {
         if (cancelado) return
         setTotalContratos(lista.length)
         setContratosActivos(lista.filter(c => c.estado === 'ACTIVO').length)
       })
-      .catch(() => {})
+      .catch(fallo)
     getFormatos()
       .then(lista => { if (!cancelado) setFormatos(lista) })
-      .catch(() => {})
+      .catch(fallo)
     getFirmas()
       .then(lista => { if (!cancelado) setFirmas(lista.map(mapFirma)) })
-      .catch(() => {})
+      .catch(fallo)
     return () => { cancelado = true }
   }, [])
 
   const toggleActivo = async (u: UserRow) => {
+    setErrorAccion('')
     try {
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers(us => us.map(x => x.id === u.id ? { ...x, activo: actualizado.activo } : x))
-    } catch { /* el chip conserva el estado real si el backend rechaza */ }
+    } catch {
+      setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
+    }
   }
 
   const toggleFirma = async (f: FirmaRow) => {
+    setErrorAccion('')
     try {
       const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
       setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: actualizada.activa } : x))
-    } catch { /* la fila conserva el estado real si el backend rechaza */ }
+    } catch {
+      setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
+    }
   }
 
   const eliminarFormatoRow = async (f: FormatoDocumentalResponse) => {
     if (!window.confirm(`¿Eliminar "${f.codigo} — ${f.nombre}" del catálogo? Esta acción no se puede deshacer.`)) return
+    setErrorAccion('')
     try {
       await eliminarFormato(f.id)
       setFormatos(fs => fs.filter(x => x.id !== f.id))
-    } catch { /* si el backend rechaza, la fila se conserva */ }
+    } catch {
+      setErrorAccion(`No se pudo eliminar el formato ${f.codigo}.`)
+    }
   }
 
   const formatosObsoletos = formatos.filter(f => f.estado === 'OBSOLETO').length
@@ -182,6 +202,13 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
 
       <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
 
+        {errorAccion && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <span>{errorAccion}</span>
+            <button className="btn-ghost" onClick={() => setErrorAccion('')} style={{ padding: '4px 10px', fontSize: 12 }}>Cerrar</button>
+          </div>
+        )}
+
         {/* ── Panel de control ── */}
         {tab === 'dashboard' && (
           <>
@@ -189,11 +216,17 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
               <div className="eyebrow">Vista general</div>
               <h3 style={{ fontSize: 18 }}>Panel de Control</h3>
             </div>
+            {errorDatos && (
+              <div style={{ marginBottom: 14, padding: '10px 14px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)' }}>
+                No se pudieron consultar algunos datos del servidor. Las cifras de abajo pueden estar
+                incompletas — recargue la página para reintentar.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <Widget icon={<IconClipboardList size={17} />} label="Contratos activos" value={String(contratosActivos)} hint={`${totalContratos} registrados en total`} />
-              <Widget icon={<IconUsers size={17} />} label="Usuarios activos" value={String(users.filter(u => u.activo).length)} hint={`${users.length} registrados en total`} />
-              <Widget icon={<IconFileText size={17} />} label="Formatos vigentes" value={`${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint="Formatos oficiales cargados" />
-              <Widget icon={<IconAlertTriangle size={17} />} label="Formatos obsoletos" value={String(formatosObsoletos)} hint="Requieren reemplazo por una versión vigente" tone={formatosObsoletos ? 'warn' : 'ok'} />
+              <Widget icon={<IconClipboardList size={17} />} label="Contratos activos" value={errorDatos ? '—' : String(contratosActivos)} hint={errorDatos ? 'Dato no disponible' : `${totalContratos} registrados en total`} />
+              <Widget icon={<IconUsers size={17} />} label="Usuarios activos" value={errorDatos ? '—' : String(users.filter(u => u.activo).length)} hint={errorDatos ? 'Dato no disponible' : `${users.length} registrados en total`} />
+              <Widget icon={<IconFileText size={17} />} label="Formatos vigentes" value={errorDatos ? '—' : `${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados'} />
+              <Widget icon={<IconAlertTriangle size={17} />} label="Formatos obsoletos" value={errorDatos ? '—' : String(formatosObsoletos)} hint={errorDatos ? 'Dato no disponible' : 'Requieren reemplazo por una versión vigente'} tone={errorDatos ? undefined : (formatosObsoletos ? 'warn' : 'ok')} />
             </div>
 
             <div className="card" style={{ padding: '16px 18px' }}>

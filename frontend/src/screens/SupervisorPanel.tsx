@@ -75,6 +75,40 @@ function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: 
   )
 }
 
+/**
+ * No se pudo consultar el contrato.
+ *
+ * Es una pantalla distinta de {@link EmptyContractState} a propósito: afirmar
+ * "no tiene un contrato asignado" cuando lo que pasó es que el backend no
+ * respondió llevaría al supervisor a creer que no tiene nada que hacer.
+ */
+function ErrorContratoState({ usuario, onLogout, onOpenSettings }: {
+  usuario: AuthResponse
+  onLogout: () => void
+  onOpenSettings: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
+      <TopBar badge="Panel Supervisor" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout} />
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div className="card" style={{ maxWidth: 460, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--chip-red)' }}>
+          <div style={{ width: 40, height: 2, background: 'var(--chip-red)', borderRadius: 1, margin: '0 auto 20px' }} />
+          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>
+            No se pudo cargar su contrato
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
+            El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga
+            ninguno: vuelva a intentarlo y, si el problema persiste, avise al área de sistemas.
+          </p>
+          <button className="btn-green" onClick={() => window.location.reload()} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
+            Reintentar
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Estado de carga — mientras se consulta el contrato real del supervisor ──
 function CargandoContratoState({ usuario, onLogout, onOpenSettings }: {
   usuario: AuthResponse
@@ -123,6 +157,7 @@ export default function SupervisorPanel({
   usuario,
   contrato,
   cargandoContrato,
+  errorContrato,
   onLogout,
   onOpenSettings,
   onStartTour,
@@ -134,6 +169,7 @@ export default function SupervisorPanel({
   usuario: AuthResponse
   contrato: ContratoResponse | null
   cargandoContrato: boolean
+  errorContrato: boolean
   onLogout: () => void
   onOpenSettings: () => void
   onStartTour: () => void
@@ -182,19 +218,34 @@ export default function SupervisorPanel({
     return () => { cancelado = true }
   }, [contrato, setSteps])
 
-  // Alertas reales del contrato (no leídas)
+  // Alertas reales del contrato (no leídas).
+  //
+  // `errorAlertas` existe porque un fallo aquí NO puede parecerse a "no hay
+  // alertas": la lista vacía se pinta en verde con "Sin alertas activas en este
+  // contrato", y decirle eso a un supervisor cuando en realidad no se pudo
+  // consultar el servicio es el peor error posible de esta pantalla — le
+  // asegura que todo está en orden justo cuando el sistema no lo sabe.
   const [alertasApi, setAlertasApi] = useState<AlertaResponse[]>([])
+  const [errorAlertas, setErrorAlertas] = useState(false)
   useEffect(() => {
     if (!contrato) {
       setAlertasApi([])
+      setErrorAlertas(false)
       return
     }
     let cancelado = false
+    setErrorAlertas(false)
     getAlertasContrato(contrato.id)
       .then(lista => {
         if (!cancelado) setAlertasApi(lista.filter(a => !a.leida))
       })
-      .catch(err => console.error('No se pudieron cargar las alertas del contrato:', err))
+      .catch(err => {
+        console.error('No se pudieron cargar las alertas del contrato:', err)
+        if (!cancelado) {
+          setAlertasApi([])
+          setErrorAlertas(true)
+        }
+      })
     return () => { cancelado = true }
   }, [contrato])
 
@@ -520,7 +571,12 @@ export default function SupervisorPanel({
     return <CargandoContratoState usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings} />
   }
 
-  // Protección: si ya se consultó y no hay contrato asignado, mostrar estado vacío
+  // La consulta falló: no se puede afirmar que no tenga contrato asignado.
+  if (!contrato && errorContrato) {
+    return <ErrorContratoState usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings} />
+  }
+
+  // Ya se consultó correctamente y no hay contrato asignado: estado vacío real.
   if (!contrato) {
     return <EmptyContractState usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings} onStartTour={onStartTour} />
   }
@@ -575,6 +631,7 @@ export default function SupervisorPanel({
                 <ProminentAlerts
                   alerts={liveAlerts}
                   blink={prefs.blinkAlerts}
+                  error={errorAlertas}
                   onDismiss={dismiss}
                   onResolve={resolveAlert}
                 />
@@ -808,7 +865,15 @@ export default function SupervisorPanel({
               )
             })}
 
-            {alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
+            {errorAlertas ? (
+              <div className="card" style={{ padding: '40px 20px', textAlign: 'center', borderColor: 'var(--chip-red)' }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--chip-red)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>!</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--chip-red)', marginBottom: 4 }}>No se pudieron consultar las alertas</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  Puede haber alertas pendientes que no se están mostrando. Recargue la página para reintentar.
+                </div>
+              </div>
+            ) : alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
               <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: '#03200D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>✓</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Sin alertas activas</div>
@@ -930,12 +995,39 @@ export default function SupervisorPanel({
 
 // ─── Panel de alertas prominentes (izquierda de la barra de progreso) ──────────
 
-function ProminentAlerts({ alerts, blink, onDismiss, onResolve }: {
+function ProminentAlerts({ alerts, blink, error, onDismiss, onResolve }: {
   alerts: LiveAlert[]
   blink: boolean
+  /** El servicio de alertas no respondió: no se puede afirmar que no haya ninguna. */
+  error: boolean
   onDismiss: (id: string) => void
   onResolve: (id: string) => void
 }) {
+  if (error && alerts.length === 0) {
+    return (
+      <div style={{
+        width: 200, flexShrink: 0,
+        border: '1.5px solid var(--chip-red)',
+        borderRadius: 10, padding: '20px 16px',
+        background: 'var(--chip-red-bg)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: 8, minHeight: 90,
+      }}>
+        <div style={{
+          width: 34, height: 34, borderRadius: '50%',
+          background: 'var(--chip-red)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontWeight: 800, fontSize: 16,
+        }}>!</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--chip-red)' }}>Alertas no disponibles</div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
+          No se pudo consultar el servicio
+        </div>
+      </div>
+    )
+  }
+
   if (alerts.length === 0) {
     return (
       <div style={{

@@ -61,6 +61,7 @@ function AppInner() {
   // panel muestre "sin contrato asignado" por un instante antes de que la
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
+  const [errorContrato, setErrorContrato] = useState(false)
 
   const refreshRegistros = async () => {
     if (!contrato) return
@@ -77,14 +78,23 @@ function AppInner() {
     }
     let cancelado = false
     setCargandoContrato(true)
+    setErrorContrato(false)
     getContratos(session.usuarioId)
       .then(lista => {
         if (cancelado) return
         const activo = lista.find(c => c.estado === 'ACTIVO') ?? lista[0] ?? null
         setContrato(activo)
       })
-      .catch(() => {
-        if (!cancelado) setContrato(null)
+      .catch(err => {
+        // Un fallo al consultar NO es lo mismo que "no tiene contrato": el panel
+        // del supervisor pinta un estado definitivo ("Actualmente no tiene un
+        // contrato asignado") que sería mentira si lo que ocurrió fue que el
+        // backend no respondió. Se distingue con `errorContrato`.
+        console.error('No se pudo cargar el contrato asignado:', err)
+        if (!cancelado) {
+          setContrato(null)
+          setErrorContrato(true)
+        }
       })
       .finally(() => {
         if (!cancelado) setCargandoContrato(false)
@@ -145,6 +155,7 @@ function AppInner() {
           usuario={session}
           contrato={contrato}
           cargandoContrato={cargandoContrato}
+          errorContrato={errorContrato}
           onLogout={logout}
           onOpenSettings={() => setSettingsOpen(true)}
           onStartTour={() => setTourActive(true)}

@@ -179,8 +179,41 @@ const Ctx = createContext<PrefsCtx>({ prefs: DEFAULT_PREFS, patch: () => {}, res
 
 export const usePrefs = () => useContext(Ctx)
 
+const STORAGE_KEY = 'sicot.prefs'
+
+/**
+ * Lee las preferencias guardadas.
+ *
+ * Se combinan sobre DEFAULT_PREFS en vez de usarse tal cual: si en una versión
+ * futura se añade una preferencia nueva, las que quedaron guardadas antes no la
+ * traerán, y sin esta mezcla el valor llegaría `undefined` a la UI.
+ * Cualquier problema al leer (JSON corrupto, localStorage bloqueado por la
+ * configuración del navegador) se ignora y se cae a los valores por defecto:
+ * no poder restaurar el tema jamás debe impedir que la aplicación arranque.
+ */
+function cargarPrefs(): Prefs {
+  try {
+    const guardado = localStorage.getItem(STORAGE_KEY)
+    if (!guardado) return DEFAULT_PREFS
+    return { ...DEFAULT_PREFS, ...(JSON.parse(guardado) as Partial<Prefs>) }
+  } catch {
+    return DEFAULT_PREFS
+  }
+}
+
 export function PrefsProvider({ children }: { children: ReactNode }) {
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS)
+  const [prefs, setPrefs] = useState<Prefs>(cargarPrefs)
+
+  // Persistencia real. Antes el panel de Ajustes mostraba "✓ Cambios guardados"
+  // pero no guardaba nada: al recargar se perdía todo.
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
+    } catch {
+      // Sin espacio o almacenamiento deshabilitado: la sesión actual sigue
+      // funcionando, solo no sobrevive a una recarga.
+    }
+  }, [prefs])
 
   useEffect(() => {
     const r = document.documentElement.style
