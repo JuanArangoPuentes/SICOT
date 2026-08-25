@@ -86,9 +86,12 @@ class ContratoDeErroresIntegrationTest {
      */
     @Test
     void ollamaCaidoDevuelve503ConMensajeHonesto() throws Exception {
+        // Mismo mensaje que produce OllamaClient en el fallo real: explica qué
+        // pasó y qué hacer, sin exponer URL interna ni nombre del modelo.
         given(ollamaClient.generar(anyString(), anyBoolean()))
                 .willThrow(new IaNoDisponibleException(
-                        "No se pudo contactar al servicio de IA local (Ollama). Verifique que esté corriendo."));
+                        "El servicio de IA no está disponible en este momento. "
+                                + "Intente de nuevo en unos minutos; si el problema persiste, avise al área de sistemas."));
 
         MockMultipartFile pdf = new MockMultipartFile(
                 "archivos", "acta.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
@@ -97,8 +100,11 @@ class ContratoDeErroresIntegrationTest {
                         .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503))
-                // El mensaje real del backend debe propagarse, no el genérico.
-                .andExpect(jsonPath("$.message", containsString("Ollama")));
+                // El mensaje real del backend debe propagarse, no el generico.
+                .andExpect(jsonPath("$.message", containsString("servicio de IA no está disponible")))
+                // ...pero sin filtrar topologia interna al cliente.
+                .andExpect(jsonPath("$.message", not(containsString("localhost"))))
+                .andExpect(jsonPath("$.message", not(containsString("11434"))));
     }
 
     @Test
