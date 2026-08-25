@@ -68,9 +68,32 @@ const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
   OBSOLETO: { label: 'Obsoleto', type: 'inactive' },
 }
 
+// Contraseña inicial de una cuenta real. Se usa `crypto.getRandomValues`, no
+// `Math.random()`: `Math.random()` no es criptográficamente seguro — su estado
+// interno se puede reconstruir observando unas pocas salidas, así que quien vea
+// una contraseña generada podría predecir las siguientes.
+//
+// El descarte de `byte >= limite` evita el sesgo de módulo: 256 no es múltiplo
+// de 61 (el tamaño del alfabeto), así que un `% chars.length` directo haría más
+// probables los primeros caracteres del alfabeto.
+//
+// El alfabeto omite a propósito los caracteres ambiguos (I, l, 1, O, 0) porque
+// esta contraseña se dicta o se transcribe a mano al entregarla.
 const randomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#$%&'
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const limite = 256 - (256 % chars.length)
+  const salida: string[] = []
+  const buffer = new Uint8Array(32)
+
+  while (salida.length < 12) {
+    crypto.getRandomValues(buffer)
+    for (const byte of buffer) {
+      if (salida.length === 12) break
+      if (byte < limite) salida.push(chars[byte % chars.length])
+    }
+  }
+
+  return salida.join('')
 }
 
 type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'

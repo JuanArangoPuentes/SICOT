@@ -45,6 +45,13 @@ Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataI
 | `gestion@soy.sena.edu.co` | GESTION | `Gestion123*` |
 | `supervisor@soy.sena.edu.co` | SUPERVISOR | `Supervisor123*` |
 
+> ⚠️ **Estas contraseñas son públicas** (están en este archivo, en un repositorio
+> compartido) y por eso estas cuentas **solo existen bajo el perfil `dev`**.
+> `DataInitializer` no las crea con ningún otro perfil, y `docker-compose.prod.yml`
+> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal para que no puedan aparecer
+> en un servidor por un `.env` mal copiado. Si alguna vez ve estas cuentas en un
+> despliegue real, ese despliegue está corriendo con el perfil equivocado.
+
 ## 3. Configuración (variables de entorno)
 
 Copie `.env.example` a un `.env` (o exporte las variables) — los valores por defecto en `application.properties` solo funcionan en desarrollo:
@@ -88,6 +95,15 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 - Swagger UI: <http://localhost:8080/swagger-ui.html>
 - Actuator: <http://localhost:8080/actuator/health>
 
+### Problemas frecuentes al arrancar
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `Fatal error compiling: error: release version 25 not supported` | La máquina tiene un JDK anterior (p. ej. 21). El proyecto compila con `--release 25` | Instalar JDK 25 (`winget install EclipseAdoptium.Temurin.25.JDK`) y apuntar `JAVA_HOME` ahí. El build vía Docker no se ve afectado: usa su propia imagen JDK 25 |
+| `Found more than one migration with version 1` | `target/classes` conserva una migración Flyway vieja que ya se eliminó del código fuente (Maven no borra artefactos huérfanos al renombrar un archivo) | `mvn clean` antes de volver a arrancar. **Correr `mvn clean` siempre después de un pull que consolide o renombre migraciones** |
+| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | Coordinar con quien administra la base antes de tocar `flyway_schema_history`; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
+| `IaNoDisponibleException` al usar el Copiloto | Ollama no está corriendo | `ollama serve` en la misma máquina que el backend, y verificar `OLLAMA_URL` |
+
 ## 5. Autenticación
 
 1. `POST /api/auth/login` con `{"email": "...", "password": "..."}` → devuelve el `token`.
@@ -105,13 +121,22 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 | PATCH | `/api/contratos/{id}/supervisor` · `/api/contratos/{id}/estado` | GESTION, ADMINISTRADOR |
 | GET | `/api/contratos/{id}/etapas`, `/api/etapas/{id}/subetapas` | autenticados |
 | PATCH | `/api/subetapas/{id}/estado` | SUPERVISOR, GESTION, ADMINISTRADOR |
-| GET | `/api/contratos/{id}/documentos` | autenticados (carga real de archivos por contrato en fase posterior) |
+| GET | `/api/contratos/{id}/documentos` | autenticados |
+| POST | `/api/contratos/{id}/documentos` (multipart, carga real) | GESTION, ADMINISTRADOR |
+| GET | `/api/contratos/{id}/documentos/{docId}/archivo` (descarga real) | autenticados |
+| POST | `/api/contratos/{id}/documentos/generar` (redacta el documento con IA) | SUPERVISOR, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/documentos/{docId}/firmar` | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/copiloto/chat` (chat real sobre Ollama) | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/ia/extraer-contrato` (multipart PDF; propone campos, **no persiste**) | GESTION, ADMINISTRADOR |
 | GET/PATCH | `/api/contratos/{id}/alertas`, `/api/alertas/{id}/leida` | autenticados |
 | GET | `/api/contratos/{id}/registros`, `/api/registros` | autenticados (todos: ADMINISTRADOR) |
 | GET | `/api/formatos` | autenticados |
 | POST | `/api/formatos` (multipart: `codigo`, `nombre`, `archivo`) | ADMINISTRADOR |
 | GET | `/api/formatos/{id}/archivo` (descarga real del archivo) | autenticados |
 | DELETE | `/api/formatos/{id}` | ADMINISTRADOR |
+| GET | `/api/firmas` · `/api/firmas/mia` | ADMINISTRADOR · autenticados |
+| POST/PATCH | `/api/firmas`, `/api/firmas/{id}/estado` | ADMINISTRADOR |
+| POST | `/api/usuarios/{id}/enviar-credenciales` | ADMINISTRADOR |
 
 **Reglas de negocio destacadas:**
 - Al cambiar el estado de una subetapa se recalcula automáticamente el porcentaje y estado de su etapa (todas COMPLETADA → etapa COMPLETADA 100%).
@@ -128,10 +153,14 @@ co.sena.sicot
 ├── dto/         → request/response (validación con Bean Validation)
 ├── entity/      → JPA + enums (Rol, EstadoContrato, EstadoEtapa, …)
 ├── exception/   → errores y manejador global (@RestControllerAdvice)
+├── ia/          → Copiloto IA: OllamaClient (único punto de salida hacia Ollama),
+│                  ExtraccionContratoService, GeneracionDocumentoService,
+│                  CopilotoChatService, PlantillaDocumentoIA, PdfTextExtractor,
+│                  SimplePdfWriter
 ├── mapper/      → entidad ↔ DTO
 ├── repository/  → Spring Data JPA
-├── security/    → JWT, filtro, CORS, BCrypt, autorización por rol
-└── service/     → lógica de negocio
+├── security/    → JWT, filtro, CORS, BCrypt, autorización por rol y por contrato
+└── service/     → lógica de negocio (incluye GcconP010Plantilla: las 6 etapas/27 subetapas)
 ```
 
 ## 8. Pruebas

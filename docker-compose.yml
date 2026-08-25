@@ -81,7 +81,18 @@ services:
       DB_URL: jdbc:postgresql://db:5432/sicot
       DB_USERNAME: sicot
       DB_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}
-      JWT_SECRET: ${JWT_SECRET:-ZGl2ZWxvcG1lbnQtc2ljb3Qtc2VjcmV0by1qd3Qta2V5LW11eS1sYXJnbzY0LWJ5dGVzLXNlZ3Vybw==}
+      # JWT_SECRET NO se define aquí a propósito, y no debe volver a definirse
+      # con un valor por defecto. El perfil "dev" ya trae un secreto de
+      # conveniencia en application-dev.properties; cualquier otro perfil exige
+      # JWT_SECRET real en el entorno o el backend rehúsa arrancar
+      # (application.properties lo declara sin respaldo, deliberadamente).
+      # Ponerle un default aquí anula esa protección: Compose inyectaría la
+      # variable pase lo que pase, el respaldo de Spring nunca se activaría, y
+      # un despliegue de producción firmaría tokens con una clave publicada en
+      # este repositorio. Tampoco sirve `${JWT_SECRET:-}`: una variable definida
+      # pero vacía también desactiva el respaldo. Si se define, se hereda del
+      # .env, que es lo correcto. Ver docker-compose.prod.yml, donde además pasa
+      # a ser obligatoria.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443}
       # Correo real (entrega de credenciales) — sin esto configurado en el .env
       # de la raíz, el envío falla honestamente en vez de fingir éxito.
