@@ -1,5 +1,9 @@
 # Base de datos local
 
+> **Entorno estándar del equipo (26 ago 2026):** la base de desarrollo es la del
+> contenedor `sicot-db`, **puerto 5433**, levantada con `docker compose`. Un
+> PostgreSQL instalado a mano en la máquina no es el entorno de referencia.
+
 ## Importante: pueden coexistir dos bases distintas
 
 En una máquina de desarrollo es normal terminar con **dos PostgreSQL independientes**:
@@ -26,11 +30,26 @@ Para una base local completamente nueva:
 
 ```powershell
 docker compose down -v
-docker compose up -d --build
+docker compose up --build -d
+docker compose ps
 ```
 
 `down -v` elimina unicamente el volumen local de este proyecto y borra sus
 datos. No debe ejecutarse en una base con informacion que se quiera conservar.
+
+### Cuando hace falta hacerlo
+
+Si el backend no arranca y en sus logs aparece:
+
+```
+FlywayValidateException: Migration checksum mismatch for migration version 1
+Detected applied migration not resolved locally: 2. (…3, 4, 5, 6, 7, 8)
+```
+
+significa que el volumen recuerda las 9 migraciones anteriores a la
+consolidacion, mientras que el codigo ya solo trae dos. Flyway se niega a
+continuar con esa discrepancia. La secuencia de arriba resuelve el caso: borra
+ese historial y deja que las dos migraciones actuales se apliquen desde cero.
 
 ## Conexion desde pgAdmin
 

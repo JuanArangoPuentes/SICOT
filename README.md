@@ -35,7 +35,12 @@ honesto.
 | [`docs/fases/`](./docs/fases) | Reportes de inspección/checkpoint por fase del proyecto | — |
 | [`docs/auditorias/`](./docs/auditorias) | Auditorías de datos/BD (consultas y resultados) | — |
 
-## Correr todo con Docker (recomendado)
+## Correr todo con Docker — entorno estándar del equipo
+
+> **Decisión del equipo (26 ago 2026):** el entorno de trabajo es este.
+> La base de datos de desarrollo es la del contenedor `sicot-db` (**puerto 5433**),
+> no un PostgreSQL instalado a mano. Así todos trabajamos contra el mismo esquema
+> con un solo comando, y no hay que instalar ni versionar nada por separado.
 
 La base de datos se crea y versiona con Flyway desde el backend. Una instalacion
 nueva aplica el esquema de `backend/src/main/resources/db/migration` y no carga
@@ -48,6 +53,28 @@ Desde la raíz del repo:
 ```bash
 docker compose up -d --build
 ```
+
+### ⚠️ Primera vez después del `git pull` que consolidó las migraciones
+
+Si ya habías levantado el proyecto antes de esa consolidación, tu volumen de
+PostgreSQL recuerda las 9 migraciones antiguas y **el backend no arrancará**:
+
+```
+FlywayValidateException: Migration checksum mismatch for migration version 1
+Detected applied migration not resolved locally: 2. (…3, 4, 5, 6, 7, 8)
+```
+
+Hay que borrar ese volumen para que Flyway parta de cero con las dos migraciones
+actuales:
+
+```bash
+docker compose down -v
+docker compose up --build -d
+docker compose ps
+```
+
+`down -v` borra **solo** el volumen local de este proyecto. No se ejecuta nunca
+sobre una base con información que se quiera conservar.
 
 Esto levanta 4 contenedores (agrupados en Docker Desktop bajo el proyecto **sicot**):
 
@@ -115,13 +142,14 @@ Backup/restauración de la base de datos: ver
 2. Backend: `cd backend && mvn spring-boot:run` → http://localhost:8080
 3. Frontend: `cd frontend && npm install && npm run dev` → http://localhost:8443
 
-> ⚠️ **Son dos bases de datos distintas, no la misma vista desde dos puertos.**
-> El Postgres **nativo** (`localhost:5432`) que usa este modo y el Postgres **del contenedor**
-> (`localhost:5433`, servicio `sicot-db` de `docker compose`) son instancias independientes con
-> datos independientes: un contrato creado en una **no** aparece en la otra. Si alguien reporta
-> que "los datos desaparecieron", lo primero a verificar es contra cuál de las dos está
-> corriendo el backend (variable `DB_URL`). Elija un modo y quédese en él durante una sesión de
-> trabajo; no los mezcle.
+> ⚠️ **Este modo NO es el entorno estándar del equipo** — ver la sección de Docker arriba.
+> Úselo solo para depurar el backend desde el IDE.
+>
+> **Son dos bases de datos distintas, no la misma vista desde dos puertos.** El Postgres
+> **nativo** (`localhost:5432`) que usa este modo y el Postgres **del contenedor**
+> (`localhost:5433`) son instancias independientes con datos independientes: un contrato creado
+> en una **no** aparece en la otra. Si alguien reporta que "los datos desaparecieron", lo primero
+> a verificar es contra cuál de las dos está corriendo el backend (variable `DB_URL`).
 
 ## Cuentas de desarrollo
 
