@@ -176,6 +176,29 @@ con la CI en rojo no se mergea. La suite end-to-end de Playwright queda fuera de
 porque necesita backend, PostgreSQL y las cuentas del perfil `dev`; se corre a mano con
 `npm run test:e2e`.
 
+## Distribución a los usuarios finales
+
+> **Decisión del equipo (26 ago 2026):** los instaladores se publican como **GitHub Releases**
+> de este repositorio. No se usa GitHub Pages ni una página de descarga aparte.
+
+El motivo es la trazabilidad: en un sistema institucional hay que poder responder *"¿qué versión
+tiene instalada este supervisor?"* y poder revertir una entrega defectuosa. Releases lo resuelve
+de forma nativa —cada versión queda con su etiqueta, su fecha y sus notas de cambios— mientras
+que una página de descarga obligaría a construir ese control a mano. Ambas opciones son
+gratuitas, así que la diferencia está en el versionado, no en el costo.
+
+Cada publicación llevará:
+
+- El instalador de Windows como *asset* descargable.
+- Etiqueta de versión semántica (`v1.0.0`) y fecha.
+- Notas de cambios redactadas para el usuario final, no en lenguaje técnico.
+
+**Todavía no hay ninguna versión publicada**, y es deliberado: el contenido del instalador
+depende de una decisión pendiente (ver [MDL-66](https://linear.app/medialab-sena/issue/MDL-66)).
+Si el supervisor trabaja conectado al servidor del Centro, el instalador es una ventana ligera de
+unos pocos MB; si trabaja sin conexión, debe incluir el asistente de IA completo y pasa a varios
+GB, con requisitos de hardware distintos. Construirlo antes de resolver eso implicaría rehacerlo.
+
 ## Herramientas de desarrollo asistido (opcional)
 
 El repo no versiona la maquinaria de asistentes de IA — es regenerable y no todo el equipo usa
