@@ -39,6 +39,36 @@ export default function Registros({ extra }: { extra: Registro[] }) {
     return true
   })
 
+  /**
+   * Descarga la bitácora que se está viendo (con los filtros aplicados) como
+   * CSV. Se genera en el navegador a partir de los registros ya cargados: no
+   * hay endpoint de exportación en el backend y no hace falta uno para esto.
+   *
+   * Separador `;` y BOM UTF-8 porque el destino real es Excel en español, que
+   * con `,` mete todo en una sola columna y sin BOM rompe las tildes.
+   */
+  const descargarCsv = () => {
+    if (filtrados.length === 0) return
+    const escapar = (valor: string) => `"${valor.replace(/"/g, '""')}"`
+    const cabecera = ['Fecha', 'Tipo', 'Acción', 'Responsable', 'Descripción']
+    const filas = filtrados.map(r => [r.fecha, r.tipo, r.accion, r.actor, r.asunto].map(escapar).join(';'))
+    // BOM y salto CRLF construidos por código: Excel en español necesita
+    // ambos, y escribirlos como literales dejaría caracteres invisibles en
+    // el archivo fuente.
+    const bom = String.fromCharCode(0xFEFF)
+    const salto = String.fromCharCode(13, 10)
+    const csv = bom + [cabecera.map(escapar).join(';'), ...filas].join(salto)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const enlace = document.createElement('a')
+    const hoy = new Date().toISOString().slice(0, 10)
+    enlace.href = url
+    enlace.download = `sicot-registros-${hoy}.csv`
+    document.body.appendChild(enlace)
+    enlace.click()
+    document.body.removeChild(enlace)
+    URL.revokeObjectURL(url)
+  }
+
   const iconFor = (t: Registro['tipo']) =>
     t === 'Firma' ? 'F' : t === 'Documento' ? 'D' : t === 'Etapa' ? 'E' : t === 'Contrato' ? 'C' : '·'
 
@@ -52,9 +82,10 @@ export default function Registros({ extra }: { extra: Registro[] }) {
             Bitácora de acciones ejecutadas sobre el contrato · {filtrados.length} de {extra.length} registros
           </p>
         </div>
-        <button className="btn-ghost" disabled title="La exportación a PDF se habilita en una fase posterior"
-          style={{ padding: '8px 14px', fontSize: 12, opacity: 0.5, cursor: 'not-allowed' }}>
-          Descargar Log Completo
+        <button className="btn-ghost" onClick={descargarCsv} disabled={filtrados.length === 0}
+          title={filtrados.length === 0 ? 'No hay registros que descargar' : 'Descarga en CSV los registros que se ven en pantalla'}
+          style={{ padding: '8px 14px', fontSize: 12, opacity: filtrados.length === 0 ? 0.5 : 1, cursor: filtrados.length === 0 ? 'not-allowed' : 'pointer' }}>
+          Descargar registros (CSV)
         </button>
       </div>
 

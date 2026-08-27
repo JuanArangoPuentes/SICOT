@@ -2,7 +2,8 @@
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
 
 export type Screen = 'login' | 'supervisor-panel' | 'gestion-panel' | 'admin-panel'
-export type Tab = 'panel' | 'alertas' | 'documentos' | 'registros'
+/** Vistas del panel del Supervisor — una por entrada de la barra lateral. */
+export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {

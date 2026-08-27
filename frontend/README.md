@@ -46,6 +46,38 @@ El login es real y valida contraseña contra el backend (BCrypt + JWT). Usuarios
 - `gestion@soy.sena.edu.co` → Panel Gestión y Contratación
 - `supervisor@soy.sena.edu.co` → Panel Supervisor
 
+## Interfaz
+
+La aplicación usa un **armazón común** (`components/AppShell.tsx`) para los tres roles: barra
+lateral de navegación a la izquierda (contraíble, con contadores de pendientes), cabecera con el
+título de la vista y el módulo del usuario, y el contenido a ancho completo.
+
+El **tema por defecto es oscuro institucional** — azul pizarra profundo (`#111C28` de lienzo,
+`#0B131D` en barra lateral y cabecera; nunca negro puro) con el verde SENA como acento. Todos los
+colores salen de variables CSS que `prefs.tsx` escribe sobre `:root`, así que los presets de
+Configuración (Azul Institucional Oscuro, Grafito Oscuro, Claro Institucional, Alto Contraste)
+cambian la aplicación entera, incluida la pantalla de login.
+
+`prefs.tsx` versiona el tema guardado (`THEME_VERSION`): al cambiar la paleta base, las
+preferencias de color que quedaron en `localStorage` se descartan y se conservan solo las que no
+son de apariencia (copiloto, notificaciones). Sin eso, un equipo que ya había usado SICOT
+seguiría viendo la paleta anterior restaurada desde el navegador.
+
+El panel del Supervisor abre en la **Bandeja de entrada**, que es deliberadamente sobria: un
+saludo, en qué paso va el contrato (indicador compacto de etapas) y la lista de alertas y
+pendientes — alertas no leídas del backend, cronograma calculado con las fechas reales, sub-pasos
+abiertos de la etapa en curso, documentos sin firmar y la firma electrónica faltante. Nada de
+tableros: la bandeja responde "¿qué tengo que hacer?" en dos segundos.
+
+Todo lo cuantitativo vive en la vista **Contrato**: barra de recorrido de extremo a extremo con el
+paso actual marcado, indicadores (avance global, etapas cerradas, sub-pasos por cerrar, vigencia),
+ficha completa del contrato, acordeón de etapas y tablero de gráficas. El **Copiloto** ocupa una
+columna propia de altura completa a la derecha y se puede plegar desde la cabecera cuando se
+necesita el ancho para leer la ficha o las gráficas.
+
+Ningún control de la interfaz es decorativo: todo botón visible ejecuta su acción. Lo que no
+existe todavía se dice con texto, no con un botón deshabilitado.
+
 ## Estructura
 
 ```
@@ -63,17 +95,24 @@ src/
 │
 ├── screens/                   Una pantalla completa por archivo
 │   ├── LoginScreen.tsx
-│   ├── SupervisorPanel.tsx    (incluye helpers privados: StepCircle, ProgressBar,
-│   │                           ProminentAlerts, AlertCard, y los estados vacío/carga/error)
+│   ├── SupervisorPanel.tsx    Orquesta las cinco vistas del supervisor (bandeja, contrato,
+│   │                           alertas, documentos, registros) e incluye helpers privados:
+│   │                           StepCircle, ProgressBar, AlertCard y los estados
+│   │                           vacío/carga/error de "sin contrato asignado"
 │   └── GestionPanel.tsx
 │
 ├── components/                Piezas de UI reutilizables entre pantallas
+│   ├── AppShell.tsx           Armazón común: barra lateral izquierda + cabecera + contenido
 │   ├── AdminPanel.tsx
 │   ├── AvatarLayer.tsx
 │   ├── Registros.tsx
 │   ├── Settings.tsx
 │   ├── icons.tsx              Iconos SVG en línea (reemplazaron a los emoji)
-│   └── ui.tsx                 Chip, Modal, TopBar, SenaLogo, StageProgressBar…
+│   ├── ui.tsx                 Chip, Modal, SenaLogo, StageJourney, StatCard, UserMenu…
+│   └── supervisor/            Vistas del panel del supervisor
+│       ├── Bandeja.tsx        Bandeja de entrada: pendientes reales + situación actual
+│       ├── ContratoInfo.tsx   Ficha completa del contrato asignado
+│       └── ContratoGraficas.tsx  Tablero de indicadores (recharts) del contrato
 │
 └── services/                  Capa de acceso al backend — TODA transformación va aquí
     ├── api/

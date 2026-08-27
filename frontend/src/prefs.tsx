@@ -1,16 +1,30 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
-export type PresetId = 'oscuro-institucional' | 'claro-institucional' | 'pastel-suave' | 'alto-contraste'
+export type PresetId =
+  | 'oscuro-institucional'
+  | 'oscuro-grafito'
+  | 'claro-institucional'
+  | 'alto-contraste'
 
 export interface Prefs {
   preset: PresetId
+  /**
+   * Versión del esquema de tema guardado. Cuando el tema base de SICOT cambia
+   * (p. ej. el paso a la paleta oscura institucional), este número sube y las
+   * preferencias de color guardadas antes se descartan — sin esto, quien ya
+   * había usado el sistema seguiría viendo la paleta vieja restaurada desde
+   * localStorage y nunca vería el rediseño.
+   */
+  themeVersion: number
   // Core palette
   colorPrimary:    string  // → --accent
   colorEmphasis:   string  // → --accent-emphasis
   colorAccentTech: string  // → --accent-tech (data / mono values)
   colorSecondary:  string  // → --chip-blue
   colorBackground: string  // → --bg-base
+  colorBgRail:     string  // → --bg-rail (barra lateral + cabecera)
   colorBgCard:     string  // → --bg-card
+  colorBgElevated: string  // → --bg-elevated (encabezados de tabla)
   colorBgSurface:  string  // → --bg-surface
   colorBgInput:    string  // → --bg-input
   colorBorder:     string  // → --border
@@ -38,22 +52,28 @@ export interface Prefs {
   avatarMode: 'ghost' | 'follower' | 'guide'
 }
 
+/** Súbelo al cambiar la paleta base — invalida los colores ya guardados. */
+export const THEME_VERSION = 3
+
 export const DEFAULT_PREFS: Prefs = {
   preset:          'oscuro-institucional',
-  colorPrimary:    '#39B54A',
-  colorEmphasis:   '#2C9A3C',
-  colorAccentTech: '#9A6A10',
-  colorSecondary:  '#126E8F',
-  colorBackground: '#FFFFFF',
-  colorBgCard:     '#FFFFFF',
-  colorBgSurface:  '#F3F7F3',
-  colorBgInput:    '#FFFFFF',
-  colorBorder:     '#C2DCC6',
-  colorText:       '#0C1A0E',
-  colorTextSecondary: '#3A6641',
-  colorTextMuted:  '#7AAB80',
-  colorAlertLeve:  '#B8780A',
-  colorAlertCritica: '#C83030',
+  themeVersion:    THEME_VERSION,
+  colorPrimary:    '#3FC55A',
+  colorEmphasis:   '#2FA347',
+  colorAccentTech: '#E0B65C',
+  colorSecondary:  '#5FC4E2',
+  colorBackground: '#111C28',
+  colorBgRail:     '#0B131D',
+  colorBgCard:     '#172433',
+  colorBgElevated: '#1D2D3E',
+  colorBgSurface:  '#1B2A39',
+  colorBgInput:    '#12202D',
+  colorBorder:     '#2A3B4E',
+  colorText:       '#E9EFF6',
+  colorTextSecondary: '#A7BACE',
+  colorTextMuted:  '#8698AD',
+  colorAlertLeve:  '#E5A93C',
+  colorAlertCritica: '#F2686B',
   fontFamily:      'IBM Plex Sans',
   fontSize:        15,
   fontWeight:      400,
@@ -73,65 +93,74 @@ type ThemePatch = Partial<Prefs>
 
 export const PRESETS: Record<PresetId, { label: string; desc: string; patch: ThemePatch }> = {
   'oscuro-institucional': {
-    label: 'Blanco Institucional SENA',
-    desc:  'Fondo blanco con acento verde SENA — tema principal (predeterminado)',
+    label: 'Azul Institucional Oscuro',
+    desc:  'Azul pizarra profundo con acento verde SENA — tema principal (predeterminado)',
     patch: {
-      colorPrimary:       '#39B54A',
-      colorEmphasis:      '#2C9A3C',
-      colorAccentTech:    '#9A6A10',
-      colorBackground:    '#FFFFFF',
-      colorBgCard:        '#FFFFFF',
-      colorBgSurface:     '#F3F7F3',
-      colorBgInput:       '#FFFFFF',
-      colorBorder:        '#C2DCC6',
-      colorText:          '#0C1A0E',
-      colorTextSecondary: '#3A6641',
-      colorTextMuted:     '#7AAB80',
-      colorAlertLeve:     '#B8780A',
-      colorAlertCritica:  '#C83030',
-      fontFamily: 'IBM Plex Sans', fontSize: 15, transitionMs: 200,
+      colorPrimary:       '#3FC55A',
+      colorEmphasis:      '#2FA347',
+      colorAccentTech:    '#E0B65C',
+      colorSecondary:     '#5FC4E2',
+      colorBackground:    '#111C28',
+      colorBgRail:        '#0B131D',
+      colorBgCard:        '#172433',
+      colorBgElevated:    '#1D2D3E',
+      colorBgSurface:     '#1B2A39',
+      colorBgInput:       '#12202D',
+      colorBorder:        '#2A3B4E',
+      colorText:          '#E9EFF6',
+      colorTextSecondary: '#A7BACE',
+      colorTextMuted:     '#8698AD',
+      colorAlertLeve:     '#E5A93C',
+      colorAlertCritica:  '#F2686B',
+      fontFamily: 'IBM Plex Sans', fontSize: 15, fontWeight: 400, transitionMs: 200,
+      blinkAlerts: true, hoverEffects: true,
+    },
+  },
+  'oscuro-grafito': {
+    label: 'Grafito Oscuro',
+    desc:  'Gris grafito neutro con acento verde SENA — alternativa sobria, sin tinte azul',
+    patch: {
+      colorPrimary:       '#42C765',
+      colorEmphasis:      '#31A44E',
+      colorAccentTech:    '#DDB264',
+      colorSecondary:     '#68C0D8',
+      colorBackground:    '#181A1D',
+      colorBgRail:        '#111315',
+      colorBgCard:        '#212428',
+      colorBgElevated:    '#292D32',
+      colorBgSurface:     '#25282D',
+      colorBgInput:       '#1B1E21',
+      colorBorder:        '#353A40',
+      colorText:          '#ECEEF1',
+      colorTextSecondary: '#B2B8C0',
+      colorTextMuted:     '#949CA6',
+      colorAlertLeve:     '#E3A84A',
+      colorAlertCritica:  '#EF6A6D',
+      fontFamily: 'IBM Plex Sans', fontSize: 15, fontWeight: 400, transitionMs: 200,
       blinkAlerts: true, hoverEffects: true,
     },
   },
   'claro-institucional': {
     label: 'Claro Institucional',
-    desc:  'Tonos neutros sobre fondo claro — ideal en oficinas con mucha luz',
+    desc:  'Fondo claro con acento verde SENA — para oficinas con mucha luz o impresión de pantalla',
     patch: {
-      colorPrimary:       '#147A5A',
-      colorEmphasis:      '#1FAE79',
-      colorAccentTech:    '#B8823A',
-      colorBackground:    '#F6F7F9',
+      colorPrimary:       '#2C9A3C',
+      colorEmphasis:      '#218030',
+      colorAccentTech:    '#9A6A10',
+      colorSecondary:     '#126E8F',
+      colorBackground:    '#F4F6F8',
+      colorBgRail:        '#12222E',
       colorBgCard:        '#FFFFFF',
-      colorBgSurface:     '#EEF1F5',
+      colorBgElevated:    '#EDF1F5',
+      colorBgSurface:     '#F0F4F7',
       colorBgInput:       '#FFFFFF',
-      colorBorder:        '#DEE3E9',
-      colorText:          '#1A212B',
-      colorTextSecondary: '#5C6675',
-      colorTextMuted:     '#8A9BB0',
-      colorAlertLeve:     '#C98A2D',
-      colorAlertCritica:  '#D6453F',
-      fontFamily: 'IBM Plex Sans', fontSize: 15, transitionMs: 200,
-      blinkAlerts: true, hoverEffects: true,
-    },
-  },
-  'pastel-suave': {
-    label: 'Pastel Suave',
-    desc:  'Paleta suave con acento verde salvia — menor fatiga visual en uso prolongado',
-    patch: {
-      colorPrimary:       '#6FA79A',
-      colorEmphasis:      '#8FC6B4',
-      colorAccentTech:    '#CBA46B',
-      colorBackground:    '#F5F2FA',
-      colorBgCard:        '#FFFFFF',
-      colorBgSurface:     '#EDE8F5',
-      colorBgInput:       '#FFFFFF',
-      colorBorder:        '#E0D8EE',
-      colorText:          '#33303F',
-      colorTextSecondary: '#7C7690',
-      colorTextMuted:     '#9D97B0',
-      colorAlertLeve:     '#D9AF6B',
-      colorAlertCritica:  '#E38585',
-      fontFamily: 'IBM Plex Sans', fontSize: 15, transitionMs: 200,
+      colorBorder:        '#D8DFE6',
+      colorText:          '#14202B',
+      colorTextSecondary: '#4B5B6B',
+      colorTextMuted:     '#7A8B9B',
+      colorAlertLeve:     '#B8780A',
+      colorAlertCritica:  '#C83030',
+      fontFamily: 'IBM Plex Sans', fontSize: 15, fontWeight: 400, transitionMs: 200,
       blinkAlerts: true, hoverEffects: true,
     },
   },
@@ -142,8 +171,11 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       colorPrimary:       '#FFD400',
       colorEmphasis:      '#FFE444',
       colorAccentTech:    '#FFD400',
+      colorSecondary:     '#4FD9FF',
       colorBackground:    '#000000',
+      colorBgRail:        '#000000',
       colorBgCard:        '#0A0A0A',
+      colorBgElevated:    '#141414',
       colorBgSurface:     '#111111',
       colorBgInput:       '#0A0A0A',
       colorBorder:        '#FFFFFF',
@@ -181,12 +213,24 @@ export const usePrefs = () => useContext(Ctx)
 
 const STORAGE_KEY = 'sicot.prefs'
 
+/** Preferencias que NO son de apariencia — sobreviven a un cambio de tema. */
+const CLAVES_NO_VISUALES = [
+  'avatarId', 'avatarName', 'avatarTone', 'avatarMode',
+  'sound', 'alertPosition', 'alertDurationS', 'blinkAlerts', 'hoverEffects',
+] as const
+
 /**
  * Lee las preferencias guardadas.
  *
  * Se combinan sobre DEFAULT_PREFS en vez de usarse tal cual: si en una versión
  * futura se añade una preferencia nueva, las que quedaron guardadas antes no la
  * traerán, y sin esta mezcla el valor llegaría `undefined` a la UI.
+ *
+ * Si el tema guardado es de una versión anterior a THEME_VERSION, se descartan
+ * los colores y la tipografía y se conservan solo las preferencias que no son
+ * de apariencia (copiloto, notificaciones): así el rediseño se ve de verdad en
+ * equipos donde ya había un tema guardado.
+ *
  * Cualquier problema al leer (JSON corrupto, localStorage bloqueado por la
  * configuración del navegador) se ignora y se cae a los valores por defecto:
  * no poder restaurar el tema jamás debe impedir que la aplicación arranque.
@@ -195,10 +239,54 @@ function cargarPrefs(): Prefs {
   try {
     const guardado = localStorage.getItem(STORAGE_KEY)
     if (!guardado) return DEFAULT_PREFS
-    return { ...DEFAULT_PREFS, ...(JSON.parse(guardado) as Partial<Prefs>) }
+    const previo = JSON.parse(guardado) as Partial<Prefs>
+    if (previo.themeVersion !== THEME_VERSION) {
+      const conservadas: Partial<Prefs> = {}
+      for (const clave of CLAVES_NO_VISUALES) {
+        if (previo[clave] !== undefined) (conservadas as Record<string, unknown>)[clave] = previo[clave]
+      }
+      return { ...DEFAULT_PREFS, ...conservadas, themeVersion: THEME_VERSION }
+    }
+    return { ...DEFAULT_PREFS, ...previo }
   } catch {
     return DEFAULT_PREFS
   }
+}
+
+/** rgba() a partir de un color hexadecimal (#RGB o #RRGGBB). */
+function toRgba(hex: string, alpha: number): string {
+  const c = hex.replace('#', '')
+  const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c
+  const n = parseInt(full, 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`
+}
+
+/**
+ * Color de texto legible sobre un fondo dado.
+ *
+ * Los botones sólidos de acento llevaban un verde casi negro fijo: con un
+ * acento oscuro (o con el preset de alto contraste) el texto desaparecía. Aquí
+ * se elige según la luminancia real del color de fondo.
+ */
+function textoSobre(hex: string): string {
+  const c = hex.replace('#', '')
+  const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c
+  const n = parseInt(full, 16)
+  if (Number.isNaN(n)) return '#06210E'
+  const canal = (v: number) => {
+    const s = v / 255
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+  }
+  const L =
+    0.2126 * canal((n >> 16) & 255) +
+    0.7152 * canal((n >> 8) & 255) +
+    0.0722 * canal(n & 255)
+  // Se comparan los dos candidatos por relación de contraste real en vez de
+  // usar un umbral fijo de luminancia: con un umbral, el verde SENA (que cae
+  // justo en la frontera) recibía texto blanco con apenas 2,3:1 de contraste.
+  const contrasteOscuro = (L + 0.05) / (0.0111 + 0.05) // #06210E
+  const contrasteClaro = 1.05 / (L + 0.05)             // #FFFFFF
+  return contrasteOscuro >= contrasteClaro ? '#06210E' : '#FFFFFF'
 }
 
 export function PrefsProvider({ children }: { children: ReactNode }) {
@@ -218,30 +306,29 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const r = document.documentElement.style
     const hex = prefs.colorPrimary
-    const toRgba = (h: string, a: number) => {
-      const c = h.replace('#', '')
-      const full = c.length === 3 ? c.split('').map(x => x + x).join('') : c
-      const n = parseInt(full, 16)
-      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
-    }
 
     // Backgrounds & borders — explicit per theme
-    r.setProperty('--bg-base',    prefs.colorBackground)
-    r.setProperty('--bg-card',    prefs.colorBgCard)
-    r.setProperty('--bg-surface', prefs.colorBgSurface)
-    r.setProperty('--bg-input',   prefs.colorBgInput)
-    r.setProperty('--border',     prefs.colorBorder)
+    r.setProperty('--bg-base',     prefs.colorBackground)
+    r.setProperty('--bg-rail',     prefs.colorBgRail)
+    r.setProperty('--bg-card',     prefs.colorBgCard)
+    r.setProperty('--bg-elevated', prefs.colorBgElevated)
+    r.setProperty('--bg-surface',  prefs.colorBgSurface)
+    r.setProperty('--bg-input',    prefs.colorBgInput)
+    r.setProperty('--border',      prefs.colorBorder)
+    r.setProperty('--border-soft', toRgba(prefs.colorBorder, 0.7))
     r.setProperty('--border-active', hex)
+    r.setProperty('--step-pending', toRgba(prefs.colorTextMuted, 0.45))
 
     // Accent — derived from primary
     r.setProperty('--accent',          hex)
     r.setProperty('--accent-emphasis', prefs.colorEmphasis)
     r.setProperty('--accent-tech',     prefs.colorAccentTech)
-    r.setProperty('--accent-dim',      toRgba(hex, 0.7))
-    r.setProperty('--accent-glow',     toRgba(hex, 0.14))
-    r.setProperty('--accent-soft',     toRgba(hex, 0.08))
-    r.setProperty('--accent-line',     toRgba(hex, 0.2))
-    r.setProperty('--grid-line',       toRgba(hex, 0.04))
+    r.setProperty('--accent-dim',      toRgba(hex, 0.62))
+    r.setProperty('--accent-glow',     toRgba(hex, 0.20))
+    r.setProperty('--accent-soft',     toRgba(hex, 0.10))
+    r.setProperty('--accent-line',     toRgba(hex, 0.26))
+    r.setProperty('--grid-line',       toRgba(hex, 0.05))
+    r.setProperty('--on-accent',       textoSobre(hex))
 
     // Text — explicit per theme
     r.setProperty('--text-primary',   prefs.colorText)
@@ -250,7 +337,14 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
     // Secondary chip color
     r.setProperty('--chip-blue',    prefs.colorSecondary)
-    r.setProperty('--chip-blue-bg', toRgba(prefs.colorSecondary, 0.15))
+    r.setProperty('--chip-blue-bg', toRgba(prefs.colorSecondary, 0.16))
+    r.setProperty('--chip-gray',    prefs.colorTextSecondary)
+    r.setProperty('--chip-gray-bg', toRgba(prefs.colorTextSecondary, 0.14))
+    r.setProperty('--chip-green',   hex)
+    r.setProperty('--chip-green-bg', toRgba(hex, 0.14))
+    r.setProperty('--chip-red',     prefs.colorAlertCritica)
+    r.setProperty('--chip-red-bg',  toRgba(prefs.colorAlertCritica, 0.14))
+    r.setProperty('--info',         prefs.colorSecondary)
 
     // Alerts
     r.setProperty('--alert-leve',    prefs.colorAlertLeve)

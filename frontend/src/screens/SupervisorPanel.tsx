@@ -1,12 +1,29 @@
-// Panel principal del Supervisor — las 5 etapas GCCON-P-010, alertas vivas,
-// documentos generados por IA, copiloto conversacional y registros.
-// Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios visuales.
+// Panel principal del Supervisor.
+//
+// Estructura: armazón con barra lateral izquierda (AppShell) y cinco vistas —
+// Bandeja de entrada (aterrizaje al iniciar sesión), Contrato (recorrido de
+// etapas + ficha completa + copiloto + gráficas), Alertas, Documentos y
+// Registros.
+//
+// Toda la información proviene del backend: etapas y subetapas reales del
+// contrato asignado, alertas no leídas, documentos realmente generados y la
+// firma electrónica de la cuenta. Los estados de carga, de error y de "sin
+// contrato" son pantallas distintas a propósito: afirmar "no tiene nada
+// pendiente" cuando en realidad falló una consulta sería el peor error de
+// esta pantalla.
 
 import { useState, useRef, useEffect } from 'react'
 import { usePrefs } from '@/prefs'
+import AppShell, { type NavGroup } from '@/components/AppShell'
 import Registros, { type Registro } from '@/components/Registros'
-import { Chip, StageProgressBar, TopBar, type LiveAlert, type Stage } from '@/components/ui'
-import { AvatarIcon, IconPlay } from '@/components/icons'
+import Bandeja, { type ItemBandeja } from '@/components/supervisor/Bandeja'
+import ContratoInfo from '@/components/supervisor/ContratoInfo'
+import ContratoGraficas from '@/components/supervisor/ContratoGraficas'
+import { Chip, SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
+import {
+  AvatarIcon, IconArrowRight, IconBell, IconChart, IconCheck, IconChevron, IconClock,
+  IconContract, IconFileText, IconHistory, IconInbox, IconPlay,
+} from '@/components/icons'
 import { AI_GENERATED_DOCS, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type { AuthResponse, AlertaResponse, ContratoResponse, DocumentoResponse } from '@/services/api/types'
@@ -16,7 +33,7 @@ import { getDocumentosContrato, generarDocumento, firmarDocumento, descargarDocu
 import { getMiFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
-import { formatCOP, formatFecha } from '@/services/format'
+import { formatFecha } from '@/services/format'
 
 // Pregunta que se envía al Copiloto real para guiar cada sub-paso del
 // tutorial — reemplaza el texto estático que antes vivía en TUTORIAL. Al
@@ -40,6 +57,87 @@ const QUICK_SUGGESTIONS: Array<{ label: string; question: string }> = [
   { label: 'GCCON-F-030', question: '¿Qué es el GCCON-F-030? ¿Es lo mismo que el acta de liquidación? ¿En qué sub-paso se genera?' },
 ]
 
+// La barra de recorrido tiene una sección por paso REAL del contrato (los
+// mismos que trae el backend), no por una agrupación aparte: así el número que
+// se ve en la barra es el mismo "Paso N" del que hablan el copiloto, la bandeja
+// y el acordeón de etapas.
+const claveDePaso = (id: number) => `paso-${id}`
+const pasoDeClave = (key: string) => Number(key.replace('paso-', '')) || 1
+
+// Resumen de lo que ocurre en cada paso — se muestra bajo la barra grande.
+const DETALLE_PASO: Record<number, string> = {
+  1: 'Estudios previos (GCCON-F-046), CDP y garantías, suscripción y publicación en SECOP II, y designación del supervisor.',
+  2: 'Revisión del contratista, cronograma y seguridad social, y firma del Acta de Inicio GCCON-F-018.',
+  3: 'Inspección física en bodega, evidencia fotográfica y firma del Informe de Supervisión GCCON-F-031.',
+  4: 'Verificación de PILA y factura electrónica DIAN, y firma del Acta de Recibo a Satisfacción GIL-F-010.',
+  5: 'Vigencia de garantías, orden de pago y CRP, y firma de la certificación de cumplimiento que respalda el pago.',
+  6: 'Cumplimiento total del objeto, Informe Final GCCON-F-030 y archivo del expediente digital en SIGEP.',
+}
+
+/** "INSPECCIÓN — Monitoreo y Ejecución" -> "Inspección". */
+function etiquetaCorta(titulo: string): string {
+  const cabeza = titulo.split('—')[0].trim()
+  const texto = cabeza || titulo
+  return texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
+}
+
+const TITULO_VISTA: Record<Tab, { titulo: string; sub: string }> = {
+  bandeja: { titulo: 'Bandeja de entrada', sub: 'Pendientes y situación actual de su contrato' },
+  contrato: { titulo: 'Contrato en supervisión', sub: 'Recorrido del proceso, ficha completa y copiloto' },
+  alertas: { titulo: 'Alertas', sub: 'Seguimiento en vivo del contrato' },
+  documentos: { titulo: 'Documentos', sub: 'Documentos formales del proceso GCCON-P-010' },
+  registros: { titulo: 'Registros', sub: 'Bitácora de acciones ejecutadas sobre el contrato' },
+}
+
+// ─── Armazón compartido por los estados sin contrato ──────────────────────────
+
+function ShellMinimo({ usuario, onLogout, onOpenSettings, children }: {
+  usuario: AuthResponse
+  onLogout: () => void
+  onOpenSettings: () => void
+  children: React.ReactNode
+}) {
+  // Se muestran TODAS las secciones del panel, no solo la bandeja: si al no
+  // haber contrato el menú se redujera a una entrada, parecería que el sistema
+  // perdió funcionalidad. Las que dependen de un contrato quedan inactivas y
+  // dicen por qué al pasar el cursor.
+  const sinContrato = 'Disponible cuando Gestión le asigne un contrato'
+  const groups: NavGroup[] = [
+    {
+      label: 'Supervisión',
+      items: [
+        { id: 'bandeja', label: 'Bandeja de entrada', icon: <IconInbox size={17} /> },
+        { id: 'contrato', label: 'Contrato', icon: <IconContract size={17} />, disabled: true, title: sinContrato },
+      ],
+    },
+    {
+      label: 'Seguimiento',
+      items: [
+        { id: 'alertas', label: 'Alertas', icon: <IconBell size={17} />, disabled: true, title: sinContrato },
+        { id: 'documentos', label: 'Documentos', icon: <IconFileText size={17} />, disabled: true, title: sinContrato },
+        { id: 'registros', label: 'Registros', icon: <IconHistory size={17} />, disabled: true, title: sinContrato },
+      ],
+    },
+  ]
+  return (
+    <AppShell
+      roleBadge="Panel Supervisor"
+      groups={groups}
+      activeId="bandeja"
+      onNavigate={() => {}}
+      usuario={usuario}
+      onLogout={onLogout}
+      onOpenSettings={onOpenSettings}
+      title="Bandeja de entrada"
+      subtitle="Supervisión de contratos"
+    >
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflowY: 'auto' }}>
+        {children}
+      </div>
+    </AppShell>
+  )
+}
+
 // ─── Estado vacío — Supervisor sin contrato asignado ────────────────────────
 function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: {
   usuario: AuthResponse
@@ -48,30 +146,23 @@ function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: 
   onStartTour: () => void
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <TopBar badge="Panel Supervisor" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout} />
-
-      {/* Content */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 460, width: '100%', padding: 32, textAlign: 'center' }}>
-          <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 20px' }} />
-          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>
-            No tiene un contrato asignado
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-            Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la información aparecerá aquí.
-          </p>
-          <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
-            <div>Esperando asignación de Gestión y Contratación</div>
-          </div>
-          <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <IconPlay size={10} /> Ver tutorial del proceso
-          </button>
+    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
+      <div className="card" style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center' }}>
+        <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 20px' }} />
+        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No tiene un contrato asignado</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
+          Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la
+          información aparecerá aquí.
+        </p>
+        <div className="surface" style={{ padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--text-secondary)', textAlign: 'left' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.09em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
+          <div>Esperando asignación de Gestión y Contratación</div>
         </div>
+        <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <IconPlay size={10} /> Ver tutorial del proceso
+        </button>
       </div>
-    </div>
+    </ShellMinimo>
   )
 }
 
@@ -88,24 +179,19 @@ function ErrorContratoState({ usuario, onLogout, onOpenSettings }: {
   onOpenSettings: () => void
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      <TopBar badge="Panel Supervisor" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout} />
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div className="card" style={{ maxWidth: 460, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--chip-red)' }}>
-          <div style={{ width: 40, height: 2, background: 'var(--chip-red)', borderRadius: 1, margin: '0 auto 20px' }} />
-          <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>
-            No se pudo cargar su contrato
-          </h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-            El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga
-            ninguno: vuelva a intentarlo y, si el problema persiste, avise al área de sistemas.
-          </p>
-          <button className="btn-green" onClick={() => window.location.reload()} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
-            Reintentar
-          </button>
-        </div>
+    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
+      <div className="card" style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--alert-critica)' }}>
+        <div style={{ width: 40, height: 2, background: 'var(--alert-critica)', borderRadius: 1, margin: '0 auto 20px' }} />
+        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No se pudo cargar su contrato</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
+          El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga
+          ninguno: vuelva a intentarlo y, si el problema persiste, avise al área de sistemas.
+        </p>
+        <button className="btn-green" onClick={() => window.location.reload()} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
+          Reintentar
+        </button>
       </div>
-    </div>
+    </ShellMinimo>
   )
 }
 
@@ -116,12 +202,9 @@ function CargandoContratoState({ usuario, onLogout, onOpenSettings }: {
   onOpenSettings: () => void
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      <TopBar badge="Panel Supervisor" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout} />
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Consultando su contrato asignado…</div>
-      </div>
-    </div>
+    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
+      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Consultando su contrato asignado…</div>
+    </ShellMinimo>
   )
 }
 
@@ -131,7 +214,7 @@ function StepCircle({ n, status }: { n: number; status: 'completed' | 'active' |
   if (status === 'completed') return (
     <div style={{ width: 26, height: 26, borderRadius: '50%', flexShrink: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <svg width="13" height="10" viewBox="0 0 13 10" fill="none">
-        <path d="M1 5L5 9L12 1" stroke="#03200D" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M1 5L5 9L12 1" stroke="var(--on-accent)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </div>
   )
@@ -145,8 +228,8 @@ function StepCircle({ n, status }: { n: number; status: 'completed' | 'active' |
 
 function ProgressBar({ pct }: { pct: number }) {
   return (
-    <div style={{ height: 2, background: 'var(--accent-soft)', borderRadius: 1, overflow: 'hidden', flexGrow: 1 }}>
-      <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--accent)' : 'var(--accent-dim)', borderRadius: 1, transition: 'width 0.4s' }} />
+    <div style={{ height: 4, background: 'var(--bg-elevated)', borderRadius: 2, overflow: 'hidden', flexGrow: 1 }}>
+      <div style={{ height: '100%', width: `${pct}%`, background: pct === 100 ? 'var(--accent)' : 'var(--accent-dim)', borderRadius: 2, transition: 'width 0.4s' }} />
     </div>
   )
 }
@@ -178,7 +261,7 @@ export default function SupervisorPanel({
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [tab, setTab] = useState<Tab>('panel')
+  const [tab, setTab] = useState<Tab>('bandeja')
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set([1]))
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
@@ -200,6 +283,10 @@ export default function SupervisorPanel({
   // puede tardar, así que se deshabilita el envío en vez de dejar que se
   // acumulen preguntas superpuestas.
   const [pensando, setPensando] = useState(false)
+  // El copiloto ocupa una columna alta y ancha a la derecha. Se puede plegar
+  // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
+  // vuelve a abrirse desde el botón de la cabecera.
+  const [copilotoAbierto, setCopilotoAbierto] = useState(true)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -221,10 +308,10 @@ export default function SupervisorPanel({
   // Alertas reales del contrato (no leídas).
   //
   // `errorAlertas` existe porque un fallo aquí NO puede parecerse a "no hay
-  // alertas": la lista vacía se pinta en verde con "Sin alertas activas en este
-  // contrato", y decirle eso a un supervisor cuando en realidad no se pudo
-  // consultar el servicio es el peor error posible de esta pantalla — le
-  // asegura que todo está en orden justo cuando el sistema no lo sabe.
+  // alertas": la lista vacía se pinta en verde con "Sin pendientes", y decirle
+  // eso a un supervisor cuando en realidad no se pudo consultar el servicio es
+  // el peor error posible de esta pantalla — le asegura que todo está en orden
+  // justo cuando el sistema no lo sabe.
   const [alertasApi, setAlertasApi] = useState<AlertaResponse[]>([])
   const [errorAlertas, setErrorAlertas] = useState(false)
   useEffect(() => {
@@ -281,6 +368,7 @@ export default function SupervisorPanel({
     const step = steps.find(s => s.id === stepId)
     const primeraPendiente = step?.subSteps.find(ss => !ss.completed)
     if (!step || !primeraPendiente) return
+    setTab('contrato')
     setTutorialMode(true)
     setActiveSubStep(primeraPendiente.id)
     setExpandedSteps(new Set([stepId]))
@@ -457,39 +545,21 @@ export default function SupervisorPanel({
     preguntarAlCopiloto(q)
   }
 
-  // Navigate to a specific sub-step from another tab
+  // Navigate to a specific sub-step from another view
   const goToSubStep = (subStepId: string, stepId: number) => {
-    setTab('panel')
+    setTab('contrato')
     setExpandedSteps(prev => { const n = new Set(prev); n.add(stepId); return n })
     setActiveSubStep(subStepId)
     setTutorialMode(true)
   }
 
-  const step3 = steps.find(s => s.id === 3)
+  const irAPaso = (stepId: number) => {
+    setTab('contrato')
+    setExpandedSteps(new Set([stepId]))
+  }
+
   // El paso que el Copiloto debe guiar ahora mismo — cualquiera de los 6, no solo el 3.
   const activeStep = steps.find(s => s.status === 'active')
-
-  // Alerts: derive from actual step state — Paso 3 = Inspección, Paso 4 = Recepción
-  const paso4Active = steps.find(s => s.id === 4)?.status !== 'completed'
-  // GCCON-F-031 signed at 3.4; GIL-F-010 signed at 4.3
-  const gccon031Signed = step3?.subSteps.find(s => s.id === '3.4')?.completed
-  const gil010Signed = steps.find(s => s.id === 4)?.subSteps.find(s => s.id === '4.3')?.completed
-
-  // ── Barra de progreso lineal: 5 etapas GCCON-P-010 ──
-  const pctOf = (ids: number[]) => {
-    const subs = steps.filter(s => ids.includes(s.id)).flatMap(s => s.subSteps)
-    return subs.length ? Math.round((subs.filter(s => s.completed).length / subs.length) * 100) : 0
-  }
-  const stateOf = (pct: number, critical: boolean, warning: boolean): Stage['state'] =>
-    pct === 100 ? 'ok' : critical ? 'critical' : warning ? 'warning' : pct === 0 ? 'idle' : 'warning'
-
-  const stages: Stage[] = [
-    { key: 'inicio', label: 'Inicio', pct: pctOf([1, 2]), state: stateOf(pctOf([1, 2]), false, false), detail: 'Estudios previos, suscripción SECOP II y Acta de Inicio GCCON-F-018.' },
-    { key: 'inspeccion', label: 'Inspección', pct: pctOf([3]), state: stateOf(pctOf([3]), false, pctOf([3]) < 100 && pctOf([1, 2]) === 100), detail: 'Monitoreo de entrega, inspección física en bodega e Informe GCCON-F-031.' },
-    { key: 'recepcion', label: 'Recepción', pct: pctOf([4]), state: stateOf(pctOf([4]), pctOf([4]) === 0 && pctOf([3]) === 100, false), detail: 'Acta de Recibo GIL-F-010, PILA y factura electrónica DIAN.' },
-    { key: 'certificacion', label: 'Certificación', pct: pctOf([5]), state: stateOf(pctOf([5]), false, false), detail: 'ESUCON, GRF-F-089 y trámite formal de pago al proveedor.' },
-    { key: 'cierre', label: 'Cierre', pct: pctOf([6]), state: stateOf(pctOf([6]), false, false), detail: `Acta de Liquidación GCCON-F-030 y archivo SIGEP. Vence ${formatFecha(contrato?.fechaFin)}.` },
-  ]
 
   // ── Alerta de cronograma (semáforo verde/amarillo/rojo) ──
   // Estimación calculada con las fechas REALES del contrato (fechaInicio/
@@ -525,19 +595,6 @@ export default function SupervisorPanel({
     return { id: 'cronograma-' + activeStep.id, severity, text: texto }
   })()
 
-  // ── Alertas vivas (máx. 3, descartables) ──
-  // La de cronograma se calcula localmente con datos reales (arriba); el
-  // resto viene del backend.
-  const alertasReales: LiveAlert[] = alertasApi.map(a => ({
-    id: 'api-' + a.id,
-    severity: a.prioridad === 'ALTA' ? 'critica' : 'leve',
-    text: a.mensaje,
-  }))
-  const liveAlerts = [
-    ...(alertaCronograma ? [alertaCronograma] : []),
-    ...alertasReales,
-  ].filter(a => !dismissed.has(a.id))
-
   const dismiss = (id: string) => {
     setDismissed(prev => new Set(prev).add(id))
     if (id.startsWith('api-')) {
@@ -552,18 +609,147 @@ export default function SupervisorPanel({
       const a = alertasApi.find(x => 'api-' + x.id === alertId)
       if (!a) return
       if (a.tipo === 'VENCIMIENTO' || a.tipo === 'SECOP' || a.tipo === 'CRONOGRAMA') {
-        setTab('panel'); setExpandedSteps(new Set([6]))
+        irAPaso(6)
       } else if (a.tipo === 'FIRMA' || a.tipo === 'DOCUMENTO' || a.tipo === 'IA') {
-        setTab('panel'); setExpandedSteps(new Set([3]))
+        irAPaso(3)
       } else {
-        setTab('panel'); setExpandedSteps(new Set([4]))
+        irAPaso(4)
       }
       return
     }
     if (alertId.startsWith('cronograma-') && activeStep) {
-      setTab('panel'); setExpandedSteps(new Set([activeStep.id]))
+      irAPaso(activeStep.id)
     }
   }
+
+
+  // ── Barra de recorrido: una sección por paso real del contrato ──
+  //
+  // El color de cada sección sale del estado real: verde si el paso está
+  // cerrado, el semáforo del cronograma si es el paso en curso, y gris si
+  // todavía no se ha tocado.
+  const stages: Stage[] = steps.map(s => {
+    const total = s.subSteps.length
+    const hechos = s.subSteps.filter(ss => ss.completed).length
+    const pct = total ? Math.round((hechos / total) * 100) : 0
+    const enCurso = s.status === 'active'
+    const state: Stage['state'] =
+      pct === 100 ? 'ok'
+        : enCurso
+          ? (alertaCronograma?.severity === 'critica' ? 'critical'
+            : alertaCronograma?.severity === 'leve' ? 'warning'
+              : 'ok')
+          : pct === 0 ? 'idle' : 'warning'
+    const detalleBase = DETALLE_PASO[s.id] ?? `${hechos} de ${total} sub-pasos cerrados en este paso.`
+    return {
+      key: claveDePaso(s.id),
+      label: etiquetaCorta(s.title),
+      fullLabel: s.title,
+      pct,
+      state,
+      detail: s.id === 6 && contrato?.fechaFin
+        ? `${detalleBase} El contrato termina el ${formatFecha(contrato.fechaFin)}.`
+        : detalleBase,
+    }
+  })
+  const etapaActualKey = activeStep ? claveDePaso(activeStep.id) : null
+
+  // Cifras del contrato — todas sobre el estado real de las subetapas y las
+  // fechas registradas; alimentan los indicadores de la vista Contrato.
+  const todosLosSubPasos = steps.flatMap(s => s.subSteps)
+  const avanceGlobal = todosLosSubPasos.length
+    ? Math.round((todosLosSubPasos.filter(ss => ss.completed).length / todosLosSubPasos.length) * 100)
+    : 0
+  const etapasCerradas = steps.filter(s => s.subSteps.length > 0 && s.subSteps.every(ss => ss.completed)).length
+  const subPasosPendientesPasoActivo = activeStep ? activeStep.subSteps.filter(ss => !ss.completed).length : 0
+  const diasDeVigencia = contrato?.fechaFin
+    ? Math.ceil((new Date(contrato.fechaFin).getTime() - Date.now()) / 86400000)
+    : null
+
+  // ── Bandeja de entrada: todo lo que le falta al supervisor ahora mismo ──
+  //
+  // Cada elemento sale de un dato real: la alerta de cronograma calculada con
+  // las fechas del contrato, las alertas no leídas del backend, la firma
+  // electrónica de la cuenta, los sub-pasos pendientes de la etapa en curso y
+  // los documentos que el Copiloto ya redactó pero siguen sin firma.
+  const itemsBandeja: ItemBandeja[] = (() => {
+    const items: ItemBandeja[] = []
+
+    if (alertaCronograma && !dismissed.has(alertaCronograma.id)) {
+      items.push({
+        id: alertaCronograma.id,
+        severidad: alertaCronograma.severity === 'critica' ? 'critica' : alertaCronograma.severity === 'leve' ? 'leve' : 'ok',
+        categoria: 'Cronograma',
+        titulo: alertaCronograma.severity === 'ok' ? 'El paso en curso va a tiempo' : 'El paso en curso está atrasado',
+        detalle: alertaCronograma.text,
+        accionLabel: 'Ver el paso',
+        onAccion: () => resolveAlert(alertaCronograma.id),
+        onDescartar: () => dismiss(alertaCronograma.id),
+      })
+    }
+
+    for (const a of alertasApi) {
+      const id = 'api-' + a.id
+      if (dismissed.has(id)) continue
+      items.push({
+        id,
+        severidad: a.prioridad === 'ALTA' ? 'critica' : a.prioridad === 'MEDIA' ? 'leve' : 'info',
+        categoria: 'Alerta',
+        titulo: a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace(/_/g, ' '),
+        detalle: a.mensaje,
+        fecha: formatFecha(a.fechaCreacion.slice(0, 10)),
+        accionLabel: 'Ir al paso',
+        onAccion: () => resolveAlert(id),
+        onDescartar: () => dismiss(id),
+      })
+    }
+
+    if (tieneFirma === false) {
+      items.push({
+        id: 'firma-pendiente',
+        severidad: 'critica',
+        categoria: 'Firma',
+        titulo: 'Falta su firma electrónica',
+        detalle: 'Todavía no se le ha asignado una firma electrónica activa. Sin ella no puede firmar los documentos formales del contrato: solicítela al Administrador.',
+      })
+    }
+
+    if (activeStep) {
+      for (const ss of activeStep.subSteps.filter(s => !s.completed)) {
+        const esDocIa = AI_GENERATED_DOCS.has(ss.id)
+        items.push({
+          id: 'sub-' + ss.id,
+          severidad: 'leve',
+          categoria: 'Tarea',
+          titulo: `Falta ${esDocIa ? 'firmar' : 'completar'}: ${ss.id} ${ss.label}`,
+          detalle: `Paso ${activeStep.id} — ${activeStep.title}. Responsable: ${ss.responsible} · Documento: ${ss.document}.`,
+          accionLabel: esDocIa ? 'Ir a firmar' : 'Abrir sub-paso',
+          onAccion: () => goToSubStep(ss.id, activeStep.id),
+        })
+      }
+    }
+
+    for (const doc of docsContrato.filter(d => d.generadoPorIa && d.estado !== 'APROBADO')) {
+      const formal = FORMAL_DOCS.find(f => doc.nombre.startsWith(f.name))
+      items.push({
+        id: 'doc-' + doc.id,
+        severidad: 'leve',
+        categoria: 'Documento',
+        titulo: `Documento sin firmar: ${doc.nombre}`,
+        detalle: formal
+          ? `${formal.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : formal.code} · generado por el Copiloto en el sub-paso ${formal.subStepId}.`
+          : 'Documento generado por el Copiloto IA que todavía no tiene firma registrada.',
+        fecha: formatFecha(doc.fechaSubida.slice(0, 10)),
+        accionLabel: formal ? 'Ir a firmar' : undefined,
+        onAccion: formal ? () => goToSubStep(formal.subStepId, formal.step) : undefined,
+      })
+    }
+
+    const orden: Record<ItemBandeja['severidad'], number> = { critica: 0, leve: 1, info: 2, ok: 3 }
+    return items.sort((a, b) => orden[a.severidad] - orden[b.severidad])
+  })()
+
+  const pendientesCriticos = itemsBandeja.filter(i => i.severidad === 'critica').length
 
   // Mientras se consulta el contrato real todavía no sabemos si hay uno o no
   // — mostrar "sin contrato asignado" en ese instante sería falso.
@@ -581,102 +767,157 @@ export default function SupervisorPanel({
     return <EmptyContractState usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings} onStartTour={onStartTour} />
   }
 
+  const navGroups: NavGroup[] = [
+    {
+      label: 'Supervisión',
+      items: [
+        {
+          id: 'bandeja', label: 'Bandeja de entrada', icon: <IconInbox size={17} />,
+          count: itemsBandeja.length, countTone: pendientesCriticos > 0 ? 'alert' : 'normal',
+        },
+        { id: 'contrato', label: 'Contrato', icon: <IconContract size={17} /> },
+      ],
+    },
+    {
+      label: 'Seguimiento',
+      items: [
+        {
+          id: 'alertas', label: 'Alertas', icon: <IconBell size={17} />,
+          count: alertasApi.length, countTone: 'alert',
+        },
+        { id: 'documentos', label: 'Documentos', icon: <IconFileText size={17} /> },
+        { id: 'registros', label: 'Registros', icon: <IconHistory size={17} /> },
+      ],
+    },
+  ]
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <TopBar badge="Panel Supervisor" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout}
-        actions={<button className="btn-ghost" onClick={onStartTour} style={{ padding: '6px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlay size={10} /> Tutorial</button>} />
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', flexShrink: 0 }}>
-        {(['panel', 'alertas', 'documentos', 'registros'] as Tab[]).map(t => (
-          <button key={t} data-tour={`tab-${t}`} className={`tab-btn ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t === 'panel' ? 'Panel Principal'
-              : t === 'alertas' ? 'Alertas'
-                : t === 'documentos' ? 'Documentos'
-                  : 'Registros'}
+    <AppShell
+      roleBadge="Panel Supervisor"
+      groups={navGroups}
+      activeId={tab}
+      onNavigate={id => setTab(id as Tab)}
+      usuario={usuario}
+      onLogout={onLogout}
+      onOpenSettings={onOpenSettings}
+      title={TITULO_VISTA[tab].titulo}
+      subtitle={`${contrato.numeroContrato} · ${TITULO_VISTA[tab].sub}`}
+      actions={
+        <>
+          {tab === 'contrato' && (
+            <button className="btn-ghost" onClick={() => setCopilotoAbierto(v => !v)}
+              title={copilotoAbierto ? 'Ocultar el panel del Copiloto' : 'Mostrar el panel del Copiloto'}
+              style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <AvatarIcon id={prefs.avatarId} size={13} />
+              {copilotoAbierto ? 'Ocultar copiloto' : 'Mostrar copiloto'}
+            </button>
+          )}
+          <button className="btn-ghost" onClick={onStartTour} style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <IconPlay size={10} /> Tutorial
           </button>
-        ))}
-      </div>
+        </>
+      }
+    >
+      {/* ── Bandeja de entrada ── */}
+      {tab === 'bandeja' && (
+        <Bandeja
+          nombre={usuario.nombre}
+          contrato={contrato}
+          steps={steps}
+          items={itemsBandeja}
+          errorAlertas={errorAlertas}
+          onIrAContrato={() => setTab('contrato')}
+          onContinuarPaso={handleIniciarPaso}
+        />
+      )}
 
-      {/* Content */}
-      <div className="split-panel" style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* ── Contrato ── */}
+      {tab === 'contrato' && (
+        <div className="split-panel" style={{ flex: 1, display: 'flex', overflow: 'hidden', minWidth: 0 }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 22px 26px', minWidth: 0 }}>
 
-        {/* ── Panel Principal ── */}
-        {tab === 'panel' && (
-          <>
-            {/* Accordion column */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
-
-              {/* ── Sección superior: Progreso (izq) + Alertas (der) ── */}
-              <div data-tour="progreso" style={{ display: 'flex', gap: 16, marginBottom: 20, alignItems: 'flex-start' }}>
-
-                {/* Barra de progreso GCCON-P-010 */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ marginBottom: 10 }}>
-                    <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--accent)', background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 4, padding: '3px 10px' }}>
-                      ETAPAS DEL CONTRATO
-                    </span>
-                  </div>
-                  <StageProgressBar
-                    stages={stages}
-                    onStageClick={key => {
-                      const map: Record<string, number> = { inicio: 1, inspeccion: 3, recepcion: 4, certificacion: 5, cierre: 6 }
-                      if (map[key]) setExpandedSteps(new Set([map[key]]))
-                    }}
-                  />
-                </div>
-
-                {/* Panel de alertas prominentes */}
-                <ProminentAlerts
-                  alerts={liveAlerts}
-                  blink={prefs.blinkAlerts}
-                  error={errorAlertas}
-                  onDismiss={dismiss}
-                  onResolve={resolveAlert}
+              {/* Recorrido del contrato — ocupa todo el ancho de la columna de
+                  contenido, con la etapa actual marcada. */}
+              <div data-tour="progreso" style={{ marginBottom: 16 }}>
+                <StageJourney
+                  stages={stages}
+                  currentKey={etapaActualKey}
+                  overallPct={avanceGlobal}
+                  onStageClick={key => setExpandedSteps(new Set([pasoDeClave(key)]))}
                 />
               </div>
 
-              {/* Contract card */}
-              <div data-tour="contrato" className="card" style={{ marginBottom: 16, padding: '14px 16px', borderLeft: '4px solid var(--accent)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 4, fontFamily: 'var(--font-ui)' }}>
-                      CONTRATO ASIGNADO
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--accent-tech)', marginBottom: 4, letterSpacing: '0.03em' }}>
-                      {contrato?.numeroContrato ?? ''}
-                    </div>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 4 }}>{contrato?.objeto ?? ''}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                      Valor: <strong>{formatCOP(contrato?.valor)}</strong> · {formatFecha(contrato?.fechaInicio)} – {formatFecha(contrato?.fechaFin)}
-                    </div>
-                  </div>
-                </div>
+              {/* Indicadores del contrato */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 16 }}>
+                <StatCard
+                  label="Avance global"
+                  value={`${avanceGlobal}%`}
+                  hint={`${todosLosSubPasos.filter(ss => ss.completed).length} de ${todosLosSubPasos.length} sub-pasos cerrados`}
+                  icon={<IconChart size={15} />}
+                />
+                <StatCard
+                  label="Etapas cerradas"
+                  value={`${etapasCerradas}/${steps.length}`}
+                  hint="Pasos del GCCON-P-010 completados en su totalidad"
+                  icon={<IconCheck size={15} />}
+                />
+                <StatCard
+                  label="Sub-pasos por cerrar"
+                  value={String(subPasosPendientesPasoActivo)}
+                  hint={activeStep ? `En el Paso ${activeStep.id} — ${activeStep.title}` : 'Sin paso en curso'}
+                  tone={subPasosPendientesPasoActivo > 0 ? 'warn' : 'accent'}
+                  icon={<IconInbox size={15} />}
+                />
+                <StatCard
+                  label="Vigencia"
+                  value={diasDeVigencia === null ? '—' : diasDeVigencia < 0 ? 'Vencido' : `${diasDeVigencia} días`}
+                  hint={
+                    diasDeVigencia === null ? 'El contrato no tiene fechas registradas'
+                      : diasDeVigencia < 0 ? `Terminó el ${formatFecha(contrato.fechaFin)}`
+                        : `Termina el ${formatFecha(contrato.fechaFin)}`
+                  }
+                  tone={diasDeVigencia !== null && diasDeVigencia < 0 ? 'danger' : 'info'}
+                  icon={<IconClock size={15} />}
+                />
               </div>
 
-              {/* Steps */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {/* Ficha completa del contrato */}
+              <div data-tour="contrato" style={{ marginBottom: 16 }}>
+                <ContratoInfo contrato={contrato} />
+              </div>
+
+              {/* Etapas y sub-pasos */}
+              <SectionHeader
+                eyebrow="Proceso GCCON-P-010"
+                title="Etapas y sub-pasos"
+                desc="Cada paso se abre para ver sus puntos de control. El Copiloto lo guía en el paso activo y redacta los documentos formales; usted revisa y firma."
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
+                {steps.length === 0 && (
+                  <div className="card" style={{ padding: '28px 20px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+                    Las etapas de este contrato todavía no se han cargado desde el servidor.
+                  </div>
+                )}
                 {steps.map(step => {
                   const stats = getStats(step)
                   const isOpen = expandedSteps.has(step.id)
                   return (
                     <div key={step.id} className="card" style={{
                       overflow: 'hidden',
-                      borderColor: step.status === 'active' ? 'var(--accent-line)' : step.status === 'completed' ? 'var(--accent-soft)' : 'var(--border)',
+                      borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--border)',
                     }}>
                       <div className="step-row" onClick={() => toggleStep(step.id)}>
                         <StepCircle n={step.id} status={step.status} />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: step.status === 'pending' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 500, color: step.status === 'pending' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 5 }}>
                             Paso {step.id} — {step.title}
                             {step.status === 'active' && (
-                              <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 600, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '1px 7px', borderRadius: 3 }}>ACTIVO</span>
+                              <span style={{ marginLeft: 8, fontSize: 9.5, fontWeight: 700, letterSpacing: '0.08em', color: 'var(--on-accent)', background: 'var(--accent)', padding: '2px 7px', borderRadius: 3 }}>ACTIVO</span>
                             )}
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <ProgressBar pct={stats.pct} />
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{stats.done}/{stats.total} — {stats.pct}%</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'var(--font-mono)' }}>{stats.done}/{stats.total} — {stats.pct}%</span>
                           </div>
                         </div>
                         <span style={{ color: 'var(--text-muted)', fontSize: 12, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
@@ -696,22 +937,23 @@ export default function SupervisorPanel({
                                   <div style={{
                                     width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
                                     background: ss.completed ? 'var(--accent)' : isActiveTutorial ? 'var(--accent-soft)' : 'transparent',
-                                    border: ss.completed ? 'none' : isActiveTutorial ? '1.5px solid var(--accent)' : '1.5px solid var(--text-muted)',
+                                    border: ss.completed ? 'none' : isActiveTutorial ? '1.5px solid var(--accent)' : '1.5px solid var(--step-pending)',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10,
                                   }}>
                                     {ss.completed
-                                      ? <span style={{ color: '#03200D', fontWeight: 700 }}>✓</span>
+                                      ? <span style={{ color: 'var(--on-accent)', fontWeight: 700 }}>✓</span>
                                       : <span style={{ color: isActiveTutorial ? 'var(--accent)' : 'var(--text-muted)', fontSize: 9 }}>{idx + 1}</span>
                                     }
                                   </div>
                                   <span style={{
                                     fontSize: 13,
-                                    color: ss.completed ? 'var(--text-secondary)' : isActiveTutorial ? 'var(--text-primary)' : 'var(--text-muted)',
+                                    color: ss.completed ? 'var(--text-muted)' : isActiveTutorial ? 'var(--text-primary)' : 'var(--text-secondary)',
                                     textDecoration: ss.completed ? 'line-through' : 'none',
                                   }}>
+                                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, color: 'var(--text-muted)', marginRight: 6 }}>{ss.id}</span>
                                     {ss.label}
                                     {isAiDoc && !ss.completed && (
-                                      <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '1px 5px', borderRadius: 3 }}>IA generó</span>
+                                      <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--accent)', background: 'var(--accent-soft)', padding: '1px 5px', borderRadius: 3 }}>IA genera</span>
                                     )}
                                   </span>
                                 </div>
@@ -726,7 +968,7 @@ export default function SupervisorPanel({
                                     <button className="btn-green"
                                       onClick={() => handleActionSubStep(step.id, ss.id)}
                                       disabled={procesando}
-                                      style={{ padding: '3px 12px', fontSize: 11, marginLeft: 4, opacity: procesando ? 0.6 : 1, cursor: procesando ? 'default' : 'pointer' }}>
+                                      style={{ padding: '4px 12px', fontSize: 11, marginLeft: 4, opacity: procesando ? 0.6 : 1, cursor: procesando ? 'default' : 'pointer' }}>
                                       {actionLabel}
                                     </button>
                                   )}
@@ -740,27 +982,43 @@ export default function SupervisorPanel({
                   )
                 })}
               </div>
+
+              {/* Gráficas del contrato */}
+              <SectionHeader
+                eyebrow="Indicadores"
+                title="Tablero del contrato"
+                desc="Cifras calculadas con el estado real del contrato: subetapas cerradas en el servidor, documentos efectivamente generados y las fechas registradas."
+              />
+              <ContratoGraficas steps={steps} docs={docsContrato} contrato={contrato} />
             </div>
 
-            {/* Copiloto column */}
-            <div data-tour="copiloto" className="split-aside" style={{ width: 380, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* ── Copiloto ── */}
+            {/* Copiloto — columna completa, de la cabecera al pie: es una
+                conversación de trabajo, no un widget, y necesita alto para que se
+                lean las respuestas largas sin desplazarse a cada rato. */}
+            {copilotoAbierto && (
+            <div data-tour="copiloto" className="split-aside" style={{ width: 420, minWidth: 340, flexShrink: 0, borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-rail)' }}>
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ width: 36, height: 36, borderRadius: '50%', color: 'var(--accent)', background: 'var(--bg-card)', border: '1.5px solid var(--accent)', boxShadow: '0 0 0 3px var(--accent-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AvatarIcon id={prefs.avatarId} size={18} /></div>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 600 }}>{prefs.avatarName}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: '#03200D', background: 'var(--accent)', padding: '1px 6px', borderRadius: 3 }}>Activo</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--on-accent)', background: 'var(--accent)', padding: '1px 6px', borderRadius: 3 }}>Activo</span>
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Asistente contractual · {contrato?.numeroContrato ?? ''}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Asistente contractual · {contrato.numeroContrato}</div>
                   </div>
+                  <div style={{ flex: 1 }} />
+                  <button type="button" onClick={() => setCopilotoAbierto(false)}
+                    title="Ocultar el panel del Copiloto" aria-label="Ocultar el panel del Copiloto"
+                    style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, display: 'flex' }}>
+                    <IconChevron size={15} />
+                  </button>
                 </div>
 
-                {/* data-tour anchor — alertas chip cluster lives inline in the progress bar */}
-                <div data-tour="alertas" />
               </div>
 
-              {/* Messages */}
+              {/* Mensajes */}
               <div style={{ flex: 1, overflowY: 'auto', padding: '14px 14px 8px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {chatMsgs.map((m, i) => (
                   <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -782,8 +1040,8 @@ export default function SupervisorPanel({
                 )}
                 {!tutorialMode && !pensando && !revisionPaso && activeStep && (
                   <div style={{ paddingLeft: 30 }}>
-                    <button className="btn-green" onClick={() => handleIniciarPaso(activeStep.id)} style={{ padding: '8px 16px', fontSize: 13 }}>
-                      Iniciar Paso {activeStep.id}
+                    <button className="btn-green" onClick={() => handleIniciarPaso(activeStep.id)} style={{ padding: '8px 16px', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                      Iniciar Paso {activeStep.id} <IconArrowRight size={12} />
                     </button>
                   </div>
                 )}
@@ -802,11 +1060,11 @@ export default function SupervisorPanel({
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Quick suggestions */}
+              {/* Sugerencias rápidas */}
               <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
                 {QUICK_SUGGESTIONS.map(({ label, question }) => (
                   <button key={label} onClick={() => quickChat(question)} disabled={pensando || !!revisionPaso}
-                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 20, padding: '4px 10px', fontSize: 11, color: 'var(--text-secondary)', cursor: (pensando || revisionPaso) ? 'default' : 'pointer', opacity: (pensando || revisionPaso) ? 0.5 : 1, fontFamily: 'Inter, sans-serif', transition: 'border-color 0.15s' }}
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 20, padding: '4px 10px', fontSize: 11, color: 'var(--text-secondary)', cursor: (pensando || revisionPaso) ? 'default' : 'pointer', opacity: (pensando || revisionPaso) ? 0.5 : 1, fontFamily: 'var(--font-ui)', transition: 'border-color 0.15s' }}
                     onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-dim)')}
                     onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                     {label}
@@ -814,9 +1072,8 @@ export default function SupervisorPanel({
                 ))}
               </div>
 
-              {/* Input */}
+              {/* Entrada */}
               <div style={{ padding: '8px 12px 12px', borderTop: '1px solid var(--border)', display: 'flex', gap: 8, flexShrink: 0 }}>
-                <span style={{ color: 'var(--text-muted)', fontSize: 14, paddingTop: 8, fontFamily: 'var(--font-mono)' }}>+</span>
                 <input type="text" value={chatInput} onChange={e => setChatInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') sendChat() }}
                   placeholder={
@@ -825,287 +1082,168 @@ export default function SupervisorPanel({
                         : 'Escriba una orden o pregunta a la IA...'
                   }
                   disabled={pensando}
-                  style={{ flex: 1, padding: '8px 12px', opacity: pensando ? 0.6 : 1 }} />
-                <button className="btn-green" onClick={sendChat} disabled={pensando} style={{ padding: '8px 14px', fontSize: 13, opacity: pensando ? 0.6 : 1, cursor: pensando ? 'default' : 'pointer' }}>→</button>
+                  style={{ flex: 1, padding: '9px 12px', opacity: pensando ? 0.6 : 1 }} />
+                <button className="btn-green" onClick={sendChat} disabled={pensando} style={{ padding: '8px 14px', fontSize: 13, opacity: pensando ? 0.6 : 1, cursor: pensando ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center' }}>
+                  <IconArrowRight size={14} />
+                </button>
               </div>
             </div>
-          </>
-        )}
-
-        {/* ── Alertas ── */}
-        {tab === 'alertas' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-            <div style={{ marginBottom: 20 }}>
-              <div className="eyebrow">Seguimiento en vivo</div>
-              <h3 style={{ fontSize: 18 }}>Alertas del contrato {contrato?.numeroContrato ?? ''}</h3>
-            </div>
-
-            {alertaCronograma && (
-              <AlertCard
-                severity={alertaCronograma.severity === 'ok' ? 'ok' : alertaCronograma.severity === 'critica' ? 'urgent' : 'attention'}
-                title="Cronograma del paso activo"
-                desc={alertaCronograma.text}
-                actionLabel="Ver paso"
-                onAction={() => resolveAlert(alertaCronograma.id)}
-              />
             )}
+        </div>
+      )}
 
-            {alertasApi.filter(a => !a.leida).map(a => {
-              const severity = a.prioridad === 'ALTA' ? 'urgent' as const
-                : a.prioridad === 'MEDIA' ? 'attention' as const
+      {/* ── Alertas ── */}
+      {tab === 'alertas' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
+          <SectionHeader
+            eyebrow="Seguimiento en vivo"
+            title={`Alertas del contrato ${contrato.numeroContrato}`}
+            desc="Alertas registradas por el sistema y la revisión de cronograma calculada con las fechas reales del contrato."
+          />
+
+          {alertaCronograma && (
+            <AlertCard
+              severity={alertaCronograma.severity === 'ok' ? 'ok' : alertaCronograma.severity === 'critica' ? 'urgent' : 'attention'}
+              title="Cronograma del paso activo"
+              desc={alertaCronograma.text}
+              actionLabel="Ver paso"
+              onAction={() => resolveAlert(alertaCronograma.id)}
+            />
+          )}
+
+          {alertasApi.filter(a => !a.leida).map(a => {
+            const severity = a.prioridad === 'ALTA' ? 'urgent' as const
+              : a.prioridad === 'MEDIA' ? 'attention' as const
                 : 'info' as const
+            return (
+              <AlertCard
+                key={a.id}
+                severity={severity}
+                title={a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace('_', ' ')}
+                desc={a.mensaje}
+                actionLabel="Ir al paso"
+                onAction={() => resolveAlert('api-' + a.id)}
+              />
+            )
+          })}
+
+          {errorAlertas ? (
+            <div className="card" style={{ padding: '40px 20px', textAlign: 'center', borderColor: 'var(--alert-critica)' }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--alert-critica)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>!</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--alert-critica)', marginBottom: 4 }}>No se pudieron consultar las alertas</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                Puede haber alertas pendientes que no se están mostrando. Recargue la página para reintentar.
+              </div>
+            </div>
+          ) : alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
+            <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
+              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: 'var(--on-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>✓</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Sin alertas activas</div>
+              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay alertas pendientes para este contrato.</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Documentos ── */}
+      {tab === 'documentos' && (
+        <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
+          <SectionHeader
+            eyebrow="GCCON-P-010"
+            title="Documentos formales"
+            desc="El Copiloto IA redacta cada documento cuando usted llega a su sub-paso — antes de eso, todavía no existe. Aquí solo se marca como disponible lo que ya se generó de verdad."
+          />
+          {tieneFirma === false && (
+            <div className="card" style={{ padding: '12px 15px', marginBottom: 14, borderColor: 'var(--alert-critica)', background: 'var(--chip-red-bg)', fontSize: 12.5, color: 'var(--text-primary)' }}>
+              <strong style={{ color: 'var(--alert-critica)' }}>Falta su firma electrónica.</strong> Todavía no se ha obtenido su
+              firma electrónica: solicítela al Administrador antes de poder firmar.
+            </div>
+          )}
+
+          {/* Documentos formales — Copiloto genera, supervisor firma.
+              El estado viene de docsContrato (datos reales), no de los pasos locales:
+              si el documento no existe todavía en el backend, se marca "Sin generar",
+              nunca se ofrece firmar algo que no fue realmente redactado. */}
+          <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', display: 'grid', gridTemplateColumns: '1fr 150px 1fr 100px 160px', gap: 12, background: 'var(--bg-elevated)' }}>
+              <span>DOCUMENTO</span><span>CÓDIGO</span><span>DESCRIPCIÓN</span><span>ETAPA</span><span>ESTADO</span>
+            </div>
+            {FORMAL_DOCS.map(doc => {
+              const generado = docsContrato.find(d => d.generadoPorIa && d.nombre.startsWith(doc.name))
+              const ETAPA_LABEL: Record<number, string> = { 2: 'Inicio', 3: 'Inspección', 4: 'Recepción', 5: 'Certificación', 6: 'Cierre' }
               return (
-                <AlertCard
-                  key={a.id}
-                  severity={severity}
-                  title={a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace('_', ' ')}
-                  desc={a.mensaje}
-                  onAction={undefined}
-                />
+                <div key={doc.subStepId} className="data-grid-row"
+                  style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 150px 1fr 100px 160px', gap: 12, alignItems: 'center', transition: 'background var(--t)' }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{doc.name}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>IA genera · sub-paso {doc.subStepId}</div>
+                  </div>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>
+                    {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>{doc.desc}</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>{ETAPA_LABEL[doc.step]}</span>
+                  {!generado ? (
+                    <Chip text="Sin generar aún" type="pending" />
+                  ) : generado.estado === 'APROBADO' ? (
+                    <Chip text="Firmado" type="signed" />
+                  ) : (
+                    <button
+                      onClick={() => goToSubStep(doc.subStepId, doc.step)}
+                      style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}>
+                      Ir a firmar →
+                    </button>
+                  )}
+                </div>
               )
             })}
-
-            {errorAlertas ? (
-              <div className="card" style={{ padding: '40px 20px', textAlign: 'center', borderColor: 'var(--chip-red)' }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--chip-red)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>!</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--chip-red)', marginBottom: 4 }}>No se pudieron consultar las alertas</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  Puede haber alertas pendientes que no se están mostrando. Recargue la página para reintentar.
-                </div>
-              </div>
-            ) : alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
-              <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: '#03200D', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>✓</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Sin alertas activas</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay alertas pendientes para este contrato.</div>
-              </div>
-            )}
           </div>
-        )}
 
-        {/* ── Documentos ── */}
-        {tab === 'documentos' && (
-          <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
-            <div style={{ marginBottom: 20 }}>
-              <div className="eyebrow">GCCON-P-010</div>
-              <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>Documentos formales</h3>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-                El Copiloto IA redacta cada documento cuando usted llega a su sub-paso — antes de eso, todavía
-                no existe. Aquí solo se marca como disponible lo que ya se generó de verdad.
-              </p>
-              {tieneFirma === false && (
-                <p style={{ margin: '8px 0 0', fontSize: 12.5, color: 'var(--alert-critica)', fontWeight: 600 }}>
-                  ⚠ Todavía no se ha obtenido su firma electrónica. Solicítela al Administrador antes de poder firmar.
-                </p>
-              )}
-            </div>
-
-            {/* GCCON-P-010 formal docs — Copiloto genera, supervisor firma.
-                El estado viene de docsContrato (datos reales), no de los pasos locales:
-                si el documento no existe todavía en el backend, se marca "Sin generar",
-                nunca se ofrece firmar algo que no fue realmente redactado. */}
-            <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
-              <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', display: 'grid', gridTemplateColumns: '1fr 130px 120px 80px 150px', gap: 10, background: 'var(--bg-surface)' }}>
-                <span>DOCUMENTO</span><span>CÓDIGO</span><span>DESCRIPCIÓN</span><span>ETAPA</span><span>ESTADO</span>
-              </div>
-              {FORMAL_DOCS.map(doc => {
-                const generado = docsContrato.find(d => d.generadoPorIa && d.nombre.startsWith(doc.name))
-                const ETAPA_LABEL: Record<number, string> = { 2: 'Inicio', 3: 'Inspección', 4: 'Recepción', 5: 'Certificación', 6: 'Cierre' }
+          {/* Documentos reales del contrato (backend) */}
+          {docsContrato.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.09em', marginBottom: 12 }}>DOCUMENTOS DEL CONTRATO</div>
+              {docsContrato.map(doc => {
+                const estado = doc.estado === 'APROBADO'
+                  ? { text: 'Disponible', type: 'done' as const }
+                  : doc.estado === 'RECHAZADO'
+                    ? { text: 'Rechazado', type: 'conflicto' as const }
+                    : { text: 'Pendiente', type: 'pending' as const }
                 return (
-                  <div key={doc.subStepId}
-                    style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 130px 120px 80px 150px', gap: 10, alignItems: 'center' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-soft)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                  <div key={doc.id} className="card" style={{ padding: '12px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{doc.name}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>IA genera · sub-paso {doc.subStepId}</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-tech)', fontFamily: 'var(--font-mono)' }}>{doc.nombre}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
+                        {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}{doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
+                      </div>
                     </div>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>
-                      {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{doc.desc}</span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{ETAPA_LABEL[doc.step]}</span>
-                    {!generado ? (
-                      <Chip text="Sin generar aún" type="pending" />
-                    ) : generado.estado === 'APROBADO' ? (
-                      <Chip text="🟢 Firmado" type="signed" />
-                    ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <Chip text={estado.text} type={estado.type} />
                       <button
-                        onClick={() => goToSubStep(doc.subStepId, doc.step)}
-                        style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>
-                        Ir a firmar →
+                        onClick={() => descargarDocumento(contrato.id, doc.id, doc.nombre).catch(err => {
+                          console.error('No se pudo descargar el documento:', err)
+                          window.alert('No se pudo descargar el documento. Intente de nuevo en un momento.')
+                        })}
+                        style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}>
+                        Descargar
                       </button>
-                    )}
+                    </div>
                   </div>
                 )
               })}
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Documentos reales del contrato (backend) */}
-            {docsContrato.length > 0 && (
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', marginBottom: 12 }}>DOCUMENTOS DEL CONTRATO</div>
-                {docsContrato.map(doc => {
-                  const estado = doc.estado === 'APROBADO'
-                    ? { text: 'Disponible', type: 'done' as const }
-                    : doc.estado === 'RECHAZADO'
-                      ? { text: 'Rechazado', type: 'conflicto' as const }
-                      : { text: 'Pendiente', type: 'pending' as const }
-                  return (
-                    <div key={doc.id} className="card" style={{ padding: '12px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-tech)', fontFamily: 'var(--font-mono)' }}>{doc.nombre}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                          {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}{doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                        <Chip text={estado.text} type={estado.type} />
-                        {contrato && (
-                          <button
-                            onClick={() => descargarDocumento(contrato.id, doc.id, doc.nombre).catch(err => {
-                              console.error('No se pudo descargar el documento:', err)
-                              window.alert('No se pudo descargar el documento. Intente de nuevo en un momento.')
-                            })}
-                            style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap' }}>
-                            Descargar
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ── Registros ── */}
-        {tab === 'registros' && <Registros extra={registros} />}
-      </div>
-
-      {/* Bottom bar */}
-      <div style={{ display: 'flex', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0, borderRight: '1px solid var(--border)', opacity: 0.5, cursor: 'not-allowed' }}>Ayuda SENA</button>
-        <button className="btn-ghost" disabled title="Disponible en una fase posterior" style={{ flex: 1, padding: '10px 0', fontSize: 12, borderRadius: 0, opacity: 0.5, cursor: 'not-allowed' }}>Manual GCCON-M-002</button>
-      </div>
-    </div>
+      {/* ── Registros ── */}
+      {tab === 'registros' && <Registros extra={registros} />}
+    </AppShell>
   )
 }
 
-// ─── Panel de alertas prominentes (izquierda de la barra de progreso) ──────────
+// ─── Tarjeta de alerta (vista Alertas) ───────────────────────────────────────
 
-function ProminentAlerts({ alerts, blink, error, onDismiss, onResolve }: {
-  alerts: LiveAlert[]
-  blink: boolean
-  /** El servicio de alertas no respondió: no se puede afirmar que no haya ninguna. */
-  error: boolean
-  onDismiss: (id: string) => void
-  onResolve: (id: string) => void
-}) {
-  if (error && alerts.length === 0) {
-    return (
-      <div style={{
-        width: 200, flexShrink: 0,
-        border: '1.5px solid var(--chip-red)',
-        borderRadius: 10, padding: '20px 16px',
-        background: 'var(--chip-red-bg)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        gap: 8, minHeight: 90,
-      }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: '50%',
-          background: 'var(--chip-red)', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 800, fontSize: 16,
-        }}>!</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--chip-red)' }}>Alertas no disponibles</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-          No se pudo consultar el servicio
-        </div>
-      </div>
-    )
-  }
-
-  if (alerts.length === 0) {
-    return (
-      <div style={{
-        width: 200, flexShrink: 0,
-        border: '1.5px solid var(--accent-line)',
-        borderRadius: 10, padding: '20px 16px',
-        background: 'var(--accent-soft)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        gap: 8, minHeight: 90,
-      }}>
-        <div style={{
-          width: 34, height: 34, borderRadius: '50%',
-          background: 'var(--accent)', color: '#03200D',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontWeight: 800, fontSize: 16,
-        }}>✓</div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>Sin alertas pendientes</div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.4 }}>
-          Sin alertas activas en este contrato
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {alerts.slice(0, 3).map(a => {
-        const critical = a.severity === 'critica'
-        const ok = a.severity === 'ok'
-        const colorVar = critical ? 'var(--alert-critica)' : ok ? 'var(--accent)' : 'var(--alert-leve)'
-        const colorHex = critical ? '#C83030' : ok ? '#2E9E5B' : '#B8780A'
-        const bgColor = critical ? 'rgba(200,48,48,0.07)' : ok ? 'rgba(46,158,91,0.07)' : 'rgba(184,120,10,0.07)'
-        const borderVal = critical ? 'rgba(200,48,48,0.28)' : ok ? 'rgba(46,158,91,0.28)' : 'rgba(184,120,10,0.28)'
-        const btnText = critical ? '#FFFFFF' : '#03200D'
-        const etiqueta = critical ? '● CRÍTICO' : ok ? '✓ A TIEMPO' : '◉ PENDIENTE'
-
-        return (
-          <div key={a.id}
-            className={blink && !ok ? (critical ? 'blink-fast' : 'blink-slow') : undefined}
-            style={{
-              borderRadius: 10, padding: '12px 14px',
-              border: `1px solid ${borderVal}`,
-              borderLeft: `4px solid ${colorHex}`,
-              background: bgColor,
-            }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '0.12em', color: colorVar }}>
-                {etiqueta}
-              </span>
-              <button onClick={() => onDismiss(a.id)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18, padding: 0, lineHeight: 1 }}>
-                ×
-              </button>
-            </div>
-            <p style={{ margin: '0 0 10px', fontSize: 12, lineHeight: 1.5, color: 'var(--text-primary)', fontWeight: 500 }}>
-              {a.text}
-            </p>
-            <button onClick={() => onResolve(a.id)}
-              style={{
-                width: '100%', padding: '7px 0', fontSize: 11, fontWeight: 700,
-                background: colorHex, color: btnText,
-                border: 'none', borderRadius: 6, cursor: 'pointer',
-                fontFamily: 'var(--font-ui)', letterSpacing: '0.03em',
-                transition: 'opacity 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
-              {ok ? 'Ver paso →' : 'Resolver →'}
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// Alert card component
 function AlertCard({ severity, title, desc, actionLabel, onAction }: {
   severity: 'urgent' | 'attention' | 'info' | 'ok'
   title: string
@@ -1114,27 +1252,27 @@ function AlertCard({ severity, title, desc, actionLabel, onAction }: {
   onAction?: () => void
 }) {
   const config = {
-    urgent: { dot: '#EF4B4B', border: 'rgba(239,75,75,0.35)', bg: 'rgba(239,75,75,0.05)', labelColor: '#f87171', label: 'URGENTE' },
-    attention: { dot: '#F2B84B', border: 'rgba(242,184,75,0.35)', bg: 'rgba(242,184,75,0.05)', labelColor: '#F2B84B', label: 'ATENCIÓN' },
-    info: { dot: '#55BDD2', border: 'rgba(85,189,210,0.3)', bg: 'rgba(85,189,210,0.04)', labelColor: '#55BDD2', label: 'INFORMATIVO' },
-    ok: { dot: '#2E9E5B', border: 'rgba(46,158,91,0.35)', bg: 'rgba(46,158,91,0.05)', labelColor: '#2E9E5B', label: 'A TIEMPO' },
+    urgent: { color: 'var(--alert-critica)', bg: 'var(--chip-red-bg)', label: 'URGENTE' },
+    attention: { color: 'var(--alert-leve)', bg: 'rgba(229,169,60,0.12)', label: 'ATENCIÓN' },
+    info: { color: 'var(--info)', bg: 'var(--chip-blue-bg)', label: 'INFORMATIVO' },
+    ok: { color: 'var(--accent)', bg: 'var(--accent-soft)', label: 'A TIEMPO' },
   }[severity]
 
   return (
-    <div className="card" style={{ padding: '14px 16px', marginBottom: 12, borderColor: config.border, background: config.bg }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ width: 10, height: 10, borderRadius: '50%', background: config.dot, flexShrink: 0, marginTop: 4 }} />
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: config.labelColor }}>{config.label}</span>
+    <div className="card" style={{ padding: '14px 16px', marginBottom: 10, borderLeft: `3px solid ${config.color}` }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <span className="inbox-icon" style={{ background: config.bg, color: config.color }}>
+          {severity === 'ok' ? '✓' : '!'}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: config.color }}>{config.label}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
           </div>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{desc}</p>
+          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{desc}</p>
           {actionLabel && onAction && (
             <button onClick={onAction}
-              style={{ marginTop: 10, background: 'transparent', border: `1px solid ${config.border}`, borderRadius: 6, padding: '5px 12px', fontSize: 12, color: config.labelColor, cursor: 'pointer', fontFamily: 'Inter, sans-serif', transition: 'opacity 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.opacity = '0.75')}
-              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
+              style={{ marginTop: 10, background: 'transparent', border: `1px solid ${config.color}`, borderRadius: 7, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, color: config.color, cursor: 'pointer', fontFamily: 'var(--font-ui)' }}>
               {actionLabel} →
             </button>
           )}

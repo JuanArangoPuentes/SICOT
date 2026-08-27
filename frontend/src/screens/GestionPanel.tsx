@@ -3,8 +3,9 @@
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios visuales.
 
 import { useEffect, useRef, useState } from 'react'
-import { Chip, Modal, TopBar, type ChipType } from '@/components/ui'
-import { IconCheckCircle, IconClipboardList, IconFileText, IconLoader, IconPlay, IconUpload } from '@/components/icons'
+import AppShell, { type NavGroup } from '@/components/AppShell'
+import { Chip, Modal, type ChipType } from '@/components/ui'
+import { IconCheckCircle, IconClipboardList, IconContract, IconFileText, IconLoader, IconPlay, IconUpload } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
 import { getContratos, crearContrato } from '@/services/contratoService'
@@ -244,24 +245,39 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
     }
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <TopBar badge="Panel Gestión" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout}
-        avatarColor="#7c3aed" avatarTextColor="white"
-        actions={<button className="btn-ghost" onClick={onStartTour} style={{ padding: '6px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlay size={10} /> Tutorial</button>} />
+  const navGroups: NavGroup[] = [{
+    label: 'Gestión y contratación',
+    items: [
+      { id: 'contratos', label: 'Contratos', icon: <IconContract size={17} />, count: contratos.length },
+      { id: 'cargar', label: 'Cargar nueva ficha', icon: <IconUpload size={17} />, title: 'Cargar una ficha de contrato en PDF' },
+    ],
+  }]
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <div className="eyebrow">Panel de Gestión y Contratación</div>
-            <h2 style={{ fontSize: 20 }}>Contratos</h2>
-          </div>
-          <button data-tour="cargar" className="btn-green" onClick={openUpload} style={{ padding: '9px 18px', fontSize: 13 }}>
+  return (
+    <AppShell
+      roleBadge="Panel Gestión"
+      groups={navGroups}
+      activeId="contratos"
+      onNavigate={id => { if (id === 'cargar') openUpload() }}
+      usuario={usuario}
+      avatarColor="#7c3aed"
+      avatarTextColor="#ffffff"
+      onLogout={onLogout}
+      onOpenSettings={onOpenSettings}
+      title="Contratos"
+      subtitle="Carga de fichas, registro y asignación al supervisor"
+      actions={
+        <>
+          <button className="btn-ghost" onClick={onStartTour} style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <IconPlay size={10} /> Tutorial
+          </button>
+          <button data-tour="cargar" className="btn-green" onClick={openUpload} style={{ padding: '8px 15px', fontSize: 12.5 }}>
             + Cargar nueva ficha
           </button>
-        </div>
+        </>
+      }
+    >
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minWidth: 0 }}>
 
         {/* Ficha procesada card — solo se muestra tras cargar y procesar una ficha real */}
         {lastProcessedContract && (
@@ -512,6 +528,6 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
             )}
         </Modal>
       )}
-    </div>
+    </AppShell>
   )
 }

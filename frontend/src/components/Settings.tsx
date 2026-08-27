@@ -69,7 +69,9 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
             {colorField('Acento énfasis', 'colorEmphasis')}
             {colorField('Datos / mono', 'colorAccentTech')}
             {colorField('Fondo base', 'colorBackground')}
+            {colorField('Barra lateral y cabecera', 'colorBgRail')}
             {colorField('Superficie (tarjetas)', 'colorBgCard')}
+            {colorField('Superficie elevada (tablas)', 'colorBgElevated')}
             {colorField('Superficie 2 (modales)', 'colorBgSurface')}
             {colorField('Borde', 'colorBorder')}
             {colorField('Texto principal', 'colorText')}
@@ -208,7 +210,7 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
         }}>
         <span style={{
           position: 'absolute', top: 2, left: value ? 20 : 2, width: 16, height: 16, borderRadius: '50%',
-          background: value ? '#041007' : 'var(--text-muted)', transition: 'left var(--t)',
+          background: value ? 'var(--on-accent)' : 'var(--text-muted)', transition: 'left var(--t)',
         }} />
       </button>
     </label>
