@@ -2,6 +2,7 @@ package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
 import co.sena.sicot.exception.BusinessException;
+import co.sena.sicot.service.ArchivoValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,7 @@ public class ExtraccionContratoService {
     private final PdfTextExtractor pdfTextExtractor;
     private final OllamaClient ollamaClient;
     private final ObjectMapper objectMapper;
+    private final ArchivoValidator archivoValidator;
 
     /**
      * Techo de tiempo para la petición COMPLETA, no para cada llamada.
@@ -53,10 +55,11 @@ public class ExtraccionContratoService {
     private long presupuestoSegundos;
 
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper, ArchivoValidator archivoValidator) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
+        this.archivoValidator = archivoValidator;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -66,6 +69,19 @@ public class ExtraccionContratoService {
         }
         if (validos.size() > MAX_ARCHIVOS) {
             throw new BusinessException("Cargue como máximo " + MAX_ARCHIVOS + " documentos a la vez.");
+        }
+
+        // Cada archivo pasa por la MISMA validación que usan DocumentoService y
+        // FormatoDocumentalService: tamaño máximo y tipo real por bytes mágicos
+        // (no por la extensión ni por el Content-Type que manda el cliente).
+        // Antes no había ninguna: seis archivos de 500 MB, o un ejecutable
+        // renombrado a .pdf, llegaban a memoria y a PDFBox sin que nadie lo
+        // comprobara. Si un archivo no supera la validación se rechaza la
+        // petición completa con un 400 claro, en vez de analizar unos e
+        // ignorar otros en silencio.
+        for (MultipartFile archivo : validos) {
+            archivoValidator.validarTamanio(archivo);
+            archivoValidator.tipoDeArchivo(archivo);
         }
 
         long limite = System.nanoTime() + Duration.ofSeconds(presupuestoSegundos).toNanos();
@@ -136,9 +152,11 @@ public class ExtraccionContratoService {
                 presupuestal), tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras",
                 "Arrendamiento" — la que mejor describa el objeto; si no es clara, usa null).
 
-                TEXTO DEL DOCUMENTO:
                 %s
-                """.formatted(textoRecortado);
+
+                %s
+                """.formatted(EntradaNoConfiable.INSTRUCCION,
+                        EntradaNoConfiable.bloque("TEXTO DEL DOCUMENTO", textoRecortado));
 
         log.info("Extrayendo datos de '{}' ({} bytes, {} caracteres de texto) con Ollama...",
                 archivo.getOriginalFilename(), contenido.length, textoRecortado.length());
@@ -148,7 +166,11 @@ public class ExtraccionContratoService {
         try {
             return objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
         } catch (IOException e) {
-            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), respuestaCruda);
+            // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
+            // PDF (incluido un intento de inyección) y no tiene por qué quedar
+            // completa en el log del servidor.
+            String muestra = respuestaCruda.length() > 300 ? respuestaCruda.substring(0, 300) + "…" : respuestaCruda;
+            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), muestra);
             // Un documento con formato inesperado no debe tumbar el análisis de los demás.
             return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
         }
