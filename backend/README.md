@@ -144,6 +144,8 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 | POST | `/api/formatos` (multipart: `codigo`, `nombre`, `archivo`) | ADMINISTRADOR |
 | GET | `/api/formatos/{id}/archivo` (descarga real del archivo) | autenticados |
 | DELETE | `/api/formatos/{id}` | ADMINISTRADOR |
+| GET | `/api/listas-chequeo` (`?tipo=MODALIDAD_SELECCION\|TRAMITE_CONTRACTUAL\|TRAMITE_PAGO`) | autenticados |
+| GET | `/api/listas-chequeo/{codigo}` (ej. `GCCON-F-053`) | autenticados |
 | GET | `/api/firmas` · `/api/firmas/mia` | ADMINISTRADOR · autenticados |
 | POST/PATCH | `/api/firmas`, `/api/firmas/{id}/estado` | ADMINISTRADOR |
 | POST | `/api/usuarios/{id}/enviar-credenciales` | ADMINISTRADOR |
@@ -153,6 +155,9 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 - Solo usuarios con rol SUPERVISOR pueden ser asignados como supervisores.
 - Número de contrato y email de usuario son únicos.
 - Toda operación de trámite queda registrada en la tabla `registros` (auditoría).
+- El catálogo de listas de chequeo es de solo lectura y se sirve desde
+  `src/main/resources/listas-chequeo/`: es el texto de un formato institucional, no un dato
+  transaccional. Ver [docs/producto/LISTAS_DE_CHEQUEO.md](../docs/producto/LISTAS_DE_CHEQUEO.md).
 
 ## 7. Estructura del proyecto
 
@@ -170,7 +175,11 @@ co.sena.sicot
 ├── mapper/      → entidad ↔ DTO
 ├── repository/  → Spring Data JPA
 ├── security/    → JWT, filtro, CORS, BCrypt, autorización por rol y por contrato
-└── service/     → lógica de negocio (incluye GcconP010Plantilla: las 6 etapas/27 subetapas)
+└── service/     → lógica de negocio (incluye GcconP010Plantilla: las 6 etapas/27 subetapas,
+                   y ListaChequeoService: catálogo de listas de chequeo oficiales)
+
+src/main/resources/listas-chequeo/  → las 8 listas de chequeo oficiales en JSON
+tools/extraer_listas_chequeo.py     → regenera ese catálogo desde los .xlsx de CompromISO
 ```
 
 ## 8. Pruebas

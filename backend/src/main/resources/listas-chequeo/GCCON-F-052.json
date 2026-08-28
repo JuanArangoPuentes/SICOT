@@ -1,0 +1,94 @@
+{
+  "codigo": "GCCON-F-052",
+  "nombre": "TERMINACIÓN ANTICIPADA Y LIQUIDACIÓN",
+  "version": "03",
+  "proceso": "GESTIÓN CONTRACTUAL",
+  "tipo": "TRAMITE_CONTRACTUAL",
+  "alcance": "LIQUIDACIÓN Y TERMINACIÓN ANTICIPADA",
+  "archivoOrigen": "GCCON-F-052-TerminacionAnticipadayLiquidacionV04.xlsx",
+  "hojaOrigen": "Liquidación y Terminación Antci",
+  "tiposPago": [],
+  "etapas": [
+    {
+      "nombre": "ETAPA PREPARATORIA",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 1,
+          "documento": "Solicitud inicio trámite terminación anticipada ó liquidación",
+          "cuandoAplique": false,
+          "observacion": "Comunicación Interna (C.I.) o Correo electronico",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 2,
+          "documento": "Informe final de supervisión y/o interventoría (balance administrativo, técnico y financiero).",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-030",
+          "formatos": [
+            "GCCON-F-030"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 3,
+          "documento": "Informe SIIF NACIÓN (Relación de pagos)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 4,
+          "documento": "Validación documentos del contratista",
+          "cuandoAplique": false,
+          "observacion": "Validar de existencia y representación legal y pagos de parafiscales",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 5,
+          "documento": "Documentos Anexos",
+          "cuandoAplique": false,
+          "observacion": "Se deben tener en cuenta los documentos de ejecución que soporten la liquidación del contrato (administrativo, técnico, jurídico y financiero) conforme a lo estipulado en el Manual de Contratación Administrativa.",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA DE SUSCRIPCIÓN",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 6,
+          "documento": "Acta de liquidación",
+          "cuandoAplique": false,
+          "observacion": "GCCON-F-027",
+          "formatos": [
+            "GCCON-F-027"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 7,
+          "documento": "Anexos Acta de liquidación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    }
+  ],
+  "notas": [
+    "*****Cabe señalar que, los documentos aquí descritos se deben agregar en la sección de \"Acta de liquidación o Terminación Anticipada\"",
+    "* Cuando aplique.",
+    "** Oficina de Sistemas o quien haga sus veces. Numeral 9, Art 8, Dto. 249.",
+    "*** Res 2450 de 2017"
+  ],
+  "advertencias": [
+    "El nombre del archivo dice versión 04 pero el encabezado de la hoja dice versión 03. Se conserva la del encabezado."
+  ]
+}
