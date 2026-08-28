@@ -100,12 +100,14 @@ solo conflicto**.
 | 1 | `fix-validaciones-de-entrada` | ✅ mergeada | #5 |
 | 2 | `fix-transiciones-de-estado` | ✅ mergeada | #6 |
 | 3 | `fix-seguridad-modulo-ia` | ✅ mergeada | #7 |
-| 4 | `fix-consistencia-api` | 🔵 PR abierto | #9 |
+| 4 | `fix-consistencia-api` | ✅ completada | #9 |
 | 5 | `test-cobertura-idor-y-aislamiento` | ✅ mergeada | #8 |
 | 6 | `chore-limpieza-codigo-muerto` | ⚪ sin lanzar | — |
 
-Cada brief cierra con una sección **Resultado** que cuenta qué salió de esa
-tarea. La 6 va deliberadamente al final: necesita el sistema ya integrado para
+"Completada" significa que el trabajo está hecho, verificado y con su PR en
+verde; el momento en que se pulsa el botón de mergear no cambia el estado de la
+tarea. Cada brief cierra con una sección **Resultado** que cuenta qué salió de
+ella. La 6 va deliberadamente al final: necesita el sistema ya integrado para
 saber qué código está muerto de verdad.
 
 ### Qué produjo la flota
