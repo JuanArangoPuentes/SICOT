@@ -100,10 +100,10 @@ public class DocumentoService {
     public DocumentoResponse firmar(Long id) {
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Documento", id));
+        SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
         if (documento.getFirmaId() != null) {
             throw new BusinessException("Este documento ya fue firmado.");
         }
-        SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
         var usuario = SecurityUtils.currentUsuario();
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(

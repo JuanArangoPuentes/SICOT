@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -47,7 +48,7 @@ public class FormatoDocumentalController {
 
     @Operation(summary = "Cargar un formato documental (nuevo o nueva versión de uno existente)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Formato subido",
+            @ApiResponse(responseCode = "201", description = "Formato subido",
                     content = @Content(schema = @Schema(implementation = FormatoDocumentalResponse.class))),
             @ApiResponse(responseCode = "400", description = "Datos inválidos (código duplicado, archivo faltante)",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
@@ -66,7 +67,7 @@ public class FormatoDocumentalController {
             @RequestParam("codigo") String codigo,
             @RequestParam("nombre") String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.ok(formatoService.subir(codigo, nombre, archivo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(formatoService.subir(codigo, nombre, archivo));
     }
 
     @Operation(summary = "Descargar el archivo de un formato documental")

@@ -23,7 +23,7 @@ En una base nueva, Flyway aplica dos migraciones:
 | Archivo | Qué hace |
 |---|---|
 | `V1__create_sicot_schema.sql` | Línea base completa: tablas, constraints e índices |
-| `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha en `alertas` y `registros` (los usa la paginación) |
+| `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha en `alertas` y `registros` (optimizan consultas por rango de fecha) |
 
 La numeración salta de `V1` a `V9` a propósito: las migraciones `V1`–`V8`
 originales se consolidaron en la nueva `V1`, y `V9` se conservó porque ya se

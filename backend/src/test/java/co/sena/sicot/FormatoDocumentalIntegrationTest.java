@@ -38,7 +38,7 @@ class FormatoDocumentalIntegrationTest {
                         .param("codigo", "GCCON-F-031-TEST")
                         .param("nombre", "Informe de supervisión (prueba)")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.codigo").value("GCCON-F-031-TEST"))
                 .andExpect(jsonPath("$.version").value("v1"))
                 .andExpect(jsonPath("$.estado").value("VIGENTE"))
@@ -61,7 +61,7 @@ class FormatoDocumentalIntegrationTest {
                         .param("codigo", "GCCON-F-031-TEST")
                         .param("nombre", "Informe de supervisión (prueba) v2")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.version").value("v2"));
     }

@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -56,7 +57,7 @@ public class DocumentoController {
 
     @Operation(summary = "Cargar un documento real al contrato (carga real de archivos)")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Documento subido",
+            @ApiResponse(responseCode = "201", description = "Documento subido",
                     content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
             @ApiResponse(responseCode = "400", description = "Archivo inválido o faltante",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
@@ -78,7 +79,7 @@ public class DocumentoController {
             @RequestParam(value = "subetapaId", required = false) Long subetapaId,
             @RequestParam(value = "nombre", required = false) String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.ok(documentoService.subir(contratoId, subetapaId, nombre, archivo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(documentoService.subir(contratoId, subetapaId, nombre, archivo));
     }
 
     @Operation(summary = "Descargar el archivo de un documento")
