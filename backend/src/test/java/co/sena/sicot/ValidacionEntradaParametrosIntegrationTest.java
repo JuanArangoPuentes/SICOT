@@ -87,7 +87,7 @@ class ValidacionEntradaParametrosIntegrationTest {
                         .param("codigo", "GCCON-F-VAL-OK")
                         .param("nombre", "Formato válido de regresión")
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk())
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.codigo").value("GCCON-F-VAL-OK"));
     }
 

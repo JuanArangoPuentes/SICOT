@@ -470,16 +470,10 @@ class AislamientoEntreSupervisoresIntegrationTest {
     }
 
     // ----------------------------------------------------------------------
-    // 7. Brechas reales encontradas — NO se arreglan en esta rama.
+    // 7. Brechas reales encontradas — YA ARREGLADAS en esta rama.
     // ----------------------------------------------------------------------
 
     @Test
-    @Disabled("Brecha real: el acceso de un supervisor a un contrato ajeno responde 400 "
-            + "(BusinessException de SecurityUtils.verificarAccesoAlContrato) mientras que un contrato "
-            + "inexistente responde 404 (ResourceNotFoundException). La diferencia es un oráculo de "
-            + "enumeración: el supervisor B puede saber qué ids de contrato existen aunque no sean suyos. "
-            + "Debe unificarse a una sola respuesta en toda la API (se propone 404, que no filtra "
-            + "existencia). La arregla la rama de consistencia de API / tarea 4.")
     void contratoAjenoYContratoInexistenteDebenResponderElMismoCodigo() throws Exception {
         int codigoAjeno = mockMvc.perform(get("/api/contratos/{id}", contratoAId)
                         .header("Authorization", "Bearer " + tokenB))
@@ -493,13 +487,6 @@ class AislamientoEntreSupervisoresIntegrationTest {
     }
 
     @Test
-    @Disabled("Brecha real: DocumentoService.firmar comprueba documento.getFirmaId() != null "
-            + "(DocumentoService.java:103) ANTES de SecurityUtils.verificarAccesoAlContrato "
-            + "(DocumentoService.java:106). Un supervisor que prueba a firmar un documento de otro "
-            + "contrato recibe 'Este documento ya fue firmado.' si lo está, y el mensaje de acceso "
-            + "denegado si no — es decir, puede enumerar qué documentos ajenos están firmados. La "
-            + "comprobación de acceso debe ir primero. La arregla la rama de seguridad IA / "
-            + "consistencia de API.")
     void firmarUnDocumentoAjenoNoDebeRevelarSiYaEstaFirmado() throws Exception {
         String mensajePendiente = mensajeDeError(mockMvc.perform(
                         post("/api/contratos/{contratoId}/documentos/{id}/firmar", contratoAId, docAPendienteId)
