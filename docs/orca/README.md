@@ -119,12 +119,11 @@ Las dos cosas que bloqueaban el arranque están resueltas:
 2. **Los seis worktrees están sincronizados** con la punta de esa rama
    (`sync-worktrees.sh --sincronizar-base`).
 
-Cuando el PR `chore/saneamiento-integral → develop` esté mergeado, cambia la
-variable `RAMA_BASE` del script a `develop` y vuelve a correrlo con
-`--sincronizar-base`:
+La rama base de la flota es `develop`, que es el defecto del script desde que se
+mergeó el saneamiento. Para apuntar a otra sin editar nada:
 
 ```bash
-RAMA_BASE=develop bash docs/orca/sync-worktrees.sh --sincronizar-base
+RAMA_BASE=otra-rama bash docs/orca/sync-worktrees.sh --sincronizar-base
 ```
 
 ### Olas de lanzamiento

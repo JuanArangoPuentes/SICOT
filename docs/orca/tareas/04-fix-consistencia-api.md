@@ -45,12 +45,16 @@ describa lo que el código hace de verdad. El frontend consume esta API con
    techo. Decide: o se implementa la paginación (cambia el contrato — hay que
    avisar al frontend), o se corrige la documentación. Lo que no puede quedar es
    la contradicción.
-2. **Todo devuelve 200.** Las creaciones (`POST /api/contratos`,
-   `POST /api/usuarios`, `POST /api/formatos`, `POST /api/firmas`,
-   `POST /api/contratos/{id}/documentos`) responden `200 OK` en vez de `201
-   Created` con `Location`. Cambiarlo toca al frontend: verifica en
-   `frontend/src/services/` qué comprueba cada llamada antes de tocar nada, y si
-   el cambio no es seguro, documéntalo como deuda en vez de romperlo.
+2. **Las creaciones no son coherentes entre sí** — corregido 2026-08-28, la
+   versión anterior de este brief decía "todo devuelve 200" y era falso.
+   Lo real, comprobado en el código: `POST /api/contratos`, `POST /api/usuarios`
+   y `POST /api/firmas` **ya devuelven 201**; `POST /api/formatos` y
+   `POST /api/contratos/{id}/documentos` devuelven **200**. La inconsistencia es
+   entre ellas, no un 200 generalizado. Ninguna emite cabecera `Location`.
+   Alinear las dos que faltan es seguro para el cliente: `apiFetch` decide el
+   éxito con `res.ok` (`frontend/src/services/api/client.ts:50`), que acepta
+   cualquier 2xx — así que pasar de 200 a 201 no rompe ninguna pantalla.
+   Aun así, dilo en el resumen.
 3. **`@PreAuthorize` desigual.** `EtapaController` y `ListaChequeoController` no
    declaran ninguno; `AlertaController` protege el listado global pero no el
    listado por contrato. En varios casos la protección real ocurre más abajo

@@ -16,14 +16,14 @@
 # Con --sincronizar-base, además adelanta cada rama al último commit de la rama base,
 # pero solo si el worktree está limpio y no tiene commits propios.
 #
-# La rama base es hoy `chore/saneamiento-integral`. Cuando su PR hacia `develop`
-# esté mergeado, pásala a `develop`:
+# La rama base es `develop`, que es donde integra el equipo. Se puede apuntar a
+# otra sin tocar el script:
 #
-#   RAMA_BASE=develop bash docs/orca/sync-worktrees.sh --sincronizar-base
+#   RAMA_BASE=otra-rama bash docs/orca/sync-worktrees.sh --sincronizar-base
 
 set -euo pipefail
 
-RAMA_BASE="${RAMA_BASE:-chore/saneamiento-integral}"
+RAMA_BASE="${RAMA_BASE:-develop}"
 SINCRONIZAR_BASE=0
 [ "${1:-}" = "--sincronizar-base" ] && SINCRONIZAR_BASE=1
 
