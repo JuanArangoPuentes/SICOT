@@ -4,11 +4,16 @@ import co.sena.sicot.dto.formato.FormatoDocumentalResponse;
 import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.service.FormatoDocumentalService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -32,12 +37,34 @@ public class FormatoDocumentalController {
     }
 
     @Operation(summary = "Listar el catálogo de formatos documentales")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Catálogo de formatos",
+                    content = @Content(schema = @Schema(implementation = FormatoDocumentalResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @GetMapping
     public ResponseEntity<List<FormatoDocumentalResponse>> listar() {
         return ResponseEntity.ok(formatoService.listar());
     }
 
     @Operation(summary = "Cargar un formato documental (nuevo o nueva versión de uno existente)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Formato subido",
+                    content = @Content(schema = @Schema(implementation = FormatoDocumentalResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos (código duplicado, archivo faltante)",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "415", description = "Tipo de contenido no soportado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<FormatoDocumentalResponse> subir(
@@ -50,10 +77,20 @@ public class FormatoDocumentalController {
             @Size(max = 255, message = "El nombre del formato no puede superar 255 caracteres.")
             String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.ok(formatoService.subir(codigo, nombre, archivo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(formatoService.subir(codigo, nombre, archivo));
     }
 
     @Operation(summary = "Descargar el archivo de un formato documental")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Archivo binario",
+                    content = @Content(schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Formato no encontrado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long id) {
         FormatoDocumental formato = formatoService.buscarConContenido(id);
@@ -67,6 +104,17 @@ public class FormatoDocumentalController {
     }
 
     @Operation(summary = "Eliminar un formato documental del catálogo")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Formato eliminado"),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Formato no encontrado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {

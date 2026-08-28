@@ -1,5 +1,6 @@
 package co.sena.sicot.exception;
 
+import co.sena.sicot.exception.AccesoDenegadoException;
 import co.sena.sicot.ia.IaNoDisponibleException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -34,6 +35,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> notFound(ResourceNotFoundException ex, WebRequest request) {
         return build(ex.getMessage(), HttpStatus.NOT_FOUND, request);
+    }
+
+    @ExceptionHandler(AccesoDenegadoException.class)
+    public ResponseEntity<ErrorResponse> accesoDenegado(AccesoDenegadoException ex, WebRequest request) {
+        log.debug("Acceso denegado (sin filtrar existencia) en {}: {}", request.getDescription(false).replace("uri=", ""), ex.getMessage());
+        return build("El recurso solicitado no existe o no tiene acceso a él.", HttpStatus.NOT_FOUND, request);
     }
 
     @ExceptionHandler(BusinessException.class)

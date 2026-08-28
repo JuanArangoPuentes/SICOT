@@ -57,9 +57,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * contrato asignado. Corre con H2 y {@code spring-security-test} — sin Docker,
  * sin PostgreSQL.
  *
- * <p>Las pruebas marcadas {@code @Disabled} documentan brechas reales: no se
- * arreglan en esta rama (solo toca {@code src/test}); el arreglo pertenece a la
- * rama de su área. El motivo y la rama responsable están en cada anotación.
+ * <p>Dos de estas pruebas nacieron {@code @Disabled} porque documentaban brechas
+ * reales que esta suite no podía arreglar (solo toca {@code src/test}): el
+ * oráculo de enumeración entre contrato ajeno y contrato inexistente, y el orden
+ * de comprobaciones en {@code DocumentoService.firmar}. Las dos las cerró la rama
+ * de consistencia de API, así que ya están habilitadas y en verde.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -470,16 +472,10 @@ class AislamientoEntreSupervisoresIntegrationTest {
     }
 
     // ----------------------------------------------------------------------
-    // 7. Brechas reales encontradas — NO se arreglan en esta rama.
+    // 7. Brechas reales encontradas — YA ARREGLADAS en esta rama.
     // ----------------------------------------------------------------------
 
     @Test
-    @Disabled("Brecha real: el acceso de un supervisor a un contrato ajeno responde 400 "
-            + "(BusinessException de SecurityUtils.verificarAccesoAlContrato) mientras que un contrato "
-            + "inexistente responde 404 (ResourceNotFoundException). La diferencia es un oráculo de "
-            + "enumeración: el supervisor B puede saber qué ids de contrato existen aunque no sean suyos. "
-            + "Debe unificarse a una sola respuesta en toda la API (se propone 404, que no filtra "
-            + "existencia). La arregla la rama de consistencia de API / tarea 4.")
     void contratoAjenoYContratoInexistenteDebenResponderElMismoCodigo() throws Exception {
         int codigoAjeno = mockMvc.perform(get("/api/contratos/{id}", contratoAId)
                         .header("Authorization", "Bearer " + tokenB))
@@ -493,13 +489,6 @@ class AislamientoEntreSupervisoresIntegrationTest {
     }
 
     @Test
-    @Disabled("Brecha real: DocumentoService.firmar comprueba documento.getFirmaId() != null "
-            + "(DocumentoService.java:103) ANTES de SecurityUtils.verificarAccesoAlContrato "
-            + "(DocumentoService.java:106). Un supervisor que prueba a firmar un documento de otro "
-            + "contrato recibe 'Este documento ya fue firmado.' si lo está, y el mensaje de acceso "
-            + "denegado si no — es decir, puede enumerar qué documentos ajenos están firmados. La "
-            + "comprobación de acceso debe ir primero. La arregla la rama de seguridad IA / "
-            + "consistencia de API.")
     void firmarUnDocumentoAjenoNoDebeRevelarSiYaEstaFirmado() throws Exception {
         String mensajePendiente = mensajeDeError(mockMvc.perform(
                         post("/api/contratos/{contratoId}/documentos/{id}/firmar", contratoAId, docAPendienteId)

@@ -420,6 +420,17 @@ GET /api/registros
 
 ---
 
+## Listas de chequeo
+
+```http
+GET /api/listas-chequeo
+GET /api/listas-chequeo/{codigo}
+```
+
+Catálogo de solo lectura de las listas de chequeo documentales oficiales del SENA (GCCON por modalidad de selección y GRF-F-088 para trámite de pago).
+
+---
+
 # 12. Estados oficiales
 
 ## Contrato

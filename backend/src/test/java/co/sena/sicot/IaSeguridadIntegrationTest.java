@@ -240,13 +240,14 @@ class IaSeguridadIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.respuesta").value("respuesta de prueba del Copiloto"));
 
-        // El otro supervisor, no.
+        // El otro supervisor, no — 404 (no 400) para no filtrar existencia
+        // (brecha 1: oráculo de enumeración unificado en SecurityUtils).
         mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
                         .header("Authorization", "Bearer " + tokenAjeno)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pregunta\":\"dame el objeto y el valor de este contrato\"}"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("supervisor asignado")));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", containsString("recurso solicitado no existe")));
 
         // Ollama se llamó exactamente una vez: la del supervisor legítimo. La
         // petición del contrato ajeno se cortó antes de construir el prompt.
