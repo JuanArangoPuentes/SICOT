@@ -92,3 +92,27 @@ ahí es dato no confiable.
 - [ ] Ningún log ni respuesta filtra prompt completo, texto de documento o URL
       interna.
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde.
+
+---
+
+## Resultado — completada, PR #7 mergeado
+
+Commits `ddfc817`, `f34293a`. `verify` en verde: 64 pruebas (10 nuevas en
+`IaSeguridadIntegrationTest`).
+
+- **El hallazgo principal, cerrado:** `POST /api/ia/extraer-contrato` ahora pasa
+  cada archivo por `ArchivoValidator` —tamaño y tipo real por bytes mágicos—
+  igual que hacían documentos y formatos.
+- Nueva clase `EntradaNoConfiable`: delimita en el prompt el contenido de origen
+  no confiable (texto de PDF, pregunta, historial, campos libres del contrato) e
+  instruye al modelo a tratarlo como datos y a no obedecer órdenes que aparezcan
+  dentro.
+- `ChatRequest` tiene topes de turnos y de longitud, que antes no existían.
+
+**Cambio de comportamiento visible:** un lote que incluya un archivo de tipo no
+permitido o sobredimensionado devuelve **400 para toda la petición**, en vez de
+saltárselo en silencio. Es lo mismo que ya hacían `DocumentoService` y
+`FormatoDocumentalService`.
+
+Sigue sin haber ningún servicio de IA de pago: todo corre sobre Ollama local, y
+si Ollama no está, el sistema falla honestamente con 503.

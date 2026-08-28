@@ -9,8 +9,8 @@ antes que cualquier otra cosa. Su tarea concreta está en `.claude/orca/TAREA.md
 ## 1. Lo primero: la instrucción del proyecto ya existe
 
 Antes de tocar código, lee **`.github/copilot-instructions.md`**. Es el contrato
-funcional de SICOT (975 líneas, versionado, escrito por el equipo) y manda sobre
-cualquier cosa que digas o supongas tú. En particular:
+funcional de SICOT —versionado y escrito por el equipo— y manda sobre cualquier
+cosa que digas o supongas tú. En particular:
 
 - **§2 Estabilidad > velocidad** — inspeccionar, comprender, cambio mínimo.
 - **§30 Regla de oro: NO INVENTAR** — nunca mostrar como real algo que el sistema
@@ -33,10 +33,11 @@ C:\Users\juant\orca\workspaces\Proyecto SICOT\<rama>
 ```
 
 Comparte el historial de git con el repo principal, pero es un checkout propio.
-Hay **cinco agentes más** trabajando al mismo tiempo, cada uno en su rama, todos
-partiendo del mismo commit base. Por eso el alcance de tu tarea está delimitado
-por archivos: respetarlo es lo que hace que las seis ramas se puedan integrar
-después sin pelearse.
+Puede haber **otros agentes trabajando al mismo tiempo**, cada uno en su rama y
+todos partiendo del mismo commit base. Por eso el alcance de tu tarea está
+delimitado por archivos: respetarlo es lo que permite integrar todas las ramas
+después sin que se peleen. Da por hecho que no eres el único aunque no veas a
+nadie.
 
 - **No** te salgas a `C:\Users\juant\Downloads\Proyecto SICOT` (el checkout de
   Juan) ni a los worktrees de las otras ramas. Si necesitas algo de ahí, pídelo.

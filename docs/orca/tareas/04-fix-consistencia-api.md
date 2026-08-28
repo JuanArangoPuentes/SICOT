@@ -45,12 +45,16 @@ describa lo que el código hace de verdad. El frontend consume esta API con
    techo. Decide: o se implementa la paginación (cambia el contrato — hay que
    avisar al frontend), o se corrige la documentación. Lo que no puede quedar es
    la contradicción.
-2. **Todo devuelve 200.** Las creaciones (`POST /api/contratos`,
-   `POST /api/usuarios`, `POST /api/formatos`, `POST /api/firmas`,
-   `POST /api/contratos/{id}/documentos`) responden `200 OK` en vez de `201
-   Created` con `Location`. Cambiarlo toca al frontend: verifica en
-   `frontend/src/services/` qué comprueba cada llamada antes de tocar nada, y si
-   el cambio no es seguro, documéntalo como deuda en vez de romperlo.
+2. **Las creaciones no son coherentes entre sí** — corregido 2026-08-28, la
+   versión anterior de este brief decía "todo devuelve 200" y era falso.
+   Lo real, comprobado en el código: `POST /api/contratos`, `POST /api/usuarios`
+   y `POST /api/firmas` **ya devuelven 201**; `POST /api/formatos` y
+   `POST /api/contratos/{id}/documentos` devuelven **200**. La inconsistencia es
+   entre ellas, no un 200 generalizado. Ninguna emite cabecera `Location`.
+   Alinear las dos que faltan es seguro para el cliente: `apiFetch` decide el
+   éxito con `res.ok` (`frontend/src/services/api/client.ts:50`), que acepta
+   cualquier 2xx — así que pasar de 200 a 201 no rompe ninguna pantalla.
+   Aun así, dilo en el resumen.
 3. **`@PreAuthorize` desigual.** `EtapaController` y `ListaChequeoController` no
    declaran ninguno; `AlertaController` protege el listado global pero no el
    listado por contrato. En varios casos la protección real ocurre más abajo
@@ -137,3 +141,31 @@ déjalo pasando.
 - [ ] Todo cambio que afecte al frontend está señalado uno por uno en el resumen.
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde, y si tocaste el frontend,
       `cd frontend; npm.cmd run build` también.
+
+---
+
+## Resultado — completada, PR #9 abierto
+
+Commits `5f5e305`, `7264014`, `5be7037`, `b67c523`, más un merge de `develop`.
+`verify` en verde: **125 pruebas, 0 fallos, 0 desactivadas**.
+
+- **Las dos brechas heredadas, cerradas.** `SecurityUtils` lanza ahora
+  `AccesoDenegadoException` (404) con un mensaje que no distingue entre "no
+  existe" y "no es tuyo"; en `DocumentoService.firmar` la comprobación de acceso
+  pasó delante de la de estado. Las dos pruebas `@Disabled` quedaron habilitadas
+  y pasan.
+- **201 alineado** en las dos creaciones que devolvían 200: subida de documento y
+  subida de formato.
+- **197 `@ApiResponse`** en los 13 controladores, y Javadoc en cada uno
+  explicando dónde se aplica realmente la autorización — varios no declaran
+  `@PreAuthorize` porque la regla vive en el servicio, y dejarlo escrito evita
+  que alguien "arregle" un hueco inexistente.
+- **`docs/INVENTARIO_ENDPOINTS.md`**: los 39 endpoints con rol, control de acceso
+  real, código de éxito y forma de respuesta.
+
+Cambiar el contrato obligó a tocar tres archivos de prueba de otras ramas
+(`isOk()` → `isCreated()`, `isBadRequest()` → `isNotFound()`). Se actualizaron
+con el motivo escrito: **ninguna assertion borrada ni debilitada**.
+
+Comprobado que el cambio de 400 a 404 no afecta a la interfaz: `apiFetch` solo
+ramifica en 401 y 204, y decide el éxito con `res.ok`.

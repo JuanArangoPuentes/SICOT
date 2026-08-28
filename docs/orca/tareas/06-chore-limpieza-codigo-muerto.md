@@ -33,14 +33,17 @@ producción tres semanas después. La regla de esta rama es una sola —
 
 ## Hallazgos ya verificados (punto de partida, no lista cerrada)
 
-1. **`ia/CopilotoChatService.responder(Long, String)` (línea ~89)** —
+1. **`ia/CopilotoChatService.responder(Long, String)` (línea 94)** —
    sobrecarga de dos argumentos que solo delega en la de tres. El único llamador
    real (`CopilotoController:33`) usa la de tres. Verificado con `grep` sobre
-   todo `backend/src`: nadie más la invoca. Es el caso limpio.
+   todo `backend/src`, y **revalidado sobre `develop` con las cinco ramas ya
+   integradas**: sigue sin usarla nadie. Es el caso limpio.
 2. **`service/ArchivoValidator.contentTypeDe`** — tiene una rama `default` en el
    `switch` sobre `TipoDocumento`. Comprueba si el enum puede llegar ahí; si no,
-   es código inalcanzable (pero mira antes si la tarea 3 va a empezar a usar este
-   método, porque entonces la rama puede dejar de ser inalcanzable).
+   es código inalcanzable. La reserva que traía este brief queda resuelta: la
+   tarea 3 acabó usando `validarTamanio` y `tipoDeArchivo`, **no** este método,
+   así que sus dos únicos llamadores siguen siendo `DocumentoService` y
+   `FormatoDocumentalService`.
 3. **`frontend/src/imports/`** — carpeta con nombre de andamiaje. El commit
    `22b1e67` ya retiró "el andamiaje de Figma Make"; comprueba si quedó algo sin
    referenciar.
@@ -67,14 +70,16 @@ Los cuatro puntos, siempre. Si alguno no se puede comprobar, el candidato pasa a
 la lista de "sospechosos no borrados" del resumen final — que es un entregable
 igual de válido que el borrado.
 
-## Orden de integración
+## Eres la última, y eso es a tu favor
 
-Esta rama se mezcla **de penúltima**, después de las cuatro ramas de arreglo
-(1-4) y antes de la de pruebas (5). Motivo: una de esas ramas puede empezar a
-usar algo que hoy parece muerto — la sobrecarga de `responder`, por ejemplo, o la
-rama `default` de `contentTypeDe`. Cuando te toque integrar, **vuelve a
-comprobar** cada borrado contra el estado ya integrado; no des por bueno el
-`grep` de hace tres días.
+Las otras cinco tareas ya están integradas en `develop` (cuatro mergeadas, la de
+consistencia de API en PR). Arrancas con el sistema completo delante, que es
+justo lo que esta tarea necesitaba: ninguna rama va a empezar a usar, después de
+ti, algo que tú diste por muerto.
+
+A cambio, la responsabilidad es toda tuya: **haz tus propias comprobaciones sobre
+el estado actual**. Los dos candidatos de arriba están revalidados contra
+`develop`, pero el resto de la lista es una pista, no un veredicto.
 
 ## Criterios de aceptación
 

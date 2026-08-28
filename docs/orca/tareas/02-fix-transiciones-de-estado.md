@@ -82,3 +82,27 @@ impide nadie.
 - [ ] El flujo completo del supervisor (6 etapas, 27 subetapas) sigue pasando de
       principio a fin — probado, no supuesto.
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde.
+
+---
+
+## Resultado — completada, PR #6 mergeado
+
+Commit `e95441e`. `verify` en verde: 71 pruebas (antes 54), incluido el flujo
+completo del supervisor de principio a fin.
+
+- Nueva clase `TransicionesDeEstado` con el mapa de transiciones permitidas.
+  `cambiarEstadoSubetapa` ya no acepta cualquier destino.
+- Lo que la documentación del SENA no confirma quedó `PENDIENTE_DE_DEFINIR` y
+  **permitido**, no adivinado. Solo se cerró lo aritméticamente imposible y lo
+  que contradice al propio código.
+- La bitácora distingue avance de retroceso: `SUBETAPA_AVANZADA`,
+  `SUBETAPA_REVERTIDA`, `ETAPA_RETROCEDIDA`.
+
+**Comprobado antes de dar por buena la regla:** el frontend no llama a
+`PATCH /api/contratos/{id}/estado` desde ningún servicio, y las transiciones de
+subetapa del panel del supervisor son todas avances — la regla nueva no rechaza
+ningún botón existente.
+
+Quedó anotado, sin tocar por estar fuera de alcance: los tres códigos de
+bitácora nuevos caen en la categoría `'Otro'` del filtro de Registros, y el
+Javadoc de `GcconP010Plantilla` dice "28 subetapas" cuando son 27.

@@ -79,3 +79,26 @@ del usuario en un 409 genérico o en un dato basura persistido.
 - [ ] Las restricciones sobre parámetros realmente se disparan (probado).
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde.
 - [ ] Ninguna migración tocada.
+
+---
+
+## Resultado — completada, PR #5 mergeado
+
+Commits `3a6f6ca`, `66c83ab`, `8fd16da`. `verify` en verde: 69 pruebas (54 de
+base + 15 nuevas).
+
+- Límites declarados y coherentes entre `CrearContratoRequest` y
+  `ActualizarContratoRequest`, incluido el `@Size` que le faltaba a `objeto`.
+- `codigo` y `nombre` dejan de ser `String` crudos en los `@RequestParam` de
+  formatos y documentos.
+- Lo institucional —qué campos son obligatorios según la modalidad, la relación
+  entre fecha de registro presupuestal y vigencia— quedó marcado
+  `PENDIENTE_DE_DEFINIR` y **sin validar**: no se inventó proceso.
+
+**Hallazgo que valió la tarea:** sin `@Validated` a nivel de clase, las
+restricciones sobre `@RequestParam` no pasan por la vía AOP y Spring lanza
+`HandlerMethodValidationException`, que caía en el catch-all como **500**. Se
+resolvió con `@Validated`; un handler propio con sus `fieldErrors` se señaló
+como alcance de la tarea 4 en vez de tocarlo desde aquí.
+
+Ninguna migración Flyway tocada. Ningún límite nuevo contradice una columna.
