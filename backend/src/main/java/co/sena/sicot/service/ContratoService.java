@@ -147,10 +147,23 @@ public class ContratoService {
     @Transactional
     public ContratoResponse cambiarEstado(Long id, CambiarEstadoContratoRequest request) {
         Contrato contrato = buscar(id);
-        contrato.setEstado(request.estado());
+        EstadoContrato anterior = contrato.getEstado();
+        EstadoContrato destino = request.estado();
+
+        // Antes esto era un setEstado directo: cualquier destino desde cualquier
+        // origen pasaba, así que FINALIZADO -> BORRADOR era una petición válida.
+        // validarContrato solo cierra lo que contradice el código (* -> BORRADOR);
+        // el resto de la máquina de estados del contrato no está confirmada en la
+        // documentación del SENA y queda PENDIENTE_DE_DEFINIR, permitida.
+        TransicionesDeEstado.Sentido sentido = TransicionesDeEstado.validarContrato(anterior, destino);
+        if (sentido == TransicionesDeEstado.Sentido.SIN_CAMBIO) {
+            return ContratoMapper.toResponse(contrato);
+        }
+
+        contrato.setEstado(destino);
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "ESTADO_CAMBIADO",
-                "Estado del contrato cambiado a " + request.estado().name() + ".");
+                "Estado del contrato: " + anterior.name() + " → " + destino.name() + ".");
         return ContratoMapper.toResponse(guardado);
     }
 

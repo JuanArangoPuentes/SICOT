@@ -90,8 +90,50 @@ class EtapaServiceTest {
         Etapa recargada = etapaRepository.findById(etapa.getId()).orElseThrow();
         assertThat(recargada.getEstado()).isEqualTo(EstadoEtapa.COMPLETADA);
         assertThat(recargada.getPorcentaje()).isEqualTo(100);
+
+        // 3 subetapas completadas -> 3 SUBETAPA_AVANZADA + 3 recálculos de etapa
+        // (0%->33%->67%->100%) con ETAPA_ACTUALIZADA. Ningún retroceso.
+        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId());
+        assertThat(registros).hasSize(6);
+        assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_AVANZADA")).hasSize(3);
+        assertThat(registros).filteredOn(r -> r.getAccion().equals("ETAPA_ACTUALIZADA")).hasSize(3);
+        assertThat(registros).noneMatch(r -> r.getAccion().equals("SUBETAPA_REVERTIDA")
+                || r.getAccion().equals("ETAPA_RETROCEDIDA"));
+    }
+
+    @Test
+    void revertirUnaSubetapaCompletadaDejaTrazaDeRetrocesoYBajaElPorcentaje() {
+        List<Subetapa> subetapas = subetapaRepository.findByEtapaIdOrderByCodigoAsc(etapa.getId());
+        for (Subetapa s : subetapas) {
+            etapaService.cambiarEstadoSubetapa(s.getId(), EstadoSubetapa.COMPLETADA);
+        }
+        // Etapa en COMPLETADA al 100%. Se reabre una subetapa: corrección.
+        Long subetapaId = subetapas.getFirst().getId();
+
+        etapaService.cambiarEstadoSubetapa(subetapaId, EstadoSubetapa.PENDIENTE);
+
+        Etapa recargada = etapaRepository.findById(etapa.getId()).orElseThrow();
+        assertThat(recargada.getEstado()).isEqualTo(EstadoEtapa.EN_CURSO);
+        assertThat(recargada.getPorcentaje()).isEqualTo(67);
+
+        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId());
+        assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_REVERTIDA")).hasSize(1);
+        assertThat(registros).filteredOn(r -> r.getAccion().equals("ETAPA_RETROCEDIDA")).hasSize(1);
+        assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_REVERTIDA"))
+                .allMatch(r -> r.getDescripcion().contains("COMPLETADA a PENDIENTE"));
+    }
+
+    @Test
+    void reenviarElMismoEstadoNoCambiaNadaNiGeneraTraza() {
+        Subetapa primera = subetapaRepository.findByEtapaIdOrderByCodigoAsc(etapa.getId()).getFirst();
+        etapaService.cambiarEstadoSubetapa(primera.getId(), EstadoSubetapa.COMPLETADA);
+        int registrosTrasCompletar = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId()).size();
+
+        // Reenviar COMPLETADA sobre una subetapa ya COMPLETADA: no-op silencioso.
+        etapaService.cambiarEstadoSubetapa(primera.getId(), EstadoSubetapa.COMPLETADA);
+
         assertThat(registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId()))
-                .hasSize(3);
+                .hasSize(registrosTrasCompletar);
     }
 
     @Test

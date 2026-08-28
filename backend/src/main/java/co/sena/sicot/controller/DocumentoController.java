@@ -12,12 +12,15 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -26,6 +29,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/contratos/{contratoId}/documentos")
+@Validated
 @Tag(name = "Documentos", description = "Documentos y evidencias de un contrato")
 public class DocumentoController {
 
@@ -76,8 +80,12 @@ public class DocumentoController {
     @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<DocumentoResponse> subir(
             @PathVariable Long contratoId,
-            @RequestParam(value = "subetapaId", required = false) Long subetapaId,
-            @RequestParam(value = "nombre", required = false) String nombre,
+            @RequestParam(value = "subetapaId", required = false)
+            @Positive(message = "El identificador de la subetapa debe ser un número positivo.")
+            Long subetapaId,
+            @RequestParam(value = "nombre", required = false)
+            @Size(max = 255, message = "El nombre del documento no puede superar 255 caracteres.")
+            String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
         return ResponseEntity.status(HttpStatus.CREATED).body(documentoService.subir(contratoId, subetapaId, nombre, archivo));
     }
