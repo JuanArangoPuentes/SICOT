@@ -3,8 +3,9 @@
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios visuales.
 
 import { useEffect, useRef, useState } from 'react'
-import { Chip, Modal, TopBar, type ChipType } from '@/components/ui'
-import { IconCheckCircle, IconClipboardList, IconFileText, IconLoader, IconPlay, IconUpload } from '@/components/icons'
+import AppShell, { type NavGroup } from '@/components/AppShell'
+import { Chip, Modal, type ChipType } from '@/components/ui'
+import { IconCheckCircle, IconClipboardList, IconContract, IconFileText, IconLoader, IconPlay, IconUpload } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
 import { getContratos, crearContrato } from '@/services/contratoService'
@@ -13,25 +14,26 @@ import { extraerDatosContrato, subirDocumento } from '@/services/documentoServic
 import { ApiError } from '@/services/api/client'
 import { formatCOP, formatFecha } from '@/services/format'
 
-// Secuencias diferenciadas por tipo de contrato (definición del proceso, no se persiste)
-const CONTRACT_TYPES: Record<string, { etapas: string[]; documentos: string[] }> = {
-  'Suministro de Bienes': {
-    etapas: ['Inicio', 'Inspección de Recepción', 'Recibo a Satisfacción', 'Cierre'],
-    documentos: ['Acta de Inicio', 'GIL-F-010', 'ESUCON'],
-  },
-  Servicios: {
-    etapas: ['Inicio', 'Ejecución', 'Inspección de Servicios', 'Cierre'],
-    documentos: ['Acta de Inicio', 'GCCON-F-031', 'Certificación'],
-  },
-  Obras: {
-    etapas: ['Inicio', 'Ejecución Parcial', 'Inspección Técnica', 'Cierre'],
-    documentos: ['Acta de Inicio', 'Actas de Avance', 'Certificación Final'],
-  },
-  Arrendamiento: {
-    etapas: ['Inicio', 'Ejecución', 'Verificación de Canon', 'Cierre'],
-    documentos: ['Acta de Inicio', 'GCCON-F-031', 'Acta de Liquidación'],
-  },
-}
+// Tipos de contrato seleccionables. Se persisten en el campo `tipoContrato`
+// del contrato; son una etiqueta descriptiva, no cambian el flujo.
+const CONTRACT_TYPES = ['Suministro de Bienes', 'Servicios', 'Obras', 'Arrendamiento'] as const
+
+// Las 6 etapas reales del procedimiento GCCON-P-010, espejo de
+// `GcconP010Plantilla` en el backend.
+//
+// Antes aquí había una "SECUENCIA RECOMENDADA" distinta por tipo de contrato
+// (4 etapas inventadas: Inspección Técnica, Verificación de Canon, etc.). Era
+// ficticia: `ContratoService.crear` llama siempre a
+// `GcconP010Plantilla.crearEtapas`, que ni siquiera lee `tipoContrato`. Todos
+// los contratos reciben exactamente estas 6 etapas, sin excepción.
+const ETAPAS_GCCON_P010 = [
+  'Inicio — Estudios y Suscripción',
+  'Inicio — Acta de Inicio',
+  'Inspección — Monitoreo y Ejecución',
+  'Recepción — Acta de Recibo a Satisfacción',
+  'Certificación — Cumplimiento y Trámite de Pago',
+  'Cierre — Informe Final y Archivo',
+]
 
 // Supervisores disponibles para asignación — se cargan desde /api/usuarios
 // (solo visible para ADMINISTRADOR; el rol GESTION recibe 403 y crea sin asignar)
@@ -102,7 +104,7 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
   const [tipo, setTipo] = useState('Suministro de Bienes')
   const [centro, setCentro] = useState(CENTROS_COSTO[0])
   const [supervisor, setSupervisor] = useState('')
-  const [revisionIA, setRevisionIA] = useState(false)
+  const [adjuntosSubidos, setAdjuntosSubidos] = useState(0)
 
   const [contratos, setContratos] = useState<ReturnType<typeof mapContratoRow>[]>([])
   const [supervisores, setSupervisores] = useState<SupervisorOption[]>([])
@@ -147,7 +149,7 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
   }, [])
 
   const openUpload = () => {
-    setShowModal(true); setUploadState('idle'); setProgress(0); setRevisionIA(false)
+    setShowModal(true); setUploadState('idle'); setProgress(0); setAdjuntosSubidos(0)
     setExtraccion(null); setErrorExtraccion(''); setArchivosSeleccionados([])
     setIdContrato(''); setObjeto(''); setProveedor(''); setValor(''); setVigencia('')
     setNit(''); setRepresentanteLegal(''); setLugarEjecucion(''); setRegistroPresupuestal('')
@@ -213,10 +215,19 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
         numeroRegistroPresupuestal: registroPresupuestal.trim() || null,
         centroCosto: centro,
       })
+      // Se cuentan los adjuntos que realmente quedaron guardados. Antes se
+      // tragaban todos los fallos y luego se informaba "N documentos adjuntos"
+      // usando el número de archivos SELECCIONADOS: si todas las cargas
+      // fallaban, se le decía al usuario que estaban adjuntos igual. El
+      // contrato ya está creado, así que un fallo aquí no es motivo para
+      // abortar — pero sí para decirlo.
       if (archivosSeleccionados.length > 0) {
-        await Promise.all(archivosSeleccionados.map(archivo =>
-          subirDocumento(creado.id, archivo).catch(() => { /* la carga real es secundaria; el contrato ya quedó creado */ })
+        const resultados = await Promise.all(archivosSeleccionados.map(archivo =>
+          subirDocumento(creado.id, archivo).then(() => true).catch(() => false)
         ))
+        setAdjuntosSubidos(resultados.filter(Boolean).length)
+      } else {
+        setAdjuntosSubidos(0)
       }
       setUploadState('done')
       const sup = supervisores.find(s => String(s.id) === supervisor)
@@ -234,24 +245,39 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
     }
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Top bar */}
-      <TopBar badge="Panel Gestión" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout}
-        avatarColor="#7c3aed" avatarTextColor="white"
-        actions={<button className="btn-ghost" onClick={onStartTour} style={{ padding: '6px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}><IconPlay size={10} /> Tutorial</button>} />
+  const navGroups: NavGroup[] = [{
+    label: 'Gestión y contratación',
+    items: [
+      { id: 'contratos', label: 'Contratos', icon: <IconContract size={17} />, count: contratos.length },
+      { id: 'cargar', label: 'Cargar nueva ficha', icon: <IconUpload size={17} />, title: 'Cargar una ficha de contrato en PDF' },
+    ],
+  }]
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-          <div>
-            <div className="eyebrow">Panel de Gestión y Contratación</div>
-            <h2 style={{ fontSize: 20 }}>Contratos</h2>
-          </div>
-          <button data-tour="cargar" className="btn-green" onClick={openUpload} style={{ padding: '9px 18px', fontSize: 13 }}>
+  return (
+    <AppShell
+      roleBadge="Panel Gestión"
+      groups={navGroups}
+      activeId="contratos"
+      onNavigate={id => { if (id === 'cargar') openUpload() }}
+      usuario={usuario}
+      avatarColor="#7c3aed"
+      avatarTextColor="#ffffff"
+      onLogout={onLogout}
+      onOpenSettings={onOpenSettings}
+      title="Contratos"
+      subtitle="Carga de fichas, registro y asignación al supervisor"
+      actions={
+        <>
+          <button className="btn-ghost" onClick={onStartTour} style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <IconPlay size={10} /> Tutorial
+          </button>
+          <button data-tour="cargar" className="btn-green" onClick={openUpload} style={{ padding: '8px 15px', fontSize: 12.5 }}>
             + Cargar nueva ficha
           </button>
-        </div>
+        </>
+      }
+    >
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minWidth: 0 }}>
 
         {/* Ficha procesada card — solo se muestra tras cargar y procesar una ficha real */}
         {lastProcessedContract && (
@@ -259,7 +285,10 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--chip-green-bg)', border: '1.5px solid var(--chip-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✓</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', marginBottom: 2 }}>FICHA PROCESADA</div>
-              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>El Copiloto IA procesó y asignó <strong>{lastProcessedContract.id}</strong> automáticamente a {lastProcessedContract.supervisor}.</div>
+              {/* No se dice "el Copiloto asignó automáticamente": la asignación la
+                  hace una persona en el formulario. La IA solo propuso datos a
+                  partir del documento cargado, y siempre pasan por confirmación. */}
+              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Contrato <strong>{lastProcessedContract.id}</strong> creado · Supervisor: {lastProcessedContract.supervisor}.</div>
             </div>
             <Chip text="Asignado" type="done" />
           </div>
@@ -279,7 +308,7 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
               <IconClipboardList size={26} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no tiene contratos registrados</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargue una ficha de contrato para que el Copiloto la procese automáticamente.</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargue una ficha de contrato en PDF y el Copiloto propondrá los datos para que usted los revise.</div>
             </div>
           )}
           {/* Data rows */}
@@ -391,8 +420,8 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
                       Estos datos vienen del documento cargado, no de un catálogo — revise y corrija lo que
                       haga falta en el siguiente paso.
                     </p>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', margin: '14px 0 6px' }}>SECUENCIA RECOMENDADA</div>
-                    {CONTRACT_TYPES[tipo].etapas.map((e, i) => (
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', margin: '14px 0 6px' }}>ETAPAS DEL PROCESO (GCCON-P-010)</div>
+                    {ETAPAS_GCCON_P010.map((e, i) => (
                       <div key={e} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '3px 0' }}>
                         <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{i + 1}</span>
                         {e}
@@ -438,10 +467,10 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo de contrato</div>
                     <select value={tipo} onChange={e => setTipo(e.target.value)}>
-                      {Object.keys(CONTRACT_TYPES).map(t => <option key={t}>{t}</option>)}
+                      {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
                     </select>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
-                      Secuencia: {CONTRACT_TYPES[tipo].etapas.join(' → ')}
+                      Todos los contratos siguen las mismas 6 etapas del GCCON-P-010.
                     </div>
                   </div>
                   <div>
@@ -459,14 +488,6 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
                   </div>
                 </div>
 
-                {revisionIA && (
-                  <div style={{ marginTop: 14, padding: '10px 14px', border: '1px solid var(--accent-line)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-                    ◆ Documentos clave para <strong>{tipo}</strong>: {CONTRACT_TYPES[tipo].documentos.join(', ')}.
-                    {' '}La detección automática de inconsistencias entre la propuesta y la ficha técnica está
-                    disponible en una fase posterior del Copiloto IA.
-                  </div>
-                )}
-
                 {errorCrear && (
                   <div style={{ marginTop: 12, padding: '8px 12px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-primary)' }}>
                     {errorCrear}
@@ -475,7 +496,9 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
 
                 <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
                   <button className="btn-ghost" onClick={() => setUploadState('idle')} style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}>✗ Rechazar</button>
-                  <button className="btn-ghost" onClick={() => setRevisionIA(true)} style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 140 }}>? Revisión IA</button>
+                  {/* El botón "Revisión IA" se retiró: no llamaba a ninguna IA — solo
+                      desplegaba una lista fija de documentos por tipo de contrato. La
+                      detección de inconsistencias sigue sin implementarse. */}
                   <button className="btn-green" onClick={handleAsignar} disabled={busyCrear} style={{ flex: 2, padding: '10px 0', fontSize: 13, minWidth: 170, opacity: busyCrear ? 0.6 : 1, cursor: busyCrear ? 'default' : 'pointer' }}>
                     {busyCrear ? 'Guardando…' : '✓ Confirmar y cargar'}
                   </button>
@@ -486,19 +509,25 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
             {uploadState === 'done' && (
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
                 <IconCheckCircle size={44} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
-                <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>Contrato asignado.</p>
+                <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>Contrato creado.</p>
+                {/* No se dice "ha sido notificado": SICOT no envía ningún aviso al
+                    crear o asignar un contrato — solo escribe un registro de
+                    auditoría. Prometer una notificación inexistente haría que el
+                    supervisor no se enterara y nadie lo supiera. */}
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
-                  {tipo} · {centro.split(' — ')[0]} — {lastProcessedContract?.supervisor ?? '—'} ha sido notificado.
+                  {tipo} · {centro.split(' — ')[0]} · Supervisor: {lastProcessedContract?.supervisor ?? '—'}
                 </p>
                 {archivosSeleccionados.length > 0 && (
-                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 6 }}>
-                    {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'} adjunto{archivosSeleccionados.length === 1 ? '' : 's'} al contrato.
+                  <p style={{ color: adjuntosSubidos < archivosSeleccionados.length ? 'var(--chip-red)' : 'var(--text-muted)', fontSize: 12, marginTop: 6 }}>
+                    {adjuntosSubidos === archivosSeleccionados.length
+                      ? `${adjuntosSubidos} documento${adjuntosSubidos === 1 ? '' : 's'} adjunto${adjuntosSubidos === 1 ? '' : 's'} al contrato.`
+                      : `Se adjuntaron ${adjuntosSubidos} de ${archivosSeleccionados.length} documentos. Los demás no se pudieron cargar; vuelva a intentarlo desde el contrato.`}
                   </p>
                 )}
               </div>
             )}
         </Modal>
       )}
-    </div>
+    </AppShell>
   )
 }

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Chip, Field, Modal, TopBar, type ChipType } from './ui'
-import { IconAlertTriangle, IconCheckCircle, IconClipboardList, IconDownload, IconFileText, IconLock, IconSignature, IconTrash, IconUpload, IconUsers } from './icons'
+import AppShell, { type NavGroup } from './AppShell'
+import { Chip, Field, Modal, type ChipType } from './ui'
+import { IconAlertTriangle, IconCheckCircle, IconClipboardList, IconDownload, IconFileText, IconGrid, IconLock, IconSignature, IconTrash, IconUpload, IconUsers } from './icons'
 import type { AuthResponse, EstadoFormato, FirmaResponse, FormatoDocumentalResponse, Rol, UsuarioResponse } from '@/services/api/types'
-import { getUsuarios, crearUsuario, cambiarEstadoUsuario, enviarCredenciales } from '@/services/usuarioService'
+import { getUsuarios, crearUsuario, actualizarUsuario, cambiarEstadoUsuario, enviarCredenciales } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
 import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
 import { getFirmas, crearFirma, cambiarEstadoFirma } from '@/services/firmaService'
@@ -21,6 +22,9 @@ interface UserRow {
   rol: string
   activo: boolean
   centros: string
+  /** Rol y teléfono tal como los devuelve la API — los exige PUT /api/usuarios/{id}. */
+  rolApi: Rol
+  telefonoApi: string | null
 }
 
 interface FirmaRow { id: string; usuarioId: string; usuario: string; correo: string; firmaId: string; fecha: string; activa: boolean }
@@ -51,6 +55,8 @@ const mapUser = (u: UsuarioResponse): UserRow => ({
   rol: ROL_LABEL[u.rol],
   activo: u.activo,
   centros: '—',
+  rolApi: u.rol,
+  telefonoApi: u.telefono,
 })
 
 const mapFirma = (f: FirmaResponse): FirmaRow => ({
@@ -68,9 +74,32 @@ const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
   OBSOLETO: { label: 'Obsoleto', type: 'inactive' },
 }
 
+// Contraseña inicial de una cuenta real. Se usa `crypto.getRandomValues`, no
+// `Math.random()`: `Math.random()` no es criptográficamente seguro — su estado
+// interno se puede reconstruir observando unas pocas salidas, así que quien vea
+// una contraseña generada podría predecir las siguientes.
+//
+// El descarte de `byte >= limite` evita el sesgo de módulo: 256 no es múltiplo
+// de 61 (el tamaño del alfabeto), así que un `% chars.length` directo haría más
+// probables los primeros caracteres del alfabeto.
+//
+// El alfabeto omite a propósito los caracteres ambiguos (I, l, 1, O, 0) porque
+// esta contraseña se dicta o se transcribe a mano al entregarla.
 const randomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#$%&'
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const limite = 256 - (256 % chars.length)
+  const salida: string[] = []
+  const buffer = new Uint8Array(32)
+
+  while (salida.length < 12) {
+    crypto.getRandomValues(buffer)
+    for (const byte of buffer) {
+      if (salida.length === 12) break
+      if (byte < limite) salida.push(chars[byte % chars.length])
+    }
+  }
+
+  return salida.join('')
 }
 
 type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
@@ -86,91 +115,146 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
   const [newUser, setNewUser] = useState(false)
   const [firmaModalOpen, setFirmaModalOpen] = useState(false)
   const [firmaUsuarioPreseleccionado, setFirmaUsuarioPreseleccionado] = useState<UserRow | null>(null)
+  const [usuarioAResetear, setUsuarioAResetear] = useState<UserRow | null>(null)
 
   const [contratosActivos, setContratosActivos] = useState(0)
   const [totalContratos, setTotalContratos] = useState(0)
 
+  // Las consultas que fallan NO pueden pintarse como un cero medido: un
+  // dashboard que muestra "0 contratos activos" porque la API no respondió es
+  // indistinguible de uno que muestra un cero real, y lleva a decisiones
+  // equivocadas. Cuando falla se muestra un guion y un aviso.
+  const [errorDatos, setErrorDatos] = useState(false)
+  // Errores de las acciones sobre filas (activar usuario, revocar firma,
+  // eliminar formato). Antes se tragaban en silencio: se hacía clic y no pasaba
+  // absolutamente nada, sin explicación.
+  const [errorAccion, setErrorAccion] = useState('')
+
   const cargarFormatos = () => {
-    getFormatos().then(setFormatos).catch(() => {})
+    getFormatos().then(setFormatos).catch(() => setErrorDatos(true))
   }
 
   const cargarFirmas = () => {
-    getFirmas().then(lista => setFirmas(lista.map(mapFirma))).catch(() => {})
+    getFirmas().then(lista => setFirmas(lista.map(mapFirma))).catch(() => setErrorDatos(true))
   }
 
   // Datos reales: usuarios, contratos, catálogo de formatos y firmas asignadas
   useEffect(() => {
     let cancelado = false
+    const fallo = () => { if (!cancelado) setErrorDatos(true) }
     getUsuarios()
       .then(lista => { if (!cancelado) setUsers(lista.map(mapUser)) })
-      .catch(() => {})
+      .catch(fallo)
     getContratos()
       .then(lista => {
         if (cancelado) return
         setTotalContratos(lista.length)
         setContratosActivos(lista.filter(c => c.estado === 'ACTIVO').length)
       })
-      .catch(() => {})
+      .catch(fallo)
     getFormatos()
       .then(lista => { if (!cancelado) setFormatos(lista) })
-      .catch(() => {})
+      .catch(fallo)
     getFirmas()
       .then(lista => { if (!cancelado) setFirmas(lista.map(mapFirma)) })
-      .catch(() => {})
+      .catch(fallo)
     return () => { cancelado = true }
   }, [])
 
   const toggleActivo = async (u: UserRow) => {
+    setErrorAccion('')
     try {
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers(us => us.map(x => x.id === u.id ? { ...x, activo: actualizado.activo } : x))
-    } catch { /* el chip conserva el estado real si el backend rechaza */ }
+    } catch {
+      setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
+    }
   }
 
   const toggleFirma = async (f: FirmaRow) => {
+    setErrorAccion('')
     try {
       const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
       setFirmas(fs => fs.map(x => x.id === f.id ? { ...x, activa: actualizada.activa } : x))
-    } catch { /* la fila conserva el estado real si el backend rechaza */ }
+    } catch {
+      setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
+    }
   }
 
   const eliminarFormatoRow = async (f: FormatoDocumentalResponse) => {
     if (!window.confirm(`¿Eliminar "${f.codigo} — ${f.nombre}" del catálogo? Esta acción no se puede deshacer.`)) return
+    setErrorAccion('')
     try {
       await eliminarFormato(f.id)
       setFormatos(fs => fs.filter(x => x.id !== f.id))
-    } catch { /* si el backend rechaza, la fila se conserva */ }
+    } catch {
+      setErrorAccion(`No se pudo eliminar el formato ${f.codigo}.`)
+    }
   }
 
   const formatosObsoletos = formatos.filter(f => f.estado === 'OBSOLETO').length
 
+  const navGroups: NavGroup[] = [
+    {
+      label: 'Administración',
+      items: [
+        { id: 'dashboard', label: 'Panel de Control', icon: <IconGrid size={17} /> },
+        { id: 'documentos', label: 'Formatos documentales', icon: <IconFileText size={17} />, count: formatos.length },
+      ],
+    },
+    {
+      label: 'Cuentas',
+      items: [
+        { id: 'usuarios', label: 'Usuarios', icon: <IconUsers size={17} />, count: users.length },
+        { id: 'firmas', label: 'Firmas electrónicas', icon: <IconSignature size={17} />, count: firmas.length },
+      ],
+    },
+  ]
+
+  const TITULO: Record<AdminTab, { titulo: string; sub: string }> = {
+    dashboard: { titulo: 'Panel de Control', sub: 'Cifras generales del sistema' },
+    documentos: { titulo: 'Formatos documentales', sub: 'Catálogo oficial de formatos institucionales' },
+    usuarios: { titulo: 'Usuarios', sub: 'Cuentas y roles del sistema' },
+    firmas: { titulo: 'Firmas electrónicas', sub: 'Asignación y vigencia de firmas' },
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-base)', overflow: 'hidden' }}>
-      {/* Barra superior */}
-      <TopBar badge="Interfaz de Administrador" usuario={usuario} onOpenSettings={onOpenSettings} onLogout={onLogout}
-        avatarColor="var(--alert-leve)" avatarTextColor="#1a1400" />
+    <AppShell
+      roleBadge="Interfaz de Administrador"
+      groups={navGroups}
+      activeId={tab}
+      onNavigate={id => setTab(id as AdminTab)}
+      usuario={usuario}
+      avatarColor="var(--alert-leve)"
+      avatarTextColor="#1a1400"
+      onLogout={onLogout}
+      onOpenSettings={onOpenSettings}
+      title={TITULO[tab].titulo}
+      subtitle={TITULO[tab].sub}
+    >
+      <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
 
-      {/* Pestañas */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', padding: '0 20px', flexShrink: 0, overflowX: 'auto' }}>
-        {([['dashboard', 'Panel de Control'], ['documentos', 'Gestión de Documentos'], ['usuarios', 'Gestión de Usuarios'], ['firmas', 'Firmas Electrónicas']] as const).map(([id, label]) => (
-          <button key={id} className={`tab-btn ${tab === id ? 'active' : ''}`} onClick={() => setTab(id)}>{label}</button>
-        ))}
-      </div>
-
-      <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+        {errorAccion && (
+          <div style={{ marginBottom: 14, padding: '10px 14px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)', display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+            <span>{errorAccion}</span>
+            <button className="btn-ghost" onClick={() => setErrorAccion('')} style={{ padding: '4px 10px', fontSize: 12 }}>Cerrar</button>
+          </div>
+        )}
 
         {/* ── Panel de control ── */}
         {tab === 'dashboard' && (
           <>
-            <div style={{ marginBottom: 18 }}>
-              <div className="eyebrow">Vista general</div>
-              <h3 style={{ fontSize: 18 }}>Panel de Control</h3>
-            </div>
+            {errorDatos && (
+              <div style={{ marginBottom: 14, padding: '10px 14px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)' }}>
+                No se pudieron consultar algunos datos del servidor. Las cifras de abajo pueden estar
+                incompletas — recargue la página para reintentar.
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
-              <Widget icon={<IconClipboardList size={17} />} label="Contratos activos" value={String(contratosActivos)} hint={`${totalContratos} registrados en total`} />
-              <Widget icon={<IconUsers size={17} />} label="Usuarios activos" value={String(users.filter(u => u.activo).length)} hint={`${users.length} registrados en total`} />
-              <Widget icon={<IconFileText size={17} />} label="Formatos vigentes" value={`${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint="Formatos oficiales cargados" />
-              <Widget icon={<IconAlertTriangle size={17} />} label="Formatos obsoletos" value={String(formatosObsoletos)} hint="Requieren reemplazo por una versión vigente" tone={formatosObsoletos ? 'warn' : 'ok'} />
+              <Widget icon={<IconClipboardList size={17} />} label="Contratos activos" value={errorDatos ? '—' : String(contratosActivos)} hint={errorDatos ? 'Dato no disponible' : `${totalContratos} registrados en total`} />
+              <Widget icon={<IconUsers size={17} />} label="Usuarios activos" value={errorDatos ? '—' : String(users.filter(u => u.activo).length)} hint={errorDatos ? 'Dato no disponible' : `${users.length} registrados en total`} />
+              <Widget icon={<IconFileText size={17} />} label="Formatos vigentes" value={errorDatos ? '—' : `${formatos.filter(f => f.estado === 'VIGENTE').length}/${formatos.length}`} hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados'} />
+              <Widget icon={<IconAlertTriangle size={17} />} label="Formatos obsoletos" value={errorDatos ? '—' : String(formatosObsoletos)} hint={errorDatos ? 'Dato no disponible' : 'Requieren reemplazo por una versión vigente'} tone={errorDatos ? undefined : (formatosObsoletos ? 'warn' : 'ok')} />
             </div>
 
             <div className="card" style={{ padding: '16px 18px' }}>
@@ -270,7 +354,9 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
                     <MiniBtn onClick={() => { setFirmaUsuarioPreseleccionado(u); setFirmaModalOpen(true) }}>
                       <IconSignature size={11} /> Asignar firma
                     </MiniBtn>
-                    <MiniBtn onClick={() => {}} disabled title="El restablecimiento de contraseña se habilita en una fase posterior">Resetear clave</MiniBtn>
+                    <MiniBtn onClick={() => setUsuarioAResetear(u)} title="Asignar una contraseña temporal nueva y enviarla al correo del usuario">
+                      Resetear clave
+                    </MiniBtn>
                     <MiniBtn onClick={() => toggleActivo(u)}>
                       {u.activo ? 'Desactivar' : 'Reactivar'}
                     </MiniBtn>
@@ -330,6 +416,14 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
           onCreate={u => { setUsers(us => [...us, u]); setNewUser(false) }} />
       )}
 
+      {usuarioAResetear && (
+        <ResetPasswordModal
+          usuario={usuarioAResetear}
+          onClose={() => setUsuarioAResetear(null)}
+          onActualizado={u => setUsers(us => us.map(x => x.id === u.id ? u : x))}
+        />
+      )}
+
       {firmaModalOpen && (
         <NewFirmaModal
           usuarios={users}
@@ -338,7 +432,7 @@ export default function AdminPanel({ usuario, onLogout, onOpenSettings }: { usua
           onCreate={f => { setFirmas(fs => [...fs, f]); setFirmaModalOpen(false) }}
         />
       )}
-    </div>
+    </AppShell>
   )
 }
 
@@ -491,6 +585,126 @@ function FormatoModal({ formatoExistente, onClose, onUploaded }: {
   )
 }
 
+// ─── Modal: restablecer contraseña ───────────────────────────────────────────
+
+/**
+ * Asigna una contraseña temporal nueva a un usuario y se la envía por correo.
+ *
+ * Es una operación real: `PUT /api/usuarios/{id}` con `password` reemplaza la
+ * contraseña codificada en el servidor, y después se reutiliza el mismo envío
+ * de credenciales que usa la creación de usuarios. La contraseña se muestra en
+ * pantalla porque el correo puede fallar (SMTP sin configurar) y el
+ * administrador necesita poder entregarla a mano — el resultado del envío se
+ * informa tal como llegó, sin fingir éxito.
+ */
+function ResetPasswordModal({ usuario, onClose, onActualizado }: {
+  usuario: UserRow
+  onClose: () => void
+  onActualizado: (u: UserRow) => void
+}) {
+  const [pw] = useState(randomPassword())
+  // El backend exige teléfono al actualizar; si la cuenta todavía no lo tiene,
+  // hay que capturarlo aquí en vez de inventar uno.
+  const [tel, setTel] = useState(usuario.telefonoApi ?? '')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [listo, setListo] = useState(false)
+  const [envioResultado, setEnvioResultado] = useState<{ enviado: boolean; error: string | null } | null>(null)
+  const [enviando, setEnviando] = useState(false)
+
+  const restablecer = async () => {
+    if (busy) return
+    if (!tel.trim()) { setError('El número de teléfono es obligatorio para guardar los datos del usuario.'); return }
+    setError('')
+    setBusy(true)
+    try {
+      const actualizado = await actualizarUsuario(Number(usuario.id), {
+        nombre: usuario.nombre,
+        email: usuario.correo,
+        password: pw,
+        telefono: tel.trim(),
+        rol: usuario.rolApi,
+      })
+      onActualizado(mapUser(actualizado))
+      setListo(true)
+      setBusy(false)
+
+      setEnviando(true)
+      try {
+        setEnvioResultado(await enviarCredenciales(actualizado.id, { password: pw }))
+      } catch {
+        setEnvioResultado({ enviado: false, error: 'No se pudo contactar al servidor.' })
+      }
+      setEnviando(false)
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo restablecer la contraseña.')
+      setBusy(false)
+    }
+  }
+
+  if (listo) {
+    return (
+      <Modal title="Contraseña restablecida" onClose={onClose} width={460}>
+        <div style={{ textAlign: 'center', padding: '10px 0 4px' }}>
+          <IconCheckCircle size={40} style={{ color: 'var(--accent)', margin: '0 auto 8px' }} />
+          <p style={{ fontSize: 14, color: 'var(--accent)', fontWeight: 600, margin: '8px 0 4px' }}>
+            La contraseña de {usuario.nombre} fue reemplazada
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{usuario.correo}</p>
+
+          <div style={{
+            marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
+            background: enviando ? 'var(--bg-surface)' : envioResultado?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
+            border: `1px solid ${enviando ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
+          }}>
+            {enviando && 'Enviando correo…'}
+            {!enviando && envioResultado?.enviado && `Correo enviado a ${usuario.correo}.`}
+            {!enviando && envioResultado && !envioResultado.enviado && (
+              <>No fue posible enviar el correo: {envioResultado.error}. Copie la contraseña y entréguela de forma manual.</>
+            )}
+          </div>
+
+          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left' }}>
+            Contraseña temporal: <span style={{ fontFamily: 'var(--font-mono)' }}>{pw}</span>
+          </div>
+
+          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }} onClick={onClose}>
+            Aceptar
+          </button>
+        </div>
+      </Modal>
+    )
+  }
+
+  return (
+    <Modal title="Restablecer contraseña" onClose={onClose} width={460}>
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 14px' }}>
+        Se le asignará una contraseña temporal nueva a <strong style={{ color: 'var(--text-primary)' }}>{usuario.nombre}</strong>{' '}
+        ({usuario.correo}) y se enviará a su correo institucional. La contraseña anterior deja de servir de inmediato.
+      </p>
+
+      <Field label="Teléfono de contacto">
+        <input type="text" value={tel} onChange={e => setTel(e.target.value)}
+          placeholder="Número de contacto del usuario" style={{ width: '100%', padding: '9px 10px' }} />
+      </Field>
+
+      <div style={{ padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+        Contraseña temporal que se asignará: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{pw}</span>
+      </div>
+
+      {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '10px 0 0' }}>{error}</p>}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={onClose} disabled={busy}>Cancelar</button>
+        <button className="btn-green" style={{ flex: 2, padding: '10px 0', fontSize: 13, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}
+          onClick={restablecer} disabled={busy}>
+          {busy ? 'Restableciendo…' : 'Restablecer y enviar'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 // ─── Modal: crear usuario ─────────────────────────────────────────────────────
 
 function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u: UserRow) => void }) {
@@ -536,16 +750,7 @@ function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u
 
   const cerrar = () => {
     if (!usuarioCreado) return
-    onCreate({
-      id: String(usuarioCreado.id),
-      nombre: usuarioCreado.nombre,
-      correo: usuarioCreado.email,
-      telefono: usuarioCreado.telefono ?? '—',
-      cargo: ROL_CARGO[usuarioCreado.rol],
-      rol: ROL_LABEL[usuarioCreado.rol],
-      activo: usuarioCreado.activo,
-      centros: '—',
-    })
+    onCreate(mapUser(usuarioCreado))
   }
 
   if (done && usuarioCreado) {

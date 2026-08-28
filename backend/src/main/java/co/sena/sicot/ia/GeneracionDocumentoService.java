@@ -61,10 +61,15 @@ public class GeneracionDocumentoService {
         }
         Contrato contrato = contratoService.buscar(contratoId);
 
+        // La consulta exige que la subetapa sea de ESTE contrato: sin esa
+        // condición, un supervisor podía generar un documento en su contrato
+        // apuntando a la subetapa de otro, contaminando el avance de un
+        // contrato ajeno.
         Subetapa subetapa = null;
         if (subetapaId != null) {
-            subetapa = subetapaRepository.findById(subetapaId)
-                    .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
+            subetapa = subetapaRepository.findByIdAndEtapaContratoId(subetapaId, contrato.getId())
+                    .orElseThrow(() -> new BusinessException(
+                            "La subetapa indicada no existe o no pertenece a este contrato."));
         }
 
         String datosContrato = """

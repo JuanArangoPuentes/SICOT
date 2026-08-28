@@ -41,24 +41,47 @@ function formatRegistroFecha(iso: string): string {
   }).replace(',', '')
 }
 
+// Categorías de la bitácora. Cubren exactamente las acciones que el backend
+// registra hoy (CONTRATO_CREADO, CONTRATO_ACTUALIZADO, SUPERVISOR_ASIGNADO,
+// ESTADO_CAMBIADO, ETAPA_ACTUALIZADA, DOCUMENTO_FIRMADO, FIRMA_ASIGNADA,
+// FIRMA_REVOCADA, FIRMA_RESTAURADA). Cualquier acción nueva cae en 'Otro' en
+// vez de ser clasificada a la fuerza en una categoría que no le corresponde.
+const CATEGORIA_POR_ACCION: Record<string, Registro['tipo']> = {
+  CONTRATO_CREADO: 'Contrato',
+  CONTRATO_ACTUALIZADO: 'Contrato',
+  SUPERVISOR_ASIGNADO: 'Contrato',
+  ESTADO_CAMBIADO: 'Contrato',
+  ETAPA_ACTUALIZADA: 'Etapa',
+  DOCUMENTO_FIRMADO: 'Documento',
+  FIRMA_ASIGNADA: 'Firma',
+  FIRMA_REVOCADA: 'Firma',
+  FIRMA_RESTAURADA: 'Firma',
+}
+
+/** `CONTRATO_CREADO` -> `Contrato creado`. */
+function humanizarAccion(accion: string): string {
+  const texto = accion.replace(/_/g, ' ').toLowerCase()
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+/**
+ * Convierte la bitácora de auditoría del backend en filas para la UI.
+ *
+ * Es un registro de ACCIONES EJECUTADAS, no de mensajes enviados. Antes esta
+ * función derivaba dos campos que el sistema no tiene: un `estado`
+ * ('Entregado' / 'Leído' / 'Firmado') que fingía acuses de recibo inexistentes
+ * —y que llegaba a etiquetar `FIRMA_REVOCADA` como "Firmado"—, y un
+ * `destinatario` que en realidad contenía a quien *ejecutó* la acción, no a
+ * quien la recibió. Ambos se eliminaron: aquí solo se muestra lo que el backend
+ * realmente sabe.
+ */
 export function mapRegistros(registros: RegistroResponse[]): Registro[] {
-  return registros.map(r => {
-    const accion = r.accion.toUpperCase()
-    const tipo: Registro['tipo'] =
-      accion.includes('FIRMA') || accion.includes('DOCUMENTO') ? 'Firma'
-      : accion.includes('CORREO') ? 'Correo Enviado'
-      : 'Notificación'
-    const estado: Registro['estado'] =
-      accion.includes('FIRMA') || accion.includes('DOCUMENTO') ? 'Firmado'
-      : accion.includes('CORREO') ? 'Entregado'
-      : 'Leído'
-    return {
-      id: 'r' + r.id,
-      tipo,
-      destinatario: r.usuarioNombre ?? 'Sistema',
-      fecha: formatRegistroFecha(r.fecha),
-      asunto: r.descripcion ?? r.accion,
-      estado,
-    }
-  })
+  return registros.map(r => ({
+    id: 'r' + r.id,
+    tipo: CATEGORIA_POR_ACCION[r.accion.toUpperCase()] ?? 'Otro',
+    accion: humanizarAccion(r.accion),
+    actor: r.usuarioNombre ?? 'Sistema',
+    fecha: formatRegistroFecha(r.fecha),
+    asunto: r.descripcion ?? humanizarAccion(r.accion),
+  }))
 }

@@ -1,5 +1,6 @@
 package co.sena.sicot.exception;
 
+import co.sena.sicot.ia.IaNoDisponibleException;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +18,11 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 
+import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -80,6 +85,60 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> dataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         return build("Los datos enviados violan una restricción de integridad (posible duplicado).",
                 HttpStatus.CONFLICT, request);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> tipoDeContenidoNoSoportado(HttpMediaTypeNotSupportedException ex,
+                                                                    WebRequest request) {
+        return build("Tipo de contenido no soportado para esta ruta: " + ex.getContentType() + ".",
+                HttpStatus.UNSUPPORTED_MEDIA_TYPE, request);
+    }
+
+    /**
+     * Ruta inexistente. Sin este handler, el catch-all de abajo las convertía en
+     * 500 y escribía un stack trace completo por cada petición a una URL que no
+     * existe — cualquier bot escaneando /wp-login.php llenaba el log de errores.
+     * Se registra a nivel debug: una ruta equivocada no es un fallo del servidor.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ResponseEntity<ErrorResponse> rutaNoEncontrada(Exception ex, WebRequest request) {
+        log.debug("Ruta no encontrada: {}", request.getDescription(false).replace("uri=", ""));
+        return build("La ruta solicitada no existe.", HttpStatus.NOT_FOUND, request);
+    }
+
+    /**
+     * El servicio de IA local (Ollama) no está disponible.
+     *
+     * Este handler es la contraparte imprescindible del diseño de OllamaClient:
+     * ese cliente falla con una excepción explícita en vez de inventar una
+     * respuesta cuando Ollama no responde. Sin este handler el mensaje honesto
+     * se perdía en el catch-all y el usuario recibía "Ocurrió un error interno
+     * del servidor" — es decir, el sistema dejaba de explicar qué pasó, que es
+     * justo lo que ese diseño trataba de evitar.
+     *
+     * 503 y no 500 porque es una dependencia externa caída, no un defecto del
+     * backend: la operación puede volver a intentarse cuando Ollama esté arriba.
+     * El mensaje de la excepción sí se propaga al cliente (a diferencia del
+     * catch-all) porque lo redacta el propio backend y es accionable.
+     */
+    @ExceptionHandler(IaNoDisponibleException.class)
+    public ResponseEntity<ErrorResponse> iaNoDisponible(IaNoDisponibleException ex, WebRequest request) {
+        log.warn("Servicio de IA no disponible en {}: {}",
+                request.getDescription(false).replace("uri=", ""), ex.getMessage());
+        return build(ex.getMessage(), HttpStatus.SERVICE_UNAVAILABLE, request);
+    }
+
+    /**
+     * Fallo de entrada/salida al leer o generar un archivo (PDFBox al extraer
+     * texto, al escribir un PDF, o al leer los bytes de una subida). No es un
+     * error de programación sino una operación de E/S que falló, así que se
+     * distingue del 500 genérico y se le da al usuario algo accionable.
+     */
+    @ExceptionHandler(UncheckedIOException.class)
+    public ResponseEntity<ErrorResponse> errorDeEntradaSalida(UncheckedIOException ex, WebRequest request) {
+        log.error("Fallo de E/S en {}", request.getDescription(false), ex);
+        return build("No se pudo procesar el archivo. Verifique que no esté dañado e intente de nuevo.",
+                HttpStatus.SERVICE_UNAVAILABLE, request);
     }
 
     @ExceptionHandler(Exception.class)

@@ -22,18 +22,22 @@ import { mapRegistros } from '@/services/mappers'
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
+// Recorridos guiados. Se anclan a las entradas de la barra lateral porque
+// existen en el DOM sea cual sea la vista abierta: los pasos anteriores
+// apuntaban a pestañas y tarjetas que solo existían en una vista concreta (o
+// que ya no existen), y el tutorial resaltaba el vacío.
 const TOUR_SUPERVISOR: TourStep[] = [
-  { selector: '[data-tour="progreso"]', text: 'Esta barra resume las 5 etapas del contrato. Pasa el mouse sobre cada segmento.' },
-  { selector: '[data-tour="contrato"]', text: 'Aquí está tu contrato asignado con valor y vigencia.' },
-  { selector: '[data-tour="alertas"]', text: 'Las alertas leves parpadean en amarillo; las críticas, en rojo.' },
-  { selector: '[data-tour="tab-registros"]', text: 'En Registros consultas comunicaciones y firmas del contrato.' },
-  { selector: '[data-tour="copiloto"]', text: 'El copiloto está siempre listo para guiarte paso a paso.' },
+  { selector: '[data-tour="nav-bandeja"]', text: 'Su bandeja de entrada: aquí ve lo que le falta y en qué paso va su contrato.' },
+  { selector: '[data-tour="nav-contrato"]', text: 'En Contrato están el recorrido de las etapas, la ficha completa, el Copiloto y las gráficas.' },
+  { selector: '[data-tour="nav-alertas"]', text: 'Las alertas del contrato, con el semáforo de cronograma calculado con sus fechas reales.' },
+  { selector: '[data-tour="nav-documentos"]', text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.' },
+  { selector: '[data-tour="nav-registros"]', text: 'La bitácora de todo lo que se ha ejecutado sobre el contrato; puede descargarla en CSV.' },
 ]
 
 const TOUR_GESTION: TourStep[] = [
-  { selector: '[data-tour="cargar"]', text: 'Empieza aquí para cargar un nuevo contrato en PDF o DOCX.' },
-  { selector: '[data-tour="ficha"]', text: 'El sistema detecta el tipo de contrato automáticamente.' },
-  { selector: '[data-tour="tabla"]', text: 'Confirma los datos antes de asignar el contrato al supervisor.' },
+  { selector: '[data-tour="nav-contratos"]', text: 'El registro de contratos del Centro: todos los que ya están cargados en SICOT.' },
+  { selector: '[data-tour="cargar"]', text: 'Empiece aquí para cargar la ficha de un contrato en PDF. El Copiloto propone los datos y usted los confirma.' },
+  { selector: '[data-tour="tabla"]', text: 'Confirme los datos antes de asignar el contrato a un supervisor: aquí ve a quién quedó asignado cada uno.' },
 ]
 
 const screenFor = (u: AuthResponse): Screen => {
@@ -61,6 +65,7 @@ function AppInner() {
   // panel muestre "sin contrato asignado" por un instante antes de que la
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
+  const [errorContrato, setErrorContrato] = useState(false)
 
   const refreshRegistros = async () => {
     if (!contrato) return
@@ -77,14 +82,23 @@ function AppInner() {
     }
     let cancelado = false
     setCargandoContrato(true)
+    setErrorContrato(false)
     getContratos(session.usuarioId)
       .then(lista => {
         if (cancelado) return
         const activo = lista.find(c => c.estado === 'ACTIVO') ?? lista[0] ?? null
         setContrato(activo)
       })
-      .catch(() => {
-        if (!cancelado) setContrato(null)
+      .catch(err => {
+        // Un fallo al consultar NO es lo mismo que "no tiene contrato": el panel
+        // del supervisor pinta un estado definitivo ("Actualmente no tiene un
+        // contrato asignado") que sería mentira si lo que ocurrió fue que el
+        // backend no respondió. Se distingue con `errorContrato`.
+        console.error('No se pudo cargar el contrato asignado:', err)
+        if (!cancelado) {
+          setContrato(null)
+          setErrorContrato(true)
+        }
       })
       .finally(() => {
         if (!cancelado) setCargandoContrato(false)
@@ -145,6 +159,7 @@ function AppInner() {
           usuario={session}
           contrato={contrato}
           cargandoContrato={cargandoContrato}
+          errorContrato={errorContrato}
           onLogout={logout}
           onOpenSettings={() => setSettingsOpen(true)}
           onStartTour={() => setTourActive(true)}

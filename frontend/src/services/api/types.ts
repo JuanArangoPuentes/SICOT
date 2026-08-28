@@ -37,6 +37,15 @@ export interface CrearUsuarioRequest {
   rol: Rol
 }
 
+export interface ActualizarUsuarioRequest {
+  nombre: string
+  email: string
+  /** Opcional: si viene, reemplaza la contraseña actual (8 a 100 caracteres). */
+  password?: string
+  telefono: string
+  rol: Rol
+}
+
 export interface CambiarEstadoUsuarioRequest {
   activo: boolean
 }

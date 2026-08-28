@@ -17,7 +17,8 @@ SICOT
 └── mcp
 ```
 
-El workspace contiene ambos proyectos y deben tratarse como un único sistema.
+El workspace contiene los tres proyectos y deben tratarse como un único sistema.
+Además hay documentación en `docs/`.
 
 ---
 
@@ -54,13 +55,13 @@ Nunca modificar por comodidad algo que ya funciona.
 * Tailwind CSS v4
 * Recharts
 * Fetch API
-* Node.js 24
+* Node.js 22
 * puerto de desarrollo: 8443
 
 ## Backend
 
 * Java 25
-* Spring Boot 3.5.3
+* Spring Boot 3.5.12
 * Spring Web
 * Spring Data JPA
 * Hibernate
@@ -123,11 +124,15 @@ Las pantallas principales incluyen:
 
 ```text
 login
-supervisor-welcome
 supervisor-panel
 gestion-panel
 admin-panel
 ```
+
+Son exactamente los cuatro valores del tipo `Screen` en
+`frontend/src/types/domain.ts`. (Existió una pantalla `supervisor-welcome`; se
+eliminó porque mostraba "no tiene contrato asignado" durante el instante en que
+la consulta real todavía estaba en curso.)
 
 No sustituir esta arquitectura por react-router sin aprobación explícita.
 
@@ -295,6 +300,7 @@ GET /api/usuarios/{id}
 POST /api/usuarios
 PUT /api/usuarios/{id}
 PATCH /api/usuarios/{id}/estado
+POST /api/usuarios/{id}/enviar-credenciales
 ```
 
 Los endpoints administrativos están protegidos por rol.
@@ -345,6 +351,52 @@ El backend recalcula automáticamente el porcentaje/estado de la etapa.
 
 ```http
 GET /api/contratos/{contratoId}/documentos
+POST /api/contratos/{contratoId}/documentos                  (multipart, GESTION/ADMINISTRADOR)
+GET /api/contratos/{contratoId}/documentos/{id}/archivo      (descarga real)
+POST /api/contratos/{contratoId}/documentos/generar          (SUPERVISOR/ADMINISTRADOR, vía IA)
+POST /api/contratos/{contratoId}/documentos/{id}/firmar      (SUPERVISOR/ADMINISTRADOR)
+```
+
+---
+
+## Copiloto IA
+
+```http
+POST /api/contratos/{contratoId}/copiloto/chat
+```
+
+Solo el supervisor asignado al contrato o un ADMINISTRADOR pueden consultarlo.
+
+---
+
+## IA (extracción)
+
+```http
+POST /api/ia/extraer-contrato    (multipart PDF, GESTION/ADMINISTRADOR)
+```
+
+Devuelve los campos propuestos. **Nunca persiste** — requiere confirmación manual.
+
+---
+
+## Firmas electrónicas
+
+```http
+GET /api/firmas
+GET /api/firmas/mia
+POST /api/firmas
+PATCH /api/firmas/{id}/estado
+```
+
+---
+
+## Formatos documentales
+
+```http
+GET /api/formatos
+POST /api/formatos                  (multipart, ADMINISTRADOR)
+GET /api/formatos/{id}/archivo      (descarga real)
+DELETE /api/formatos/{id}           (ADMINISTRADOR)
 ```
 
 ---
@@ -434,28 +486,34 @@ Toda modificación estructural debe hacerse mediante migración Flyway.
 
 ---
 
-# 15. Datos seed
+# 15. Datos iniciales
 
-El seed original representa el flujo GCCON-P-010.
+**No existe seed de datos transaccionales.** Una base nueva arranca vacía: sin
+contratos, sin etapas, sin documentos, sin alertas, sin registros. Las
+migraciones `V1`/`V9` solo crean estructura.
 
-No sustituir el seed por datos arbitrarios.
+Lo único que se crea automáticamente son las **tres cuentas de desarrollo** de
+§9, y solo bajo el perfil `dev`, mediante `DataInitializer` y únicamente si la
+tabla `usuarios` está vacía.
 
-Actualmente existen contratos, etapas, subetapas, documentos, alertas, registros y usuarios de desarrollo.
+Las etapas de un contrato tampoco vienen de un seed: las genera
+`GcconP010Plantilla` cuando el contrato se crea (las mismas 6 etapas y 27
+sub-etapas para todos, sin depender del tipo de contrato).
 
 ---
 
 # 16. Datos de prueba temporales
 
-Durante pruebas se generaron datos adicionales.
-
-No asumir que forman parte del seed.
-
-Antes de eliminarlos:
+Cualquier contrato o documento que aparezca en una base local fue creado usando
+la aplicación, no por una migración. Antes de borrar algo:
 
 1. verificar IDs;
 2. comprobar relaciones;
 3. comprobar foreign keys;
-4. confirmar que no pertenecen al seed.
+4. confirmar con el equipo si la base es compartida.
+
+Nunca se borran datos con SQL directo: la base es responsabilidad de quien la
+administra (ver §33).
 
 ---
 
@@ -469,34 +527,52 @@ Actualmente están conectadas al backend:
 * contratos;
 * detalle de contrato;
 * etapas;
-* subetapas;
+* subetapas (incluida la siembra automática de las 6 etapas/27 subetapas GCCON-P-010 al crear
+  un contrato, con auto-sanación de contratos antiguos sin etapas);
 * cambio de estado;
 * alertas;
 * marcar alertas;
-* documentos;
+* documentos (listar, **subir**, **descargar**);
 * registros;
 * Gestión de contratos;
 * creación de contratos;
 * usuarios;
 * activación/desactivación;
-* autorización por roles.
+* autorización por roles (incluido el control de acceso por contrato: un SUPERVISOR solo
+  alcanza los datos del contrato que tiene asignado);
+* **copiloto conversacional** (chat real sobre Ollama, anclado al contrato y sus etapas reales);
+* **tutorial guiado** de los 6 pasos, con gate de revisión IA asesor (nunca bloqueante) antes
+  de cerrar un paso;
+* **generación automática de documentos** formales vía IA;
+* **firma electrónica** de referencia interna (usa la firma real asignada a la cuenta, nunca un
+  valor generado en el cliente);
+* **firmas electrónicas administrativas** (asignación por parte del ADMINISTRADOR);
+* **lectura/extracción real de ficha PDF** (Apache PDFBox + Ollama; PDFs con texto);
+* **catálogo documental del administrador** (formatos: subida, descarga y borrado reales);
+* **notificación/entrega real de credenciales por correo**;
+* **alerta de cronograma tipo semáforo**, computada en vivo desde las fechas reales del
+  contrato.
 
 ---
 
-# 18. Funcionalidades todavía MOCK
+# 18. Funcionalidades todavía NO implementadas
 
-Estas funcionalidades NO tienen backend funcional completo y NO deben fingirse como reales:
+Estas funcionalidades NO tienen backend funcional y NO deben fingirse como reales:
 
-* copiloto conversacional;
-* tutorial;
-* generación automática de documentos;
-* firma electrónica;
-* lectura/análisis real de ficha PDF;
-* catálogo documental avanzado del administrador;
-* firmas electrónicas administrativas;
-* gráfica avanzada de actividad;
-* notificación por correo;
-* integración SECOP II.
+* integración SECOP II;
+* OCR de documentos escaneados sin texto legible (la extracción actual requiere un PDF con
+  texto — un escaneo puro no se lee);
+* extracción desde DOCX (hoy solo PDF; `ExtraccionContratoService` rechaza otros formatos con
+  un mensaje claro en vez de fingir que los leyó);
+* RAG normativo / detección automática de inconsistencias documentales;
+* gráfica avanzada de actividad del panel de administrador (no existe endpoint de estadísticas
+  agregadas; el panel muestra un estado vacío honesto, no números inventados);
+* carga de archivos por sub-paso individual del flujo del supervisor (**no existe**: en los
+  sub-pasos de verificación la única acción es "Marcar completado" — el Copiloto tiene
+  prohibido explícitamente sugerir lo contrario);
+* firma electrónica con un proveedor PKI externo real (lo actual es una referencia interna de
+  SICOT, no una integración con infraestructura nacional de firma);
+* empaquetado de escritorio (Tauri) para el rol SUPERVISOR.
 
 NO inventar endpoints para ellas.
 
@@ -684,20 +760,36 @@ Ejecutar backend:
 Siempre que se modifique frontend:
 
 ```text
+npm.cmd run typecheck
 npm.cmd run build
-npx tsc --noEmit
 ```
 
 Siempre que se modifique backend:
 
 ```text
-.\mvnw.cmd clean test
-.\mvnw.cmd clean package
+.\mvnw.cmd clean verify
 ```
 
-Si se modifican ambos:
+Si se modifican ambos: ejecutar las dos cosas.
 
-ejecutar todas las pruebas.
+`npm run build` ya incluye el chequeo de tipos (`tsc --noEmit && vite build`),
+y `mvn verify` incluye las pruebas — no hace falta correrlas aparte.
+
+## Pruebas end-to-end (Playwright)
+
+```text
+npm.cmd run test:e2e
+```
+
+**No corren en CI** y no forman parte de la verificación obligatoria: necesitan
+el backend levantado, PostgreSQL y las cuentas sembradas del perfil `dev`.
+Ejecutarlas a mano cuando se toque el flujo de autenticación o la navegación
+entre paneles. Los specs están en `frontend/e2e/specs/`.
+
+## Integración continua
+
+`.github/workflows/ci.yml` corre estas mismas verificaciones en cada PR hacia
+`develop` o `master`. Un PR con la CI en rojo no se mergea.
 
 ---
 
@@ -740,44 +832,94 @@ Luego esperar aprobación.
 
 # 29. IA
 
-La IA no forma parte todavía del núcleo obligatorio.
-
-No integrar Ollama automáticamente.
-
-Cuando llegue esa fase:
+La IA **ya está integrada** y forma parte del núcleo funcional. La arquitectura obligatoria,
+ya implementada, es:
 
 ```text
 React
  ↓
 Spring Boot
  ↓
-servicio de IA
+servicio de IA  (paquete co.sena.sicot.ia)
  ↓
-Ollama
+Ollama (local)
 ```
 
-La IA no debe acceder directamente a PostgreSQL desde React.
+El frontend **nunca** llama a Ollama directamente. Ollama **nunca** toca PostgreSQL. El backend
+es el único responsable del contexto y de los permisos.
 
-El backend será responsable del contexto y permisos.
+Piezas reales del paquete `co.sena.sicot.ia`:
+
+* `OllamaClient` — único punto de salida hacia Ollama. Si Ollama no está disponible lanza
+  `IaNoDisponibleException`: falla honestamente, **nunca fabrica un resultado**.
+* `ExtraccionContratoService` — extrae datos de un contrato desde un PDF real (Apache PDFBox).
+* `GeneracionDocumentoService` + `PlantillaDocumentoIA` — redacta los documentos formales del
+  proceso.
+* `CopilotoChatService` — chat conversacional anclado al contrato y a sus etapas reales.
+* `PdfTextExtractor`, `SimplePdfWriter` — lectura y escritura real de PDF.
+
+Reglas al trabajar sobre la IA:
+
+* SICOT no usa ningún servicio de IA de pago — todo corre en un Ollama local
+  (`OLLAMA_URL`/`OLLAMA_MODEL`). Cambiar de modelo es configuración, no código.
+* La IA es **asesora, nunca autoridad**: su revisión antes de cerrar un paso no bloquea al
+  supervisor; la decisión final siempre es de una persona.
+* Los prompts no deben afirmar capacidades que la interfaz no tiene (ver §18) — el modelo ya
+  alucinó una vez una función de carga de archivos inexistente, y esa restricción está escrita
+  explícitamente en `CopilotoChatService.CONOCIMIENTO_PROCESO`. No debilitarla.
 
 ---
 
-# 30. Regla de oro
+# 30. Regla de oro — NO INVENTAR
 
-NO inventar.
+Es la regla más importante del proyecto. SICOT es un sistema institucional de
+contratación pública: un dato falso presentado como real puede llevar a una
+decisión equivocada sobre un contrato del Estado.
 
-Cuando algo no esté claro:
+## 30.1 Qué prohíbe, en concreto
 
-* inspeccionar código;
-* buscar DTO;
-* buscar endpoint;
-* buscar migración;
-* revisar modelo;
-* comprobar comportamiento real.
+**Nunca mostrar como real algo que el sistema no sabe.** Formas concretas que
+esto ha tomado en el pasado, todas encontradas en auditorías reales:
 
-Si todavía no está claro:
+1. **Derivar un dato que no existe.** Se inventaban acuses de recibo
+   ('Entregado' / 'Leído') a partir del nombre de una acción de auditoría.
+   SICOT no rastrea entregas ni lecturas.
+2. **Afirmar una acción que no ocurre.** Se decía "el supervisor ha sido
+   notificado" cuando no se envía ningún aviso.
+3. **Atribuir a la IA un trabajo humano.** "El Copiloto procesó y asignó
+   automáticamente" cuando una persona llenó el formulario.
+4. **Un control que aparenta hacer algo.** Un botón "Revisión IA" que no llamaba
+   a ninguna IA; un "Guardar cambios" que no guardaba nada.
+5. **Presentar un fallo como un estado sano.** Lo más grave: si falla la
+   consulta de alertas, NO mostrar "sin alertas" en verde; si falla la del
+   contrato, NO mostrar "no tiene contrato asignado"; si fallan las métricas, NO
+   mostrar `0`. Una caída debe verse como una caída.
+6. **Inventar reglas del proceso institucional.** Códigos de formato,
+   secuencias de etapas o firmantes que no estén confirmados en la
+   documentación real del SENA.
 
-detenerse y preguntar.
+## 30.2 Qué hacer en su lugar
+
+* Si el dato no existe: **no mostrar el campo**.
+* Si la consulta falló: **decir que falló**, y ofrecer reintentar.
+* Si la función no está implementada: **deshabilitar el control con un `title`**
+  que lo explique (patrón ya usado en "Conectar SECOP II").
+* Si un dato institucional no está confirmado: marcarlo
+  `PENDIENTE_DE_DEFINIR`, nunca adivinarlo.
+* Un estado vacío honesto siempre es preferible a un dato inventado.
+
+## 30.3 Cómo verificarlo
+
+Antes de dar una tarea por terminada, **levantar la aplicación con el backend
+apagado** y recorrer las pantallas afectadas. Si alguna muestra un verde, un
+cero o un vacío tranquilizador en vez de un error, hay una violación de esta
+regla.
+
+## 30.4 Cuando algo no esté claro
+
+Inspeccionar código, buscar el DTO, buscar el endpoint, buscar la migración,
+revisar el modelo, comprobar el comportamiento real. Si aun así no está claro:
+**detenerse y preguntar.**
 
 ---
 
@@ -810,5 +952,24 @@ Las funcionalidades existentes tienen valor.
 La UI existente tiene valor.
 
 La estabilidad tiene prioridad sobre cualquier mejora estética o refactorización.
+
+---
+
+# 33. Propiedad de áreas del proyecto
+
+SICOT lo desarrolla un equipo. Estas áreas tienen responsable asignado: no se
+modifican sin coordinar con esa persona, aunque el cambio parezca trivial.
+
+| Área | Responsable | Regla |
+|---|---|---|
+| `backend/src/main/resources/db/migration/` | Juliana | Ninguna migración nueva, renombrada ni editada sin ella. Tampoco SQL directo contra la base. |
+| `.vscode/settings.json` | Juliana | Es configuración compartida del entorno Java. |
+| `backend/direct-dependencies.txt` | Juliana | Se regenera desde el `pom.xml`; no editar a mano. |
+
+Si un trabajo necesita un cambio de esquema, **se reporta y se espera** — no se
+resuelve por la vía rápida.
+
+Configuración personal (preferencias del editor, ajustes de herramientas de IA)
+va en archivos locales ignorados por git, nunca en archivos versionados.
 
 FIN DE LAS INSTRUCCIONES.

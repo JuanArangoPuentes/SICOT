@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import senaLogo from '@/imports/image.png'
-import { IconSettings } from './icons'
+import { IconLogout } from './icons'
 
 // ─── Marca institucional ──────────────────────────────────────────────────────
 
@@ -15,54 +15,6 @@ export function SenaLogo({ size = 72 }: { size?: number }) {
       flexShrink: 0,
     }}>
       <img src={senaLogo} alt="Logotipo del SENA" style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-    </div>
-  )
-}
-
-export function SicotBadge({ small, onDark }: { small?: boolean; onDark?: boolean }) {
-  return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', gap: small ? 7 : 9 }}>
-      <SenaLogo size={small ? 22 : 30} />
-      <div>
-        <span style={{
-          display: 'block',
-          fontFamily: "'Space Grotesk', system-ui, sans-serif",
-          fontSize: small ? 13 : 15, fontWeight: 700, color: onDark ? '#ffffff' : 'var(--text-primary)',
-          letterSpacing: '-0.01em', lineHeight: 1.1,
-        }}>
-          SICOT
-        </span>
-        {!small && (
-          <span style={{ display: 'block', fontSize: 9, fontWeight: 500, color: onDark ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)', letterSpacing: '0.08em', lineHeight: 1 }}>
-            CTMA · SENA
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Barra superior (compartida por todos los paneles) ────────────────────────
-
-export function TopBar({ badge, actions, usuario, onOpenSettings, onLogout, avatarColor, avatarTextColor }: {
-  badge: string
-  actions?: React.ReactNode
-  usuario: { nombre: string; email: string }
-  onOpenSettings: () => void
-  onLogout: () => void
-  avatarColor?: string
-  avatarTextColor?: string
-}) {
-  return (
-    <div className="topbar">
-      <SicotBadge small onDark />
-      <span className="topbar-badge">{badge}</span>
-      <div style={{ flex: 1 }} />
-      {actions}
-      <button className="btn-ghost" onClick={onOpenSettings} style={{ padding: '6px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <IconSettings size={13} /> Configuración
-      </button>
-      <UserMenu label={usuario.nombre} email={usuario.email} avatarColor={avatarColor} avatarTextColor={avatarTextColor} onLogout={onLogout} />
     </div>
   )
 }
@@ -82,11 +34,11 @@ export function Chip({ text, type }: { text: string; type: ChipType }) {
     signed: { bg: 'var(--accent-soft)', color: 'var(--accent)' },
     vigente: { bg: 'var(--accent-soft)', color: 'var(--accent)' },
     running: { bg: 'var(--chip-blue-bg)', color: 'var(--chip-blue)' },
-    unassigned: { bg: 'rgba(255,215,0,0.12)', color: 'var(--alert-leve)' },
-    sugerido: { bg: 'rgba(255,215,0,0.12)', color: 'var(--alert-leve)' },
-    conflicto: { bg: 'rgba(239,68,68,0.12)', color: 'var(--alert-critica)' },
-    finished: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
-    inactive: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
+    unassigned: { bg: 'rgba(229,169,60,0.14)', color: 'var(--alert-leve)' },
+    sugerido: { bg: 'rgba(229,169,60,0.14)', color: 'var(--alert-leve)' },
+    conflicto: { bg: 'var(--chip-red-bg)', color: 'var(--alert-critica)' },
+    finished: { bg: 'var(--chip-gray-bg)', color: 'var(--chip-gray)' },
+    inactive: { bg: 'var(--chip-gray-bg)', color: 'var(--chip-gray)' },
   }
   const s = map[type]
   return (
@@ -97,13 +49,16 @@ export function Chip({ text, type }: { text: string; type: ChipType }) {
   )
 }
 
-// ─── Barra de progreso (etapas) ───────────────────────────────────────────────
+// ─── Recorrido del contrato (barra grande de etapas) ──────────────────────────
 
 export type StageState = 'ok' | 'warning' | 'critical' | 'idle'
 
 export interface Stage {
   key: string
+  /** Nombre corto de la etapa — "Inspección". */
   label: string
+  /** Nombre completo mostrado cuando la etapa es la actual. */
+  fullLabel?: string
   state: StageState
   pct: number
   detail: string
@@ -113,205 +68,171 @@ const STAGE_COLOR: Record<StageState, string> = {
   ok: 'var(--accent)',
   warning: 'var(--alert-leve)',
   critical: 'var(--alert-critica)',
-  idle: 'rgba(204,204,204,0.22)',
+  idle: 'var(--step-pending)',
 }
 
-// ─── Barra lineal SICOT v2.1 (GCCON-P-010) ───────────────────────────────────
-// Single 6px track with per-stage tick markers; no segments.
-export function StageProgressBar({ stages, onStageClick }: {
+/**
+ * Barra de recorrido del contrato — ocupa todo el ancho disponible, una
+ * sección por etapa, y dice explícitamente en qué etapa está el contrato
+ * ahora mismo.
+ *
+ * Sustituye a la barra lineal anterior, que tenía un ancho fijo de 600 px y
+ * solo mostraba un porcentaje global: había que interpretar la posición del
+ * relleno para deducir la etapa actual.
+ */
+export function StageJourney({ stages, currentKey, overallPct, onStageClick }: {
   stages: Stage[]
+  /** Etapa en curso — la que se resalta como "actual". */
+  currentKey?: string | null
+  /**
+   * Avance global del contrato. Se recibe de fuera para que sea exactamente la
+   * misma cifra que muestran los indicadores (sub-pasos cerrados sobre el
+   * total); el promedio de porcentajes por etapa daría un número distinto para
+   * lo que el usuario lee como "lo mismo".
+   */
+  overallPct?: number
   onStageClick?: (key: string) => void
 }) {
-  const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null)
   const total = stages.length
 
-  // Overall fill %: average of per-stage pct
-  const overallPct = stages.length
-    ? Math.round(stages.reduce((acc, s) => acc + s.pct, 0) / stages.length)
-    : 0
+  const avance = overallPct ?? (total
+    ? Math.round(stages.reduce((acc, s) => acc + s.pct, 0) / total)
+    : 0)
 
-  // Dominant state drives bar color
-  const dominant: StageState =
-    stages.some(s => s.state === 'critical') ? 'critical'
-    : stages.some(s => s.state === 'warning') ? 'warning'
-    : stages.every(s => s.state === 'ok') ? 'ok'
-    : 'idle'
+  if (!total) {
+    return (
+      <div className="card" style={{ padding: '24px 20px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+        Las etapas de este contrato todavía no se han cargado desde el servidor.
+      </div>
+    )
+  }
 
-  const barColor = STAGE_COLOR[dominant]
+  const currentIdx = currentKey ? stages.findIndex(s => s.key === currentKey) : -1
+  const actual = currentIdx >= 0 ? stages[currentIdx] : null
+  const detalle = stages.find(s => s.key === hoveredKey) ?? actual
 
   return (
-    <div style={{ marginBottom: 20, maxWidth: 600, position: 'relative' }}>
-      {/* Label row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+    <div className="card" style={{ padding: '16px 20px 18px' }}>
+      {/* Cabecera: etapa actual + avance global */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="eyebrow">Recorrido del contrato · GCCON-P-010</div>
+          {actual ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+                  PASO {currentIdx + 1} DE {total}
+                </span>
+                <h2 style={{ fontSize: 21, color: STAGE_COLOR[actual.state], letterSpacing: '-0.015em' }}>
+                  {(actual.fullLabel ?? actual.label).toUpperCase()}
+                </h2>
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.5, maxWidth: 620 }}>
+                {actual.detail}
+              </div>
+            </>
+          ) : (
+            <h2 style={{ fontSize: 19 }}>Etapas del contrato</h2>
+          )}
+        </div>
+
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)' }}>AVANCE GLOBAL</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 700, color: 'var(--accent)', lineHeight: 1.05 }}>
+            {avance}<span style={{ fontSize: 17 }}>%</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Barra: una sección por etapa, de extremo a extremo */}
+      <div className="journey">
         {stages.map((s, i) => {
-          const isHov = hoveredKey === s.key
           const color = STAGE_COLOR[s.state]
+          const esActual = s.key === currentKey
+          const completa = s.pct === 100
           return (
             <button
               key={s.key}
+              type="button"
+              className={`journey-seg${esActual ? ' actual' : ''}`}
               onClick={() => onStageClick?.(s.key)}
               onMouseEnter={() => setHoveredKey(s.key)}
               onMouseLeave={() => setHoveredKey(null)}
-              style={{
-                background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-                display: 'flex', flexDirection: 'column',
-                alignItems: i === 0 ? 'flex-start' : i === total - 1 ? 'flex-end' : 'center',
-                flex: 1, gap: 2,
-              }}
+              onFocus={() => setHoveredKey(s.key)}
+              onBlur={() => setHoveredKey(null)}
+              title={`${s.label} — ${s.pct}% completado`}
             >
-              <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase',
-                color: isHov ? color : s.state === 'idle' ? 'var(--text-muted)' : color,
-                transition: 'color var(--t)',
-              }}>
-                {s.label}
-              </span>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 9,
-                color: isHov ? 'var(--accent-tech)' : 'var(--text-muted)',
-                transition: 'color var(--t)',
-              }}>
-                {s.pct}%
-              </span>
+              {/* Etiqueta superior */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minHeight: 18 }}>
+                <span style={{
+                  width: 17, height: 17, borderRadius: '50%', flexShrink: 0,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 9.5, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                  background: completa ? color : esActual ? 'var(--accent-soft)' : 'transparent',
+                  border: completa ? 'none' : `1.5px solid ${esActual ? color : 'var(--step-pending)'}`,
+                  color: completa ? 'var(--on-accent)' : esActual ? color : 'var(--text-muted)',
+                }}>
+                  {completa ? '✓' : i + 1}
+                </span>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  color: esActual ? color : s.state === 'idle' ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>
+                  {s.label}
+                </span>
+              </div>
+
+              {/* Riel */}
+              <div className="journey-track">
+                <div className="journey-fill" style={{ width: `${s.pct}%`, background: color }} />
+              </div>
+
+              {/* Pie: porcentaje + marca de etapa actual */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 5, minHeight: 16 }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: esActual ? color : 'var(--text-muted)' }}>
+                  {s.pct}%
+                </span>
+                {esActual && (
+                  <span style={{
+                    fontSize: 8.5, fontWeight: 800, letterSpacing: '0.1em',
+                    color: 'var(--on-accent)', background: color,
+                    padding: '1px 6px', borderRadius: 3, whiteSpace: 'nowrap',
+                  }}>
+                    AQUÍ
+                  </span>
+                )}
+              </div>
             </button>
           )
         })}
       </div>
 
-      {/* Track */}
-      <div style={{ position: 'relative', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'visible' }}>
-        {/* Fill bar */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, height: '100%',
-          width: `${overallPct}%`,
-          background: barColor,
-          borderRadius: 3,
-          transition: 'width 0.5s ease, background 0.3s',
-        }} />
-
-        {/* Glow tip at filled end */}
-        {overallPct > 0 && overallPct < 100 && (
-          <div style={{
-            position: 'absolute', top: '50%', left: `${overallPct}%`,
-            transform: 'translate(-50%, -50%)',
-            width: 10, height: 10, borderRadius: '50%',
-            background: barColor,
-            boxShadow: `0 0 8px 3px ${barColor}88`,
-            transition: 'left 0.5s ease',
-          }} />
-        )}
-
-        {/* Stage tick marks */}
-        {stages.map((s, i) => {
-          if (i === 0) return null
-          const pos = (i / total) * 100
-          const filled = overallPct >= pos
-          return (
-            <div key={s.key} style={{
-              position: 'absolute', top: -2, left: `${pos}%`, transform: 'translateX(-50%)',
-              width: 2, height: 10, borderRadius: 1,
-              background: filled ? barColor : 'var(--border)',
-              transition: 'background 0.3s',
-            }} />
-          )
-        })}
-      </div>
-
-      {/* Tooltip */}
-      {hoveredKey && (() => {
-        const s = stages.find(x => x.key === hoveredKey)!
-        const idx = stages.findIndex(x => x.key === hoveredKey)
-        const leftPct = ((idx + 0.5) / total) * 100
-        return (
-          <div style={{
-            position: 'absolute', top: 48, left: `${leftPct}%`, transform: 'translateX(-50%)',
-            background: 'var(--bg-surface)', border: `1px solid ${STAGE_COLOR[s.state]}`,
-            borderRadius: 10, padding: '10px 14px', zIndex: 20,
-            fontSize: 12, color: 'var(--text-primary)',
-            minWidth: 180, whiteSpace: 'normal',
-            boxShadow: `0 4px 20px rgba(0,0,0,0.4), 0 0 0 1px ${STAGE_COLOR[s.state]}22`,
-            pointerEvents: 'none',
-          }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: STAGE_COLOR[s.state], marginBottom: 4 }}>{s.label}</div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: 11, lineHeight: 1.45 }}>{s.detail}</div>
-            <div style={{ marginTop: 6, fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>
-              {s.pct}% completado
+      {/* Detalle de la etapa señalada (o de la actual si no hay ninguna señalada) */}
+      {detalle && (
+        <div className="surface" style={{ marginTop: 14, padding: '10px 13px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+          <span style={{ width: 3, alignSelf: 'stretch', borderRadius: 2, background: STAGE_COLOR[detalle.state], flexShrink: 0 }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: STAGE_COLOR[detalle.state], letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+              {detalle.label} · {detalle.pct}% completado
+            </div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.55, marginTop: 2 }}>
+              {detalle.detail}
             </div>
           </div>
-        )
-      })()}
-
-      {/* Overall % */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8, gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Avance global:</span>
-        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 600, color: barColor }}>
-          {overallPct}%
-        </span>
-      </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// ─── Alertas parpadeantes ─────────────────────────────────────────────────────
+// ─── Alerta viva (cronograma y alertas del backend) ───────────────────────────
 
 export interface LiveAlert {
   id: string
   severity: 'ok' | 'leve' | 'critica'
   text: string
-}
-
-export function AlertRail({ alerts, blink, onDismiss, onOpen }: {
-  alerts: LiveAlert[]
-  blink: boolean
-  onDismiss: (id: string) => void
-  onOpen?: (id: string) => void
-}) {
-  if (!alerts.length) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      {alerts.slice(0, 3).map(a => {
-        const critical = a.severity === 'critica'
-        const color = critical ? 'var(--alert-critica)' : 'var(--alert-leve)'
-        const colorVal = critical ? '#EF4B4B' : '#F2B84B'
-        return (
-          <div key={a.id}
-            className={blink ? (critical ? 'blink-fast' : 'blink-slow') : undefined}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 10,
-              border: `1px solid ${colorVal}33`,
-              borderLeft: `3px solid ${color}`,
-              background: 'transparent',
-              borderRadius: 8, padding: '8px 10px',
-            }}>
-            {/* Glow ring icon */}
-            <div style={{
-              width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-              border: `1px solid ${color}`,
-              boxShadow: `0 0 8px ${colorVal}44`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, color,
-            }}>
-              {critical ? '!' : '·'}
-            </div>
-            <button onClick={() => onOpen?.(a.id)} style={{
-              flex: 1, textAlign: 'left', background: 'none', border: 'none', padding: 0,
-              cursor: onOpen ? 'pointer' : 'default', fontSize: 11.5, lineHeight: 1.45,
-              color: 'var(--text-primary)', fontFamily: 'inherit',
-            }}>
-              <span style={{ color, fontWeight: 700, fontSize: 9, letterSpacing: '0.1em', display: 'block', marginBottom: 1 }}>
-                {critical ? 'ALERTA CRÍTICA' : 'ALERTA LEVE'}
-              </span>
-              {a.text}
-            </button>
-            <button onClick={() => onDismiss(a.id)} title="Ocultar"
-              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: 0, flexShrink: 0 }}>
-              ×
-            </button>
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 // ─── Modal genérico ───────────────────────────────────────────────────────────
@@ -325,7 +246,7 @@ export function Modal({ title, onClose, width = 520, hideClose = false, children
 }) {
   return (
     <div role="presentation" onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(6,14,8,0.72)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
+      style={{ position: 'fixed', inset: 0, background: 'rgba(4,9,15,0.74)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: 16 }}>
       <div className="card" role="dialog" aria-modal="true" aria-labelledby="modal-title" onClick={e => e.stopPropagation()}
         style={{ width: '100%', maxWidth: width, maxHeight: '90vh', display: 'flex', flexDirection: 'column', borderRadius: 16, boxShadow: 'var(--shadow-lg)', overflow: 'hidden' }}>
         <div style={{ height: 4, flexShrink: 0, background: 'linear-gradient(90deg, var(--accent) 0%, var(--accent-emphasis) 100%)' }} />
@@ -352,14 +273,16 @@ export function Field({ label, children }: { label: string; children: React.Reac
   )
 }
 
-// ─── User Menu (avatar + dropdown "Cerrar sesión") ────────────────────────────
+// ─── Menú de usuario (avatar + desplegable "Cerrar sesión") ───────────────────
 
-export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTextColor = '#03200D', onLogout }: {
+export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTextColor = 'var(--on-accent)', onLogout, onDark = false }: {
   label: string
   email: string
   avatarColor?: string
   avatarTextColor?: string
   onLogout: () => void
+  /** true cuando el menú vive sobre un fondo de color sólido (barra verde). */
+  onDark?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -373,12 +296,15 @@ export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTe
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
+  const nombreColor = onDark ? '#ffffff' : 'var(--text-primary)'
+  const emailColor = onDark ? 'rgba(255,255,255,0.78)' : 'var(--text-muted)'
+
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8 }}>
+    <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
       <button type="button" aria-expanded={open} aria-label={`Abrir menú de ${label}`} onClick={() => setOpen(v => !v)}
         style={{
           width: 32, height: 32, borderRadius: '50%', background: avatarColor,
-          border: '2px solid rgba(255,255,255,0.9)', boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
+          border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700,
           color: avatarTextColor, cursor: 'pointer', userSelect: 'none', flexShrink: 0,
         }}
@@ -386,15 +312,15 @@ export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTe
         {label[0].toUpperCase()}
       </button>
       <button type="button" aria-expanded={open} aria-label={`Abrir menú de ${label}`} style={{ lineHeight: 1.3, cursor: 'pointer', background: 'none', border: 'none', padding: 0, textAlign: 'left' }} onClick={() => setOpen(v => !v)}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: '#ffffff' }}>{label}</div>
-        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.78)' }}>{email}</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: nombreColor }}>{label}</div>
+        <div style={{ fontSize: 11, color: emailColor }}>{email}</div>
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: 6,
+          position: 'absolute', top: '100%', right: 0, marginTop: 8,
           background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
-          minWidth: 190, zIndex: 999, overflow: 'hidden',
+          borderRadius: 10, boxShadow: 'var(--shadow-lg)',
+          minWidth: 200, zIndex: 999, overflow: 'hidden',
         }}>
           <div style={{ padding: '10px 14px 8px', borderBottom: '1px solid var(--border)' }}>
             <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
@@ -402,19 +328,66 @@ export function UserMenu({ label, email, avatarColor = 'var(--accent)', avatarTe
           </div>
           <button
             onClick={() => { setOpen(false); onLogout() }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 14px', background: 'none', border: 'none', fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', background: 'none', border: 'none', fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer', textAlign: 'left', fontFamily: 'var(--font-ui)' }}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-soft)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'none')}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" y1="12" x2="9" y2="12"/>
-            </svg>
+            <IconLogout size={14} />
             Cerrar sesión
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Tarjeta de indicador (KPI) ───────────────────────────────────────────────
+
+export function StatCard({ label, value, hint, tone = 'accent', icon }: {
+  label: string
+  value: string
+  hint?: string
+  tone?: 'accent' | 'warn' | 'danger' | 'info'
+  icon?: React.ReactNode
+}) {
+  const cls = tone === 'accent' ? '' : ` ${tone}`
+  const color =
+    tone === 'warn' ? 'var(--alert-leve)'
+      : tone === 'danger' ? 'var(--alert-critica)'
+        : tone === 'info' ? 'var(--info)'
+          : 'var(--accent)'
+  return (
+    <div className={`stat-card${cls}`}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        {icon && <span style={{ color, display: 'flex' }}>{icon}</span>}
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+          {label}
+        </span>
+      </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 700, color, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {hint && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  )
+}
+
+// ─── Encabezado de sección ────────────────────────────────────────────────────
+
+export function SectionHeader({ eyebrow, title, desc, actions }: {
+  eyebrow?: string
+  title: string
+  desc?: string
+  actions?: React.ReactNode
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div style={{ minWidth: 0 }}>
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
+        <h3 style={{ fontSize: 18 }}>{title}</h3>
+        {desc && <p className="section-sub" style={{ margin: '4px 0 0', maxWidth: 760 }}>{desc}</p>}
+      </div>
+      {actions && <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>{actions}</div>}
     </div>
   )
 }

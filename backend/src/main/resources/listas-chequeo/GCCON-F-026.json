@@ -1,0 +1,525 @@
+{
+  "codigo": "GCCON-F-026",
+  "nombre": "Lista de Chequeo Contratación Directa",
+  "version": "04",
+  "proceso": "GESTIÓN CONTRACTUAL",
+  "tipo": "MODALIDAD_SELECCION",
+  "alcance": "CONTRATACIÓN DIRECTA",
+  "archivoOrigen": "GCCON-F-026-ListadeChequeoContratacionDirectaV04.xlsx",
+  "hojaOrigen": "Contratación Directa",
+  "tiposPago": [],
+  "etapas": [
+    {
+      "nombre": "ETAPA PRECONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 1,
+          "documento": "Designación Comité Estructurador",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.) o Correo Electrónico",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 2,
+          "documento": "Solicitud inicio de trámite de proceso Contractual",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.)",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 3,
+          "documento": "Estudios previos con sus Anexos",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-046",
+          "formatos": [
+            "GCCON-F-046"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 4,
+          "documento": "Evidencia de inclusión en el Plan de Adquisiciones",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo del PAA en SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 5,
+          "documento": "Certificado de inexistencia de Bienes expedido por el almacén",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 6,
+          "documento": "Anexo de Verificación Criterios de Contratacion",
+          "cuandoAplique": true,
+          "observacion": "GCCON-F-053",
+          "formatos": [
+            "GCCON-F-053"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 7,
+          "documento": "Autorización o concepto técnico",
+          "cuandoAplique": true,
+          "observacion": "Acorde a la Res. 1-2154 de 2024",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 8,
+          "documento": "Análisis sector (incluido estudio del mercado)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 9,
+          "documento": "Matriz de Riesgos",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 10,
+          "documento": "Certificado de disponibilidad presupuestal",
+          "cuandoAplique": false,
+          "observacion": "Acuerdo normatividad vigente puede ser aportado con la publicación de pliegos definitivos",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 11,
+          "documento": "Comunicación de Autorización vigencias futuras del Ministerio de Hacienda y anexos",
+          "cuandoAplique": true,
+          "observacion": "Acuerdo normatividad vigente puede ser aportado con la publicación de pliegos definitivos",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 12,
+          "documento": "Acta de comité de contratación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 13,
+          "documento": "Certificación de exclusividad y único oferente en el mercado del bien o servicio o (Este requisito solo aplica para los contratos en los cuales no exista pluralidad de oferentes).",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 14,
+          "documento": "Propuesta técnica y certificaciones de contratos ejecutados",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 15,
+          "documento": "Certificado de existencia y representación legal del contratista",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 16,
+          "documento": "Estatutos de la persona jurídica",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 17,
+          "documento": "Autorización al representante legal para suscribir contratos",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 18,
+          "documento": "Hoja de Vida del DAFP de la persona jurídica o persona natural",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 19,
+          "documento": "Registro Único Tributario - RUT",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 20,
+          "documento": "Registro de Información Tributaria - RIT",
+          "cuandoAplique": false,
+          "observacion": "Solo si el contrato se ejecuta en Bogotá D.C.",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 21,
+          "documento": "Cedula de ciudadanía del representante legal de la persona jurídica o documento de identidad de la persona natural",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 22,
+          "documento": "Certificado inexistencia de antecedentes disciplinarios del representante legal y de la persona jurídica o de la persona natural",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 23,
+          "documento": "Certificado inexistencia de antecedentes fiscales del representante legal y de la persona jurídica o de la persona natural",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 24,
+          "documento": "Certificado inexistencia de antecedentes judiciales del representante legal o de la persona natural",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 25,
+          "documento": "Certificado inexistencia de antecedentes del Sistema Registro Nacional de Medidas Correctivas RNMC",
+          "cuandoAplique": false,
+          "observacion": "Aplica para Representante legal de la persona jurídica o persona natural",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 26,
+          "documento": "Certificado REDAM",
+          "cuandoAplique": false,
+          "observacion": "Aplica para Representante legal de la persona jurídica o persona natural",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 27,
+          "documento": "Certificado de pago de aportes parafiscales",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 28,
+          "documento": "Certificación Bancaria no superior a 30 días.",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 29,
+          "documento": "Acto de justificación de la contratación directa",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA CONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 30,
+          "documento": "Minuta Electrónica de Contrato",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 31,
+          "documento": "Anexos Minuta de Contrato",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-021",
+          "formatos": [
+            "GCCON-F-021"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 32,
+          "documento": "Certificado de registro en la plataforma Blackbox",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 33,
+          "documento": "Certificado de Registro Presupuestal - RP",
+          "cuandoAplique": false,
+          "observacion": "Puede ser en fìsico o digital",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 34,
+          "documento": "Garantías",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 35,
+          "documento": "Acta de aprobación de la garantías",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo de SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA DE EJECUCIÓN",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 36,
+          "documento": "Designación de Supervisor",
+          "cuandoAplique": false,
+          "observacion": "Formato GCCON-F-032 y Comunicación interna (C.I.)",
+          "formatos": [
+            "GCCON-F-032"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 37,
+          "documento": "Acta de inicio",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-018",
+          "formatos": [
+            "GCCON-F-018"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 38,
+          "documento": "Factura del Contratista",
+          "cuandoAplique": true,
+          "observacion": "Solo se anexa si se exige",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 39,
+          "documento": "Informes de ejecución con sus soportes",
+          "cuandoAplique": true,
+          "observacion": "Solo se anexa si se exige",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 40,
+          "documento": "Informes y/o Certificaciones de Pago de supervisión",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-031",
+          "formatos": [
+            "GCCON-F-031"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 41,
+          "documento": "Solicitud de modificación con sus soportes",
+          "cuandoAplique": true,
+          "observacion": "CI, Formato y demas docs",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 42,
+          "documento": "Informe de supervisión para modificación",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-071",
+          "formatos": [
+            "GCCON-F-071"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 43,
+          "documento": "Certificado de Disponibilidad Presupuestal - CDP",
+          "cuandoAplique": true,
+          "observacion": "Puede ser en fìsico o digital",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 44,
+          "documento": "Minuta Electrónica de modificación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 45,
+          "documento": "Anexo Minuta de modificación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 46,
+          "documento": "Certificado de registro en la plataforma Blackbox",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 47,
+          "documento": "Certificado de Registro Presupuestal - RP",
+          "cuandoAplique": true,
+          "observacion": "Puede ser en fìsico o digital",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 48,
+          "documento": "Garantías",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 49,
+          "documento": "Constancia de aprobación de la garantías en SECOP",
+          "cuandoAplique": true,
+          "observacion": "Pantallazo de SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 50,
+          "documento": "Otros documentos de ejecución",
+          "cuandoAplique": true,
+          "observacion": "Relacionar los documentos que se generen durante la ejecuión y que no esten incluidos en otros apartados.",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 51,
+          "documento": "Informe final de supervisión",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-030",
+          "formatos": [
+            "GCCON-F-030"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 52,
+          "documento": "Certificación Paz y Salvo requeridos",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 53,
+          "documento": "Acta de recibo a satisfacción",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 54,
+          "documento": "Procedimiento de incumplimiento",
+          "cuandoAplique": true,
+          "observacion": "Se puede presentar durante la ejecución o en el proceso de liquidación",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA POSCONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 55,
+          "documento": "Procedimiento de incumplimiento",
+          "cuandoAplique": true,
+          "observacion": "Se puede presentar durante la ejecución o en el proceso de liquidación",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 56,
+          "documento": "Acta de liquidación",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-027",
+          "formatos": [
+            "GCCON-F-027"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 57,
+          "documento": "Anexos de pago pendientes a saldos a favor del contratista",
+          "cuandoAplique": true,
+          "observacion": "Se deben realizar los pagos pendientes al contratista o la liberación del presupuesto de acuerdo a lo estipulado en el Acta de Liquidación.",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 58,
+          "documento": "Acta de cierre de expediente y/o cierre financiero",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-028",
+          "formatos": [
+            "GCCON-F-028"
+          ],
+          "tiposPago": []
+        }
+      ]
+    }
+  ],
+  "notas": [
+    "* Cuando aplique."
+  ],
+  "advertencias": []
+}

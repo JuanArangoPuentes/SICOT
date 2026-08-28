@@ -18,10 +18,20 @@ Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 ## 2. Base de datos
 
-En una base nueva, Flyway aplica una unica migracion de estructura:
-`V1__create_sicot_schema.sql`. No se insertan datos transaccionales de ejemplo
-ni se ejecutan migraciones destructivas. Las cuentas demo solo se crean con el
-perfil `dev` mediante `DataInitializer`.
+En una base nueva, Flyway aplica dos migraciones:
+
+| Archivo | Qué hace |
+|---|---|
+| `V1__create_sicot_schema.sql` | Línea base completa: tablas, constraints e índices |
+| `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha en `alertas` y `registros` (los usa la paginación) |
+
+La numeración salta de `V1` a `V9` a propósito: las migraciones `V1`–`V8`
+originales se consolidaron en la nueva `V1`, y `V9` se conservó porque ya se
+había aplicado en bases existentes. **No hay migraciones perdidas.**
+
+No se insertan datos transaccionales de ejemplo ni se ejecutan migraciones
+destructivas. Las cuentas demo solo se crean con el perfil `dev` mediante
+`DataInitializer`.
 
 Para recrear una base local Docker desde cero, detenga el stack y elimine solo
 su volumen local (`docker compose down -v`). Nunca ejecute ese comando sobre
@@ -33,9 +43,9 @@ CREATE USER sicot WITH PASSWORD 'sicot_dev_password';
 CREATE DATABASE sicot OWNER sicot;
 ```
 
-El esquema se crea automáticamente con **Flyway** al primer arranque mediante
-`V1__create_sicot_schema.sql`. Esta linea base contiene estructura, constraints
-e indices, pero no inserta ni elimina datos transaccionales demo.
+El esquema se crea automáticamente con **Flyway** al primer arranque. La línea
+base contiene estructura, constraints e índices, pero no inserta ni elimina
+datos transaccionales demo.
 
 Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataInitializer` con contraseñas codificadas en BCrypt:
 
@@ -44,6 +54,13 @@ Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataI
 | `administrador@soy.sena.edu.co` | ADMINISTRADOR | `Admin123*` |
 | `gestion@soy.sena.edu.co` | GESTION | `Gestion123*` |
 | `supervisor@soy.sena.edu.co` | SUPERVISOR | `Supervisor123*` |
+
+> ⚠️ **Estas contraseñas son públicas** (están en este archivo, en un repositorio
+> compartido) y por eso estas cuentas **solo existen bajo el perfil `dev`**.
+> `DataInitializer` no las crea con ningún otro perfil, y `docker-compose.prod.yml`
+> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal para que no puedan aparecer
+> en un servidor por un `.env` mal copiado. Si alguna vez ve estas cuentas en un
+> despliegue real, ese despliegue está corriendo con el perfil equivocado.
 
 ## 3. Configuración (variables de entorno)
 
@@ -88,6 +105,15 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 - Swagger UI: <http://localhost:8080/swagger-ui.html>
 - Actuator: <http://localhost:8080/actuator/health>
 
+### Problemas frecuentes al arrancar
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `Fatal error compiling: error: release version 25 not supported` | La máquina tiene un JDK anterior (p. ej. 21). El proyecto compila con `--release 25` | Instalar JDK 25 (`winget install EclipseAdoptium.Temurin.25.JDK`) y apuntar `JAVA_HOME` ahí. El build vía Docker no se ve afectado: usa su propia imagen JDK 25 |
+| `Found more than one migration with version 1` | `target/classes` conserva una migración Flyway vieja que ya se eliminó del código fuente (Maven no borra artefactos huérfanos al renombrar un archivo) | `mvn clean` antes de volver a arrancar. **Correr `mvn clean` siempre después de un pull que consolide o renombre migraciones** |
+| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | Coordinar con quien administra la base antes de tocar `flyway_schema_history`; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
+| `IaNoDisponibleException` al usar el Copiloto | Ollama no está corriendo | `ollama serve` en la misma máquina que el backend, y verificar `OLLAMA_URL` |
+
 ## 5. Autenticación
 
 1. `POST /api/auth/login` con `{"email": "...", "password": "..."}` → devuelve el `token`.
@@ -105,19 +131,33 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 | PATCH | `/api/contratos/{id}/supervisor` · `/api/contratos/{id}/estado` | GESTION, ADMINISTRADOR |
 | GET | `/api/contratos/{id}/etapas`, `/api/etapas/{id}/subetapas` | autenticados |
 | PATCH | `/api/subetapas/{id}/estado` | SUPERVISOR, GESTION, ADMINISTRADOR |
-| GET | `/api/contratos/{id}/documentos` | autenticados (carga real de archivos por contrato en fase posterior) |
+| GET | `/api/contratos/{id}/documentos` | autenticados |
+| POST | `/api/contratos/{id}/documentos` (multipart, carga real) | GESTION, ADMINISTRADOR |
+| GET | `/api/contratos/{id}/documentos/{docId}/archivo` (descarga real) | autenticados |
+| POST | `/api/contratos/{id}/documentos/generar` (redacta el documento con IA) | SUPERVISOR, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/documentos/{docId}/firmar` | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/copiloto/chat` (chat real sobre Ollama) | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/ia/extraer-contrato` (multipart PDF; propone campos, **no persiste**) | GESTION, ADMINISTRADOR |
 | GET/PATCH | `/api/contratos/{id}/alertas`, `/api/alertas/{id}/leida` | autenticados |
 | GET | `/api/contratos/{id}/registros`, `/api/registros` | autenticados (todos: ADMINISTRADOR) |
 | GET | `/api/formatos` | autenticados |
 | POST | `/api/formatos` (multipart: `codigo`, `nombre`, `archivo`) | ADMINISTRADOR |
 | GET | `/api/formatos/{id}/archivo` (descarga real del archivo) | autenticados |
 | DELETE | `/api/formatos/{id}` | ADMINISTRADOR |
+| GET | `/api/listas-chequeo` (`?tipo=MODALIDAD_SELECCION\|TRAMITE_CONTRACTUAL\|TRAMITE_PAGO`) | autenticados |
+| GET | `/api/listas-chequeo/{codigo}` (ej. `GCCON-F-053`) | autenticados |
+| GET | `/api/firmas` · `/api/firmas/mia` | ADMINISTRADOR · autenticados |
+| POST/PATCH | `/api/firmas`, `/api/firmas/{id}/estado` | ADMINISTRADOR |
+| POST | `/api/usuarios/{id}/enviar-credenciales` | ADMINISTRADOR |
 
 **Reglas de negocio destacadas:**
 - Al cambiar el estado de una subetapa se recalcula automáticamente el porcentaje y estado de su etapa (todas COMPLETADA → etapa COMPLETADA 100%).
 - Solo usuarios con rol SUPERVISOR pueden ser asignados como supervisores.
 - Número de contrato y email de usuario son únicos.
 - Toda operación de trámite queda registrada en la tabla `registros` (auditoría).
+- El catálogo de listas de chequeo es de solo lectura y se sirve desde
+  `src/main/resources/listas-chequeo/`: es el texto de un formato institucional, no un dato
+  transaccional. Ver [docs/producto/LISTAS_DE_CHEQUEO.md](../docs/producto/LISTAS_DE_CHEQUEO.md).
 
 ## 7. Estructura del proyecto
 
@@ -128,10 +168,18 @@ co.sena.sicot
 ├── dto/         → request/response (validación con Bean Validation)
 ├── entity/      → JPA + enums (Rol, EstadoContrato, EstadoEtapa, …)
 ├── exception/   → errores y manejador global (@RestControllerAdvice)
+├── ia/          → Copiloto IA: OllamaClient (único punto de salida hacia Ollama),
+│                  ExtraccionContratoService, GeneracionDocumentoService,
+│                  CopilotoChatService, PlantillaDocumentoIA, PdfTextExtractor,
+│                  SimplePdfWriter
 ├── mapper/      → entidad ↔ DTO
 ├── repository/  → Spring Data JPA
-├── security/    → JWT, filtro, CORS, BCrypt, autorización por rol
-└── service/     → lógica de negocio
+├── security/    → JWT, filtro, CORS, BCrypt, autorización por rol y por contrato
+└── service/     → lógica de negocio (incluye GcconP010Plantilla: las 6 etapas/27 subetapas,
+                   y ListaChequeoService: catálogo de listas de chequeo oficiales)
+
+src/main/resources/listas-chequeo/  → las 8 listas de chequeo oficiales en JSON
+tools/extraer_listas_chequeo.py     → regenera ese catálogo desde los .xlsx de CompromISO
 ```
 
 ## 8. Pruebas

@@ -1,42 +1,76 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Chip } from './ui'
 
+/**
+ * Una entrada de la bitácora de auditoría: una acción que alguien ejecutó
+ * sobre el contrato. No es un mensaje ni una notificación — SICOT no registra
+ * envíos ni acuses de recibo, así que aquí no hay destinatario ni estado de
+ * entrega.
+ */
 export interface Registro {
   id: string
-  tipo: 'Correo Enviado' | 'Firma' | 'Notificación'
-  destinatario: string
+  tipo: 'Contrato' | 'Etapa' | 'Documento' | 'Firma' | 'Otro'
+  /** Acción real ejecutada, legible (p. ej. "Documento firmado"). */
+  accion: string
+  /** Quien ejecutó la acción. */
+  actor: string
   fecha: string
   asunto: string
-  estado: 'Entregado' | 'Leído' | 'Firmado'
 }
 
-const TIPOS = ['Todos', 'Correo Enviado', 'Firma', 'Notificación'] as const
+const TIPOS = ['Todos', 'Contrato', 'Etapa', 'Documento', 'Firma', 'Otro'] as const
 
 export default function Registros({ extra }: { extra: Registro[] }) {
   const [tipo, setTipo] = useState<(typeof TIPOS)[number]>('Todos')
-  const [destinatario, setDestinatario] = useState('')
+  const [actor, setActor] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
-
-  const all = useMemo(() => extra, [extra])
 
   const toDate = (f: string) => {
     const [d, m, y] = f.slice(0, 10).split('/')
     return new Date(`${y}-${m}-${d}`)
   }
 
-  const filtrados = all.filter(r => {
+  const filtrados = extra.filter(r => {
     if (tipo !== 'Todos' && r.tipo !== tipo) return false
-    if (destinatario && !r.destinatario.toLowerCase().includes(destinatario.toLowerCase())) return false
+    if (actor && !r.actor.toLowerCase().includes(actor.toLowerCase())) return false
     if (desde && toDate(r.fecha) < new Date(desde)) return false
     if (hasta && toDate(r.fecha) > new Date(hasta)) return false
     return true
   })
 
-  const chipFor = (estado: Registro['estado']) =>
-    estado === 'Firmado' ? 'signed' : estado === 'Leído' ? 'running' : 'pending'
+  /**
+   * Descarga la bitácora que se está viendo (con los filtros aplicados) como
+   * CSV. Se genera en el navegador a partir de los registros ya cargados: no
+   * hay endpoint de exportación en el backend y no hace falta uno para esto.
+   *
+   * Separador `;` y BOM UTF-8 porque el destino real es Excel en español, que
+   * con `,` mete todo en una sola columna y sin BOM rompe las tildes.
+   */
+  const descargarCsv = () => {
+    if (filtrados.length === 0) return
+    const escapar = (valor: string) => `"${valor.replace(/"/g, '""')}"`
+    const cabecera = ['Fecha', 'Tipo', 'Acción', 'Responsable', 'Descripción']
+    const filas = filtrados.map(r => [r.fecha, r.tipo, r.accion, r.actor, r.asunto].map(escapar).join(';'))
+    // BOM y salto CRLF construidos por código: Excel en español necesita
+    // ambos, y escribirlos como literales dejaría caracteres invisibles en
+    // el archivo fuente.
+    const bom = String.fromCharCode(0xFEFF)
+    const salto = String.fromCharCode(13, 10)
+    const csv = bom + [cabecera.map(escapar).join(';'), ...filas].join(salto)
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    const enlace = document.createElement('a')
+    const hoy = new Date().toISOString().slice(0, 10)
+    enlace.href = url
+    enlace.download = `sicot-registros-${hoy}.csv`
+    document.body.appendChild(enlace)
+    enlace.click()
+    document.body.removeChild(enlace)
+    URL.revokeObjectURL(url)
+  }
 
-  const iconFor = (t: Registro['tipo']) => (t === 'Firma' ? 'F' : t === 'Correo Enviado' ? '@' : 'N')
+  const iconFor = (t: Registro['tipo']) =>
+    t === 'Firma' ? 'F' : t === 'Documento' ? 'D' : t === 'Etapa' ? 'E' : t === 'Contrato' ? 'C' : '·'
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
@@ -45,12 +79,13 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           <div className="eyebrow">Trazabilidad del contrato</div>
           <h3 style={{ margin: '0 0 4px', fontSize: 18 }}>Registros</h3>
           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>
-            Historial de comunicaciones y firmas del contrato · {filtrados.length} de {all.length} registros
+            Bitácora de acciones ejecutadas sobre el contrato · {filtrados.length} de {extra.length} registros
           </p>
         </div>
-        <button className="btn-ghost" disabled title="La exportación a PDF se habilita en una fase posterior"
-          style={{ padding: '8px 14px', fontSize: 12, opacity: 0.5, cursor: 'not-allowed' }}>
-          Descargar Log Completo
+        <button className="btn-ghost" onClick={descargarCsv} disabled={filtrados.length === 0}
+          title={filtrados.length === 0 ? 'No hay registros que descargar' : 'Descarga en CSV los registros que se ven en pantalla'}
+          style={{ padding: '8px 14px', fontSize: 12, opacity: filtrados.length === 0 ? 0.5 : 1, cursor: filtrados.length === 0 ? 'not-allowed' : 'pointer' }}>
+          Descargar registros (CSV)
         </button>
       </div>
 
@@ -63,9 +98,9 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Destinatario</div>
-          <input type="text" value={destinatario} onChange={e => setDestinatario(e.target.value)}
-            placeholder="Nombre o cargo" style={{ width: '100%', padding: '9px 10px' }} />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Responsable</div>
+          <input type="text" value={actor} onChange={e => setActor(e.target.value)}
+            placeholder="Nombre de quien ejecutó la acción" style={{ width: '100%', padding: '9px 10px' }} />
         </div>
         <div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Desde</div>
@@ -77,9 +112,9 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
             style={{ padding: '8px 10px', background: 'var(--bg-input)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text-primary)', fontFamily: 'var(--font-ui)', fontSize: 13, colorScheme: 'dark' }} />
         </div>
-        {(tipo !== 'Todos' || destinatario || desde || hasta) && (
+        {(tipo !== 'Todos' || actor || desde || hasta) && (
           <button className="btn-ghost" style={{ padding: '8px 12px', fontSize: 12 }}
-            onClick={() => { setTipo('Todos'); setDestinatario(''); setDesde(''); setHasta('') }}>Limpiar</button>
+            onClick={() => { setTipo('Todos'); setActor(''); setDesde(''); setHasta('') }}>Limpiar</button>
         )}
       </div>
 
@@ -96,15 +131,15 @@ export default function Registros({ extra }: { extra: Registro[] }) {
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{r.fecha}</span>
               </div>
               <div style={{ fontSize: 13, color: 'var(--text-primary)', marginBottom: 3 }}>{r.asunto}</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Para: {r.destinatario}</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Por: {r.actor}</div>
             </div>
-            <Chip text={r.estado} type={chipFor(r.estado)} />
+            <Chip text={r.accion} type="running" />
           </div>
         ))}
         {!filtrados.length && (
           <div className="card" style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
-            {all.length === 0
-              ? 'Aún no hay registros de comunicaciones ni firmas para este contrato.'
+            {extra.length === 0
+              ? 'Aún no hay acciones registradas para este contrato.'
               : 'No hay registros que coincidan con los filtros aplicados.'}
           </div>
         )}

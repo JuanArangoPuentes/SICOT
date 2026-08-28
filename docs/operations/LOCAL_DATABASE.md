@@ -1,5 +1,25 @@
 # Base de datos local
 
+> **Entorno estándar del equipo (26 ago 2026):** la base de desarrollo es la del
+> contenedor `sicot-db`, **puerto 5433**, levantada con `docker compose`. Un
+> PostgreSQL instalado a mano en la máquina no es el entorno de referencia.
+
+## Importante: pueden coexistir dos bases distintas
+
+En una máquina de desarrollo es normal terminar con **dos PostgreSQL independientes**:
+
+| Instancia | Puerto en el host | Cuándo se usa |
+| --- | --- | --- |
+| Contenedor `sicot-db` (`docker compose`) | `5433` | Al levantar el stack con Docker |
+| PostgreSQL nativo instalado en Windows | `5432` | Al correr el backend sin Docker (`mvn spring-boot:run` con la `DB_URL` por defecto) |
+
+**No son la misma base.** Tienen datos distintos: un contrato creado en una no existe en la
+otra. Antes de concluir que "se borraron los datos", verifique contra cuál está apuntando el
+backend (`DB_URL`) y en cuál está consultando con pgAdmin/Adminer.
+
+Un tercer caso reportado por el equipo: conectarse al `5432` creyendo que es el de SICOT cuando
+en realidad es un PostgreSQL nativo de otro proyecto instalado en esa máquina.
+
 ## PostgreSQL con Docker
 
 El servicio `db` de `docker-compose.yml` ejecuta PostgreSQL 18 y crea la base
@@ -10,11 +30,26 @@ Para una base local completamente nueva:
 
 ```powershell
 docker compose down -v
-docker compose up -d --build
+docker compose up --build -d
+docker compose ps
 ```
 
 `down -v` elimina unicamente el volumen local de este proyecto y borra sus
 datos. No debe ejecutarse en una base con informacion que se quiera conservar.
+
+### Cuando hace falta hacerlo
+
+Si el backend no arranca y en sus logs aparece:
+
+```
+FlywayValidateException: Migration checksum mismatch for migration version 1
+Detected applied migration not resolved locally: 2. (…3, 4, 5, 6, 7, 8)
+```
+
+significa que el volumen recuerda las 9 migraciones anteriores a la
+consolidacion, mientras que el codigo ya solo trae dos. Flyway se niega a
+continuar con esa discrepancia. La secuencia de arriba resuelve el caso: borra
+ese historial y deja que las dos migraciones actuales se apliquen desde cero.
 
 ## Conexion desde pgAdmin
 
@@ -42,11 +77,17 @@ crear manualmente desde pgAdmin.
 
 ## Migraciones
 
-La base nueva usa una linea base de estructura en:
+La base nueva aplica dos migraciones, ambas en
+`backend/src/main/resources/db/migration/`:
 
 ```text
-backend/src/main/resources/db/migration/V1__create_sicot_schema.sql
+V1__create_sicot_schema.sql                    linea base: tablas, constraints, indices
+V9__add_indices_fecha_alertas_registros.sql    indices por fecha (alertas, registros)
 ```
 
-No contiene datos demo ni operaciones `DELETE`. Los usuarios demo solo se
+El salto de `V1` a `V9` es intencional: las migraciones `V1`–`V8` originales se
+consolidaron en la nueva `V1`, y `V9` se conservó porque ya estaba aplicada en
+bases existentes. No falta ninguna migración.
+
+Ninguna contiene datos demo ni operaciones `DELETE`. Los usuarios demo solo se
 crean con el perfil `dev` mediante `DataInitializer`.

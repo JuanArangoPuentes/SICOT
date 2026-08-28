@@ -19,11 +19,22 @@
 # "localhost" — ver .env.example. Si se cambia VITE_API_URL hay que
 # reconstruir el frontend (queda horneado en el build de Vite).
 #
-# DB_PASSWORD pasa de tener un valor de conveniencia por defecto (base,
-# "sicot_dev_password") a ser obligatorio: si el .env no lo define, este
-# override hace que `docker compose ... config`/`up` se niegue a arrancar
-# con un mensaje claro, en vez de arrancar tranquilamente con la contraseña
-# de desarrollo expuesta — mismo criterio que ya aplica JWT_SECRET.
+# Secretos y perfil — las tres garantías que añade este archivo:
+#
+#   1. DB_PASSWORD pasa de tener un valor de conveniencia por defecto (base,
+#      "sicot_dev_password") a ser obligatorio: si el .env no lo define, este
+#      override hace que `docker compose ... config`/`up` se niegue a arrancar
+#      con un mensaje claro, en vez de arrancar tranquilamente con la
+#      contraseña de desarrollo expuesta.
+#   2. JWT_SECRET recibe el mismo trato obligatorio. El archivo base no le
+#      define ningún valor por defecto, así que en desarrollo el respaldo lo
+#      pone el perfil "dev" de Spring; aquí, además, se exige explícitamente
+#      para que un despliegue no pueda quedarse sin secreto propio.
+#   3. SPRING_PROFILES_ACTIVE se fija a "prod" de forma literal, NO
+#      interpolada desde el .env. Es deliberado: hace imposible desplegar el
+#      perfil "dev" usando este archivo. Con "dev" activo se sembrarían las
+#      cuentas de prueba (cuyas contraseñas están publicadas en el README) y
+#      Swagger quedaría público.
 # ═══════════════════════════════════════════════════════════════════════════
 
 services:
@@ -38,7 +49,11 @@ services:
 
   backend:
     environment:
+      # Literal, no interpolado: el perfil "dev" no puede activarse por accidente
+      # desde el .env cuando se despliega con este archivo.
+      SPRING_PROFILES_ACTIVE: prod
       DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en el .env antes de usar el perfil de producción — genérelo con `openssl rand -base64 48`, nunca reutilice el de desarrollo}
 
   adminer:
     profiles: ["tools"]

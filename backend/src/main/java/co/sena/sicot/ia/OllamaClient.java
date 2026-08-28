@@ -1,6 +1,8 @@
 package co.sena.sicot.ia;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -16,6 +18,8 @@ import java.time.Duration;
  */
 @Component
 public class OllamaClient {
+
+    private static final Logger log = LoggerFactory.getLogger(OllamaClient.class);
 
     @Value("${sicot.ia.ollama-url}")
     private String ollamaUrl;
@@ -58,9 +62,15 @@ public class OllamaClient {
         } catch (IaNoDisponibleException e) {
             throw e;
         } catch (Exception e) {
+            // El detalle técnico (URL interna, modelo configurado) va SOLO al log
+            // del servidor: GlobalExceptionHandler propaga el mensaje de esta
+            // excepción al cliente, y esa URL es topología interna que no le
+            // corresponde ver a un usuario final. Lo que sí recibe es una
+            // explicación honesta de qué pasó y qué se puede hacer.
+            log.error("Fallo al contactar Ollama en {} con el modelo '{}'", ollamaUrl, modelo, e);
             throw new IaNoDisponibleException(
-                    "No se pudo contactar al servicio de IA local (Ollama) en " + ollamaUrl
-                            + ". Verifique que Ollama esté corriendo y el modelo '" + modelo + "' esté disponible.", e);
+                    "El servicio de IA no está disponible en este momento. "
+                            + "Intente de nuevo en unos minutos; si el problema persiste, avise al área de sistemas.", e);
         }
     }
 

@@ -7,24 +7,27 @@ import { login } from '@/services/authService'
 import { ApiError } from '@/services/api/client'
 import type { AuthResponse } from '@/services/api/types'
 
-// Login colors — identity panel uses SENA green bg; form panel uses white
+// Colores del inicio de sesión — el panel de identidad usa la superficie más
+// oscura del tema (nunca negro puro) con el verde SENA como acento; el panel
+// del formulario usa el lienzo base. Todo sale de los tokens del tema, así que
+// cambiar de preset en Configuración también cambia esta pantalla.
 const LOGIN_STYLE = {
-  // Panel de identidad (fondo verde SENA)
-  idBg:            '#39B54A',
-  idText:          '#FFFFFF',
-  idTextSub:       'rgba(255,255,255,0.80)',
-  idTextMuted:     'rgba(255,255,255,0.55)',
-  idBadgeBorder:   'rgba(255,255,255,0.35)',
-  idMark:          'rgba(255,255,255,0.50)',
-  // Panel formulario (fondo blanco)
-  formBg:       '#FFFFFF',
-  formSurface:  '#F4FAF5',
-  accent:       '#39B54A',
-  accentTech:   '#9A6A10',
-  border:       '#C2DCC6',
-  textPrimary:  '#0C1A0E',
-  textSecondary:'#3A6641',
-  textMuted:    '#7AAB80',
+  // Panel de identidad
+  idBg:            'var(--bg-rail)',
+  idText:          'var(--text-primary)',
+  idTextSub:       'var(--text-secondary)',
+  idTextMuted:     'var(--text-muted)',
+  idBadgeBorder:   'var(--accent-line)',
+  idMark:          'var(--accent-line)',
+  // Panel del formulario
+  formBg:       'var(--bg-base)',
+  formSurface:  'var(--bg-input)',
+  accent:       'var(--accent)',
+  accentTech:   'var(--accent-tech)',
+  border:       'var(--border)',
+  textPrimary:  'var(--text-primary)',
+  textSecondary:'var(--text-secondary)',
+  textMuted:    'var(--text-muted)',
 } as const
 
 export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse) => void }) {
@@ -65,7 +68,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
         {/* Cuadrícula técnica sobre verde */}
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)`,
+          backgroundImage: `linear-gradient(rgba(63,197,90,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(63,197,90,0.07) 1px, transparent 1px)`,
           backgroundSize: '32px 32px',
         }} />
 
@@ -73,7 +76,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
         <div style={{
           position: 'absolute', bottom: -180, left: -60,
           width: 500, height: 500, borderRadius: '50%',
-          background: `radial-gradient(circle, rgba(0,0,0,0.12) 0%, transparent 70%)`,
+          background: `radial-gradient(circle, var(--accent-glow) 0%, transparent 70%)`,
           pointerEvents: 'none',
         }} />
 
@@ -87,22 +90,22 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
                 position: 'absolute',
                 top: top ? 12 : undefined, bottom: !top ? 12 : undefined,
                 left: left ? 12 : undefined, right: !left ? 12 : undefined,
-                opacity: 0.30, pointerEvents: 'none',
+                opacity: 0.5, pointerEvents: 'none', color: 'var(--accent)',
               }}>
-              <line x1="14" y1="0" x2="14" y2="28" stroke="white" strokeWidth="1" />
-              <line x1="0" y1="14" x2="28" y2="14" stroke="white" strokeWidth="1" />
-              <circle cx="14" cy="14" r="4" stroke="white" strokeWidth="1" fill="none" />
-              <polyline points="8,0 0,0 0,8" stroke="white" strokeWidth="1" fill="none" />
-              <polyline points="20,0 28,0 28,8" stroke="white" strokeWidth="1" fill="none" />
-              <polyline points="0,20 0,28 8,28" stroke="white" strokeWidth="1" fill="none" />
-              <polyline points="28,20 28,28 20,28" stroke="white" strokeWidth="1" fill="none" />
+              <line x1="14" y1="0" x2="14" y2="28" stroke="currentColor" strokeWidth="1" />
+              <line x1="0" y1="14" x2="28" y2="14" stroke="currentColor" strokeWidth="1" />
+              <circle cx="14" cy="14" r="4" stroke="currentColor" strokeWidth="1" fill="none" />
+              <polyline points="8,0 0,0 0,8" stroke="currentColor" strokeWidth="1" fill="none" />
+              <polyline points="20,0 28,0 28,8" stroke="currentColor" strokeWidth="1" fill="none" />
+              <polyline points="0,20 0,28 8,28" stroke="currentColor" strokeWidth="1" fill="none" />
+              <polyline points="28,20 28,28 20,28" stroke="currentColor" strokeWidth="1" fill="none" />
             </svg>
           )
         })}
 
         {/* Logo + wordmark */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, position: 'relative' }}>
-          <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 6, backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 10, padding: 6 }}>
             <SenaLogo size={36} />
           </div>
           <div>
@@ -141,14 +144,14 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
           </p>
 
           {/* Separador decorativo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: 0.35 }}>
-            <div style={{ flex: 1, height: 1, background: 'white' }} />
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <line x1="6" y1="0" x2="6" y2="12" stroke="white" strokeWidth="1" />
-              <line x1="0" y1="6" x2="12" y2="6" stroke="white" strokeWidth="1" />
-              <circle cx="6" cy="6" r="2.5" stroke="white" strokeWidth="1" fill="none" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, opacity: 0.45 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--accent)' }} />
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ color: 'var(--accent)' }}>
+              <line x1="6" y1="0" x2="6" y2="12" stroke="currentColor" strokeWidth="1" />
+              <line x1="0" y1="6" x2="12" y2="6" stroke="currentColor" strokeWidth="1" />
+              <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1" fill="none" />
             </svg>
-            <div style={{ flex: 1, height: 1, background: 'white' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--accent)' }} />
           </div>
         </div>
 
@@ -163,7 +166,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
         flex: '0 0 40%', display: 'flex', flexDirection: 'column',
         alignItems: 'center', justifyContent: 'center',
         background: s.formBg,
-        borderLeft: `3px solid rgba(57,181,74,0.25)`,
+        borderLeft: '1px solid var(--border)',
         padding: '48px 40px',
       }}>
         <div style={{ width: '100%', maxWidth: 340 }}>
@@ -202,7 +205,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
                   fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
                   fontSize: 14, outline: 'none',
                 }}
-                onFocus={e => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(57,181,74,0.15)` }}
+                onFocus={e => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-glow)' }}
                 onBlur={e  => { e.currentTarget.style.borderColor = s.border; e.currentTarget.style.boxShadow = 'none' }}
               />
             </div>
@@ -226,7 +229,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
                   fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
                   fontSize: 14, outline: 'none',
                 }}
-                onFocus={e => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.boxShadow = `0 0 0 3px rgba(57,181,74,0.15)` }}
+                onFocus={e => { e.currentTarget.style.borderColor = s.accent; e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-glow)' }}
                 onBlur={e  => { e.currentTarget.style.borderColor = s.border; e.currentTarget.style.boxShadow = 'none' }}
               />
               <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'} title={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'} style={{
@@ -243,9 +246,9 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
           {error && (
             <div role="alert" aria-live="polite" style={{
-              fontSize: 12, color: '#C83030', margin: '8px 0 0',
-              padding: '8px 12px', background: 'rgba(200,48,48,0.06)',
-              border: '1px solid rgba(200,48,48,0.2)', borderRadius: 6,
+              fontSize: 12, color: 'var(--alert-critica)', margin: '8px 0 0',
+              padding: '8px 12px', background: 'var(--chip-red-bg)',
+              border: '1px solid var(--alert-critica)', borderRadius: 6,
             }}>
               {error}
             </div>
@@ -262,13 +265,15 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
             {busy ? 'Verificando…' : 'Ingresar →'}
           </button>
 
-          {/* Help link */}
-          <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <button disabled title="Contacte a la Unidad de Gestión Contractual para restablecer su contraseña"
-              style={{ background: 'none', border: 'none', color: s.textMuted, fontSize: 12, cursor: 'not-allowed', textDecoration: 'underline', opacity: 0.65 }}>
-              ¿Olvidó su contraseña?
-            </button>
-          </div>
+          {/* Ayuda de acceso.
+              Es un texto, no un botón: SICOT no tiene autoservicio de
+              restablecimiento de contraseña — la asigna el Administrador desde
+              su panel. Un botón "¿Olvidó su contraseña?" que no hace nada solo
+              hace perder el tiempo a quien no puede entrar. */}
+          <p style={{ marginTop: 20, textAlign: 'center', fontSize: 12, color: s.textMuted, lineHeight: 1.6 }}>
+            ¿Olvidó su contraseña? Solicite una nueva al Administrador del
+            sistema; se la enviará a su correo institucional.
+          </p>
 
           <div style={{ marginTop: 32, padding: '12px 0', borderTop: `1px solid ${s.border}`, textAlign: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: s.textMuted }}>
