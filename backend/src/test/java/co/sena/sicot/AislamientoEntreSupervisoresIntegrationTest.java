@@ -57,9 +57,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * contrato asignado. Corre con H2 y {@code spring-security-test} — sin Docker,
  * sin PostgreSQL.
  *
- * <p>Las pruebas marcadas {@code @Disabled} documentan brechas reales: no se
- * arreglan en esta rama (solo toca {@code src/test}); el arreglo pertenece a la
- * rama de su área. El motivo y la rama responsable están en cada anotación.
+ * <p>Dos de estas pruebas nacieron {@code @Disabled} porque documentaban brechas
+ * reales que esta suite no podía arreglar (solo toca {@code src/test}): el
+ * oráculo de enumeración entre contrato ajeno y contrato inexistente, y el orden
+ * de comprobaciones en {@code DocumentoService.firmar}. Las dos las cerró la rama
+ * de consistencia de API, así que ya están habilitadas y en verde.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
