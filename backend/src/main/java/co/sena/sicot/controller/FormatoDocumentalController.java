@@ -5,11 +5,14 @@ import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.service.FormatoDocumentalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -18,6 +21,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/formatos")
+@Validated
 @Tag(name = "Formatos documentales", description = "Catálogo de formatos oficiales (GCCON, GIL, ESUCON, etc.) que administra el Administrador")
 public class FormatoDocumentalController {
 
@@ -37,8 +41,14 @@ public class FormatoDocumentalController {
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<FormatoDocumentalResponse> subir(
-            @RequestParam("codigo") String codigo,
-            @RequestParam("nombre") String nombre,
+            @RequestParam("codigo")
+            @NotBlank(message = "El código del formato es obligatorio (ej. GCCON-F-031).")
+            @Size(max = 50, message = "El código del formato no puede superar 50 caracteres.")
+            String codigo,
+            @RequestParam("nombre")
+            @NotBlank(message = "El nombre del formato es obligatorio.")
+            @Size(max = 255, message = "El nombre del formato no puede superar 255 caracteres.")
+            String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
         return ResponseEntity.ok(formatoService.subir(codigo, nombre, archivo));
     }
