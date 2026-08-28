@@ -141,3 +141,31 @@ déjalo pasando.
 - [ ] Todo cambio que afecte al frontend está señalado uno por uno en el resumen.
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde, y si tocaste el frontend,
       `cd frontend; npm.cmd run build` también.
+
+---
+
+## Resultado — completada, PR #9 abierto
+
+Commits `5f5e305`, `7264014`, `5be7037`, `b67c523`, más un merge de `develop`.
+`verify` en verde: **125 pruebas, 0 fallos, 0 desactivadas**.
+
+- **Las dos brechas heredadas, cerradas.** `SecurityUtils` lanza ahora
+  `AccesoDenegadoException` (404) con un mensaje que no distingue entre "no
+  existe" y "no es tuyo"; en `DocumentoService.firmar` la comprobación de acceso
+  pasó delante de la de estado. Las dos pruebas `@Disabled` quedaron habilitadas
+  y pasan.
+- **201 alineado** en las dos creaciones que devolvían 200: subida de documento y
+  subida de formato.
+- **197 `@ApiResponse`** en los 13 controladores, y Javadoc en cada uno
+  explicando dónde se aplica realmente la autorización — varios no declaran
+  `@PreAuthorize` porque la regla vive en el servicio, y dejarlo escrito evita
+  que alguien "arregle" un hueco inexistente.
+- **`docs/INVENTARIO_ENDPOINTS.md`**: los 39 endpoints con rol, control de acceso
+  real, código de éxito y forma de respuesta.
+
+Cambiar el contrato obligó a tocar tres archivos de prueba de otras ramas
+(`isOk()` → `isCreated()`, `isBadRequest()` → `isNotFound()`). Se actualizaron
+con el motivo escrito: **ninguna assertion borrada ni debilitada**.
+
+Comprobado que el cambio de 400 a 404 no afecta a la interfaz: `apiFetch` solo
+ramifica en 401 y 204, y decide el éxito con `res.ok`.

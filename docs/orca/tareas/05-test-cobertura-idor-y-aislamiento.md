@@ -93,3 +93,28 @@ Casos que hay que cubrir explícitamente:
 - [ ] Ni una línea modificada en `backend/src/main`.
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde.
 - [ ] El resumen final lista las brechas encontradas y a qué rama corresponden.
+
+---
+
+## Resultado — completada, PR #8 mergeado
+
+Commit `704cd00`. Un solo archivo de pruebas, +622 líneas, **cero líneas de
+`src/main`**. `verify` en verde: 83 pruebas, 2 desactivadas a propósito.
+
+Hay una prueba de acceso cruzado por cada puerta —etapas, subetapas, documentos,
+alertas, registros, firmas, chat del Copiloto— y también las que comprueban que
+`GESTION` y `ADMINISTRADOR` siguen pasando: la suite no puede estrangular los
+roles legítimos.
+
+**Encontró dos brechas reales**, las dejó probadas y `@Disabled` con el motivo
+escrito, y no las arregló — que era exactamente lo que pedía esta tarea:
+
+1. **Oráculo de enumeración.** Un contrato ajeno respondía 400 y uno inexistente
+   404: el supervisor B podía averiguar qué ids existen aunque no fueran suyos.
+2. **Orden de comprobaciones en `DocumentoService.firmar`.** El estado de firma
+   se comprobaba antes que el acceso, así que el mensaje de error revelaba si un
+   documento ajeno estaba firmado.
+
+Las dos las cerró la **tarea 4**, y sus pruebas están habilitadas y en verde.
+Separar el hallazgo de su arreglo es lo que permitió revisar cada brecha por su
+cuenta antes de que se mezclara con una solución.
