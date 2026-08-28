@@ -38,6 +38,16 @@ git los ignore:
 **Se sobrescriben en cada corrida.** No se editan dentro del worktree: se editan
 aquí, en `docs/orca/`, y se propagan.
 
+Sobre `settings.local.json`: **es una comodidad, no un aislamiento**. Recorta los
+permisos que el agente tendría que confirmar a mano en el uso normal —compilar,
+leer, commitear— y bloquea lo que no debe hacer nunca —`push`, `rebase`, `merge`,
+abrir PRs, leer `.env`—. Pero las reglas casan por prefijo del comando, así que
+una orden compuesta o escrita de otra forma puede quedarse fuera del patrón: no
+es una caja de arena y no hay que confiarle nada crítico. **La restricción real
+es el contrato del agente**, que dice por escrito qué no se toca y por qué; el
+archivo de permisos solo evita que el operador esté aprobando `mvnw verify` cada
+cinco minutos.
+
 ---
 
 ## 2. Operación

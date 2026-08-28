@@ -55,9 +55,10 @@ Lee completos y en este orden, antes de tocar nada:
   2. .claude/orca/CONTRATO_DEL_AGENTE.md  (reglas de la flota: limites, verificacion, entrega)
   3. .claude/orca/TAREA.md                (tu tarea concreta)
 
-Ejecuta la tarea completa respetando el alcance por archivos que fija TAREA.md:
-hay otros agentes trabajando en paralelo sobre la misma base y ese reparto es lo
-que permite integrar despues sin conflictos.
+Ejecuta la tarea completa respetando el alcance por archivos que fija TAREA.md.
+Puede haber otros agentes trabajando en paralelo sobre la misma base: ese reparto
+es lo que permite integrar despues sin conflictos, asi que respetalo aunque no
+veas a nadie.
 
 No toques migraciones Flyway, no anadas dependencias, no hagas push ni rebase.
 
@@ -75,6 +76,7 @@ escribir_permisos() {
 {
   "permissions": {
     "allow": [
+      "Bash(cd:*)",
       "Bash(./mvnw:*)",
       "Bash(mvnw.cmd:*)",
       "Bash(git status:*)",
