@@ -60,8 +60,13 @@ hay otros agentes trabajando en paralelo sobre la misma base y ese reparto es lo
 que permite integrar despues sin conflictos.
 
 No toques migraciones Flyway, no anadas dependencias, no hagas push ni rebase.
-Verifica con \`cd backend && ./mvnw -B -ntp verify\` antes de dar nada por
-terminado, y cierra con el resumen de 5 puntos que pide el contrato.
+
+Verifica antes de dar nada por terminado, con el comando de tu shell:
+
+  PowerShell:  cd backend; .\mvnw.cmd -B -ntp verify
+  Git Bash:    cd backend && ./mvnw -B -ntp verify
+
+Cierra con el resumen de 5 puntos que pide el contrato.
 PROMPT
 }
 
