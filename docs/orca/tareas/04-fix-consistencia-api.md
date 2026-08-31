@@ -144,7 +144,7 @@ déjalo pasando.
 
 ---
 
-## Resultado — completada, PR #9 abierto
+## Resultado — completada, PR #9 mergeado
 
 Commits `5f5e305`, `7264014`, `5be7037`, `b67c523`, más un merge de `develop`.
 `verify` en verde: **125 pruebas, 0 fallos, 0 desactivadas**.

@@ -112,9 +112,9 @@ saber qué código está muerto de verdad.
 
 ### Qué produjo la flota
 
-Partiendo de 54 pruebas, `develop` está hoy en **125 pruebas, 0 fallos y 2
-desactivadas** — las dos que documentan las brechas de acceso. El PR #9 las
-habilita: cuando entre, quedan **125 con 0 desactivadas**.
+Partiendo de 54 pruebas, `develop` está en **125 pruebas, 0 fallos y 0
+desactivadas**: las dos que documentaban brechas de acceso quedaron habilitadas
+cuando la tarea 4 las cerró.
 
 - Dos brechas reales de control de acceso encontradas y cerradas: el oráculo de
   enumeración entre contrato ajeno y contrato inexistente, y el orden de
