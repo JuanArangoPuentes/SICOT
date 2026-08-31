@@ -41,17 +41,20 @@ function formatRegistroFecha(iso: string): string {
   }).replace(',', '')
 }
 
-// Categorías de la bitácora. Cubren exactamente las acciones que el backend
-// registra hoy (CONTRATO_CREADO, CONTRATO_ACTUALIZADO, SUPERVISOR_ASIGNADO,
-// ESTADO_CAMBIADO, ETAPA_ACTUALIZADA, DOCUMENTO_FIRMADO, FIRMA_ASIGNADA,
-// FIRMA_REVOCADA, FIRMA_RESTAURADA). Cualquier acción nueva cae en 'Otro' en
-// vez de ser clasificada a la fuerza en una categoría que no le corresponde.
+// Categorías de la bitácora. Cubren las doce acciones que el backend registra
+// hoy. Cualquier acción nueva cae en 'Otro' en vez de ser clasificada a la
+// fuerza en una categoría que no le corresponde.
 const CATEGORIA_POR_ACCION: Record<string, Registro['tipo']> = {
   CONTRATO_CREADO: 'Contrato',
   CONTRATO_ACTUALIZADO: 'Contrato',
   SUPERVISOR_ASIGNADO: 'Contrato',
   ESTADO_CAMBIADO: 'Contrato',
   ETAPA_ACTUALIZADA: 'Etapa',
+  // Añadidas con la validación de transiciones de estado: distinguen un avance
+  // de un retroceso, que antes se registraban con el mismo texto.
+  SUBETAPA_AVANZADA: 'Etapa',
+  SUBETAPA_REVERTIDA: 'Etapa',
+  ETAPA_RETROCEDIDA: 'Etapa',
   DOCUMENTO_FIRMADO: 'Documento',
   FIRMA_ASIGNADA: 'Firma',
   FIRMA_REVOCADA: 'Firma',

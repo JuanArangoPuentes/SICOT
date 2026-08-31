@@ -10,9 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Plantilla fija de las 6 etapas / 28 subetapas del procedimiento GCCON-P-010,
- * espejo 1:1 de STEPS_INITIAL en el frontend (contractFlow.ts) y de la
- * estructura usada en V2__seed_dev_data.sql para los contratos de ejemplo.
+ * Plantilla fija de las 6 etapas / 27 subetapas del procedimiento GCCON-P-010,
+ * espejo 1:1 de STEPS_INITIAL en el frontend (contractFlow.ts).
  * Se usa para poblar etapas/subetapas reales cuando Gestión crea un contrato
  * nuevo — sin esto, un contrato real nunca tenía etapas y el panel de
  * Supervisor quedaba vacío.

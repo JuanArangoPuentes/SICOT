@@ -10,7 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.context.MessageSourceResolvable;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.ParameterValidationResult;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,6 +62,32 @@ public class GlobalExceptionHandler {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
         for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
             fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage());
+        }
+        return build("Error de validación en los datos enviados.", HttpStatus.BAD_REQUEST, request, fieldErrors);
+    }
+
+    /**
+     * Restricciones que fallan sobre un {@code @RequestParam} o un
+     * {@code @PathVariable}.
+     *
+     * <p>Solo llega aquí cuando el controlador NO declara {@code @Validated} a
+     * nivel de clase: en ese caso Spring MVC valida el método por su cuenta y
+     * lanza esta excepción en vez de la {@link ConstraintViolationException}
+     * que produce la vía AOP. Sin este manejador caía en el catch-all y salía
+     * como <b>500</b>, convirtiendo un error del usuario en un fallo del
+     * servidor. Se responde igual que la validación del cuerpo: 400 con el
+     * mismo mapa {@code fieldErrors}, para que el frontend no tenga que
+     * distinguir de dónde vino el fallo.
+     */
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<ErrorResponse> validacionDeParametros(HandlerMethodValidationException ex,
+                                                                 WebRequest request) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (ParameterValidationResult resultado : ex.getAllValidationResults()) {
+            String nombre = resultado.getMethodParameter().getParameterName();
+            for (MessageSourceResolvable error : resultado.getResolvableErrors()) {
+                fieldErrors.putIfAbsent(nombre != null ? nombre : "parametro", error.getDefaultMessage());
+            }
         }
         return build("Error de validación en los datos enviados.", HttpStatus.BAD_REQUEST, request, fieldErrors);
     }
