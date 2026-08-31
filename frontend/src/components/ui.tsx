@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import senaLogo from '@/imports/image.png'
+import senaLogo from '@/assets/logo-sena.png'
 import { IconLogout } from './icons'
 
 // ─── Marca institucional ──────────────────────────────────────────────────────
