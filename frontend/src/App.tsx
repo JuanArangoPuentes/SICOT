@@ -5,7 +5,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { PrefsProvider } from '@/prefs'
-import AdminPanel from '@/components/AdminPanel'
+import AdminPanel from '@/screens/AdminPanel'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
 import type { Registro } from '@/components/Registros'

@@ -160,7 +160,7 @@ Commits `5f5e305`, `7264014`, `5be7037`, `b67c523`, más un merge de `develop`.
   explicando dónde se aplica realmente la autorización — varios no declaran
   `@PreAuthorize` porque la regla vive en el servicio, y dejarlo escrito evita
   que alguien "arregle" un hueco inexistente.
-- **`docs/INVENTARIO_ENDPOINTS.md`**: los 39 endpoints con rol, control de acceso
+- **`docs/api/INVENTARIO_ENDPOINTS.md`**: los 39 endpoints con rol, control de acceso
   real, código de éxito y forma de respuesta.
 
 Cambiar el contrato obligó a tocar tres archivos de prueba de otras ramas
