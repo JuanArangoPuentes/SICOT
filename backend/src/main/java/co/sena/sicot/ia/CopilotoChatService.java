@@ -91,10 +91,6 @@ public class CopilotoChatService {
     // es la segunda barrera para cualquier ruta que no pase por ese DTO.
     private static final int MAX_CARACTERES_ENTRADA = 8000;
 
-    public String responder(Long contratoId, String pregunta) {
-        return responder(contratoId, pregunta, null);
-    }
-
     // Sin @Transactional a propósito: ollamaClient.generar() más abajo puede
     // tardar hasta sicot.ia.timeout-seconds (900s por defecto). Si este método
     // mantuviera una transacción abierta durante esa llamada, retendría una
