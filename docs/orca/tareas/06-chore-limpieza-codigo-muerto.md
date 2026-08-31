@@ -38,20 +38,20 @@ producción tres semanas después. La regla de esta rama es una sola —
    real (`CopilotoController:33`) usa la de tres. Verificado con `grep` sobre
    todo `backend/src`, y **revalidado sobre `develop` con las cinco ramas ya
    integradas**: sigue sin usarla nadie. Es el caso limpio.
-2. **`service/ArchivoValidator.contentTypeDe`** — tiene una rama `default` en el
-   `switch` sobre `TipoDocumento`. Comprueba si el enum puede llegar ahí; si no,
-   es código inalcanzable. La reserva que traía este brief queda resuelta: la
-   tarea 3 acabó usando `validarTamanio` y `tipoDeArchivo`, **no** este método,
-   así que sus dos únicos llamadores siguen siendo `DocumentoService` y
-   `FormatoDocumentalService`.
+2. ~~**`service/ArchivoValidator.contentTypeDe`** — su rama `default` parecía
+   inalcanzable.~~ **Pista falsa, descartada al ejecutar la tarea:**
+   `TipoDocumento` tiene cinco constantes (`PDF`, `DOCX`, `XLSX`, `IMAGEN`,
+   `OTRO`) y el `switch` solo cubre tres, así que el `default` es obligatorio
+   para que compile. Quitarlo no sería una eliminación.
 3. **`frontend/src/imports/`** — carpeta con nombre de andamiaje. El commit
    `22b1e67` ya retiró "el andamiaje de Figma Make"; comprueba si quedó algo sin
    referenciar.
 4. **`frontend/src/data/`** — revisa si queda algún dato de ejemplo. Los commits
    `3452c57` y `d482d06` eliminaron datos fabricados del frontend; lo que quede
    sin usar aquí es tanto limpieza como higiene de la regla de oro (§30).
-5. **`mcp/`** — no aparece en la CI ni en el `README` principal. Averigua si sigue
-   vivo **antes** de proponer nada: si no lo tienes claro, no lo borres, pregunta.
+5. ~~**`mcp/`** — no aparece en la CI ni en el `README` principal.~~ **Medio
+   falso:** no entra en la CI, pero sí está en el `README` principal, en el
+   diagrama de arquitectura y en la tabla de subproyectos. Está vivo.
 
 ## Cómo demostrar que algo está muerto
 
@@ -89,3 +89,30 @@ el estado actual**. Los dos candidatos de arriba están revalidados contra
 - [ ] `cd backend; .\mvnw.cmd -B -ntp verify` en verde, y
       `cd frontend; npm.cmd run build` también si tocaste el frontend.
 - [ ] El resumen incluye la lista de "sospechosos no borrados" y por qué.
+
+---
+
+## Resultado — completada
+
+Commits `833eb22`, `76eea16`, `a08c44b`. Diff total: **5 archivos, 20 líneas,
+solo eliminaciones**, sin un solo `import` huérfano. `verify` en verde: 125
+pruebas, 0 fallos, 0 desactivadas; y `npm run build` del frontend también.
+
+Cinco símbolos muertos eliminados, cada uno con sus cuatro evidencias escritas en
+el cuerpo de su commit:
+
+| Símbolo | Por qué estaba muerto |
+|---|---|
+| `CopilotoChatService.responder(Long, String)` | Sobrecarga que solo delegaba con `null`; el único llamador usa la de tres argumentos |
+| `JwtService.extractUsuarioId` | Cero llamadores: el filtro resuelve el usuario por email, nunca por el claim |
+| `contratoService.getContrato(id)` | Cero consumidores; la UI usa solo `getContratos` |
+| `api/client.getAuthToken()` | Cero consumidores; `apiFetch` lee la variable de módulo |
+| `api/types.ChatRequest` | Nunca se importa, y estaba obsoleta: le faltaba `historial` |
+
+**Lo que no borró vale tanto como lo que borró.** Descartó cuatro de las cinco
+pistas de este brief —dos de ellas equivocadas de origen, corregidas arriba— y
+dejó por escrito dos sospechosos que **no** se tocan: las constantes
+`TipoDocumento.IMAGEN` y `OTRO`, que hoy no asigna nadie pero pertenecen a un
+enum persistido (`@Enumerated(EnumType.STRING)`) y confirmarlas exige inspección
+de base de datos, que es área con dueño asignado (§33); y un par de símbolos
+sobre-exportados que no son código muerto, solo `export` de más.
