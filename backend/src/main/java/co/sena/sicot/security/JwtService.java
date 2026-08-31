@@ -41,10 +41,6 @@ public class JwtService {
         return claims(token).getSubject();
     }
 
-    public Long extractUsuarioId(String token) {
-        return claims(token).get("usuarioId", Long.class);
-    }
-
     public boolean isTokenValid(String token, String email) {
         Claims claims = claims(token);
         return claims.getSubject().equals(email) && claims.getExpiration().after(new Date());
