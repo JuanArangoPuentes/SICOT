@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -13,30 +15,53 @@ import java.time.Duration;
  * Única puerta de entrada a Ollama (IA local, sin costo de licencia).
  * Nadie más en el backend llama a Ollama directamente — así el modelo se
  * puede cambiar (OLLAMA_MODEL) sin tocar el resto del código. El frontend
- * nunca llama a Ollama; siempre pasa por el backend (ver
- * .github/copilot-instructions.md §29).
+ * nunca llama a Ollama; siempre pasa por este backend.
+ *
+ * <p>Al ser el único punto de paso, es también donde se aplica el límite de uso
+ * ({@link LimitadorDeUsoIa}): así queda cubierto el chat, la extracción de
+ * datos de un PDF y la generación de documentos sin tener que acordarse de
+ * ponerlo en cada uno.
  */
 @Component
 public class OllamaClient {
 
     private static final Logger log = LoggerFactory.getLogger(OllamaClient.class);
 
-    @Value("${sicot.ia.ollama-url}")
-    private String ollamaUrl;
+    private final String ollamaUrl;
+    private final String modelo;
+    private final LimitadorDeUsoIa limitador;
 
-    @Value("${sicot.ia.ollama-model}")
-    private String modelo;
+    /**
+     * Cliente construido <b>una sola vez</b>.
+     *
+     * <p>Antes se creaba uno nuevo en cada llamada, con un
+     * {@code SimpleClientHttpRequestFactory} configurado mediante
+     * inicialización de doble llave — una subclase anónima por cada invocación,
+     * que además retiene una referencia implícita a la instancia que la creó.
+     * Los tiempos de espera no cambian entre peticiones, así que no había nada
+     * que reconstruir.
+     */
+    private final RestClient restClient;
 
-    @Value("${sicot.ia.timeout-seconds}")
-    private int timeoutSeconds;
+    /**
+     * Inyección por constructor, como el resto del backend. Con {@code @Value}
+     * sobre campos, los valores no existen todavía cuando corre el constructor,
+     * lo que impide precisamente construir aquí el cliente.
+     */
+    public OllamaClient(@Value("${sicot.ia.ollama-url}") String ollamaUrl,
+                        @Value("${sicot.ia.ollama-model}") String modelo,
+                        @Value("${sicot.ia.timeout-seconds}") int timeoutSeconds,
+                        LimitadorDeUsoIa limitador) {
+        this.ollamaUrl = ollamaUrl;
+        this.modelo = modelo;
+        this.limitador = limitador;
 
-    private RestClient restClient() {
-        return RestClient.builder()
+        SimpleClientHttpRequestFactory fabrica = new SimpleClientHttpRequestFactory();
+        fabrica.setConnectTimeout(Duration.ofSeconds(10));
+        fabrica.setReadTimeout(Duration.ofSeconds(timeoutSeconds));
+        this.restClient = RestClient.builder()
                 .baseUrl(ollamaUrl)
-                .requestFactory(new org.springframework.http.client.SimpleClientHttpRequestFactory() {{
-                    setConnectTimeout((int) Duration.ofSeconds(10).toMillis());
-                    setReadTimeout((int) Duration.ofSeconds(timeoutSeconds).toMillis());
-                }})
+                .requestFactory(fabrica)
                 .build();
     }
 
@@ -47,11 +72,15 @@ public class OllamaClient {
      * fabrica una respuesta falsa para disimular que la IA no respondió.
      */
     public String generar(String prompt, boolean formatoJson) {
+        return limitador.ejecutar("ollama:generar", () -> llamar(prompt, formatoJson));
+    }
+
+    private String llamar(String prompt, boolean formatoJson) {
         try {
             GenerateRequest request = new GenerateRequest(modelo, prompt, false, formatoJson ? "json" : null);
-            GenerateResponse respuesta = restClient().post()
+            GenerateResponse respuesta = restClient.post()
                     .uri("/api/generate")
-                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
                     .body(GenerateResponse.class);

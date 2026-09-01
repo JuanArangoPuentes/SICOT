@@ -54,6 +54,15 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       DB_PASSWORD: ${DB_PASSWORD:?Defina DB_PASSWORD en el .env antes de usar el perfil de producción — no hay contraseña de conveniencia aquí}
       JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET en el .env antes de usar el perfil de producción — genérelo con `openssl rand -base64 48`, nunca reutilice el de desarrollo}
+      # Administrador inicial: obligatorio en el PRIMER arranque de una base
+      # vacía. Sin él, el despliegue quedaría inaccesible — DataInitializer solo
+      # siembra cuentas en los perfiles dev/test, POST /api/usuarios exige rol
+      # ADMINISTRADOR y el login es el único endpoint público. El backend lo
+      # comprueba y se niega a arrancar (ver AdministradorInicial); esto lo
+      # detiene antes, en `docker compose up`, con un mensaje más claro.
+      # Una vez creada la cuenta, ambas variables pueden retirarse del .env.
+      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:?Defina SICOT_ADMIN_EMAIL en el .env — es la cuenta de administrador con la que se entra por primera vez}
+      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:?Defina SICOT_ADMIN_PASSWORD en el .env con al menos 12 caracteres — genérela con `openssl rand -base64 24` y cámbiela desde la aplicación tras el primer ingreso}
 
   adminer:
     profiles: ["tools"]

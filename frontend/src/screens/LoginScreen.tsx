@@ -48,7 +48,18 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
       const auth = await login(correo, password)
       onLogin(auth)
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudo conectar con el servidor.')
+      if (e instanceof ApiError && e.esDemasiadasSolicitudes) {
+        // El backend responde 429 con Retry-After tras varios intentos
+        // fallidos. Decir cuánto falta evita que la persona siga probando
+        // contraseñas —lo que solo alarga el bloqueo— y que crea que el
+        // sistema está caído.
+        const minutos = e.reintentarEnSegundos ? Math.ceil(e.reintentarEnSegundos / 60) : null
+        setError(minutos
+          ? `${e.message} Podrá volver a intentarlo en unos ${minutos} minuto${minutos === 1 ? '' : 's'}.`
+          : e.message)
+      } else {
+        setError(e instanceof ApiError ? e.message : 'No se pudo conectar con el servidor.')
+      }
     } finally {
       setBusy(false)
     }
