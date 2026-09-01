@@ -29,11 +29,13 @@ public class FormatoDocumentalService {
         this.archivoValidator = archivoValidator;
     }
 
+    /**
+     * Catálogo completo, sin traer los archivos — ver
+     * {@code FormatoDocumentalRepository.listarCatalogo}.
+     */
     @Transactional(readOnly = true)
     public List<FormatoDocumentalResponse> listar() {
-        return formatoRepository.findAllByOrderByCodigoAsc().stream()
-                .map(FormatoDocumentalMapper::toResponse)
-                .toList();
+        return formatoRepository.listarCatalogo();
     }
 
     @Transactional
@@ -62,7 +64,7 @@ public class FormatoDocumentalService {
         formato.setVersion(siguienteVersion(esNuevo ? null : formato.getVersion()));
         formato.setTipoArchivo(tipo);
         formato.setNombreArchivo(archivo.getOriginalFilename());
-        formato.setContentType(archivoValidator.contentTypeDe(tipo, archivo.getContentType()));
+        formato.setContentType(archivoValidator.contentTypeDe(tipo));
         formato.setTamanioBytes(archivo.getSize());
         formato.setEstado(EstadoFormato.VIGENTE);
         formato.setSubidoPor(SecurityUtils.currentUsuario());

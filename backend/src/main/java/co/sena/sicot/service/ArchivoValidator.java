@@ -3,6 +3,10 @@ package co.sena.sicot.service;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import org.apache.tika.Tika;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.InvalidMediaTypeException;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,12 +25,33 @@ import java.util.Set;
 @Component
 public class ArchivoValidator {
 
-    private static final long TAMANIO_MAXIMO_BYTES = 20L * 1024 * 1024; // 20 MB
+    private static final Logger log = LoggerFactory.getLogger(ArchivoValidator.class);
+
+    /**
+     * Tope por archivo. Debe coincidir con
+     * {@code spring.servlet.multipart.max-file-size} en application.properties:
+     * si el de Spring fuera mayor, un archivo intermedio se recibiría entero en
+     * memoria para después rechazarlo aquí — se pagaría el costo de la subida
+     * sin quedarse con nada. Si fuera menor, este mensaje de error nunca se
+     * vería y el usuario recibiría el genérico de Spring.
+     */
+    public static final long TAMANIO_MAXIMO_BYTES = 20L * 1024 * 1024; // 20 MB
 
     private static final Map<String, TipoDocumento> EXTENSIONES_PERMITIDAS = Map.of(
             "pdf", TipoDocumento.PDF,
             "docx", TipoDocumento.DOCX,
             "xlsx", TipoDocumento.XLSX
+    );
+
+    /**
+     * MIME canónico de cada tipo aceptado. Es el ÚNICO valor que se guarda en
+     * la base y el único que se devuelve al descargar: ver
+     * {@link #contentTypeDe(TipoDocumento)}.
+     */
+    private static final Map<TipoDocumento, String> MIME_CANONICO = Map.of(
+            TipoDocumento.PDF, "application/pdf",
+            TipoDocumento.DOCX, "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            TipoDocumento.XLSX, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
 
     // Tipos MIME reales (detectados por contenido/bytes mágicos, no por la
@@ -73,17 +98,50 @@ public class ArchivoValidator {
         }
     }
 
-    public String contentTypeDe(TipoDocumento tipo, String contentTypeDetectado) {
-        if (contentTypeDetectado != null && !contentTypeDetectado.isBlank()
-                && !contentTypeDetectado.equals("application/octet-stream")) {
-            return contentTypeDetectado;
+    /**
+     * MIME que se guarda y que se devolverá al descargar.
+     *
+     * <p>Antes este método recibía además el {@code Content-Type} que mandó el
+     * navegador y lo devolvía tal cual si no venía vacío. Eso tenía dos
+     * consecuencias, las dos malas. La primera: ese valor lo elige por completo
+     * quien sube el archivo, se guardaba en la base y se devolvía como cabecera
+     * de la descarga — un archivo que Tika acepta como PDF podía quedar
+     * almacenado como {@code text/html}. Hoy eso no es explotable porque la
+     * descarga fuerza {@code Content-Disposition: attachment} y Spring Security
+     * añade {@code nosniff}, pero dejaba el sistema a un cambio de distancia de
+     * un XSS almacenado sobre un dominio institucional. La segunda, peor porque
+     * era un fallo seguro y no potencial: un {@code Content-Type} sin barra
+     * ("foo") o con caracteres inválidos hacía que
+     * {@code MediaType.parseMediaType} lanzara al descargar, y ese documento
+     * quedaba <b>permanentemente indescargable</b> con un error 500, sin
+     * endpoint para borrarlo ni corregirlo.
+     *
+     * <p>La corrección es dejar de preguntarle al cliente: el tipo ya se
+     * determinó por los bytes reales del archivo, y de ahí sale el MIME.
+     */
+    public String contentTypeDe(TipoDocumento tipo) {
+        return MIME_CANONICO.getOrDefault(tipo, MediaType.APPLICATION_OCTET_STREAM_VALUE);
+    }
+
+    /**
+     * Convierte a {@link MediaType} lo que haya guardado en la columna
+     * {@code content_type}, sin posibilidad de lanzar.
+     *
+     * <p>Los registros nuevos siempre llevan un MIME canónico, así que en la
+     * práctica esto no se activa. Está por las filas anteriores a esta
+     * corrección, que pueden guardar cualquier cosa que el navegador enviara:
+     * sin esta red, esos documentos seguirían respondiendo 500 al descargarlos.
+     */
+    public static MediaType mediaTypeSeguro(String contentType) {
+        if (contentType == null || contentType.isBlank()) {
+            return MediaType.APPLICATION_OCTET_STREAM;
         }
-        return switch (tipo) {
-            case PDF -> "application/pdf";
-            case DOCX -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-            case XLSX -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-            default -> "application/octet-stream";
-        };
+        try {
+            return MediaType.parseMediaType(contentType);
+        } catch (InvalidMediaTypeException e) {
+            log.warn("Content-Type inválido almacenado ('{}'). Se sirve como binario genérico.", contentType);
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 
     private String extensionDe(String nombreArchivo) {
