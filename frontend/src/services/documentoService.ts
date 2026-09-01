@@ -3,7 +3,13 @@
 // backend; el frontend nunca habla con Ollama directamente.
 
 import { apiFetch, apiFetchBlob } from './api/client'
-import type { ChatResponse, DocumentoResponse, ExtraccionContratoResponse, GenerarDocumentoRequest } from './api/types'
+import type {
+  ChatResponse,
+  DocumentoResponse,
+  ExtraccionContratoResponse,
+  GenerarDocumentoRequest,
+  VerificacionIntegridadResponse,
+} from './api/types'
 import type { ChatMsg } from '@/types/domain'
 
 export function getDocumentosContrato(contratoId: number): Promise<DocumentoResponse[]> {
@@ -33,6 +39,19 @@ export function firmarDocumento(contratoId: number, documentoId: number): Promis
   return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/firmar`, {
     method: 'POST',
   })
+}
+
+// Comprueba que un documento firmado no haya cambiado desde que se firmó: el
+// backend recalcula el SHA-256 del contenido y lo compara con la huella que
+// registró al firmar. Es lo que permite decirle a un supervisor si el archivo
+// que está viendo es exactamente el que firmó.
+export function verificarIntegridad(
+  contratoId: number,
+  documentoId: number,
+): Promise<VerificacionIntegridadResponse> {
+  return apiFetch<VerificacionIntegridadResponse>(
+    `/api/contratos/${contratoId}/documentos/${documentoId}/verificacion`,
+  )
 }
 
 // Descarga el archivo real (PDF generado por la IA o cargado manualmente)

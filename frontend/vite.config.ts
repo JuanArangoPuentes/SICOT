@@ -49,6 +49,20 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
     },
+    // Pruebas de componente y de servicios (Vitest). Hasta ahora el frontend
+    // no tenía ninguna prueba: su única red de seguridad era `tsc --noEmit`,
+    // que comprueba que los tipos cuadren pero no que la pantalla haga lo que
+    // debe. `jsdom` da un DOM real para montar componentes; los `.spec.ts` de
+    // Playwright viven en e2e/ y los ejecuta otra herramienta, así que se
+    // excluyen explícitamente.
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test/setup.ts'],
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      exclude: ['e2e/**', 'node_modules/**'],
+      css: false,
+    },
   }
 })
 
