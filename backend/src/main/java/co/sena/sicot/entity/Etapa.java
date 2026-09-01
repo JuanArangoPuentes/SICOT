@@ -14,6 +14,11 @@ public class Etapa {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Bloqueo optimista gestionado por Hibernate — ver {@code V12__bloqueo_optimista.sql}. */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "contrato_id", nullable = false)
     private Contrato contrato;

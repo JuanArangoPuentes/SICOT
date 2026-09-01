@@ -17,6 +17,15 @@ public class Contrato {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Versión para bloqueo optimista. La gestiona Hibernate por completo: el
+     * código de la aplicación nunca la lee ni la escribe, por eso no tiene
+     * getter ni setter. Ver {@code V12__bloqueo_optimista.sql} para el motivo.
+     */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @Column(name = "numero_contrato", nullable = false, unique = true, length = 50)
     private String numeroContrato;
 

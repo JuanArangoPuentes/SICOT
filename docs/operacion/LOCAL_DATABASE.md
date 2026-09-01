@@ -77,17 +77,32 @@ crear manualmente desde pgAdmin.
 
 ## Migraciones
 
-La base nueva aplica dos migraciones, ambas en
-`backend/src/main/resources/db/migration/`:
+Todas viven en `backend/src/main/resources/db/migration/`:
 
 ```text
-V1__create_sicot_schema.sql                    linea base: tablas, constraints, indices
-V9__add_indices_fecha_alertas_registros.sql    indices por fecha (alertas, registros)
+V1__create_sicot_schema.sql                                  linea base: tablas, constraints, indices
+V9__add_indices_fecha_alertas_registros.sql                  indices por fecha (alertas, registros)
+V10__reconcilia_esquema_con_la_linea_base.sql                restaura restricciones ausentes en bases antiguas
+V11__indices_compuestos_tablas_de_crecimiento_libre.sql      (contrato_id, fecha DESC) en alertas y registros
+V12__bloqueo_optimista.sql                                   columna lock_version en siete tablas
 ```
 
 El salto de `V1` a `V9` es intencional: las migraciones `V1`–`V8` originales se
 consolidaron en la nueva `V1`, y `V9` se conservó porque ya estaba aplicada en
 bases existentes. No falta ninguna migración.
 
+`V10` merece una nota: la consolidación de `V1` agregó siete restricciones que
+las migraciones originales no tenían, pero en las bases que ya existían solo se
+reparó el historial de Flyway — el SQL nuevo nunca corrió. `V10` las restaura y
+es un no-op en las bases creadas desde cero. Es la migración que vuelve a dejar
+todas las bases del proyecto con el mismo esquema. El detalle completo está en
+[MODELO_DE_DATOS.md](MODELO_DE_DATOS.md).
+
 Ninguna contiene datos demo ni operaciones `DELETE`. Los usuarios demo solo se
 crean con el perfil `dev` mediante `DataInitializer`.
+
+## Verificar que dos bases tienen el mismo esquema
+
+Si sospecha que la base del `5432` y la del `5433` divergieron, hay una consulta
+lista para compararlas con `diff` en
+[MODELO_DE_DATOS.md](MODELO_DE_DATOS.md#comparar-dos-bases).
