@@ -60,6 +60,20 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
+        <!--
+            Formato de métricas para Prometheus/Grafana, ambos libres y sin
+            límite de uso. Hasta ahora el único dato observable del backend era
+            "arriba o abajo": cuando se degradara no habría forma de saber si
+            fue la memoria, el pool de conexiones o un endpoint concreto.
+            Micrometer ya viene con Actuator; esto solo añade el registro que
+            publica /actuator/prometheus (autenticado, ver SecurityConfig).
+        -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Correo (entrega real de credenciales) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
