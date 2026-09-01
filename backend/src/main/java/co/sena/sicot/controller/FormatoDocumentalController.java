@@ -2,6 +2,7 @@ package co.sena.sicot.controller;
 
 import co.sena.sicot.dto.formato.FormatoDocumentalResponse;
 import co.sena.sicot.entity.FormatoDocumental;
+import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.FormatoDocumentalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -99,7 +100,9 @@ public class FormatoDocumentalController {
                 .build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(MediaType.parseMediaType(formato.getContentType()))
+                // Ver ArchivoValidator.mediaTypeSeguro: un Content-Type inválido
+                // guardado antes de la corrección haría fallar la descarga con 500.
+                .contentType(ArchivoValidator.mediaTypeSeguro(formato.getContentType()))
                 .body(formato.getContenido());
     }
 

@@ -14,11 +14,20 @@ public class FirmaElectronica {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Bloqueo optimista gestionado por Hibernate — ver {@code V12__bloqueo_optimista.sql}. */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     private Usuario usuario;
 
-    @Column(name = "firma_id", nullable = false, length = 50)
+    // unique = true refleja uq_firmas_electronicas_firma_id, que existe en la
+    // base desde V1 pero no estaba declarada aquí. El mapeo y el esquema deben
+    // decir lo mismo: quien lee esta clase tiene que poder deducir las reglas
+    // de la tabla sin abrir el SQL.
+    @Column(name = "firma_id", nullable = false, unique = true, length = 50)
     private String firmaId;
 
     @Column(nullable = false)

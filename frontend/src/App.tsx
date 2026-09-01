@@ -3,15 +3,26 @@
 // Reestructurado a partir del App.tsx original de Figma Make: misma lógica,
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
 import { PrefsProvider } from '@/prefs'
-import AdminPanel from '@/screens/AdminPanel'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
 import type { Registro } from '@/components/Registros'
 import LoginScreen from '@/screens/LoginScreen'
-import SupervisorPanel from '@/screens/SupervisorPanel'
-import GestionPanel from '@/screens/GestionPanel'
+import CargandoPanel from '@/components/CargandoPanel'
+
+// Los tres paneles se cargan bajo demanda, no de entrada.
+//
+// Antes el build producía un único paquete de 755 kB: cualquiera que abriera
+// SICOT descargaba los tres paneles de rol más Recharts, aunque solo pudiera
+// entrar a uno. Cada persona usa exactamente un panel —el de su rol— y la
+// pantalla de login no necesita ninguno.
+//
+// Importa especialmente para el despliegue local del supervisor y para la red
+// del centro de formación, donde el ancho de banda no es el de una oficina.
+const SupervisorPanel = lazy(() => import('@/screens/SupervisorPanel'))
+const GestionPanel = lazy(() => import('@/screens/GestionPanel'))
+const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { Screen, Step } from '@/types/domain'
 import type { AuthResponse, ContratoResponse } from '@/services/api/types'
 import { clearSession, getSession } from '@/services/session'
@@ -152,6 +163,7 @@ function AppInner() {
   return (
     <>
       {screen === 'login' && <LoginScreen onLogin={handleLogin} />}
+      <Suspense fallback={screen === 'login' ? null : <CargandoPanel />}>
       {screen === 'supervisor-panel' && session && (
         <SupervisorPanel
           steps={steps}
@@ -178,6 +190,7 @@ function AppInner() {
       {screen === 'admin-panel' && session && (
         <AdminPanel usuario={session} onLogout={logout} onOpenSettings={() => setSettingsOpen(true)} />
       )}
+      </Suspense>
 
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 

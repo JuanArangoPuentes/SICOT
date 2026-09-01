@@ -23,7 +23,7 @@ import java.util.List;
  * La autorización real se aplica en {@link EtapaService#listarSubetapas(Long)} mediante
  * {@code SecurityUtils.verificarAccesoAlContrato} a través de la etapa padre.
  * <p>
- * <b>Control de acceso PATCH /api/sutetapas/{id}/estado:</b> {@code @PreAuthorize} por rol
+ * <b>Control de acceso PATCH /api/subetapas/{id}/estado:</b> {@code @PreAuthorize} por rol
  * + verificación en service de acceso al contrato de la subetapa.
  */
 @RestController

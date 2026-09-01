@@ -19,6 +19,13 @@ import Registros, { type Registro } from '@/components/Registros'
 import Bandeja, { type ItemBandeja } from '@/components/supervisor/Bandeja'
 import ContratoInfo from '@/components/supervisor/ContratoInfo'
 import ContratoGraficas from '@/components/supervisor/ContratoGraficas'
+import VistaDocumentos from '@/components/supervisor/VistaDocumentos'
+import VistaAlertas from '@/components/supervisor/VistaAlertas'
+import {
+  CargandoContratoState,
+  EmptyContractState,
+  ErrorContratoState,
+} from '@/components/supervisor/EstadosSinContrato'
 import { Chip, SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
 import {
   AvatarIcon, IconArrowRight, IconBell, IconChart, IconCheck, IconChevron, IconClock,
@@ -29,7 +36,7 @@ import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type { AuthResponse, AlertaResponse, ContratoResponse, DocumentoResponse } from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
-import { getDocumentosContrato, generarDocumento, firmarDocumento, descargarDocumento, preguntarCopiloto } from '@/services/documentoService'
+import { getDocumentosContrato, generarDocumento, firmarDocumento, preguntarCopiloto } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
@@ -87,125 +94,6 @@ const TITULO_VISTA: Record<Tab, { titulo: string; sub: string }> = {
   alertas: { titulo: 'Alertas', sub: 'Seguimiento en vivo del contrato' },
   documentos: { titulo: 'Documentos', sub: 'Documentos formales del proceso GCCON-P-010' },
   registros: { titulo: 'Registros', sub: 'Bitácora de acciones ejecutadas sobre el contrato' },
-}
-
-// ─── Armazón compartido por los estados sin contrato ──────────────────────────
-
-function ShellMinimo({ usuario, onLogout, onOpenSettings, children }: {
-  usuario: AuthResponse
-  onLogout: () => void
-  onOpenSettings: () => void
-  children: React.ReactNode
-}) {
-  // Se muestran TODAS las secciones del panel, no solo la bandeja: si al no
-  // haber contrato el menú se redujera a una entrada, parecería que el sistema
-  // perdió funcionalidad. Las que dependen de un contrato quedan inactivas y
-  // dicen por qué al pasar el cursor.
-  const sinContrato = 'Disponible cuando Gestión le asigne un contrato'
-  const groups: NavGroup[] = [
-    {
-      label: 'Supervisión',
-      items: [
-        { id: 'bandeja', label: 'Bandeja de entrada', icon: <IconInbox size={17} /> },
-        { id: 'contrato', label: 'Contrato', icon: <IconContract size={17} />, disabled: true, title: sinContrato },
-      ],
-    },
-    {
-      label: 'Seguimiento',
-      items: [
-        { id: 'alertas', label: 'Alertas', icon: <IconBell size={17} />, disabled: true, title: sinContrato },
-        { id: 'documentos', label: 'Documentos', icon: <IconFileText size={17} />, disabled: true, title: sinContrato },
-        { id: 'registros', label: 'Registros', icon: <IconHistory size={17} />, disabled: true, title: sinContrato },
-      ],
-    },
-  ]
-  return (
-    <AppShell
-      roleBadge="Panel Supervisor"
-      groups={groups}
-      activeId="bandeja"
-      onNavigate={() => {}}
-      usuario={usuario}
-      onLogout={onLogout}
-      onOpenSettings={onOpenSettings}
-      title="Bandeja de entrada"
-      subtitle="Supervisión de contratos"
-    >
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflowY: 'auto' }}>
-        {children}
-      </div>
-    </AppShell>
-  )
-}
-
-// ─── Estado vacío — Supervisor sin contrato asignado ────────────────────────
-function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: {
-  usuario: AuthResponse
-  onLogout: () => void
-  onOpenSettings: () => void
-  onStartTour: () => void
-}) {
-  return (
-    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
-      <div className="card" style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center' }}>
-        <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 20px' }} />
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No tiene un contrato asignado</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-          Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la
-          información aparecerá aquí.
-        </p>
-        <div className="surface" style={{ padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--text-secondary)', textAlign: 'left' }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.09em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
-          <div>Esperando asignación de Gestión y Contratación</div>
-        </div>
-        <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <IconPlay size={10} /> Ver tutorial del proceso
-        </button>
-      </div>
-    </ShellMinimo>
-  )
-}
-
-/**
- * No se pudo consultar el contrato.
- *
- * Es una pantalla distinta de {@link EmptyContractState} a propósito: afirmar
- * "no tiene un contrato asignado" cuando lo que pasó es que el backend no
- * respondió llevaría al supervisor a creer que no tiene nada que hacer.
- */
-function ErrorContratoState({ usuario, onLogout, onOpenSettings }: {
-  usuario: AuthResponse
-  onLogout: () => void
-  onOpenSettings: () => void
-}) {
-  return (
-    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
-      <div className="card" style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--alert-critica)' }}>
-        <div style={{ width: 40, height: 2, background: 'var(--alert-critica)', borderRadius: 1, margin: '0 auto 20px' }} />
-        <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No se pudo cargar su contrato</h2>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-          El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga
-          ninguno: vuelva a intentarlo y, si el problema persiste, avise al área de sistemas.
-        </p>
-        <button className="btn-green" onClick={() => window.location.reload()} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
-          Reintentar
-        </button>
-      </div>
-    </ShellMinimo>
-  )
-}
-
-// ─── Estado de carga — mientras se consulta el contrato real del supervisor ──
-function CargandoContratoState({ usuario, onLogout, onOpenSettings }: {
-  usuario: AuthResponse
-  onLogout: () => void
-  onOpenSettings: () => void
-}) {
-  return (
-    <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
-      <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Consultando su contrato asignado…</div>
-    </ShellMinimo>
-  )
 }
 
 // ─── Helper components (privados de este panel) ────────────────────────────────
@@ -1094,190 +982,26 @@ export default function SupervisorPanel({
 
       {/* ── Alertas ── */}
       {tab === 'alertas' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
-          <SectionHeader
-            eyebrow="Seguimiento en vivo"
-            title={`Alertas del contrato ${contrato.numeroContrato}`}
-            desc="Alertas registradas por el sistema y la revisión de cronograma calculada con las fechas reales del contrato."
-          />
-
-          {alertaCronograma && (
-            <AlertCard
-              severity={alertaCronograma.severity === 'ok' ? 'ok' : alertaCronograma.severity === 'critica' ? 'urgent' : 'attention'}
-              title="Cronograma del paso activo"
-              desc={alertaCronograma.text}
-              actionLabel="Ver paso"
-              onAction={() => resolveAlert(alertaCronograma.id)}
-            />
-          )}
-
-          {alertasApi.filter(a => !a.leida).map(a => {
-            const severity = a.prioridad === 'ALTA' ? 'urgent' as const
-              : a.prioridad === 'MEDIA' ? 'attention' as const
-                : 'info' as const
-            return (
-              <AlertCard
-                key={a.id}
-                severity={severity}
-                title={a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace('_', ' ')}
-                desc={a.mensaje}
-                actionLabel="Ir al paso"
-                onAction={() => resolveAlert('api-' + a.id)}
-              />
-            )
-          })}
-
-          {errorAlertas ? (
-            <div className="card" style={{ padding: '40px 20px', textAlign: 'center', borderColor: 'var(--alert-critica)' }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--alert-critica)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>!</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--alert-critica)', marginBottom: 4 }}>No se pudieron consultar las alertas</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                Puede haber alertas pendientes que no se están mostrando. Recargue la página para reintentar.
-              </div>
-            </div>
-          ) : alertasApi.filter(a => !a.leida).length === 0 && !alertaCronograma && (
-            <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
-              <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent)', color: 'var(--on-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16, margin: '0 auto 12px' }}>✓</div>
-              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', marginBottom: 4 }}>Sin alertas activas</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay alertas pendientes para este contrato.</div>
-            </div>
-          )}
-        </div>
+        <VistaAlertas
+          contrato={contrato}
+          alertaCronograma={alertaCronograma}
+          alertasApi={alertasApi}
+          errorAlertas={errorAlertas}
+          onResolver={resolveAlert}
+        />
       )}
-
       {/* ── Documentos ── */}
       {tab === 'documentos' && (
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
-          <SectionHeader
-            eyebrow="GCCON-P-010"
-            title="Documentos formales"
-            desc="El Copiloto IA redacta cada documento cuando usted llega a su sub-paso — antes de eso, todavía no existe. Aquí solo se marca como disponible lo que ya se generó de verdad."
-          />
-          {tieneFirma === false && (
-            <div className="card" style={{ padding: '12px 15px', marginBottom: 14, borderColor: 'var(--alert-critica)', background: 'var(--chip-red-bg)', fontSize: 12.5, color: 'var(--text-primary)' }}>
-              <strong style={{ color: 'var(--alert-critica)' }}>Falta su firma electrónica.</strong> Todavía no se ha obtenido su
-              firma electrónica: solicítela al Administrador antes de poder firmar.
-            </div>
-          )}
-
-          {/* Documentos formales — Copiloto genera, supervisor firma.
-              El estado viene de docsContrato (datos reales), no de los pasos locales:
-              si el documento no existe todavía en el backend, se marca "Sin generar",
-              nunca se ofrece firmar algo que no fue realmente redactado. */}
-          <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
-            <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', display: 'grid', gridTemplateColumns: '1fr 150px 1fr 100px 160px', gap: 12, background: 'var(--bg-elevated)' }}>
-              <span>DOCUMENTO</span><span>CÓDIGO</span><span>DESCRIPCIÓN</span><span>ETAPA</span><span>ESTADO</span>
-            </div>
-            {FORMAL_DOCS.map(doc => {
-              const generado = docsContrato.find(d => d.generadoPorIa && d.nombre.startsWith(doc.name))
-              const ETAPA_LABEL: Record<number, string> = { 2: 'Inicio', 3: 'Inspección', 4: 'Recepción', 5: 'Certificación', 6: 'Cierre' }
-              return (
-                <div key={doc.subStepId} className="data-grid-row"
-                  style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 150px 1fr 100px 160px', gap: 12, alignItems: 'center', transition: 'background var(--t)' }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{doc.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>IA genera · sub-paso {doc.subStepId}</div>
-                  </div>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>
-                    {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
-                  </span>
-                  <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.45 }}>{doc.desc}</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>{ETAPA_LABEL[doc.step]}</span>
-                  {!generado ? (
-                    <Chip text="Sin generar aún" type="pending" />
-                  ) : generado.estado === 'APROBADO' ? (
-                    <Chip text="Firmado" type="signed" />
-                  ) : (
-                    <button
-                      onClick={() => goToSubStep(doc.subStepId, doc.step)}
-                      style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}>
-                      Ir a firmar →
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Documentos reales del contrato (backend) */}
-          {docsContrato.length > 0 && (
-            <div>
-              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.09em', marginBottom: 12 }}>DOCUMENTOS DEL CONTRATO</div>
-              {docsContrato.map(doc => {
-                const estado = doc.estado === 'APROBADO'
-                  ? { text: 'Disponible', type: 'done' as const }
-                  : doc.estado === 'RECHAZADO'
-                    ? { text: 'Rechazado', type: 'conflicto' as const }
-                    : { text: 'Pendiente', type: 'pending' as const }
-                return (
-                  <div key={doc.id} className="card" style={{ padding: '12px 16px', marginBottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--accent-tech)', fontFamily: 'var(--font-mono)' }}>{doc.nombre}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-                        {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}{doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                      <Chip text={estado.text} type={estado.type} />
-                      <button
-                        onClick={() => descargarDocumento(contrato.id, doc.id, doc.nombre).catch(err => {
-                          console.error('No se pudo descargar el documento:', err)
-                          window.alert('No se pudo descargar el documento. Intente de nuevo en un momento.')
-                        })}
-                        style={{ background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap' }}>
-                        Descargar
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
+        <VistaDocumentos
+          contrato={contrato}
+          docsContrato={docsContrato}
+          tieneFirma={tieneFirma}
+          onIrASubPaso={goToSubStep}
+        />
       )}
 
       {/* ── Registros ── */}
       {tab === 'registros' && <Registros extra={registros} />}
     </AppShell>
-  )
-}
-
-// ─── Tarjeta de alerta (vista Alertas) ───────────────────────────────────────
-
-function AlertCard({ severity, title, desc, actionLabel, onAction }: {
-  severity: 'urgent' | 'attention' | 'info' | 'ok'
-  title: string
-  desc: string
-  actionLabel?: string
-  onAction?: () => void
-}) {
-  const config = {
-    urgent: { color: 'var(--alert-critica)', bg: 'var(--chip-red-bg)', label: 'URGENTE' },
-    attention: { color: 'var(--alert-leve)', bg: 'rgba(229,169,60,0.12)', label: 'ATENCIÓN' },
-    info: { color: 'var(--info)', bg: 'var(--chip-blue-bg)', label: 'INFORMATIVO' },
-    ok: { color: 'var(--accent)', bg: 'var(--accent-soft)', label: 'A TIEMPO' },
-  }[severity]
-
-  return (
-    <div className="card" style={{ padding: '14px 16px', marginBottom: 10, borderLeft: `3px solid ${config.color}` }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-        <span className="inbox-icon" style={{ background: config.bg, color: config.color }}>
-          {severity === 'ok' ? '✓' : '!'}
-        </span>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '0.1em', color: config.color }}>{config.label}</span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
-          </div>
-          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.55 }}>{desc}</p>
-          {actionLabel && onAction && (
-            <button onClick={onAction}
-              style={{ marginTop: 10, background: 'transparent', border: `1px solid ${config.color}`, borderRadius: 7, padding: '5px 12px', fontSize: 11.5, fontWeight: 600, color: config.color, cursor: 'pointer', fontFamily: 'var(--font-ui)' }}>
-              {actionLabel} →
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
   )
 }

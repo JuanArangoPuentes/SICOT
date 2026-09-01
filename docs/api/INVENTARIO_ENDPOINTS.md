@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT — Rama `fix/consistencia-api`
 
-Generado el 2026-08-28. 13 controladores, 39 endpoints.
+Generado el 2026-08-28. 13 controladores, 40 endpoints.
 
 | # | Controlador | Método | Ruta | Rol en `@PreAuthorize` | Control de acceso real | Éxito | Forma de respuesta |
 |---|-------------|--------|------|------------------------|------------------------|-------|-------------------|
@@ -20,10 +20,11 @@ Generado el 2026-08-28. 13 controladores, 39 endpoints.
 | 14 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 16 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
-| 17 | SubetapaController | PATCH | /api/sutetapas/{id}/estado | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `SubetapaResponse` |
+| 17 | SubetapaController | PATCH | /api/subetapas/{id}/estado | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `SubetapaResponse` |
 | 18 | DocumentoController | GET | /api/contratos/{contratoId}/documentos | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `List<DocumentoResponse>` |
-| 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `DocumentoResponse` |
+| 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso | **201** | `DocumentoResponse` |
 | 20 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
+| 20b | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
 | 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
 | 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
 | 23 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse` |
@@ -59,7 +60,7 @@ Generado el 2026-08-28. 13 controladores, 39 endpoints.
 
 3. **SubetapaController** — `@RequestMapping("/api")` con rutas sueltas:
    - `GET /api/etapas/{etapaId}/subetapas`
-   - `PATCH /api/sutetapas/{id}/estado`
+   - `PATCH /api/subetapas/{id}/estado`
 
 4. **Códigos de éxito inconsistentes**:
    - **201 Created**: `UsuarioController.crear`, `ContratoController.crear`, `FirmaElectronicaController.crear` ✓

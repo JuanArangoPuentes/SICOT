@@ -18,6 +18,16 @@ public class FormatoDocumental {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Bloqueo optimista gestionado por Hibernate. No confundir con el campo
+     * {@link #version} de abajo, que es la versión del formato institucional
+     * (v1, v2, …) y sí la maneja la aplicación. Ver
+     * {@code V12__bloqueo_optimista.sql}.
+     */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @Column(nullable = false, unique = true, length = 50)
     private String codigo;
 

@@ -7,6 +7,13 @@ name: CI
 # NOTA: la suite end-to-end de Playwright NO corre aquí a propósito — necesita el
 # backend, PostgreSQL y las cuentas sembradas del perfil `dev`. Se ejecuta a mano
 # (`npm run test:e2e`, ver frontend/README.md) hasta que se monte con servicios.
+#
+# NOTA: `npm run format:check` (oxfmt) deliberadamente NO está en esta compuerta.
+# Se probó al preparar este workflow y reescribe tipos objeto en línea
+# (`{ a: T; b: U }` → `{ a: T b: U }`), sintaxis inválida, sobre archivos que ya
+# compilaban — confirmado en este mismo repo, no una sospecha. Gatear la CI con
+# eso rompería cualquier PR que tocara un archivo con ese patrón. Revisar de
+# nuevo cuando oxfmt publique una versión más allá de 0.2.x.
 
 on:
   pull_request:
@@ -24,11 +31,33 @@ permissions:
 
 jobs:
   backend:
-    name: Backend (Java 25 · Maven)
+    name: Backend (Java 25 · Maven · PostgreSQL 18)
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
+
+    # PostgreSQL real, la misma versión mayor que usa el despliegue. No
+    # reemplaza a H2: el grueso de la suite sigue corriendo en memoria por
+    # velocidad. Está aquí para que EsquemaPostgreSqlIntegrationTest tenga base
+    # contra la cual construir el esquema con Flyway y comprobar que Hibernate
+    # lo valide — la única prueba capaz de detectar que una migración y una
+    # entidad dejaron de coincidir. Sin este servicio esa prueba se salta sola y
+    # el desfase volvería a descubrirse en el arranque de producción.
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: sicot
+          POSTGRES_USER: sicot
+          POSTGRES_PASSWORD: sicot_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sicot -d sicot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v4
@@ -41,9 +70,16 @@ jobs:
           cache: maven
 
       - name: Compilar y probar
-        # `verify` cubre compilación + pruebas unitarias e de integración (H2).
+        # `verify` cubre compilación + pruebas unitarias e de integración (H2)
+        # + la verificación del esquema contra PostgreSQL.
         # -B (batch) evita salida interactiva; -ntp oculta el ruido de descargas.
         run: ./mvnw -B -ntp verify
+        env:
+          # Presentes solo aquí: en una máquina de desarrollo sin base, la
+          # prueba de esquema se salta sola y `mvn verify` sigue en verde.
+          SICOT_IT_DB_URL: jdbc:postgresql://localhost:5432/sicot
+          SICOT_IT_DB_USERNAME: sicot
+          SICOT_IT_DB_PASSWORD: sicot_ci
 
       - name: Publicar reportes de pruebas
         if: always()
@@ -51,6 +87,15 @@ jobs:
         with:
           name: reportes-pruebas-backend
           path: backend/target/surefire-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Publicar informe de cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: backend/target/site/jacoco/
           retention-days: 7
           if-no-files-found: ignore
 
@@ -77,5 +122,127 @@ jobs:
       - name: Chequeo de tipos
         run: npm run typecheck
 
+      - name: Pruebas
+        run: npm run test:run
+
       - name: Compilar
         run: npm run build
+
+  mcp:
+    name: MCP (Node 22 · TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+
+    # El servidor MCP es código TypeScript versionado en este repositorio y
+    # hasta ahora no lo compilaba nadie en CI: un cambio que lo rompiera se
+    # descubría al ejecutarlo a mano, o no se descubría.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: mcp/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Compilar
+        run: npm run build
+
+  dependencias:
+    name: Vulnerabilidades en dependencias
+    runs-on: ubuntu-latest
+
+    # No había ningún escaneo de dependencias: una vulnerabilidad publicada en
+    # una librería que el proyecto ya usa no habría producido ninguna señal.
+    # Se ejecuta como job propio para que su fallo sea legible y no quede
+    # escondido dentro del job de build.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Auditar dependencias del frontend
+        working-directory: frontend
+        # `high` como umbral: por debajo de eso el ruido supera a la señal en un
+        # árbol de dependencias de desarrollo, y el equipo aprendería a ignorar
+        # el job — que es peor que no tenerlo.
+        run: npm audit --audit-level=high
+
+      - name: Auditar dependencias del MCP
+        working-directory: mcp
+        run: npm audit --audit-level=high
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: Auditar dependencias del backend (OWASP Dependency-Check)
+        working-directory: backend
+        # Base de datos pública de vulnerabilidades (NVD), sin costo ni límite
+        # de uso. `continue-on-error` a propósito durante el rodaje: el análisis
+        # depende de un servicio externo y de una base que se actualiza a
+        # diario, así que un fallo suyo no debe bloquear un PR correcto. Cuando
+        # el equipo tenga unas semanas de datos, quitar esta línea lo convierte
+        # en una compuerta real.
+        continue-on-error: true
+        run: >-
+          ./mvnw -B -ntp org.owasp:dependency-check-maven:12.1.0:check
+          -DfailBuildOnCVSS=8
+          -DassemblyAnalyzerEnabled=false
+
+      - name: Publicar informe de vulnerabilidades
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check
+          path: backend/target/dependency-check-report.html
+          retention-days: 7
+          if-no-files-found: ignore
+
+  imagenes:
+    name: Construcción de imágenes Docker
+    runs-on: ubuntu-latest
+
+    # Los Dockerfile no se construían en CI, así que un error en cualquiera de
+    # los dos solo aparecía al desplegar. Se construyen sin publicar nada: el
+    # objetivo es comprobar que compilan, no distribuirlas.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir imagen del backend
+        run: docker build -t sicot-backend:ci ./backend
+
+      - name: Construir imagen del frontend
+        run: docker build -t sicot-frontend:ci ./frontend
+
+      - name: Comprobar la configuración de nginx dentro de la imagen
+        # Un error de sintaxis en nginx.conf no rompe el `docker build` — la
+        # imagen se construye igual y el contenedor falla al arrancar. `nginx -t`
+        # lo detecta aquí.
+        run: docker run --rm sicot-frontend:ci nginx -t
+
+      - name: Validar los archivos de Compose
+        # `config` resuelve variables, fusiona los dos archivos y falla si algo
+        # no cuadra. Las variables obligatorias del perfil de producción se
+        # rellenan con valores de relleno: aquí se valida la estructura, no los
+        # secretos.
+        env:
+          DB_PASSWORD: valor-de-relleno-para-ci
+          JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
+          SICOT_ADMIN_EMAIL: ci@ejemplo.invalid
+          SICOT_ADMIN_PASSWORD: relleno-solo-para-ci-1234
+        run: |
+          docker compose -f docker-compose.yml config > /dev/null
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null

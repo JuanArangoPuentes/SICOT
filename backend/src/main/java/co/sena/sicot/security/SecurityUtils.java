@@ -6,9 +6,16 @@ import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.AccesoDenegadoException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Utilidades estáticas de seguridad.
+ *
+ * <p>Sin {@code @Component}: la clase solo tiene métodos estáticos y un
+ * constructor privado, así que el bean que Spring creaba (accediendo al
+ * constructor por reflexión) no lo inyectaba ni lo usaba nadie. Una anotación
+ * que no hace nada induce a pensar que el ciclo de vida de esta clase lo
+ * gestiona el contenedor, y no es así.
+ */
 public final class SecurityUtils {
 
     private SecurityUtils() {

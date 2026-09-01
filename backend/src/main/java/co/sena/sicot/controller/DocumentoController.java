@@ -1,9 +1,11 @@
 package co.sena.sicot.controller;
 
 import co.sena.sicot.dto.documento.DocumentoResponse;
+import co.sena.sicot.dto.documento.VerificacionIntegridadResponse;
 import co.sena.sicot.dto.ia.GenerarDocumentoRequest;
 import co.sena.sicot.entity.Documento;
 import co.sena.sicot.ia.GeneracionDocumentoService;
+import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DocumentoService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -32,6 +34,9 @@ import java.util.List;
 @Validated
 @Tag(name = "Documentos", description = "Documentos y evidencias de un contrato")
 public class DocumentoController {
+
+    /** Estado de integridad del documento que acompaña a cada descarga. */
+    static final String CABECERA_INTEGRIDAD = "X-SICOT-Integridad";
 
     private final DocumentoService documentoService;
     private final GeneracionDocumentoService generacionDocumentoService;
@@ -111,9 +116,36 @@ public class DocumentoController {
                 .build();
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(MediaType.parseMediaType(
-                        documento.getContentType() != null ? documento.getContentType() : "application/octet-stream"))
+                // Estado de integridad en la propia descarga, para que una
+                // auditoría automatizada pueda comprobarlo sin una segunda
+                // petición. La verificación legible para una persona está en
+                // GET /{id}/verificacion.
+                .header(CABECERA_INTEGRIDAD, documentoService.estadoDeIntegridad(documento).name())
+                // mediaTypeSeguro y no parseMediaType: esta cadena viene de la
+                // base, y las filas anteriores a la corrección del Content-Type
+                // pueden contener un valor que parseMediaType rechaza — lo que
+                // dejaba ese documento indescargable con un 500 permanente.
+                .contentType(ArchivoValidator.mediaTypeSeguro(documento.getContentType()))
                 .body(documento.getContenido());
+    }
+
+    @Operation(summary = "Verificar que un documento firmado no cambió desde que se firmó",
+            description = "Recalcula el SHA-256 del contenido almacenado y lo compara con la huella "
+                    + "registrada en el momento de la firma.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Resultado de la verificación",
+                    content = @Content(schema = @Schema(implementation = VerificacionIntegridadResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/verificacion")
+    public ResponseEntity<VerificacionIntegridadResponse> verificar(@PathVariable Long contratoId,
+                                                                    @PathVariable Long id) {
+        return ResponseEntity.ok(documentoService.verificarIntegridad(id));
     }
 
     @Operation(summary = "Generar (redactar) un documento formal con el Copiloto IA a partir de los datos reales del contrato",

@@ -94,6 +94,14 @@ services:
       # .env, que es lo correcto. Ver docker-compose.prod.yml, donde además pasa
       # a ser obligatoria.
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443}
+      # Administrador inicial — solo se usa en un despliegue con perfil distinto
+      # de "dev" y solo si la tabla de usuarios está vacía. En desarrollo no
+      # hacen falta: las cuentas de prueba las siembra DataInitializer. Ver
+      # AdministradorInicial y docker-compose.prod.yml, donde pasan a ser
+      # obligatorias.
+      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:-}
+      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:-}
+      SICOT_ADMIN_NOMBRE: ${SICOT_ADMIN_NOMBRE:-Administrador SICOT}
       # Correo real (entrega de credenciales) — sin esto configurado en el .env
       # de la raíz, el envío falla honestamente en vez de fingir éxito.
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}

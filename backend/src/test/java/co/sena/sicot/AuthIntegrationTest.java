@@ -48,8 +48,10 @@ class AuthIntegrationTest {
                         .content("""
                                 {"email":"gestion@soy.sena.edu.co","password":"incorrecta"}
                                 """))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.status").value(400))
+                // 401 y no 400: la petición está bien formada, lo que falla es
+                // la autenticación. Ver CredencialesInvalidasException.
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.message").value("Credenciales inválidas."));
     }
 
@@ -90,7 +92,7 @@ class AuthIntegrationTest {
                         .content("""
                                 {"email":"inactivo@soy.sena.edu.co","password":"ClaveTest123"}
                                 """))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value("El usuario está inactivo. Contacte al administrador."));
     }
 

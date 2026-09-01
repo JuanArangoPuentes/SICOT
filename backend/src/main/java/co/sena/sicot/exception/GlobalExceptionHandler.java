@@ -6,6 +6,8 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -49,6 +51,43 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ErrorResponse> business(BusinessException ex, WebRequest request) {
         return build(ex.getMessage(), HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * Credenciales incorrectas o cuenta inactiva: <b>401</b>, no 400.
+     *
+     * <p>Antes viajaban como {@link BusinessException} y salían con 400, que
+     * significa «la petición está mal formada» — y no lo estaba. Un cliente no
+     * podía distinguir por código de estado entre un cuerpo inválido, una clave
+     * equivocada y un bloqueo por intentos: tenía que leer el texto del
+     * mensaje, que es exactamente lo que los códigos de estado existen para
+     * evitar.
+     */
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<ErrorResponse> credencialesInvalidas(CredencialesInvalidasException ex,
+                                                                WebRequest request) {
+        return build(ex.getMessage(), HttpStatus.UNAUTHORIZED, request);
+    }
+
+    /**
+     * Límite de frecuencia superado: <b>429</b> con {@code Retry-After}.
+     *
+     * <p>Cubre el bloqueo por intentos fallidos de login y el techo de uso del
+     * Copiloto de IA. La cabecera dice en segundos cuánto esperar, para que un
+     * cliente pueda reintentar de forma automática en vez de a ciegas.
+     */
+    @ExceptionHandler(DemasiadasSolicitudesException.class)
+    public ResponseEntity<ErrorResponse> demasiadasSolicitudes(DemasiadasSolicitudesException ex,
+                                                                WebRequest request) {
+        ErrorResponse cuerpo = ErrorResponse.of(
+                HttpStatus.TOO_MANY_REQUESTS.value(),
+                HttpStatus.TOO_MANY_REQUESTS.getReasonPhrase(),
+                ex.getMessage(),
+                request.getDescription(false).replace("uri=", ""),
+                null);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getSegundosDeEspera()))
+                .body(cuerpo);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
@@ -120,6 +159,32 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> dataIntegrity(DataIntegrityViolationException ex, WebRequest request) {
         return build("Los datos enviados violan una restricción de integridad (posible duplicado).",
+                HttpStatus.CONFLICT, request);
+    }
+
+    /**
+     * Dos transacciones escribieron sobre la misma fila y la segunda llegó con
+     * una versión ya vencida.
+     *
+     * <p>Es la contraparte imprescindible del bloqueo optimista que introdujo
+     * {@code V12__bloqueo_optimista.sql}. Antes de él, este caso no producía
+     * ningún error: la segunda escritura simplemente pisaba a la primera y el
+     * dato de la primera desaparecía sin dejar rastro. Ahora falla, y este
+     * manejador convierte ese fallo en algo que el usuario puede resolver.
+     *
+     * <p>409 y no 500 porque no es un defecto del backend sino una colisión
+     * legítima entre dos usuarios, y la operación se puede repetir con éxito
+     * después de recargar. El mensaje dice explícitamente qué hacer: sin eso,
+     * un "conflicto" a secas no le indica a nadie que debe volver a abrir el
+     * contrato antes de reintentar.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> conflictoDeConcurrencia(OptimisticLockingFailureException ex,
+                                                                  WebRequest request) {
+        log.warn("Conflicto de edición concurrente en {}: {}",
+                request.getDescription(false).replace("uri=", ""), ex.getMessage());
+        return build("Otra persona modificó este registro mientras usted lo editaba. "
+                        + "Recargue la información y vuelva a aplicar sus cambios.",
                 HttpStatus.CONFLICT, request);
     }
 
