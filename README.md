@@ -31,7 +31,7 @@ honesto.
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
-| [`docs/operacion/`](./docs/operacion) | Operación día a día: base de datos local, backup y restauración | — |
+| [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
 | [`docs/orca/`](./docs/orca) | Configuración de la flota de agentes y resultado de cada tarea | — |
 | [`docs/historico/`](./docs/historico) | Reportes de fases ya cerradas y auditorías de datos pasadas | — |
 
@@ -161,6 +161,30 @@ Backup/restauración de la base de datos: ver
 
 Contraseñas en [`backend/README.md`](./backend/README.md). Son exclusivamente de
 desarrollo/demo — nunca deben usarse en producción.
+
+## Primer arranque en producción
+
+Estas cuentas **no existen** fuera de los perfiles `dev` y `test`: las siembra
+`DataInitializer`, que está restringido a ellos precisamente porque sus contraseñas
+están publicadas en este repositorio.
+
+En un despliegue real la tabla de usuarios arranca vacía, y como
+`POST /api/usuarios` exige rol ADMINISTRADOR y el login es el único endpoint
+público, hace falta crear la primera cuenta desde el entorno. Se declara en el
+`.env` del servidor antes del primer `docker compose up`:
+
+```bash
+SICOT_ADMIN_EMAIL=nombre.apellido@sena.edu.co
+SICOT_ADMIN_PASSWORD=<al menos 12 caracteres — genérela con: openssl rand -base64 24>
+```
+
+Con la base vacía y sin estas variables, **el backend se niega a arrancar** y
+dice por qué. Es deliberado: un sistema en pie al que nadie puede entrar es peor
+que un despliegue que falla con un mensaje claro.
+
+Después del primer arranque ambas variables pueden retirarse — solo se usan
+cuando no hay ningún usuario. Cambie esa contraseña desde el panel de
+administración en cuanto entre.
 
 ## Reglas del proyecto
 

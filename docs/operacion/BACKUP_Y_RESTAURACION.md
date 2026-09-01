@@ -1,8 +1,28 @@
 # SICOT — Backup y restauración de la base de datos
 
-Procedimiento manual (no hay automatización/cron todavía — queda documentado
-para poder correrlo a mano antes de cualquier operación riesgosa: una
-migración nueva, una actualización de versión, limpieza de datos, etc.).
+## Respaldo automático (recomendado)
+
+`scripts/respaldo-sicot.sh` hace el volcado, **verifica que se pueda leer** y
+rota los antiguos. Programarlo a diario:
+
+```bash
+0 2 * * * /ruta/al/repo/scripts/respaldo-sicot.sh /var/backups/sicot >> /var/log/sicot-respaldo.log 2>&1
+```
+
+La verificación no es un adorno: `pg_dump` puede terminar con código 0 y dejar
+un archivo truncado si el disco se llenó a mitad, y eso solo se descubre el día
+que hace falta restaurar. El script lee el volcado entero con `pg_restore
+--list` y falla si no es válido. Conserva 14 respaldos por defecto
+(`SICOT_BACKUPS_A_CONSERVAR`), para que el disco no se llene en silencio.
+
+La **restauración sigue siendo manual a propósito** (ver más abajo): sobrescribe
+datos oficiales y no debe poder ocurrir por un cron mal escrito.
+
+## Procedimiento manual
+
+Sigue siendo válido y es el que conviene correr a mano antes de cualquier
+operación riesgosa: una migración nueva, una actualización de versión, limpieza
+de datos, etc.
 
 Asume que la base corre en el contenedor `sicot-db` (ver `docker-compose.yml`).
 Si corre sin Docker, cambiar `docker exec sicot-db` por el `psql`/`pg_dump`

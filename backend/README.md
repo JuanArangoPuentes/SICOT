@@ -18,12 +18,19 @@ Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
 
 ## 2. Base de datos
 
-En una base nueva, Flyway aplica dos migraciones:
+El modelo de datos completo —tabla por tabla, con sus invariantes y dónde se
+imponen— está en
+[`docs/operacion/MODELO_DE_DATOS.md`](../docs/operacion/MODELO_DE_DATOS.md).
+
+En una base nueva, Flyway aplica cinco migraciones:
 
 | Archivo | Qué hace |
 |---|---|
 | `V1__create_sicot_schema.sql` | Línea base completa: tablas, constraints e índices |
 | `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha en `alertas` y `registros` (optimizan consultas por rango de fecha) |
+| `V10__reconcilia_esquema_con_la_linea_base.sql` | Restaura las siete restricciones que la consolidación de `V1` agregó pero que nunca llegaron a ejecutarse en las bases ya existentes. No-op en una base creada desde cero |
+| `V11__indices_compuestos_tablas_de_crecimiento_libre.sql` | `(contrato_id, fecha DESC)` en `alertas` y `registros`, las dos tablas que crecen sin techo |
+| `V12__bloqueo_optimista.sql` | Columna `lock_version` en siete tablas: convierte una actualización perdida silenciosa en un 409 reintentable |
 
 La numeración salta de `V1` a `V9` a propósito: las migraciones `V1`–`V8`
 originales se consolidaron en la nueva `V1`, y `V9` se conservó porque ya se
@@ -188,7 +195,27 @@ tools/extraer_listas_chequeo.py     → regenera ese catálogo desde los .xlsx d
 mvn test
 ```
 
-Las pruebas de integración usan **H2 en memoria** (perfil `test`); las migraciones Flyway se validan contra PostgreSQL real al ejecutar la aplicación.
+El grueso de la suite usa **H2 en memoria** (perfil `test`) por velocidad. Ese
+montaje, sin embargo, es incapaz de detectar que una migración y una entidad
+dejaron de coincidir: Hibernate genera el esquema a partir de las propias
+entidades, así que siempre concuerda consigo mismo. Dos pruebas cubren ese hueco:
+
+| Prueba | Necesita base | Qué detecta |
+|---|---|---|
+| `RestriccionesDeEnumEnMigracionesTest` | No | Un enum de Java cuyos valores ya no coinciden con su `CHECK` en las migraciones |
+| `EsquemaPostgreSqlIntegrationTest` | Sí, PostgreSQL | Que Flyway construya el esquema y Hibernate lo valide; restricciones e índices ausentes; que `V10` sepa reparar una base desfasada |
+
+La segunda **se salta sola** si no hay base, así que `mvn verify` sigue en verde
+en cualquier máquina. En CI el servicio de PostgreSQL siempre está, así que allí
+siempre corre. Para ejecutarla a mano, con la base del proyecto arriba:
+
+```bash
+SICOT_IT_DB_URL=jdbc:postgresql://localhost:5432/sicot SICOT_IT_DB_USERNAME=sicot SICOT_IT_DB_PASSWORD=sicot_dev_password mvn test -Dtest=EsquemaPostgreSqlIntegrationTest
+```
+
+No toca los datos del equipo: trabaja sobre un esquema desechable
+(`sicot_verificacion_esquema`) que borra y recrea en cada corrida; el esquema
+`public` queda intacto.
 
 ## 9. Pendiente (fases siguientes)
 
