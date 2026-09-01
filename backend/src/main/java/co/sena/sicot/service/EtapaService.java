@@ -72,8 +72,32 @@ public class EtapaService {
         Subetapa subetapa = subetapaRepository.findById(subetapaId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Subetapa", subetapaId));
         SecurityUtils.verificarAccesoAlContrato(subetapa.getEtapa().getContrato());
+
+        EstadoSubetapa anterior = subetapa.getEstado();
+        // Antes esto era un setEstado directo: cualquier destino pasaba, y una
+        // subetapa podía volver de COMPLETADA a PENDIENTE sin dejar constancia.
+        TransicionesDeEstado.Sentido sentido = TransicionesDeEstado.validarSubetapa(anterior, nuevoEstado);
+        if (sentido == TransicionesDeEstado.Sentido.SIN_CAMBIO) {
+            return EtapaMapper.toSubetapaResponse(subetapa);
+        }
+
         subetapa.setEstado(nuevoEstado);
         subetapaRepository.save(subetapa);
+
+        // Traza propia de la subetapa, distinguible entre avance y retroceso: sin
+        // esto, reabrir un sub-paso solo dejaba (a veces) un ETAPA_ACTUALIZADA
+        // genérico que no decía qué sub-paso ni en qué dirección se movió.
+        Contrato contrato = subetapa.getEtapa().getContrato();
+        if (sentido == TransicionesDeEstado.Sentido.RETROCESO) {
+            registroService.registrar(contrato, "SUBETAPA_REVERTIDA",
+                    "Subetapa " + subetapa.getCodigo() + " (" + subetapa.getNombre() + ") revertida de "
+                            + anterior.name() + " a " + nuevoEstado.name() + " (corrección).");
+        } else {
+            registroService.registrar(contrato, "SUBETAPA_AVANZADA",
+                    "Subetapa " + subetapa.getCodigo() + " (" + subetapa.getNombre() + ") avanzó de "
+                            + anterior.name() + " a " + nuevoEstado.name() + ".");
+        }
+
         recalcularEtapa(subetapa.getEtapa());
         return EtapaMapper.toSubetapaResponse(subetapa);
     }
@@ -103,13 +127,23 @@ public class EtapaService {
             nuevoEstado = EstadoEtapa.PENDIENTE;
         }
 
-        boolean cambio = etapa.getEstado() != nuevoEstado || etapa.getPorcentaje() != porcentaje;
+        EstadoEtapa estadoAnterior = etapa.getEstado();
+        int porcentajeAnterior = etapa.getPorcentaje();
         etapa.setEstado(nuevoEstado);
         etapa.setPorcentaje(porcentaje);
         etapaRepository.save(etapa);
 
-        if (cambio) {
-            Contrato contrato = etapa.getContrato();
+        TransicionesDeEstado.Sentido sentido = TransicionesDeEstado.sentidoRecalculoEtapa(
+                estadoAnterior, porcentajeAnterior, nuevoEstado, porcentaje);
+        Contrato contrato = etapa.getContrato();
+        if (sentido == TransicionesDeEstado.Sentido.RETROCESO) {
+            // Antes avanzar y retroceder dejaban el mismo texto: quien auditara el
+            // contrato no distinguía una corrección de un avance.
+            registroService.registrar(contrato, "ETAPA_RETROCEDIDA",
+                    "Etapa " + etapa.getNumero() + " (" + etapa.getNombre() + ") retrocedió de "
+                            + estadoAnterior.name() + " " + porcentajeAnterior + "% a "
+                            + nuevoEstado.name() + " " + porcentaje + "% (corrección).");
+        } else if (sentido == TransicionesDeEstado.Sentido.AVANCE) {
             registroService.registrar(contrato, "ETAPA_ACTUALIZADA",
                     "Etapa " + etapa.getNumero() + " (" + etapa.getNombre() + ") ahora está en "
                             + nuevoEstado.name() + " al " + porcentaje + "%.");

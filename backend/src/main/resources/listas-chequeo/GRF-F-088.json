@@ -1,0 +1,661 @@
+{
+  "codigo": "GRF-F-088",
+  "nombre": "Formato Lista de Chequeo Documentos Requeridos para Registro de Obligaciones",
+  "version": "08",
+  "proceso": "PROCESO GESTION DE RECURSOS FINANCIEROS",
+  "tipo": "TRAMITE_PAGO",
+  "alcance": "REGISTRO DE OBLIGACIONES Y TRÁMITE DE PAGO",
+  "archivoOrigen": "GRF-F-088FormatoListadeChequeoDocumentosRequeridosparaelPago(2).xlsx",
+  "hojaOrigen": "Formato GRF-F-088",
+  "tiposPago": [
+    {
+      "codigo": "ADQUISICION_BIENES",
+      "nombre": "Adquisición de bienes"
+    },
+    {
+      "codigo": "IMPORTACION_BIENES",
+      "nombre": "Importación de Bienes"
+    },
+    {
+      "codigo": "ADQUISICION_SERVICIOS",
+      "nombre": "Adquisición de Servicios"
+    },
+    {
+      "codigo": "OTROS_SERVICIOS_SIN_CONTRATO",
+      "nombre": "Otros Servicios en General sin contrato (serv. Publicos, prestaciones sociales, sentencias, etc)"
+    },
+    {
+      "codigo": "SERVICIOS_OBRA_CIVIL",
+      "nombre": "Servicios Obra Civil"
+    },
+    {
+      "codigo": "BOLSA_MERCANTIL",
+      "nombre": "Adquisición de bienes y/o servicios realizados por Bolsa Mercantil"
+    },
+    {
+      "codigo": "HONORARIOS_PRESTACION_SERVICIOS",
+      "nombre": "Honorarios Prestacion de Servicios Personales"
+    },
+    {
+      "codigo": "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+      "nombre": "Anticipos para adquisicion de bienes y/o servicios o Recursos entregados en administración"
+    },
+    {
+      "codigo": "CONVENIOS",
+      "nombre": "Convenios"
+    },
+    {
+      "codigo": "CONVENIOS_COOPERACION_INTERNACIONAL",
+      "nombre": "Convenios de Cooperación Internacional"
+    },
+    {
+      "codigo": "FONDO_VIVIENDA",
+      "nombre": "Fondo de Vivienda"
+    }
+  ],
+  "etapas": [
+    {
+      "nombre": "DOCUMENTOS REQUERIDOS PARA REGISTRO DE OBLIGACIONES",
+      "rotuladaEnOrigen": false,
+      "items": [
+        {
+          "numero": 1,
+          "documento": "Registro presupuestal del compromiso",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "OTROS_SERVICIOS_SIN_CONTRATO",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 2,
+          "documento": "Formato GRF-F-078 Reconocimiento de Activos Intangibles adquiridos de forma separada, para adquisición de intangibles",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GRF-F-078"
+          ],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "BOLSA_MERCANTIL",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 3,
+          "documento": "RUT con fecha de impresión o generación no mayor a 180 días. (Para el primer pago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "OTROS_SERVICIOS_SIN_CONTRATO",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 4,
+          "documento": "En el caso de que la adquisición se haya efectuado a una persona natural, se remite soporte del pago de su seguridad social del mes anterior del periodo objeto de cobro",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION"
+          ]
+        },
+        {
+          "numero": 5,
+          "documento": "Certificación del pago de los aportes parafiscales no mayor a 30 días, firmada por el Revisor Fiscal o Representante Legal, para personas jurídicas",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 6,
+          "documento": "Certificación cuenta bancaria del beneficiario del pago no mayor a 30 días, únicamente en el primer desembolso o cuando se presenten solicitudes de cambio de cuenta por parte del contratista con el otro sí respectivo",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "OTROS_SERVICIOS_SIN_CONTRATO",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 7,
+          "documento": "Para los contratos que requieran constitución de fiducia, se adjunta certificación bancaria de la misma no mayor a 30 días, únicamente para el primer pago",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "SERVICIOS_OBRA_CIVIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 8,
+          "documento": "Certificación de recibo a satisfacción, firmada por el supervisor del contrato",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 9,
+          "documento": "Formato GRF-F-087 V01 denominado “Relación Entradas de Almacén para Pago de Contratos” publicado en CompromISO",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GRF-F-087"
+          ],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 10,
+          "documento": "Formato GIL-F- 029 (última versión) Certificación contratos para intervención bienes inmuebles, documento a diligenciar para bienes muebles adheridos a bienes inmuebles",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GIL-F-029"
+          ],
+          "tiposPago": [
+            "SERVICIOS_OBRA_CIVIL"
+          ]
+        },
+        {
+          "numero": 11,
+          "documento": "Factura de venta o documento equivalente o acto administrativo, cumpliendo con todos los requisitos de Ley, debidamente registrada y aprobada en el aplicativo SIIF NACIÓN",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "OTROS_SERVICIOS_SIN_CONTRATO",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL"
+          ]
+        },
+        {
+          "numero": 12,
+          "documento": "Copia del documento contractual cuando se realicen adiciones y modificaciones",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "SERVICIOS_OBRA_CIVIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION"
+          ]
+        },
+        {
+          "numero": 13,
+          "documento": "Cuando el servicio se presta en diferentes municipios se debe desagregar el valor del servicio prestado antes de IVA en cada municipio para el calculo de los diferentes impuestos y contribuciones territoriales",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_SERVICIOS",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL"
+          ]
+        },
+        {
+          "numero": 14,
+          "documento": "Factura emitida por el proveedor del exterior",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES"
+          ]
+        },
+        {
+          "numero": 15,
+          "documento": "Copia de las declaraciones de importación",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 16,
+          "documento": "Declaración de cambio por crédito en moneda extranjera",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 17,
+          "documento": "Certificación cuenta bancaria del exterior no mayor a 30 días",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 18,
+          "documento": "Código ABA – SWIFT para dólares",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 19,
+          "documento": "Código IBAN para Euros",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 20,
+          "documento": "Original o copia del informe de aval del desembolso por parte de la interventoría o supervisión (Formato de aval de desembolso, que se encuentra publicado en CompromISO, el GRF-F-064- Formato Aval para el Pago de Convenios), en la cual entre otros indicado Valor y concepto del desembolso autorizado. o Cláusula del convenio a la que corresponde el desembolso respectivo",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GRF-F-064"
+          ],
+          "tiposPago": [
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 21,
+          "documento": "o Si, como condición del desembolso, se contempla la entrega de bienes por parte del conviniente y recibo por parte del SENA, se relacionan dichos bienes, así como las notas en las que se registra la entrada al almacén",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 22,
+          "documento": "o En el caso de entrega de bienes, se relaciona en qué proporción dichos bienes corresponden a aportes del conviniente y en qué proporción a aportes del SENA",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 23,
+          "documento": "Para endosos la cuenta bancaria debe estar validada previamente mediante solicitud al grupo de presupuesto o quien haga sus veces en regionales y centros de formación",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "OTROS_SERVICIOS_SIN_CONTRATO",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 24,
+          "documento": "Para la legalización de anticipos es necesario que al momento de solicitar el pago parcial o total de la factura o documento equivalente emitido por el proveedor en estos figure la relación de bienes amortizando el porcentaje del valor pactado como anticipo",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "SERVICIOS_OBRA_CIVIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION"
+          ]
+        },
+        {
+          "numero": 25,
+          "documento": "Plan Operativo (unicamente para primer desembolso)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 26,
+          "documento": "Informes de supervisión y/o interventor",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "SERVICIOS_OBRA_CIVIL",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 27,
+          "documento": "Primera copia de la Escritura Pública de constitución de hipoteca N°____________",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 28,
+          "documento": "Certificados de Tradición y Libertad inmueble hipotecado",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 29,
+          "documento": "Copia Pagaré y Carta de instrucciones firmados por el deudor y la avalista",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 30,
+          "documento": "Certificación bancaria del destinatario del desembolso según modalidad no mayor a 30 dias",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 31,
+          "documento": "Autorización de descuentos suscrita por el servidor público para su respectivo descuento mensual de nómina, debidamente radicada",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 32,
+          "documento": "Autorización para desembolso del crédito hipotecario suscrita por el servidor público, dirigida al director regional",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 33,
+          "documento": "Seguimiento realizado al crédito, generado por aplicativo FNV (PDF)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 34,
+          "documento": "Copia cédula de ciudadanía servidor público favorecido con el crédito",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 35,
+          "documento": "Copia Certificado de Registro Presupuestal del crédito",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 36,
+          "documento": "Simulación inicial del crédito según fecha estimada de desembolso",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "FONDO_VIVIENDA"
+          ]
+        },
+        {
+          "numero": 37,
+          "documento": "Formato comunicación interna para tramite de pagos GRF-F-089",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GRF-F-089"
+          ],
+          "tiposPago": [
+            "ADQUISICION_BIENES",
+            "IMPORTACION_BIENES",
+            "ADQUISICION_SERVICIOS",
+            "SERVICIOS_OBRA_CIVIL",
+            "BOLSA_MERCANTIL",
+            "ANTICIPOS_Y_RECURSOS_EN_ADMINISTRACION",
+            "CONVENIOS",
+            "CONVENIOS_COOPERACION_INTERNACIONAL"
+          ]
+        },
+        {
+          "numero": 38,
+          "documento": "Planilla para pago de contratos por concepto de honorarios y/o prestación de servicios personales y que se debe descargar del aplicativo https://contratistas.sena.edu.co/.",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 39,
+          "documento": "Copia de la afiliación de la seguridad social con fecha del mes de inicio del contrato o Certificación de que se encuentra afiliado (primer pago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 40,
+          "documento": "RUT con fecha de generación o impresión no mayor a 180 días (primer pago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 41,
+          "documento": "Certificado de intereses de vivienda, corrección monetaria, o costo leasing para vivienda pagados en el año anterior. (Cuando se acoja al beneficio,\npara disminuir base de\nretención en la fuente primer\npago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 42,
+          "documento": "Certificado de pagos efectuados por contratos de prestación de servicios a empresas de medicina prepagada o por seguros de salud pagados en el año anterior. (Cuando se acoja al beneficio,\npara disminuir base de\nretención en la fuente primer\npago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 43,
+          "documento": "Certificación y soportes según corresponda, de acuerdo con el formato GRF-F-063– Certificación por Dependientes Contratistas. (Cuando se acoja al beneficio,\npara disminuir base de\nretención en la fuente primer\npago)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GRF-F-063"
+          ],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 44,
+          "documento": "Copia de la planilla de pago de la seguridad social (Todos los pagos)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 45,
+          "documento": "Factura de venta (Sólo responsable de IVA (Cuando aplique)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 46,
+          "documento": "Certificación de la cuenta AFC y/o AVC y el efectivo pago realizado por el período objeto de cobro (Cuando se acoja al beneficio,\npara disminuir base de\nretención en la fuente. Todos\nlos pagos)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 47,
+          "documento": "Certificado de la cuenta de aportes voluntarios a fondos de pensiones voluntarias o fondos de pensiones obligatorias y el valor pagado de los aportes por el período objeto de cobro.(Cuando se acoja al beneficio,\npara disminuir base de\nretención en la fuente. Todos\nlos pagos)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        },
+        {
+          "numero": 48,
+          "documento": "Formato GTH-074-Entrega de bienes e información de ejecución contractual por el contratista para el caso del último pago o en liquidaciones o cesiones de contrato (Último pago",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [
+            "GTH-074"
+          ],
+          "tiposPago": [
+            "HONORARIOS_PRESTACION_SERVICIOS"
+          ]
+        }
+      ]
+    }
+  ],
+  "notas": [],
+  "advertencias": [
+    "La columna N (\"Convenios\") no marca ningún documento en el archivo original y repite el nombre de otra columna; no se incluyó en el catálogo.",
+    "La columna O (\"Convenios de Cooperación Internacional\") no marca ningún documento en el archivo original y repite el nombre de otra columna; no se incluyó en el catálogo.",
+    "La columna P (\"Fondo de Vivienda\") no marca ningún documento en el archivo original y repite el nombre de otra columna; no se incluyó en el catálogo.",
+    "El formato no agrupa los documentos por etapa sino por tipo de pago; el catálogo los expone en un único grupo y la aplicabilidad de cada ítem queda en su lista tiposPago."
+  ]
+}

@@ -3,15 +3,25 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-import siteConfiguration from './.figma/make/site.json' with { type: 'json' }
+// Metadatos del documento HTML generado. Antes vivían en `.figma/make/site.json`
+// (andamiaje de la plataforma Figma Make, ya retirado del repo); se inlinearon
+// aquí para que la configuración esté junto al código que la consume.
+// `robots.index: false` es deliberado: SICOT es un sistema institucional interno
+// y no debe aparecer en buscadores.
+const siteConfiguration: FigmaSiteConfiguration = {
+  title: 'SICOT — Centro Tecnológico del Mobiliario (SENA)',
+  description:
+    'Sistema Inteligente para la Gestión y Acompañamiento de Contratos del Centro Tecnológico del Mobiliario (SENA).',
+  robots: { index: false },
+  accessibility: { addBypassLinks: false },
+}
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
   return {
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : '/',
+    base: '/',
     build: {
       sourcemap: emitSourcemaps ? 'inline' : false,
       minify: !emitSourcemaps,
@@ -34,11 +44,24 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
-      watch: { ignored: ['**/.figma/**'] },
     },
     preview: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+    },
+    // Pruebas de componente y de servicios (Vitest). Hasta ahora el frontend
+    // no tenía ninguna prueba: su única red de seguridad era `tsc --noEmit`,
+    // que comprueba que los tipos cuadren pero no que la pantalla haga lo que
+    // debe. `jsdom` da un DOM real para montar componentes; los `.spec.ts` de
+    // Playwright viven en e2e/ y los ejecuta otra herramienta, así que se
+    // excluyen explícitamente.
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['./src/test/setup.ts'],
+      include: ['src/**/*.{test,spec}.{ts,tsx}'],
+      exclude: ['e2e/**', 'node_modules/**'],
+      css: false,
     },
   }
 })

@@ -1,0 +1,583 @@
+{
+  "codigo": "GCCON-F-053",
+  "nombre": "LISTA DE CHEQUEO MÍNIMA CUANTÍA",
+  "version": "05",
+  "proceso": "GESTIÓN CONTRACTUAL",
+  "tipo": "MODALIDAD_SELECCION",
+  "alcance": "MÍNIMA CUANTÍA",
+  "archivoOrigen": "GCCON-F-053-ListadeChequeoMinimaCuantia_V05.xlsx",
+  "hojaOrigen": "Lista de Chequeo",
+  "tiposPago": [],
+  "etapas": [
+    {
+      "nombre": "ETAPA PRECONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 1,
+          "documento": "Designación Comité Estructurador",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.) o Correo Electrónico",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 2,
+          "documento": "Solicitud inicio de trámite de proceso Contractual",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.) o Correo Electrónico",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 3,
+          "documento": "Estudios previos con sus Anexos",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-046\nIncluye ficha técnica",
+          "formatos": [
+            "GCCON-F-046"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 4,
+          "documento": "Evidencia de inclusión en el Plan de Adquisiciones",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo del PAA en SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 5,
+          "documento": "Certificado de inexistencia de Bienes expedido por el almacén",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 6,
+          "documento": "Anexo de Verificación Criterios de Contratacion",
+          "cuandoAplique": true,
+          "observacion": "GCCON-F-053",
+          "formatos": [
+            "GCCON-F-053"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 7,
+          "documento": "Autorización o concepto técnico",
+          "cuandoAplique": true,
+          "observacion": "Acorde a la Res. 1-2154 de 2024 o aquella que la modifique",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 8,
+          "documento": "Análisis sector (incluido estudio del mercado)",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 9,
+          "documento": "Matriz de Riesgos",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 10,
+          "documento": "Certificado de disponibilidad presupuestal",
+          "cuandoAplique": false,
+          "observacion": "Acuerdo normatividad vigente puede ser aportado con la publicación de pliegos definitivos",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 11,
+          "documento": "Comunicación de Autorización vigencias futuras del Ministerio de Hacienda y anexos",
+          "cuandoAplique": true,
+          "observacion": "Acuerdo normatividad vigente puede ser aportado con la publicación de pliegos definitivos",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 12,
+          "documento": "Invitación pública",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 13,
+          "documento": "Documento anexo a la Invitación",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-023",
+          "formatos": [
+            "GCCON-F-023"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 14,
+          "documento": "Observaciones a la Invitación pública",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 15,
+          "documento": "Respuestas a las observaciones de la invitación pública",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 16,
+          "documento": "Adendas",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 17,
+          "documento": "Aviso de no Limitación a Mipymes",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-075",
+          "formatos": [
+            "GCCON-F-075"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 18,
+          "documento": "Constancia de Cierre",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 19,
+          "documento": "Adendas",
+          "cuandoAplique": true,
+          "observacion": "Que afecten solo el cronograma del proceso",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 20,
+          "documento": "Designación del evaluador o Comité evlauador",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.)",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 21,
+          "documento": "Informe de evaluación preliminar",
+          "cuandoAplique": false,
+          "observacion": "FORMATO EVALUACIÓN JURIDICA GCCON-F-038",
+          "formatos": [
+            "GCCON-F-038"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 22,
+          "documento": "Consolidado Informe de evaluación preliminar",
+          "cuandoAplique": false,
+          "observacion": "FORMATO CONSOLIDADO GCCON-F-039",
+          "formatos": [
+            "GCCON-F-039"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 23,
+          "documento": "Observaciones al informe de evaluación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 24,
+          "documento": "Respuesta a observaciones al informe de evaluación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 25,
+          "documento": "Informe de evaluación definitivo",
+          "cuandoAplique": false,
+          "observacion": "FORMATO EVALUACIÓN JURIDICA GCCON-F-038\nFORMATO CONSOLIDADO GCCON-F-039",
+          "formatos": [
+            "GCCON-F-038",
+            "GCCON-F-039"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 26,
+          "documento": "Observaciones al informe de evaluación definitivo",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 27,
+          "documento": "Respuesta a las observaciones del informe definitivo",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 28,
+          "documento": "Actualización del Informe de evaluación definitivo",
+          "cuandoAplique": true,
+          "observacion": "FORMATO CONSOLIDADO GCCON-F-039",
+          "formatos": [
+            "GCCON-F-039"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 29,
+          "documento": "Verificación causales de desempate",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-076 VERIFICACIÓN CRITERIOS DE DESEMPATE",
+          "formatos": [
+            "GCCON-F-076"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 30,
+          "documento": "Recomendación Comité evaluador",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-039",
+          "formatos": [
+            "GCCON-F-039"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 31,
+          "documento": "Resolución de declaratoria desierta",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GJ-F-026",
+          "formatos": [
+            "GJ-F-026"
+          ],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA CONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 32,
+          "documento": "Aceptación de Oferta",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 33,
+          "documento": "Documento anexo Aceptación de oferta",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-021",
+          "formatos": [
+            "GCCON-F-021"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 34,
+          "documento": "Certificado de registro en Blackbox",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 35,
+          "documento": "Certificado de Registro Presupuestal - RP",
+          "cuandoAplique": false,
+          "observacion": "Puede ser en fìsico o digital",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 36,
+          "documento": "Garantías",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 37,
+          "documento": "Aprobación de la garantías en SECOP",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA DE EJECUCIÓN",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 38,
+          "documento": "Designación de Supervisor",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo de SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 39,
+          "documento": "Acta de inicio",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-018",
+          "formatos": [
+            "GCCON-F-018"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 40,
+          "documento": "Factura del Contratista",
+          "cuandoAplique": true,
+          "observacion": "Solo se anexa si se exige",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 41,
+          "documento": "Informes de ejecución con sus soportes",
+          "cuandoAplique": true,
+          "observacion": "Solo se anexa si se exige",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 42,
+          "documento": "Informes y/o Certificaciones de Pago de supervisión / Interventoría",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-031",
+          "formatos": [
+            "GCCON-F-031"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 43,
+          "documento": "Actas adicionales que se generen durante la ejecución del contrato",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 44,
+          "documento": "Soportes ingreso a Almacén",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 45,
+          "documento": "Solicitud de modificación con sus soportes",
+          "cuandoAplique": true,
+          "observacion": "Comunicación Interna (C.I.), Formato y demas documentos",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 46,
+          "documento": "Informe de supervisión para modificación",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 47,
+          "documento": "Certificado de Disponibilidad Presupuestal - Adición",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 48,
+          "documento": "Minuta Electrónica de modificación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 49,
+          "documento": "Anexo Minuta de modificación",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 50,
+          "documento": "Certificado de registro en la plataforma Blackbox",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 51,
+          "documento": "Certificado de Registro Presupuestal - RP",
+          "cuandoAplique": true,
+          "observacion": "Puede ser en fìsico o digital",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 52,
+          "documento": "Garantías",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 53,
+          "documento": "Constancia de aprobación de la garantías en SECOP",
+          "cuandoAplique": true,
+          "observacion": "Pantallazo de SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 54,
+          "documento": "Otros documentos de ejecución",
+          "cuandoAplique": true,
+          "observacion": "Relacionar los documentos que se generen durante la ejecuión y que no esten incluidos en otros apartados.",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 55,
+          "documento": "Informe final de supervisión / Interventoría",
+          "cuandoAplique": false,
+          "observacion": "FORMATO GCCON-F-030",
+          "formatos": [
+            "GCCON-F-030"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 56,
+          "documento": "Certificación Paz y Salvo requeridos",
+          "cuandoAplique": true,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 57,
+          "documento": "Acta de recibo a satisfacción",
+          "cuandoAplique": false,
+          "observacion": "",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 58,
+          "documento": "Procedimiento de incumplimiento",
+          "cuandoAplique": true,
+          "observacion": "Se puede presentar durante la ejecución o en el proceso de liquidación",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    },
+    {
+      "nombre": "ETAPA POSCONTRACTUAL",
+      "rotuladaEnOrigen": true,
+      "items": [
+        {
+          "numero": 58,
+          "documento": "Procedimiento de incumplimiento",
+          "cuandoAplique": true,
+          "observacion": "Se puede presentar durante la ejecución o en el proceso de liquidación",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 59,
+          "documento": "Acta de liquidación o Terminación Anticipada",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-027",
+          "formatos": [
+            "GCCON-F-027"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 60,
+          "documento": "Anexos de pago pendientes a saldos a favor del contratista",
+          "cuandoAplique": true,
+          "observacion": "Se deben realizar los pagos pendientes al contratista o la liberación del presupuesto de acuerdo a lo estipulado en el Acta de liquidación.",
+          "formatos": [],
+          "tiposPago": []
+        },
+        {
+          "numero": 61,
+          "documento": "Acta de cierre de expediente",
+          "cuandoAplique": true,
+          "observacion": "FORMATO GCCON-F-028",
+          "formatos": [
+            "GCCON-F-028"
+          ],
+          "tiposPago": []
+        },
+        {
+          "numero": 62,
+          "documento": "Constancia de Publicación en SECOP II del acta de liquidación y/o acta de cierre",
+          "cuandoAplique": false,
+          "observacion": "Pantallazo SECOP II",
+          "formatos": [],
+          "tiposPago": []
+        }
+      ]
+    }
+  ],
+  "notas": [
+    "* Cuando aplique.",
+    "** Aplica Resolución 069 de 2014"
+  ],
+  "advertencias": [
+    "El formato original numera dos ítems distintos con el número 58. Se conservó la numeración tal como aparece."
+  ]
+}

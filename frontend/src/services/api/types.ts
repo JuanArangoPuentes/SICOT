@@ -37,6 +37,15 @@ export interface CrearUsuarioRequest {
   rol: Rol
 }
 
+export interface ActualizarUsuarioRequest {
+  nombre: string
+  email: string
+  /** Opcional: si viene, reemplaza la contraseña actual (8 a 100 caracteres). */
+  password?: string
+  telefono: string
+  rol: Rol
+}
+
 export interface CambiarEstadoUsuarioRequest {
   activo: boolean
 }
@@ -167,8 +176,34 @@ export interface DocumentoResponse {
   generadoPorIa: boolean
   firmaId: string | null
   fechaFirma: string | null
+  /** Huella SHA-256 registrada al firmar. null si el documento no está firmado. */
+  firmaHashSha256: string | null
+  /** Quién firmó. null si no está firmado. */
+  firmadoPorNombre: string | null
   subidoPorNombre: string | null
   fechaSubida: string
+}
+
+/**
+ * Estado de integridad de un documento firmado — el backend recalcula el
+ * SHA-256 del contenido y lo compara con la huella registrada al firmar.
+ *
+ * NO_VERIFICABLE no significa "está bien": son documentos firmados antes de que
+ * el sistema registrara la huella, y su integridad no se puede confirmar ni
+ * descartar. Debe mostrarse distinto de INTEGRO.
+ */
+export type EstadoIntegridad = 'INTEGRO' | 'ALTERADO' | 'SIN_FIRMA' | 'NO_VERIFICABLE'
+
+export interface VerificacionIntegridadResponse {
+  documentoId: number
+  nombre: string
+  estado: EstadoIntegridad
+  hashRegistrado: string | null
+  hashActual: string | null
+  firmaId: string | null
+  fechaFirma: string | null
+  firmadoPorNombre: string | null
+  mensaje: string
 }
 
 // ─── IA (Ollama local) ────────────────────────────────────────────────────────
@@ -190,10 +225,6 @@ export interface ExtraccionContratoResponse {
 export interface GenerarDocumentoRequest {
   tipo: string
   subetapaId: number | null
-}
-
-export interface ChatRequest {
-  pregunta: string
 }
 
 export interface ChatResponse {

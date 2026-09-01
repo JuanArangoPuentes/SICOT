@@ -2,8 +2,8 @@
 // Administrador (GCCON-*, GIL-*, ESUCON, etc.). Carga y descarga real de
 // archivos contra el backend; sin datos simulados.
 
-import { API_BASE, ApiError, apiFetch, getAuthToken } from './api/client'
-import type { ErrorResponse, FormatoDocumentalResponse } from './api/types'
+import { apiFetch, apiFetchBlob } from './api/client'
+import type { FormatoDocumentalResponse } from './api/types'
 
 export function getFormatos(): Promise<FormatoDocumentalResponse[]> {
   return apiFetch<FormatoDocumentalResponse[]>('/api/formatos')
@@ -25,16 +25,7 @@ export function eliminarFormato(id: number): Promise<void> {
 // guardado en el navegador — apiFetch no sirve aquí porque la respuesta es
 // binaria, no JSON.
 export async function descargarFormato(id: number, nombreArchivo: string): Promise<void> {
-  const token = getAuthToken()
-  const res = await fetch(`${API_BASE}/api/formatos/${id}/archivo`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  if (!res.ok) {
-    let detail: ErrorResponse | undefined
-    try { detail = (await res.json()) as ErrorResponse } catch { /* cuerpo vacío o no JSON */ }
-    throw new ApiError(res.status, detail?.message ?? `Error ${res.status}`, detail)
-  }
-  const blob = await res.blob()
+  const blob = await apiFetchBlob(`/api/formatos/${id}/archivo`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

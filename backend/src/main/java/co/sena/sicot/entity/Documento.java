@@ -18,6 +18,11 @@ public class Documento {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Bloqueo optimista gestionado por Hibernate — ver {@code V12__bloqueo_optimista.sql}. */
+    @Version
+    @Column(name = "lock_version", nullable = false)
+    private Long lockVersion;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "contrato_id", nullable = false)
     private Contrato contrato;
@@ -43,6 +48,26 @@ public class Documento {
     @Column(name = "content_type", length = 100)
     private String contentType;
 
+    /**
+     * Bytes del archivo, dentro de la fila (columna {@code BYTEA}).
+     *
+     * <p><b>Nunca lo cargue con una consulta de listado.</b> JPA carga los
+     * atributos básicos de forma ansiosa, así que cualquier consulta que
+     * devuelva entidades {@code Documento} trae también todos los bytes de
+     * todos los archivos. Con el tope de 20 MB por archivo y un heap de
+     * contenedor de ~750 MB, basta una cuarentena de documentos en un contrato
+     * para provocar un {@code OutOfMemoryError} — y eso listando una pantalla
+     * que ni siquiera muestra el contenido.
+     *
+     * <p>{@code @Basic(fetch = LAZY)} NO resuelve esto: sobre un atributo
+     * básico, Hibernate lo ignora en silencio salvo que el proyecto active la
+     * mejora de bytecode (bytecode enhancement), y una anotación que no hace
+     * nada es peor que ninguna porque induce a confiar. La solución real está
+     * en {@link co.sena.sicot.repository.DocumentoRepository}: los listados
+     * usan una proyección JPQL que no menciona esta columna, así que los bytes
+     * no salen de PostgreSQL. La entidad completa solo se carga en la descarga
+     * y en la firma, que son operaciones de un documento a la vez.
+     */
     @JdbcTypeCode(SqlTypes.VARBINARY)
     private byte[] contenido;
 
@@ -60,6 +85,25 @@ public class Documento {
 
     @Column(name = "fecha_firma")
     private Instant fechaFirma;
+
+    /**
+     * SHA-256 (hexadecimal, 64 caracteres) del contenido en el momento exacto
+     * de la firma — ver {@code V13__huella_de_integridad_en_la_firma.sql}. Es
+     * lo que permite detectar que los bytes cambiaron después de firmados.
+     * {@code null} en documentos sin firmar y en los que se firmaron antes de
+     * que existiera esta columna.
+     */
+    @Column(name = "firma_hash_sha256", length = 64)
+    private String firmaHashSha256;
+
+    /**
+     * Quién firmó, como clave foránea y no como texto dentro de un registro de
+     * auditoría. Distinto de {@link #subidoPor}: quien carga un documento no
+     * es necesariamente quien lo firma.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "firmado_por_id")
+    private Usuario firmadoPor;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "subido_por_id")
@@ -111,6 +155,12 @@ public class Documento {
 
     public Instant getFechaFirma() { return fechaFirma; }
     public void setFechaFirma(Instant fechaFirma) { this.fechaFirma = fechaFirma; }
+
+    public String getFirmaHashSha256() { return firmaHashSha256; }
+    public void setFirmaHashSha256(String firmaHashSha256) { this.firmaHashSha256 = firmaHashSha256; }
+
+    public Usuario getFirmadoPor() { return firmadoPor; }
+    public void setFirmadoPor(Usuario firmadoPor) { this.firmadoPor = firmadoPor; }
 
     public Usuario getSubidoPor() { return subidoPor; }
     public void setSubidoPor(Usuario subidoPor) { this.subidoPor = subidoPor; }

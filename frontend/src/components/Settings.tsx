@@ -12,7 +12,6 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 }) {
   const { prefs, patch, reset } = usePrefs()
   const [section, setSection] = useState<Section>(initialSection)
-  const [saved, setSaved] = useState(false)
 
   if (!open) return null
 
@@ -70,7 +69,9 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
             {colorField('Acento énfasis', 'colorEmphasis')}
             {colorField('Datos / mono', 'colorAccentTech')}
             {colorField('Fondo base', 'colorBackground')}
+            {colorField('Barra lateral y cabecera', 'colorBgRail')}
             {colorField('Superficie (tarjetas)', 'colorBgCard')}
+            {colorField('Superficie elevada (tablas)', 'colorBgElevated')}
             {colorField('Superficie 2 (modales)', 'colorBgSurface')}
             {colorField('Borde', 'colorBorder')}
             {colorField('Texto principal', 'colorText')}
@@ -121,11 +122,14 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
           </Field>
           <Toggle label="Sonido de notificación" value={prefs.sound} onChange={v => patch({ sound: v })} />
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-            <button className="btn-green" style={{ flex: 2, padding: '10px 0', fontSize: 13 }}
-              onClick={() => { setSaved(true); setTimeout(() => setSaved(false), 2000) }}>
-              {saved ? '✓ Cambios guardados' : 'Guardar cambios'}
-            </button>
+          {/* Las preferencias se guardan solas en cuanto cambian (ver prefs.tsx),
+              así que no hay un botón "Guardar": tenerlo sugeriría que sin pulsarlo
+              se pierden. Antes existía y mostraba "✓ Cambios guardados" sin
+              guardar absolutamente nada. */}
+          <div style={{ display: 'flex', gap: 10, marginTop: 22, alignItems: 'center' }}>
+            <span style={{ flex: 2, fontSize: 12, color: 'var(--text-muted)' }}>
+              Los cambios se guardan automáticamente en este equipo.
+            </span>
             <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={reset}>↶ Resetear</button>
           </div>
         </div>
@@ -206,7 +210,7 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
         }}>
         <span style={{
           position: 'absolute', top: 2, left: value ? 20 : 2, width: 16, height: 16, borderRadius: '50%',
-          background: value ? '#041007' : 'var(--text-muted)', transition: 'left var(--t)',
+          background: value ? 'var(--on-accent)' : 'var(--text-muted)', transition: 'left var(--t)',
         }} />
       </button>
     </label>

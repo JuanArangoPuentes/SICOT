@@ -94,8 +94,7 @@ public class ContratoService {
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
         if (request.supervisorId() != null) {
-            contrato.setSupervisor(usuarioRepository.findById(request.supervisorId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId())));
+            contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
         }
         Contrato guardado = contratoRepository.save(contrato);
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
@@ -137,11 +136,7 @@ public class ContratoService {
     @Transactional
     public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
         Contrato contrato = buscar(id);
-        Usuario supervisor = usuarioRepository.findById(request.supervisorId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", request.supervisorId()));
-        if (supervisor.getRol() != null && !supervisor.getRol().name().equals("SUPERVISOR")) {
-            throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
-        }
+        Usuario supervisor = buscarSupervisor(request.supervisorId());
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
@@ -152,10 +147,23 @@ public class ContratoService {
     @Transactional
     public ContratoResponse cambiarEstado(Long id, CambiarEstadoContratoRequest request) {
         Contrato contrato = buscar(id);
-        contrato.setEstado(request.estado());
+        EstadoContrato anterior = contrato.getEstado();
+        EstadoContrato destino = request.estado();
+
+        // Antes esto era un setEstado directo: cualquier destino desde cualquier
+        // origen pasaba, así que FINALIZADO -> BORRADOR era una petición válida.
+        // validarContrato solo cierra lo que contradice el código (* -> BORRADOR);
+        // el resto de la máquina de estados del contrato no está confirmada en la
+        // documentación del SENA y queda PENDIENTE_DE_DEFINIR, permitida.
+        TransicionesDeEstado.Sentido sentido = TransicionesDeEstado.validarContrato(anterior, destino);
+        if (sentido == TransicionesDeEstado.Sentido.SIN_CAMBIO) {
+            return ContratoMapper.toResponse(contrato);
+        }
+
+        contrato.setEstado(destino);
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "ESTADO_CAMBIADO",
-                "Estado del contrato cambiado a " + request.estado().name() + ".");
+                "Estado del contrato: " + anterior.name() + " → " + destino.name() + ".");
         return ContratoMapper.toResponse(guardado);
     }
 
@@ -165,5 +173,14 @@ public class ContratoService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Contrato", id));
         SecurityUtils.verificarAccesoAlContrato(contrato);
         return contrato;
+    }
+
+    private Usuario buscarSupervisor(Long supervisorId) {
+        Usuario supervisor = usuarioRepository.findById(supervisorId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", supervisorId));
+        if (supervisor.getRol() != Rol.SUPERVISOR) {
+            throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
+        }
+        return supervisor;
     }
 }

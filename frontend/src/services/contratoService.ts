@@ -11,10 +11,6 @@ export function getContratos(supervisorId?: number, estado?: string): Promise<Co
   return apiFetch<ContratoResponse[]>(`/api/contratos${qs ? `?${qs}` : ''}`)
 }
 
-export function getContrato(id: number): Promise<ContratoResponse> {
-  return apiFetch<ContratoResponse>(`/api/contratos/${id}`)
-}
-
 export function crearContrato(body: CrearContratoRequest): Promise<ContratoResponse> {
   return apiFetch<ContratoResponse>('/api/contratos', {
     method: 'POST',

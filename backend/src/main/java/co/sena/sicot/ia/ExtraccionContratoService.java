@@ -2,14 +2,17 @@ package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
 import co.sena.sicot.exception.BusinessException;
+import co.sena.sicot.service.ArchivoValidator;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -28,15 +31,35 @@ public class ExtraccionContratoService {
 
     private static final Logger log = LoggerFactory.getLogger(ExtraccionContratoService.class);
 
+    private static final int MAX_ARCHIVOS = 6;
+
     private final PdfTextExtractor pdfTextExtractor;
     private final OllamaClient ollamaClient;
     private final ObjectMapper objectMapper;
+    private final ArchivoValidator archivoValidator;
+
+    /**
+     * Techo de tiempo para la petición COMPLETA, no para cada llamada.
+     *
+     * {@code sicot.ia.timeout-seconds} acota una sola llamada a Ollama, pero
+     * aquí se hacen hasta {@value #MAX_ARCHIVOS} en serie: con el valor por
+     * defecto (900 s) una única petición podía retener un hilo de Tomcat hasta
+     * 90 minutos. Con unas pocas simultáneas se agota el pool de hilos y deja
+     * de responder toda la API, no solo la extracción.
+     *
+     * En hardware sin GPU una extracción real ronda los 35-40 s por archivo
+     * (≈4 min para los 6), así que este presupuesto no estorba el uso normal:
+     * solo corta el caso patológico.
+     */
+    @Value("${sicot.ia.presupuesto-extraccion-seconds:900}")
+    private long presupuestoSegundos;
 
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
-                                      ObjectMapper objectMapper) {
+                                      ObjectMapper objectMapper, ArchivoValidator archivoValidator) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
+        this.archivoValidator = archivoValidator;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -44,23 +67,51 @@ public class ExtraccionContratoService {
         if (validos.isEmpty()) {
             throw new BusinessException("Debe cargar al menos un archivo para analizar.");
         }
-        if (validos.size() > 6) {
-            throw new BusinessException("Cargue como máximo 6 documentos a la vez.");
+        if (validos.size() > MAX_ARCHIVOS) {
+            throw new BusinessException("Cargue como máximo " + MAX_ARCHIVOS + " documentos a la vez.");
         }
+
+        // Cada archivo pasa por la MISMA validación que usan DocumentoService y
+        // FormatoDocumentalService: tamaño máximo y tipo real por bytes mágicos
+        // (no por la extensión ni por el Content-Type que manda el cliente).
+        // Antes no había ninguna: seis archivos de 500 MB, o un ejecutable
+        // renombrado a .pdf, llegaban a memoria y a PDFBox sin que nadie lo
+        // comprobara. Si un archivo no supera la validación se rechaza la
+        // petición completa con un 400 claro, en vez de analizar unos e
+        // ignorar otros en silencio.
+        for (MultipartFile archivo : validos) {
+            archivoValidator.validarTamanio(archivo);
+            archivoValidator.tipoDeArchivo(archivo);
+        }
+
+        long limite = System.nanoTime() + Duration.ofSeconds(presupuestoSegundos).toNanos();
+        int procesados = 0;
 
         ExtraccionContratoResponse resultado = new ExtraccionContratoResponse(
                 null, null, null, null, null, null, null, null, null, null, null);
         for (MultipartFile archivo : validos) {
+            // Se comprueba ANTES de cada archivo, no después: si ya se agotó el
+            // presupuesto, no se empieza otra llamada que podría durar otros 15
+            // minutos. Se devuelve lo extraído hasta aquí en vez de fallar — es
+            // información real y útil — y se avisa en el log de cuántos archivos
+            // quedaron sin analizar, para no dar a entender que se leyeron todos.
+            if (procesados > 0 && System.nanoTime() > limite) {
+                log.warn("Presupuesto de {} s agotado tras {} de {} archivos; los restantes no se analizaron.",
+                        presupuestoSegundos, procesados, validos.size());
+                break;
+            }
             ExtraccionContratoResponse deEsteArchivo = extraerDeUnArchivo(archivo);
             resultado = combinar(resultado, deEsteArchivo);
+            procesados++;
         }
         return resultado;
     }
 
     private ExtraccionContratoResponse extraerDeUnArchivo(MultipartFile archivo) {
-        String nombreArchivo = archivo.getOriginalFilename() == null ? "" : archivo.getOriginalFilename().toLowerCase();
+        String nombreOriginal = archivo.getOriginalFilename();
+        String nombreArchivo = nombreOriginal == null ? "" : nombreOriginal.toLowerCase();
         if (!nombreArchivo.endsWith(".pdf")) {
-            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", archivo.getOriginalFilename());
+            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", nombreOriginal);
             return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
         }
 
@@ -101,9 +152,11 @@ public class ExtraccionContratoService {
                 presupuestal), tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras",
                 "Arrendamiento" — la que mejor describa el objeto; si no es clara, usa null).
 
-                TEXTO DEL DOCUMENTO:
                 %s
-                """.formatted(textoRecortado);
+
+                %s
+                """.formatted(EntradaNoConfiable.INSTRUCCION,
+                        EntradaNoConfiable.bloque("TEXTO DEL DOCUMENTO", textoRecortado));
 
         log.info("Extrayendo datos de '{}' ({} bytes, {} caracteres de texto) con Ollama...",
                 archivo.getOriginalFilename(), contenido.length, textoRecortado.length());
@@ -113,7 +166,11 @@ public class ExtraccionContratoService {
         try {
             return objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
         } catch (IOException e) {
-            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), respuestaCruda);
+            // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
+            // PDF (incluido un intento de inyección) y no tiene por qué quedar
+            // completa en el log del servidor.
+            String muestra = respuestaCruda.length() > 300 ? respuestaCruda.substring(0, 300) + "…" : respuestaCruda;
+            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), muestra);
             // Un documento con formato inesperado no debe tumbar el análisis de los demás.
             return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
         }

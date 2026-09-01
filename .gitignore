@@ -1,7 +1,6 @@
 .DS_Store
 Thumbs.db
 *.log
-.claude/*.lock
 .env
 
 # Red de seguridad genérica — cada subcarpeta (backend/, frontend/, mcp/) ya
@@ -9,3 +8,23 @@ Thumbs.db
 node_modules/
 dist/
 target/
+
+# --- Herramientas de agentes de IA (locales, no se comparten) -----------------
+# Se ignora TODO .claude/ salvo `launch.json`, que sí es configuración del
+# proyecto (define cómo se arranca el frontend).
+#
+# La regla se escribe en negativo a propósito: estas herramientas (GSD, Spec
+# Kit, worktrees de agentes...) instalan y renombran carpetas con frecuencia, y
+# una lista de exclusiones concretas se queda corta enseguida — así fue como
+# estuvieron a punto de commitearse 41 archivos de una de ellas.
+#
+# GSD en particular instala ~12 MB de maquinaria regenerable; no tiene sentido
+# versionarla, y no todo el equipo usa el mismo asistente. Para instalarla:
+#   npx @opengsd/gsd-core@latest --local --claude
+.claude/*
+!.claude/launch.json
+
+# --- Entornos de desarrollo ---------------------------------------------------
+.idea/
+*.iml
+*.swp

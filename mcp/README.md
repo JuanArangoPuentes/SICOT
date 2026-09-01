@@ -13,8 +13,8 @@ opciones parecidas, sin contexto de cuáles tienen sentido combinar. Este servid
 herramientas de alto valor (lectura de contratos/etapas/alertas/formatos/usuarios/registros, más
 las escrituras que no dependen de reglas de negocio aún sin definir: crear contrato, asignar
 supervisor, avanzar una subetapa, marcar alerta leída). Deliberadamente **no** incluye:
-administración de cuentas (crear/editar/activar usuarios), cambio de estado de contrato (el
-backend todavía no valida transiciones — ver `backend/README.md`), ni carga de formatos
+administración de cuentas (crear/editar/activar usuarios), cambio de estado de contrato (una
+máquina de estados con reglas de negocio; ver `TransicionesDeEstado` en el backend), ni carga de formatos
 (archivo binario, se puede agregar después con el mismo patrón).
 
 ## Configuración
@@ -52,7 +52,7 @@ Agregar en la configuración de servidores MCP (`claude_desktop_config.json` o e
   "mcpServers": {
     "sicot": {
       "command": "node",
-      "args": ["C:/Users/juant/Downloads/Proyecto SICOT/mcp/dist/index.js"],
+      "args": ["<RUTA-AL-REPO>/mcp/dist/index.js"],
       "env": {
         "SICOT_API_URL": "http://localhost:8080",
         "SICOT_EMAIL": "administrador@soy.sena.edu.co",

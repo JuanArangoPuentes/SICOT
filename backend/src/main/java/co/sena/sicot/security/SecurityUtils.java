@@ -3,12 +3,19 @@ package co.sena.sicot.security;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
-import co.sena.sicot.exception.BusinessException;
+import co.sena.sicot.exception.AccesoDenegadoException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Component;
 
-@Component
+/**
+ * Utilidades estáticas de seguridad.
+ *
+ * <p>Sin {@code @Component}: la clase solo tiene métodos estáticos y un
+ * constructor privado, así que el bean que Spring creaba (accediendo al
+ * constructor por reflexión) no lo inyectaba ni lo usaba nadie. Una anotación
+ * que no hace nada induce a pensar que el ciclo de vida de esta clase lo
+ * gestiona el contenedor, y no es así.
+ */
 public final class SecurityUtils {
 
     private SecurityUtils() {
@@ -32,6 +39,11 @@ public final class SecurityUtils {
      * el contrato por otra vía (p. ej. a través de un documento o una alerta).
      * `contrato == null` no restringe nada (dato sin dueño, p. ej. una alerta
      * huérfana).
+     * <p>
+     * Lanza {@link AccesoDenegadoException} (HTTP 404) en lugar de
+     * {@link BusinessException} (HTTP 400) para evitar el oráculo de enumeración:
+     * un supervisor no debe poder distinguir entre "el contrato no existe" y
+     * "el contrato existe pero no es suyo".
      */
     public static void verificarAccesoAlContrato(Contrato contrato) {
         if (contrato == null) {
@@ -44,7 +56,7 @@ public final class SecurityUtils {
         boolean esSupervisorDelContrato = contrato.getSupervisor() != null
                 && contrato.getSupervisor().getId().equals(usuario.getId());
         if (!esSupervisorDelContrato) {
-            throw new BusinessException("Solo el supervisor asignado a este contrato puede acceder a su información.");
+            throw new AccesoDenegadoException("El recurso solicitado no existe o no tiene acceso a él.");
         }
     }
 }

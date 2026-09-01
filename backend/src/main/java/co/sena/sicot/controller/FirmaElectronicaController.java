@@ -6,6 +6,10 @@ import co.sena.sicot.dto.firma.FirmaResponse;
 import co.sena.sicot.dto.firma.MiFirmaResponse;
 import co.sena.sicot.service.FirmaElectronicaService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -28,6 +32,16 @@ public class FirmaElectronicaController {
     }
 
     @Operation(summary = "Listar firmas electrónicas asignadas")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Lista de firmas",
+                    content = @Content(schema = @Schema(implementation = FirmaResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @GetMapping
     public ResponseEntity<List<FirmaResponse>> listar() {
         return ResponseEntity.ok(firmaService.listar());
@@ -35,6 +49,14 @@ public class FirmaElectronicaController {
 
     @Operation(summary = "Consultar si la cuenta actual tiene una firma electrónica activa asignada",
             description = "Cualquier usuario autenticado puede consultar su propia firma (no requiere rol ADMINISTRADOR).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado de la firma propia",
+                    content = @Content(schema = @Schema(implementation = MiFirmaResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @GetMapping("/mia")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<MiFirmaResponse> miFirma() {
@@ -42,12 +64,38 @@ public class FirmaElectronicaController {
     }
 
     @Operation(summary = "Asignar firma electrónica a una cuenta")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Firma asignada",
+                    content = @Content(schema = @Schema(implementation = FirmaResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos (usuario ya tiene firma, usuario no existe)",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @PostMapping
     public ResponseEntity<FirmaResponse> crear(@Valid @RequestBody CrearFirmaRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(firmaService.crear(request));
     }
 
     @Operation(summary = "Revocar o restaurar una firma electrónica")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado cambiado",
+                    content = @Content(schema = @Schema(implementation = FirmaResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Firma no encontrada",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
     @PatchMapping("/{id}/estado")
     public ResponseEntity<FirmaResponse> cambiarEstado(@PathVariable Long id,
                                                        @Valid @RequestBody CambiarEstadoFirmaRequest request) {

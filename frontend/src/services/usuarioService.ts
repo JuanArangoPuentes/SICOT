@@ -2,6 +2,7 @@
 
 import { apiFetch } from './api/client'
 import type {
+  ActualizarUsuarioRequest,
   CambiarEstadoUsuarioRequest,
   CrearUsuarioRequest,
   EnviarCredencialesRequest,
@@ -16,6 +17,17 @@ export function getUsuarios(): Promise<UsuarioResponse[]> {
 export function crearUsuario(request: CrearUsuarioRequest): Promise<UsuarioResponse> {
   return apiFetch<UsuarioResponse>('/api/usuarios', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  })
+}
+
+// Actualiza los datos del usuario. `password` es opcional: cuando llega, el
+// backend la re-codifica y reemplaza la anterior — es el camino real para
+// restablecer la clave de alguien desde el panel de Administración.
+export function actualizarUsuario(id: number, request: ActualizarUsuarioRequest): Promise<UsuarioResponse> {
+  return apiFetch<UsuarioResponse>(`/api/usuarios/${id}`, {
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(request),
   })

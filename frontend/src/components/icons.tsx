@@ -209,3 +209,109 @@ export function AvatarIcon({ id, size = 24, style, className }: IconProps & { id
     default: return <IconAvatarBot {...props} />
   }
 }
+
+// ─── Iconografía de navegación (barra lateral) ───────────────────────────────
+
+export function IconInbox({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+    </svg>
+  )
+}
+
+export function IconContract({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+      <path d="M14 2v6h6" />
+      <path d="M8 13h5M8 17h8" />
+    </svg>
+  )
+}
+
+export function IconBell({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  )
+}
+
+export function IconHistory({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3v5h5" />
+      <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
+      <path d="M12 7v5l4 2" />
+    </svg>
+  )
+}
+
+export function IconChart({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 3v18h18" />
+      <rect x="7" y="11" width="3" height="6" rx="1" />
+      <rect x="12.5" y="7" width="3" height="10" rx="1" />
+      <rect x="18" y="13" width="3" height="4" rx="1" />
+    </svg>
+  )
+}
+
+export function IconGrid({ size = 18, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </svg>
+  )
+}
+
+export function IconChevron({ size = 14, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
+    </svg>
+  )
+}
+
+export function IconArrowRight({ size = 14, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="12" x2="19" y2="12" />
+      <polyline points="13 6 19 12 13 18" />
+    </svg>
+  )
+}
+
+export function IconCheck({ size = 14, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 12.5 9.5 18 20 6.5" />
+    </svg>
+  )
+}
+
+export function IconLogout({ size = 14, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
+    </svg>
+  )
+}
+
+export function IconClock({ size = 16, style, className }: IconProps) {
+  return (
+    <svg className={className} style={{ ...base(size), ...style }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </svg>
+  )
+}
