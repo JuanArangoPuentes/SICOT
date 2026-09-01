@@ -56,9 +56,22 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * <p>No se activa en {@code dev} ni en {@code test} porque allí manda
  * {@code DataInitializer}; tener los dos sembrando la misma tabla sería una
  * carrera con resultado impredecible.
+ *
+ * <p><b>Tampoco se activa en {@code esquema-it}</b> — el perfil de
+ * {@code EsquemaPostgreSqlIntegrationTest}, que arranca la aplicación completa
+ * contra un PostgreSQL real y vacío solo para que Flyway construya el esquema
+ * y Hibernate lo valide. Ese perfil se eligió deliberadamente distinto de
+ * "dev"/"test" para que {@code DataInitializer} tampoco sembrara datos ahí —
+ * y por esa misma razón antes caía dentro de la condición original de este
+ * bean, que se activaba, no encontraba {@code SICOT_ADMIN_EMAIL} configurado
+ * y tumbaba el contexto de la prueba entera.
+ *
+ * <p>Si se agrega un nuevo perfil de prueba que arranque
+ * {@code SicotApplication} completa (no solo un slice de Spring), hay que
+ * sumarlo aquí también — ver {@code @ActiveProfiles} en {@code backend/src/test}.
  */
 @Configuration
-@Profile("!dev & !test")
+@Profile("!dev & !test & !esquema-it")
 public class AdministradorInicial {
 
     private static final Logger log = LoggerFactory.getLogger(AdministradorInicial.class);
