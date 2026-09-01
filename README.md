@@ -186,6 +186,35 @@ Después del primer arranque ambas variables pueden retirarse — solo se usan
 cuando no hay ningún usuario. Cambie esa contraseña desde el panel de
 administración en cuanto entre.
 
+## Operación
+
+| Documento | Para qué |
+| --- | --- |
+| [`BACKUP_Y_RESTAURACION.md`](./docs/operacion/BACKUP_Y_RESTAURACION.md) | Respaldo automático verificado y restauración manual |
+| [`GESTION_DE_SECRETOS.md`](./docs/operacion/GESTION_DE_SECRETOS.md) | Dónde viven las credenciales, cómo rotarlas y qué hacer ante una filtración |
+| [`MODELO_DE_DATOS.md`](./docs/operacion/MODELO_DE_DATOS.md) | Las tablas, sus reglas y el inventario de migraciones |
+| [`LOCAL_DATABASE.md`](./docs/operacion/LOCAL_DATABASE.md) | Base de datos local para desarrollo |
+
+## Decisiones de arquitectura
+
+Las decisiones que **no son evidentes leyendo el código** —y que alguien tendría
+que volver a tomar, probablemente mal, si no estuvieran escritas— viven en
+[`docs/decisiones/`](./docs/decisiones/README.md):
+
+| ADR | Decide |
+| --- | --- |
+| [001](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md) | Qué significa "instalación local" para el Supervisor |
+| [002](./docs/decisiones/ADR-002-continuidad-y-perdida-aceptable.md) | Cuánta información es aceptable perder y en cuánto tiempo se vuelve a estar en pie |
+| [003](./docs/decisiones/ADR-003-umbral-de-migracion-de-documentos.md) | Cuándo dejar de guardar los archivos dentro de PostgreSQL |
+| [004](./docs/decisiones/ADR-004-un-solo-sistema-de-estilos.md) | Un solo sistema de estilos en el frontend |
+| [005](./docs/decisiones/ADR-005-gestion-de-secretos.md) | Dónde viven las credenciales y cómo se rotan |
+| [006](./docs/decisiones/ADR-006-modelo-de-ia.md) | Qué modelo de IA local usa el Copiloto |
+| [007](./docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md) | Enrutado por URL y enlaces compartibles |
+
+Un ADR **no se edita para cambiar la decisión**: se escribe uno nuevo que lo
+reemplaza. El historial de por qué el sistema tuvo una forma anterior es parte
+del valor.
+
 ## Reglas del proyecto
 
 Las reglas de estabilidad, alcance y "no inventar" que gobiernan este repo están en
