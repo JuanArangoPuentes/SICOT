@@ -77,3 +77,20 @@ la IA es opcional y el resto del sistema no depende de ella— y no descarga nad
 por su cuenta, porque una descarga de gigabytes disparada en silencio durante el
 arranque de un servicio es justo la clase de sorpresa que no debe ocurrir en
 producción.
+
+### Verificado en funcionamiento (2 de septiembre de 2026)
+
+Descargado el modelo, se comprobó que responde de verdad y no solo que existe en
+el catálogo. Pregunta de dominio contractual, en español:
+
+> *¿Qué es un acta de inicio en un contrato de suministro y quién la suscribe?*
+>
+> «Un acta de inicio en un contrato de suministro documenta formalmente el
+> comienzo de las actividades acordadas entre las partes. Este documento se
+> suscribe generalmente por el representante legal del contratista y por el
+> representante o oficial designado por la institución SENA…»
+
+Respuesta correcta, en español y con vocabulario del dominio — que es
+precisamente lo que un modelo afinado para generar código no garantiza. La
+decisión de este ADR queda verificada de punta a punta: modelo descargado,
+registrado en Ollama, y produciendo salida útil para el copiloto.
