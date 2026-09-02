@@ -169,10 +169,11 @@
                 el proyecto sabía cuántas pruebas tenía, pero no sobre cuánto
                 código corrían: un número sin denominador.
 
-                Deliberadamente SIN umbral que rompa el build. Primero se mide
-                unas semanas y luego se fija un mínimo con datos reales; poner
-                hoy una cifra inventada solo enseña al equipo a subirla o a
-                saltársela. El informe queda en target/site/jacoco/index.html.
+                Durante un tiempo se midió SIN umbral, a propósito: poner una
+                cifra inventada el primer día solo enseña al equipo a subirla o
+                a saltársela. Ya hay datos reales, así que el mínimo existe y
+                está justificado abajo. El informe legible queda en
+                target/site/jacoco/index.html.
             -->
             <plugin>
                 <groupId>org.jacoco</groupId>
@@ -191,6 +192,49 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                    </execution>
+                    <!--
+                        Umbral mínimo, fijado con datos reales y no con una cifra
+                        inventada: al medirlo, la cobertura era 85 % de línea y
+                        63 % de rama. El mínimo se pone deliberadamente UNOS
+                        PUNTOS POR DEBAJO de lo alcanzado.
+
+                        El objetivo no es empujar la cifra hacia arriba, es
+                        impedir que baje sin que nadie se entere. Un umbral
+                        pegado al valor actual convierte cualquier refactor
+                        legítimo en un build roto, y a la semana alguien lo
+                        desactiva — que es como mueren estos controles.
+
+                        La rama es la métrica que se vigila; la de línea sube
+                        sola y engaña. Subir estos números es una decisión
+                        consciente cuando el equipo tenga margen, no un efecto
+                        secundario de haber escrito pruebas.
+                    -->
+                    <execution>
+                        <id>umbral-minimo</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.58</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>
