@@ -5,9 +5,18 @@
 # acordarse de subir la versión. Dependabot abre el PR por su cuenta.
 #
 # Frecuencia semanal y no diaria a propósito: con un equipo de tres personas,
-# un aluvión diario de PRs se ignora, y una lista ignorada es lo mismo que no
-# tenerla. `open-pull-requests-limit` acota cuántos puede haber a la vez por
-# el mismo motivo.
+# un aluvión de PRs se ignora, y una lista ignorada es lo mismo que no tenerla.
+#
+# SOLO ACTUALIZACIONES MENORES Y DE PARCHE. La primera configuración no lo
+# limitaba y Dependabot abrió nueve PRs en el primer minuto, casi todos saltos
+# de versión mayor: TypeScript de 5.9 a 7.0, actions/checkout de v4 a v7. Ese
+# tipo de salto rompe el build o cambia comportamiento, necesita que alguien lo
+# evalúe con tiempo, y mezclado con las actualizaciones rutinarias hace que
+# nadie lea ninguna.
+#
+# Las versiones mayores se suben a mano, a propósito y de una en una. Las
+# actualizaciones de SEGURIDAD no pasan por este filtro: Dependabot las abre
+# igual aunque impliquen un salto mayor, que es justo lo que se quiere.
 
 version: 2
 updates:
@@ -20,6 +29,9 @@ updates:
     labels: [dependencias, backend]
     commit-message:
       prefix: "chore(backend)"
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -30,6 +42,9 @@ updates:
     labels: [dependencias, frontend]
     commit-message:
       prefix: "chore(frontend)"
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
     groups:
       # Las herramientas de desarrollo se agrupan en un solo PR: son muchas y
       # su riesgo individual es bajo. Las de producción van sueltas, para
@@ -45,6 +60,9 @@ updates:
     labels: [dependencias, mcp]
     commit-message:
       prefix: "chore(mcp)"
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   # Las propias acciones del CI también envejecen, y una acción sin actualizar
   # es código de terceros ejecutándose con acceso al repositorio.
@@ -52,4 +70,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    open-pull-requests-limit: 2
     labels: [dependencias, ci]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
