@@ -56,3 +56,24 @@ documentos reales del SENA.
 - Cuando existan documentos reales generados y revisados por un supervisor: eso
   permite comparar candidatos con evidencia en vez de por reputación.
 - Si el hardware del despliegue cambia y admite un modelo mayor.
+
+## Lo que pasó al aplicar esta decisión (2 de septiembre de 2026)
+
+El cambio de `qwen2.5-coder:7b` a `qwen2.5:7b` se hizo en la configuración
+**sin comprobar que el modelo nuevo estuviera descargado**, con Ollama apagado
+en ese momento. El resultado: durante horas la configuración apuntó a un modelo
+inexistente en la máquina, y cualquier uso real del copiloto habría respondido
+503. Una mejora convertida en regresión, sin que nada lo señalara.
+
+Este ADR ya documentaba `ollama pull qwen2.5:7b` como paso de despliegue. **No
+fue suficiente**, y esa es la lección: un paso manual escrito en un documento no
+es un control. El nombre del modelo es una cadena de configuración que nada
+valida, y descargar varios gigabytes se olvida.
+
+**Control añadido:** `VerificacionDelModeloIa` consulta al arrancar el catálogo
+de Ollama y, si el modelo configurado no está, escribe en el log un aviso
+explícito con el `ollama pull` exacto que falta ejecutar. No impide arrancar —
+la IA es opcional y el resto del sistema no depende de ella— y no descarga nada
+por su cuenta, porque una descarga de gigabytes disparada en silencio durante el
+arranque de un servicio es justo la clase de sorpresa que no debe ocurrir en
+producción.
