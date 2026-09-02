@@ -45,8 +45,27 @@ marca() { date '+%Y-%m-%d %H:%M:%S'; }
 log()   { echo "[$(marca)] $*"; }
 error() { echo "[$(marca)] ERROR: $*" >&2; }
 
-if ! docker ps --format '{{.Names}}' | grep -qx "$CONTENEDOR"; then
-    error "El contenedor '$CONTENEDOR' no está corriendo. No hay nada que respaldar."
+# ── Modo de acceso a la base ────────────────────────────────────────────────
+#
+# Dos modos, detectados en este orden:
+#
+#   docker  — la base corre en el contenedor $CONTENEDOR (el despliegue normal)
+#   nativo  — hay un PostgreSQL instalado en la máquina (desarrollo, o un
+#             servidor sin Docker)
+#
+# El script soportaba SOLO docker, y eso tenía una consecuencia práctica: en
+# una máquina sin Docker corriendo no se podía ni siquiera probar. Un
+# procedimiento de respaldo que solo se puede ejercitar bajo una condición
+# concreta tiende a no ejercitarse nunca — que es exactamente lo que le pasó a
+# este archivo hasta hoy.
+MODO=""
+if command -v docker >/dev/null 2>&1    && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$CONTENEDOR"; then
+    MODO="docker"
+elif command -v pg_dump >/dev/null 2>&1      && pg_isready -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}" >/dev/null 2>&1; then
+    MODO="nativo"
+else
+    error "No hay base a la que conectarse: ni el contenedor '$CONTENEDOR' está corriendo,"
+    error "ni hay un PostgreSQL accesible en ${SICOT_DB_HOST:-localhost}:${SICOT_DB_PORT:-5432}."
     exit 1
 fi
 
@@ -54,14 +73,25 @@ mkdir -p "$DESTINO"
 
 FECHA="$(date +%Y%m%d-%H%M%S)"
 ARCHIVO="$DESTINO/sicot-$FECHA.dump"
-TEMPORAL="/tmp/sicot-$FECHA.dump"
 
-log "Iniciando respaldo de '$BASE' desde el contenedor '$CONTENEDOR'…"
+log "Iniciando respaldo de '$BASE' (modo: $MODO)…"
 
 # -F c = formato "custom": comprimido y permite restaurar tablas sueltas.
-docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c -f "$TEMPORAL"
-docker cp "$CONTENEDOR:$TEMPORAL" "$ARCHIVO"
-docker exec "$CONTENEDOR" rm -f "$TEMPORAL"
+if [[ "$MODO" == "docker" ]]; then
+    # Se vuelca directo a la salida estándar y se redirige al archivo del host.
+    #
+    # La versión anterior escribía a un temporal DENTRO del contenedor y después
+    # lo copiaba con `docker cp`. Eso fallaba en Git Bash sobre Windows: la capa
+    # de compatibilidad traduce `/tmp/...` a una ruta de Windows antes de que el
+    # argumento llegue al contenedor, y pg_dump intentaba escribir en una ruta
+    # inexistente. Además el temporal duplicaba el tamaño del volcado en disco.
+    #
+    # SIN `-t`: un pseudo-terminal traduce saltos de línea y corrompería un
+    # volcado binario de forma silenciosa — se notaría solo al restaurar.
+    docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c > "$ARCHIVO"
+else
+    PGPASSWORD="${SICOT_DB_PASSWORD:-}" pg_dump         -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}"         -U "$USUARIO" -d "$BASE" -F c -f "$ARCHIVO"
+fi
 
 if [[ ! -s "$ARCHIVO" ]]; then
     error "El respaldo quedó vacío: $ARCHIVO"
@@ -72,9 +102,26 @@ fi
 # Verificación real: leer el volcado entero. Si está truncado o corrupto,
 # pg_restore --list falla aquí y no dentro de seis meses, cuando haga falta.
 log "Verificando la integridad del volcado…"
-if ! docker run --rm -v "$(cd "$(dirname "$ARCHIVO")" && pwd):/backup:ro" \
-        postgres:18-alpine \
-        pg_restore --list "/backup/$(basename "$ARCHIVO")" > /dev/null 2>&1; then
+# Se prefiere un pg_restore instalado en la máquina, exista Docker o no: la
+# verificación solo necesita leer el archivo, y hacerlo por fuera del contenedor
+# evita montar volúmenes.
+#
+# Ese montaje era el que fallaba: `docker run -v "$(pwd):/backup"` bajo Git Bash
+# en Windows pasa una ruta tipo `/c/Users/...` que el demonio no resuelve, y la
+# verificación daba «volcado no legible» sobre un volcado perfectamente válido.
+# Un falso positivo así es peor que no verificar: entrena a ignorar la alarma.
+#
+# Sin pg_restore local se usa el contenedor, pero por ENTRADA ESTÁNDAR en vez de
+# por volumen — `-i` sin `-t`, que no traduce el binario.
+if command -v pg_restore >/dev/null 2>&1; then
+    verificar() { pg_restore --list "$ARCHIVO"; }
+elif [[ "$MODO" == "docker" ]]; then
+    verificar() { docker run --rm -i postgres:18-alpine pg_restore --list < "$ARCHIVO"; }
+else
+    error "No hay pg_restore disponible para verificar el volcado."
+    exit 3
+fi
+if ! verificar > /dev/null 2>&1; then
     error "El volcado no es legible: $ARCHIVO. NO se puede confiar en este respaldo."
     exit 3
 fi

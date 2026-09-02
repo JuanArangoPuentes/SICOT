@@ -68,3 +68,33 @@ nadie sabe restaurar bajo presión.
   prueba: ahí conviene reevaluar si 24 h sigue siendo tolerable.
 - Si el SENA fija por norma un RPO menor.
 - Si alguna vez ocurre una pérdida real: el incidente manda sobre esta cifra.
+
+## Verificación del ciclo completo (2 de septiembre de 2026)
+
+Este ADR prometía un RPO de 24 h apoyado en `scripts/respaldo-sicot.sh`. Ese
+script estaba escrito y documentado, pero **nunca se había ejecutado**: la cifra
+era una intención, no una capacidad. Se ejercitó de punta a punta y se corrigieron
+dos defectos que solo aparecen al correrlo:
+
+| Defecto | Síntoma | Corrección |
+| --- | --- | --- |
+| El volcado se escribía a un temporal dentro del contenedor | Bajo Git Bash en Windows, `/tmp/...` se traducía a una ruta de Windows inexistente para el contenedor, y `pg_dump` fallaba | Volcado directo a la salida estándar; se eliminó el temporal y el `docker cp` |
+| La verificación montaba un volumen (`docker run -v`) | Con rutas tipo `/c/Users/...` el demonio no las resuelve: daba «volcado no legible» sobre un archivo **válido** | Se usa el `pg_restore` de la máquina si existe; si no, el contenedor por entrada estándar |
+
+El segundo era el más peligroso: un **falso positivo** que declara corrupto un
+respaldo sano entrena al equipo a ignorar la alarma.
+
+**Resultado del ciclo, con la base real:**
+
+```
+Original    → usuarios=3 contratos=1 etapas=6 subetapas=27 documentos=0 · 6 migraciones, última 13
+Restaurada  → usuarios=3 contratos=1 etapas=6 subetapas=27 documentos=0 · 6 migraciones, última 13
+```
+
+El script también se volvió **bimodal** (Docker o PostgreSQL nativo). No es una
+comodidad: un procedimiento que solo se puede ejercitar bajo una condición
+concreta tiende a no ejercitarse nunca, que es precisamente lo que había pasado.
+
+**Pendiente:** repetir este ejercicio cuando la base tenga documentos reales en
+`BYTEA`. El volcado verificado aquí pesa 44 KB; el comportamiento con cientos de
+megabytes de binario no está comprobado.
