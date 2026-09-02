@@ -1,6 +1,71 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
-@import 'tailwindcss';
+/* ── Reset propio ────────────────────────────────────────────────────────────
+   Antes esto lo aportaba en silencio el "preflight" de Tailwind. Al retirar
+   Tailwind (ver docs/decisiones/ADR-004) estas reglas NO se heredan: hay que
+   escribirlas, porque el proyecto sí dependía de ellas aunque no usara ni una
+   utilidad del framework.
+
+   Cada bloque está aquí por un motivo concreto, no por copiar un reset genérico:
+   quitar cualquiera de ellos rompe algo visible. */
+
+/* Los iconos son SVG en línea. Sin `display: block` un SVG es un elemento de
+   línea y el navegador le reserva espacio bajo la línea base para los
+   descendientes de la fuente, lo que desalinea verticalmente todos los iconos
+   respecto a su texto. Es el efecto más visible de retirar el preflight. */
+svg, img, video, canvas {
+  display: block;
+  vertical-align: middle;
+}
+
+/* Los controles de formulario NO heredan la fuente del documento por defecto:
+   cada navegador les impone la suya. Sin esto, botones e inputs aparecen en la
+   fuente del sistema en medio de una interfaz que usa IBM Plex. */
+button, input, select, textarea, optgroup {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  margin: 0;
+}
+
+/* El botón nativo trae fondo gris y borde biselado del sistema operativo. La
+   interfaz define su propia apariencia (.btn-green, .btn-ghost y estilos en
+   línea), así que se parte de cero. */
+button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled { cursor: default; }
+
+/* Márgenes por defecto del navegador en texto y listas: la interfaz controla su
+   propio espaciado con flex/grid y `gap`. */
+p, figure, blockquote, dl, dd { margin: 0; }
+
+ul, ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Sin esto una tabla deja huecos entre celdas y los bordes se dibujan dobles. */
+table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+/* Respeta a quien pidió menos movimiento en su sistema operativo. No venía del
+   preflight —Tailwind no lo incluye— pero es el sitio correcto para tenerlo. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ── Design tokens — Tema institucional oscuro (predeterminado) ──────────────
    Azul pizarra profundo (NUNCA negro puro) con el verde SENA como acento.
@@ -653,4 +718,21 @@ input[type="radio"]    { accent-color: var(--accent); }
   .login-identity  { height: 120px !important; flex: none !important; }
   .login-identity .identity-tagline { display: none !important; }
   .login-form-panel { flex: 1 !important; }
+}
+
+/* ── Indicador de carga de un panel ─────────────────────────────────────────
+   Usado por CargandoPanel mientras React.lazy descarga el paquete del rol.
+   La animación queda anulada por el bloque de `prefers-reduced-motion` de
+   arriba, así que quien pidió menos movimiento ve un anillo estático. */
+.cargando-giro {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: cargandoGiro 0.9s linear infinite;
+}
+
+@keyframes cargandoGiro {
+  to { transform: rotate(360deg); }
 }

@@ -187,7 +187,7 @@ que su rol permite (ej. un SUPERVISOR no puede consultar el Copiloto de un contr
 - El proceso GCCON-P-010 de 6 etapas/27 subetapas ya está corregido según los 3 hallazgos de
   `[[project-sicot-gccon-p010-grounded]]` (F-030 = Informe Final no Acta de Liquidación, GRF-F-089
   no lo firma el supervisor, "ESUCON" sin código oficial confirmado).
-- Ollama corre localmente (`qwen2.5-coder:7b` en esta máquina de desarrollo) — no hay dependencia
+- Ollama corre localmente (`qwen2.5:7b` en esta máquina de desarrollo — ver docs/decisiones/ADR-006) — no hay dependencia
   de un servicio de IA de pago, por la regla de herramientas gratuitas del proyecto.
 - La subida de documentos de asignación de contrato (Carta de notificación, GCCON-F-031, Acta de
   Inicio real que SENA envía al designar supervisor) está **fuera de alcance** de este spec —

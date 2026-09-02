@@ -1,9 +1,15 @@
 // Tipos de dominio compartidos por toda la aplicación SICOT.
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
 
-export type Screen = 'login' | 'supervisor-panel' | 'gestion-panel' | 'admin-panel'
+// Vistas de cada panel. Son los segmentos que aparecen en la URL
+// (/supervisor/alertas, /admin/usuarios) — ver docs/decisiones/ADR-007.
+//
+// Ya no existe un tipo `Screen`: qué pantalla se ve lo decide la ruta, no una
+// variable de estado.
 /** Vistas del panel del Supervisor — una por entrada de la barra lateral. */
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
+
+export type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
 export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {

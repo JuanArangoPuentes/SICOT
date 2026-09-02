@@ -4,6 +4,7 @@
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { PrefsProvider } from '@/prefs'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
@@ -23,8 +24,8 @@ import CargandoPanel from '@/components/CargandoPanel'
 const SupervisorPanel = lazy(() => import('@/screens/SupervisorPanel'))
 const GestionPanel = lazy(() => import('@/screens/GestionPanel'))
 const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
-import type { Screen, Step } from '@/types/domain'
-import type { AuthResponse, ContratoResponse } from '@/services/api/types'
+import type { AdminTab, Step, Tab } from '@/types/domain'
+import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { clearSession, getSession } from '@/services/session'
 import { onUnauthorized, setAuthToken } from '@/services/api/client'
 import { getContratos } from '@/services/contratoService'
@@ -51,19 +52,29 @@ const TOUR_GESTION: TourStep[] = [
   { selector: '[data-tour="tabla"]', text: 'Confirme los datos antes de asignar el contrato a un supervisor: aquí ve a quién quedó asignado cada uno.' },
 ]
 
-const screenFor = (u: AuthResponse): Screen => {
-  if (u.rol === 'SUPERVISOR') return 'supervisor-panel'
-  if (u.rol === 'ADMINISTRADOR') return 'admin-panel'
-  if (u.rol === 'GESTION') return 'gestion-panel'
-  return 'login'
+// Ruta inicial de cada rol. La URL es la fuente de verdad de qué se ve; el rol
+// solo decide a dónde se entra tras iniciar sesión. La autoridad sobre permisos
+// sigue siendo el backend: una URL no es un control de acceso.
+const rutaDeRol = (u: AuthResponse): string => {
+  if (u.rol === 'SUPERVISOR') return '/supervisor/bandeja'
+  if (u.rol === 'ADMINISTRADOR') return '/admin/dashboard'
+  if (u.rol === 'GESTION') return '/gestion'
+  return '/login'
+}
+
+const VISTAS_SUPERVISOR: Tab[] = ['bandeja', 'contrato', 'alertas', 'documentos', 'registros']
+const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'documentos', 'usuarios', 'firmas']
+
+/** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
+function vistaValida<T extends string>(valor: string | undefined, permitidas: T[], porDefecto: T): T {
+  return permitidas.includes(valor as T) ? (valor as T) : porDefecto
 }
 
 function AppInner() {
   const [session, setSession] = useState<AuthResponse | null>(() => getSession())
-  const [screen, setScreen] = useState<Screen>(() => {
-    const s = getSession()
-    return s ? screenFor(s) : 'login'
-  })
+  const navigate = useNavigate()
+  const location = useLocation()
+  const enLogin = location.pathname === '/login'
   // Etapas del contrato real (autoridad: backend). Nunca se usan datos de
   // ejemplo como etapas reales: sin contrato el estado queda vacío y el panel
   // lo reemplaza al cargar las etapas del contrato asignado.
@@ -134,13 +145,15 @@ function AppInner() {
 
   const handleLogin = (auth: AuthResponse) => {
     setSession(auth)
-    setScreen(screenFor(auth))
+    navigate(rutaDeRol(auth), { replace: true })
   }
 
   const logout = () => {
     clearSession()
     setSession(null)
-    setScreen('login')
+    // `replace` a propósito: tras cerrar sesión, el botón atrás no debe devolver
+    // a una pantalla del panel que ya no se puede cargar.
+    navigate('/login', { replace: true })
     setTourActive(false)
   }
 
@@ -156,45 +169,89 @@ function AppInner() {
   }, [session])
 
   const tour = useMemo(
-    () => (screen === 'gestion-panel' ? TOUR_GESTION : TOUR_SUPERVISOR),
-    [screen],
+    () => (location.pathname.startsWith('/gestion') ? TOUR_GESTION : TOUR_SUPERVISOR),
+    [location.pathname],
   )
+
+  // Envoltura que protege una ruta.
+  //
+  // Dos comprobaciones, y ninguna es un control de seguridad: la autoridad sobre
+  // permisos es el backend, que responde 403 a cualquier petición fuera de rol
+  // sin importar qué URL tenga abierta el navegador. Esto es experiencia de uso.
+  //
+  //  1. Sin sesión -> al login.
+  //  2. Con sesión de otro rol -> a SU panel, no a un error. Sin esto, un
+  //     supervisor que escribiera /admin/usuarios veía el panel de
+  //     administración pintándose y fallando a pedazos con 403 en consola:
+  //     el backend hacía su trabajo, pero la pantalla resultante no le decía
+  //     nada útil a la persona.
+  const conSesion = (rolesPermitidos: Rol[], contenido: (s: AuthResponse) => React.ReactNode) => {
+    if (!session) return <Navigate to="/login" replace />
+    if (!rolesPermitidos.includes(session.rol)) return <Navigate to={rutaDeRol(session)} replace />
+    return contenido(session)
+  }
 
   return (
     <>
-      {screen === 'login' && <LoginScreen onLogin={handleLogin} />}
-      <Suspense fallback={screen === 'login' ? null : <CargandoPanel />}>
-      {screen === 'supervisor-panel' && session && (
-        <SupervisorPanel
-          steps={steps}
-          setSteps={setSteps}
-          usuario={session}
-          contrato={contrato}
-          cargandoContrato={cargandoContrato}
-          errorContrato={errorContrato}
-          onLogout={logout}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onStartTour={() => setTourActive(true)}
-          registros={registros}
-          onRefreshRegistros={refreshRegistros}
-        />
-      )}
-      {screen === 'gestion-panel' && session && (
-        <GestionPanel
-          usuario={session}
-          onLogout={logout}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onStartTour={() => setTourActive(true)}
-        />
-      )}
-      {screen === 'admin-panel' && session && (
-        <AdminPanel usuario={session} onLogout={logout} onOpenSettings={() => setSettingsOpen(true)} />
-      )}
+      <Suspense fallback={enLogin ? null : <CargandoPanel />}>
+        <Routes>
+          <Route
+            path="/login"
+            element={session ? <Navigate to={rutaDeRol(session)} replace /> : <LoginScreen onLogin={handleLogin} />}
+          />
+
+          <Route
+            path="/supervisor/:vista"
+            element={conSesion(['SUPERVISOR'], s => (
+              <PanelSupervisorEnRuta
+                usuario={s}
+                steps={steps}
+                setSteps={setSteps}
+                contrato={contrato}
+                cargandoContrato={cargandoContrato}
+                errorContrato={errorContrato}
+                onLogout={logout}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onStartTour={() => setTourActive(true)}
+                registros={registros}
+                onRefreshRegistros={refreshRegistros}
+              />
+            ))}
+          />
+          <Route path="/supervisor" element={<Navigate to="/supervisor/bandeja" replace />} />
+
+          <Route
+            path="/gestion"
+            element={conSesion(['GESTION'], s => (
+              <GestionPanel
+                usuario={s}
+                onLogout={logout}
+                onOpenSettings={() => setSettingsOpen(true)}
+                onStartTour={() => setTourActive(true)}
+              />
+            ))}
+          />
+
+          <Route
+            path="/admin/:vista"
+            element={conSesion(['ADMINISTRADOR'], s => (
+              <PanelAdminEnRuta
+                usuario={s}
+                onLogout={logout}
+                onOpenSettings={() => setSettingsOpen(true)}
+              />
+            ))}
+          />
+          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+          {/* Raíz y cualquier ruta desconocida: al panel del rol, o al login. */}
+          <Route path="*" element={<Navigate to={session ? rutaDeRol(session) : '/login'} replace />} />
+        </Routes>
       </Suspense>
 
       <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
 
-      {screen !== 'login' && (
+      {!enLogin && session && (
         <AvatarLayer
           tour={tour}
           tourActive={tourActive}
@@ -203,6 +260,37 @@ function AppInner() {
         />
       )}
     </>
+  )
+}
+
+/**
+ * Traduce el segmento de la URL a la vista del panel y viceversa.
+ *
+ * Vive en un componente aparte porque `useParams` solo funciona dentro de la
+ * ruta que declara el parámetro. Un segmento desconocido cae en la vista por
+ * defecto en vez de romper.
+ */
+function PanelSupervisorEnRuta(props: Omit<React.ComponentProps<typeof SupervisorPanel>, 'vista' | 'onCambiarVista'>) {
+  const { vista } = useParams()
+  const navigate = useNavigate()
+  return (
+    <SupervisorPanel
+      {...props}
+      vista={vistaValida<Tab>(vista, VISTAS_SUPERVISOR, 'bandeja')}
+      onCambiarVista={t => navigate(`/supervisor/${t}`)}
+    />
+  )
+}
+
+function PanelAdminEnRuta(props: Omit<React.ComponentProps<typeof AdminPanel>, 'vista' | 'onCambiarVista'>) {
+  const { vista } = useParams()
+  const navigate = useNavigate()
+  return (
+    <AdminPanel
+      {...props}
+      vista={vistaValida<AdminTab>(vista, VISTAS_ADMIN, 'dashboard')}
+      onCambiarVista={t => navigate(`/admin/${t}`)}
+    />
   )
 }
 
