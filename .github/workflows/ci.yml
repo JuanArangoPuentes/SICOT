@@ -60,7 +60,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configurar JDK 25
         uses: actions/setup-java@v4
@@ -107,7 +107,7 @@ jobs:
         working-directory: frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configurar Node 22
         uses: actions/setup-node@v4
@@ -139,7 +139,7 @@ jobs:
     # hasta ahora no lo compilaba nadie en CI: un cambio que lo rompiera se
     # descubría al ejecutarlo a mano, o no se descubría.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configurar Node 22
         uses: actions/setup-node@v4
@@ -163,7 +163,7 @@ jobs:
     # Se ejecuta como job propio para que su fallo sea legible y no quede
     # escondido dentro del job de build.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configurar Node 22
         uses: actions/setup-node@v4
@@ -219,7 +219,7 @@ jobs:
     # los dos solo aparecía al desplegar. Se construyen sin publicar nada: el
     # objetivo es comprobar que compilan, no distribuirlas.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Construir imagen del backend
         run: docker build -t sicot-backend:ci ./backend
