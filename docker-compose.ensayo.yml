@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Entorno de ENSAYO — el lugar donde una migración puede salir mal.
+#
+# ¿POR QUÉ EXISTE?
+# Hasta ahora solo había dos entornos: desarrollo y producción. No existía
+# ningún lugar intermedio donde probar una migración de Flyway contra datos
+# parecidos a los reales antes de aplicarla sobre los de verdad. Para un
+# sistema que va a acumular contratos públicos durante años, eso significa que
+# la primera vez que una migración se ejecuta sobre datos reales es también la
+# única, y sin vuelta atrás salvo restaurar un respaldo.
+#
+# CÓMO SE USA
+#
+#   1. Tomar un respaldo de producción (o del entorno que se quiera ensayar):
+#        ./scripts/respaldo-sicot.sh ./respaldos
+#
+#   2. Levantar el ensayo, que arranca vacío y en un volumen aparte:
+#        docker compose -f docker-compose.yml -f docker-compose.ensayo.yml up -d
+#
+#   3. Cargar el respaldo en la base de ensayo:
+#        docker exec -i sicot-ensayo-db pg_restore -U sicot -d sicot --clean --if-exists < ./respaldos/sicot-XXXX.dump
+#
+#   4. Aplicar la versión nueva del backend y observar qué hace Flyway. Si algo
+#      sale mal, se destruye y se vuelve a empezar sin consecuencias:
+#        docker compose -f docker-compose.yml -f docker-compose.ensayo.yml down -v
+#
+# TRES DECISIONES DELIBERADAS
+#
+#   - **Puertos distintos** (55432 / 18080 / 18443). Puede correr al mismo
+#     tiempo que el entorno de desarrollo sin pelearse por un puerto, que es
+#     justo lo que haría que nadie lo usara.
+#
+#   - **Volumen propio** (`sicot_ensayo_db_data`). No comparte ni un byte con
+#     el volumen de desarrollo: un `down -v` aquí no puede llevarse por delante
+#     los datos con los que alguien estaba trabajando.
+#
+#   - **Nombres de contenedor con sufijo `-ensayo`**. Para que `docker ps` deje
+#     obvio cuál es cuál. Un `docker exec sicot-db ...` ejecutado contra el
+#     entorno equivocado es un error caro y silencioso.
+#
+# NO ES UN SERVIDOR. Está pensado para correr en el portátil de quien va a
+# aplicar el cambio. La recomendación del arquitecto era literal: «no hace
+# falta un servidor, hace falta un lugar donde una migración pueda salir mal
+# sin consecuencias».
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  db:
+    container_name: sicot-ensayo-db
+    ports:
+      - "55432:5432"
+    volumes:
+      # Nombre de volumen distinto: el ensayo NUNCA toca los datos de desarrollo.
+      - sicot_ensayo_db_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${DB_NAME:-sicot}
+      POSTGRES_USER: ${DB_USERNAME:-sicot}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}
+
+  backend:
+    container_name: sicot-ensayo-backend
+    ports:
+      - "18080:8080"
+    environment:
+      # Perfil "prod" a propósito: el ensayo debe parecerse a producción, no a
+      # desarrollo. Eso incluye NO sembrar las cuentas de prueba conocidas y
+      # exigir el administrador inicial, que es precisamente uno de los pasos
+      # que conviene haber ensayado antes de hacerlo en serio.
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-sicot}
+      CORS_ALLOWED_ORIGINS: http://localhost:18443,http://127.0.0.1:18443
+      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:-ensayo@sena.edu.co}
+      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:-clave-solo-de-ensayo-1234}
+
+  frontend:
+    container_name: sicot-ensayo-frontend
+    build:
+      args:
+        VITE_API_URL: http://localhost:18080
+    ports:
+      - "18443:8443"
+
+  # Adminer no se expone en el ensayo: si hace falta inspeccionar la base, se
+  # entra por `docker exec`. Un panel de base de datos más en otro puerto es
+  # una confusión adicional sin beneficio.
+  adminer:
+    profiles:
+      - no-usar-en-ensayo
+
+volumes:
+  sicot_ensayo_db_data:
