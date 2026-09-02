@@ -116,7 +116,7 @@ services:
       # hace que ese nombre funcione también en Docker nativo de Linux (en
       # Docker Desktop de Windows/Mac ya funciona sin eso).
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

@@ -6,19 +6,30 @@
 //
 // Deliberadamente sobrio: no promete nada que no esté ocurriendo ni inventa una
 // barra de progreso que no mide nada real.
+//
+// Estilado con los tokens del proyecto, no con utilidades de un framework
+// (ver docs/decisiones/ADR-004): este componente era el único de todo el
+// frontend que usaba clases de Tailwind, y mantenerlo así habría obligado a
+// conservar la dependencia entera por un archivo.
 
 export default function CargandoPanel() {
   return (
     <div
-      className="min-h-screen flex flex-col items-center justify-center gap-4 bg-[#0f1419] text-slate-300"
       role="status"
       aria-live="polite"
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 16,
+        background: 'var(--bg-base)',
+        color: 'var(--text-secondary)',
+      }}
     >
-      <div
-        className="h-8 w-8 rounded-full border-2 border-slate-600 border-t-emerald-400 motion-safe:animate-spin"
-        aria-hidden="true"
-      />
-      <p className="text-sm tracking-wide">Abriendo su panel…</p>
+      <div className="cargando-giro" aria-hidden="true" />
+      <p style={{ fontSize: 13, letterSpacing: '0.03em', margin: 0 }}>Abriendo su panel…</p>
     </div>
   )
 }

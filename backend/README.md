@@ -94,7 +94,7 @@ máquina que este backend. Qué modelo usar depende del hardware de esa máquina
 
 | Máquina | Modelo recomendado | Por qué |
 |---|---|---|
-| Servidor sin GPU (uso remoto de Gestión/Administrador — extracción ocasional de datos) | `qwen2.5-coder:7b` (por defecto) | Chico, corre aceptable en CPU; la extracción es una acción esporádica, no interactiva |
+| Servidor sin GPU (uso remoto de Gestión/Administrador — extracción ocasional de datos) | `qwen2.5:7b` (por defecto) | Chico, corre aceptable en CPU; la extracción es una acción esporádica, no interactiva |
 | Máquina del Supervisor con GPU potente (chat interactivo del Copiloto) | `qwen2.5:32b` | Modelos de ~30-40B siguen instrucciones de forma mucho más confiable que los de 7B — necesario para el chat conversacional, no solo para extraer datos |
 
 Para cambiar de modelo: `ollama pull <modelo>` en esa máquina, y ajustar `OLLAMA_MODEL` en

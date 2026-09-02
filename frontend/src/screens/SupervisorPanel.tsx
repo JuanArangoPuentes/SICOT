@@ -123,6 +123,8 @@ function ProgressBar({ pct }: { pct: number }) {
 }
 
 export default function SupervisorPanel({
+  vista,
+  onCambiarVista,
   steps,
   setSteps,
   usuario,
@@ -135,6 +137,8 @@ export default function SupervisorPanel({
   registros,
   onRefreshRegistros,
 }: {
+  vista: Tab
+  onCambiarVista: (t: Tab) => void
   steps: Step[]
   setSteps: (s: Step[]) => void
   usuario: AuthResponse
@@ -149,7 +153,11 @@ export default function SupervisorPanel({
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
-  const [tab, setTab] = useState<Tab>('bandeja')
+  // La vista activa vive en la URL, no en estado local: así el botón atrás
+  // funciona, recargar conserva la vista y una vista se puede compartir por
+  // enlace. Ver docs/decisiones/ADR-007.
+  const tab = vista
+  const setTab = onCambiarVista
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set([1]))
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
