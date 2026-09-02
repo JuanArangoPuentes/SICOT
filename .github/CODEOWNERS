@@ -1,0 +1,16 @@
+# Revisión por defecto de todo el repositorio.
+#
+# Con un equipo pequeño y rotativo, esto no reparte trabajo: garantiza que
+# ningún cambio se mergee sin que alguien con contexto lo haya visto. Cuando
+# los roles del semillero estén definidos, conviene repartir por área — por
+# ejemplo, quien sostenga la base de datos como dueño de
+# backend/src/main/resources/db/migration/.
+
+*   @JuanArangoPuentes
+
+# Las migraciones y las decisiones de arquitectura merecen atención explícita:
+# una migración mal hecha no se puede deshacer sobre datos reales, y un ADR
+# cambia el rumbo del proyecto.
+/backend/src/main/resources/db/migration/   @JuanArangoPuentes
+/docs/decisiones/                           @JuanArangoPuentes
+/.github/workflows/                         @JuanArangoPuentes

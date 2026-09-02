@@ -1,0 +1,69 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Normalización de fin de línea.
+#
+# POR QUÉ EXISTE ESTE ARCHIVO
+# Sin él, Git usa la configuración de CADA máquina (`core.autocrlf`). En este
+# equipo eso significa que Windows convierte a CRLF al sacar los archivos y
+# Linux/macOS no, así que `git status` reporta como modificados decenas de
+# archivos que nadie tocó, y un commit hecho desde Windows puede reescribir el
+# final de cada línea de un archivo que solo se abrió.
+#
+# El síntoma es ruido constante: revisiones de código llenas de cambios falsos,
+# conflictos de fusión sobre líneas idénticas, y la costumbre de ignorar lo que
+# dice `git status` — que es cuando un cambio real pasa desapercibido.
+#
+# `text=auto eol=lf` fija una sola regla: en el repositorio SIEMPRE se guarda
+# LF, y cada quien ve en su disco lo que su editor necesite. Es el estándar de
+# facto y lo que espera cualquier herramienta de CI (que corre en Linux).
+# ═══════════════════════════════════════════════════════════════════════════
+
+* text=auto eol=lf
+
+# Scripts que ejecuta un intérprete de shell: LF obligatorio. Con CRLF, bash
+# falla con un "bad interpreter: /bin/bash^M" que no dice nada útil.
+*.sh            text eol=lf
+mvnw            text eol=lf
+gradlew         text eol=lf
+
+# Scripts de Windows: al revés, necesitan CRLF para comportarse bien en cmd.
+*.bat           text eol=crlf
+*.cmd           text eol=crlf
+mvnw.cmd        text eol=crlf
+
+# Binarios: Git no debe tocarles ni un byte. Sin esto, la "normalización"
+# corrompe una imagen o una tipografía de forma silenciosa.
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.pdf           binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+*.otf           binary
+*.jar           binary
+*.zip           binary
+*.dump          binary
+
+# ── Nota sobre Git LFS ──────────────────────────────────────────────────────
+# Este repositorio NO usa Git LFS, y es deliberado.
+#
+# `frontend/src/assets/logo-sena.png` llegó a estar en LFS, pero el
+# `.gitattributes` que declara el filtro nunca se commiteó. Sin esa línea, LFS
+# no materializa el archivo: cada clon se quedaba con el puntero de 130 bytes
+# de texto en lugar de la imagen. El resultado es que el build empaquetaba ese
+# texto como si fuera el logo, y la aplicación desplegada mostraba una imagen
+# rota — sin ningún error, ni en el build ni en el navegador.
+#
+# Para un PNG de 21 KB, LFS solo añade una dependencia externa y un modo de
+# fallo silencioso. Los binarios de este proyecto son pequeños y van directos
+# en Git. Si algún día hace falta versionar algo realmente grande, hay que
+# activar LFS Y commitear su línea de filtro aquí, en el mismo commit.
+
+# Archivos generados: se excluyen de las estadísticas de lenguaje de GitHub y
+# se colapsan por defecto en las revisiones, para que un PR no parezca enorme
+# por un package-lock.json que nadie va a leer línea a línea.
+package-lock.json   linguist-generated=true
+*.min.js            linguist-generated=true
+*.min.css           linguist-generated=true

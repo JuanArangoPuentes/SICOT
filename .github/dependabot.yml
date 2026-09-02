@@ -1,0 +1,55 @@
+# Actualizaciones automáticas de dependencias.
+#
+# El CI ya detecta vulnerabilidades conocidas (npm audit y OWASP
+# Dependency-Check), pero detectarlas no las corrige: alguien tiene que
+# acordarse de subir la versión. Dependabot abre el PR por su cuenta.
+#
+# Frecuencia semanal y no diaria a propósito: con un equipo de tres personas,
+# un aluvión diario de PRs se ignora, y una lista ignorada es lo mismo que no
+# tenerla. `open-pull-requests-limit` acota cuántos puede haber a la vez por
+# el mismo motivo.
+
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencias, backend]
+    commit-message:
+      prefix: "chore(backend)"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    labels: [dependencias, frontend]
+    commit-message:
+      prefix: "chore(frontend)"
+    groups:
+      # Las herramientas de desarrollo se agrupan en un solo PR: son muchas y
+      # su riesgo individual es bajo. Las de producción van sueltas, para
+      # poder revisar una por una lo que llega al usuario.
+      herramientas-de-desarrollo:
+        dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /mcp
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 2
+    labels: [dependencias, mcp]
+    commit-message:
+      prefix: "chore(mcp)"
+
+  # Las propias acciones del CI también envejecen, y una acción sin actualizar
+  # es código de terceros ejecutándose con acceso al repositorio.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    labels: [dependencias, ci]
