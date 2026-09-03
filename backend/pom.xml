@@ -127,7 +127,7 @@
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
+            <version>3.0.8</version>
         </dependency>
 
         <!-- Detección del tipo real de archivo por contenido (magic bytes), no por
