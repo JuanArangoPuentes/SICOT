@@ -102,19 +102,27 @@ solo conflicto**.
 | 3 | `fix-seguridad-modulo-ia` | ✅ mergeada | #7 |
 | 4 | `fix-consistencia-api` | ✅ completada | #9 |
 | 5 | `test-cobertura-idor-y-aislamiento` | ✅ mergeada | #8 |
-| 6 | `chore-limpieza-codigo-muerto` | ⚪ sin lanzar | — |
+| 6 | `chore-limpieza-codigo-muerto` | ✅ mergeada | #12 |
 
 "Completada" significa que el trabajo está hecho, verificado y con su PR en
 verde; el momento en que se pulsa el botón de mergear no cambia el estado de la
 tarea. Cada brief cierra con una sección **Resultado** que cuenta qué salió de
-ella. La 6 va deliberadamente al final: necesita el sistema ya integrado para
-saber qué código está muerto de verdad.
+ella. La 6 fue deliberadamente la última: necesitaba el sistema ya integrado
+para saber qué código estaba muerto de verdad. **La flota está terminada**: las
+seis tareas se ejecutaron y se integraron.
+
+> Esta tabla dijo «sin lanzar» en la fila 6 durante cuatro días después de que
+> la tarea se mergeara (PR #12, 31 ago). El PR #13, que añadió la sección
+> **Resultado** al brief de esa tarea, no tocó este archivo. Quien vaya a
+> retomar la flota: el estado de una tarea se actualiza **aquí** y en su brief,
+> o este resumen vuelve a contradecir al detalle.
 
 ### Qué produjo la flota
 
-Partiendo de 54 pruebas, `develop` está en **125 pruebas, 0 fallos y 0
-desactivadas**: las dos que documentaban brechas de acceso quedaron habilitadas
-cuando la tarea 4 las cerró.
+La flota llevó la suite de **54 a 125 pruebas, 0 fallos y 0 desactivadas**:
+las dos que documentaban brechas de acceso quedaron habilitadas cuando la tarea
+4 las cerró. (Ese 125 es la foto al cerrar la flota, no el número de hoy — el
+trabajo posterior la ha seguido ampliando.)
 
 - Dos brechas reales de control de acceso encontradas y cerradas: el oráculo de
   enumeración entre contrato ajeno y contrato inexistente, y el orden de

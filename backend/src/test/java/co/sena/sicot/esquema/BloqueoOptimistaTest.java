@@ -1,5 +1,6 @@
 package co.sena.sicot.esquema;
 
+import co.sena.sicot.PruebaDeIntegracion;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.repository.ContratoRepository;
 import jakarta.persistence.EntityManager;
@@ -8,8 +9,6 @@ import jakarta.persistence.OptimisticLockException;
 import jakarta.persistence.RollbackException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,9 +33,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * persistencia que leyeron la misma versión. Con hilos, la prueba dependería
  * del azar del planificador; así es determinista.
  */
-@SpringBootTest
-@ActiveProfiles("test")
-class BloqueoOptimistaTest {
+class BloqueoOptimistaTest extends PruebaDeIntegracion {
 
     @Autowired
     private EntityManagerFactory entityManagerFactory;
