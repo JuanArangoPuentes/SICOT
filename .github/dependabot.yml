@@ -14,9 +14,21 @@
 # evalúe con tiempo, y mezclado con las actualizaciones rutinarias hace que
 # nadie lea ninguna.
 #
-# Las versiones mayores se suben a mano, a propósito y de una en una. Las
-# actualizaciones de SEGURIDAD no pasan por este filtro: Dependabot las abre
-# igual aunque impliquen un salto mayor, que es justo lo que se quiere.
+# Las versiones mayores se suben a mano, a propósito y de una en una.
+#
+# OJO CON LO QUE ESTE FILTRO SÍ ALCANZA. Aquí decía que las actualizaciones de
+# SEGURIDAD no pasaban por él y que Dependabot las abría igual aunque
+# implicaran un salto mayor. No es cierto, y se comprobó del peor modo: la
+# alerta crítica de Apache Tika (CVE-2025-66516, XXE) se abrió el 2 de
+# septiembre de 2026 con `dependabot_security_updates` habilitado en el
+# repositorio, y NUNCA llegó un PR — porque el arreglo estaba en la 3.2.2 y
+# esto es un salto mayor desde la 2.9.4 que teníamos.
+#
+# Consecuencia práctica: una vulnerabilidad cuya corrección viva en una versión
+# mayor NO se va a corregir sola. Hay que mirar las alertas de Dependabot
+# (pestaña Security del repositorio, o `gh api repos/OWNER/REPO/dependabot/alerts`)
+# y subir esa versión a mano. Este filtro sigue mereciendo la pena para el ruido
+# rutinario, pero no es una red de seguridad.
 #
 # `target-branch: develop` en todos los ecosistemas. Por defecto Dependabot
 # abre sus PRs contra la rama POR DEFECTO del repositorio, que aquí es
