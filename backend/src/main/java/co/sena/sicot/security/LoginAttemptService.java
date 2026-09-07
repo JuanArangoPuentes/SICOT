@@ -101,6 +101,23 @@ public class LoginAttemptService {
         intentos.remove(clavePorCorreo(email));
     }
 
+    /**
+     * Olvida todos los intentos acumulados.
+     *
+     * <p>Existe para las pruebas de integración, que comparten una única
+     * instancia de este componente: los contadores no viven en la base de
+     * datos, así que vaciar las tablas entre pruebas no los alcanza y un
+     * bloqueo provocado a propósito por una prueba de fuerza bruta seguía
+     * vigente para la siguiente, que fallaba con 429 sin motivo aparente.
+     *
+     * <p>No se expone por ninguna ruta HTTP y no debe llamarse desde la
+     * aplicación: un endpoint capaz de limpiar estos contadores anularía la
+     * mitigación de fuerza bruta entera.
+     */
+    public void reiniciar() {
+        intentos.clear();
+    }
+
     private void comprobar(String clave, String mensaje) {
         Estado estado = intentos.get(clave);
         if (estado != null && estado.sigueBloqueado()) {

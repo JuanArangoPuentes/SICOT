@@ -159,9 +159,27 @@ public class SecurityConfig {
         };
     }
 
+    /**
+     * Coste de BCrypt. El valor por defecto es <b>10</b>, que es exactamente el
+     * que aplicaba {@code new BCryptPasswordEncoder()}: ningún despliegue real
+     * cambia de comportamiento por hacerlo configurable.
+     *
+     * <p>Se expone como propiedad para que el perfil de pruebas pueda bajarlo.
+     * BCrypt es lento <i>a propósito</i> —es su defensa— y esa lentitud, que en
+     * producción se paga una vez por inicio de sesión, en la suite se paga
+     * cientos de veces: cada prueba de integración vuelve a sembrar las cuentas
+     * y a iniciar sesión con ellas. Bajarlo ahí no debilita nada que las pruebas
+     * estén comprobando; lo que verifican es que la contraseña correcta entra y
+     * la incorrecta no, y eso es idéntico con cualquier coste.
+     *
+     * <p><b>No bajarlo fuera de pruebas.</b> El coste va escrito dentro del
+     * propio hash, así que una contraseña guardada con un valor bajo se seguiría
+     * verificando —sin avisar— aunque después se subiera la configuración.
+     */
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public PasswordEncoder passwordEncoder(
+            @Value("${sicot.security.bcrypt-fuerza:10}") int fuerza) {
+        return new BCryptPasswordEncoder(fuerza);
     }
 
     @Bean

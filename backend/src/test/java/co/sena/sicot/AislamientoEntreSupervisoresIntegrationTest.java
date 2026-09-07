@@ -18,12 +18,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -52,7 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * directo por id de recurso hijo (documento, alerta, subetapa), que un
  * {@code @PreAuthorize} por rol nunca detecta.
  *
- * <p>Escenario base (montado una vez y reutilizado): dos supervisores
+ * <p>Escenario base (se monta entero antes de cada prueba, sobre la base
+ * ya vaciada por {@link PruebaDeIntegracion}): dos supervisores
  * (A y B) con un contrato ACTIVO cada uno, más un tercer supervisor C sin
  * contrato asignado. Corre con H2 y {@code spring-security-test} — sin Docker,
  * sin PostgreSQL.
@@ -63,11 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * de comprobaciones en {@code DocumentoService.firmar}. Las dos las cerró la rama
  * de consistencia de API, así que ya están habilitadas y en verde.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-class AislamientoEntreSupervisoresIntegrationTest {
+class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
 
     private static final String PASSWORD = "Aislamiento123";
     private static final String EMAIL_SUP_A = "sup.a.aislamiento@soy.sena.edu.co";
@@ -105,8 +98,6 @@ class AislamientoEntreSupervisoresIntegrationTest {
     @MockitoBean
     private OllamaClient ollamaClient;
 
-    private boolean listo = false;
-
     private String tokenAdmin;
     private String tokenGestion;
     private String tokenA;
@@ -127,9 +118,6 @@ class AislamientoEntreSupervisoresIntegrationTest {
 
     @BeforeEach
     void montarEscenario() throws Exception {
-        if (listo) {
-            return;
-        }
         tokenAdmin = login("administrador@soy.sena.edu.co", "Admin123*");
         tokenGestion = login("gestion@soy.sena.edu.co", "Gestion123*");
 
@@ -158,8 +146,6 @@ class AislamientoEntreSupervisoresIntegrationTest {
 
         docAPendienteId = seedDocumento(contratoAId, null, EstadoDocumento.PENDIENTE);
         docAFirmadoId = seedDocumento(contratoAId, "FIRMA-AISLAM-TEST", EstadoDocumento.APROBADO);
-
-        listo = true;
     }
 
     // ----------------------------------------------------------------------
