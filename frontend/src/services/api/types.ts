@@ -168,6 +168,12 @@ export interface DocumentoResponse {
   id: number
   contratoId: number
   subetapaId: number | null
+  /** Entrada del catálogo institucional que el documento representa. null si no es la instancia de un formato oficial. */
+  formatoId: number | null
+  /** Código del formato institucional (GCCON-F-031, GCCON-F-018…). null si no tiene formato asociado. */
+  formatoCodigo: string | null
+  /** Nombre del formato institucional. null si no tiene formato asociado. */
+  formatoNombre: string | null
   nombre: string
   tipo: TipoDocumento
   rutaArchivo: string

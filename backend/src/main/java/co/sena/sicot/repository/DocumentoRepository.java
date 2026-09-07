@@ -28,16 +28,19 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      * que se active la mejora de bytecode.
      *
      * <p>Los {@code LEFT JOIN} son obligatorios y no cosméticos: {@code subetapa},
-     * {@code subidoPor} y {@code firmadoPor} son opcionales, y una unión
-     * implícita (escribir {@code d.subetapa.id} a secas) genera un INNER JOIN
-     * que haría desaparecer del listado justamente los documentos que no
-     * tienen subetapa asignada.
+     * {@code formato}, {@code subidoPor} y {@code firmadoPor} son opcionales, y
+     * una unión implícita (escribir {@code d.subetapa.id} a secas) genera un
+     * INNER JOIN que haría desaparecer del listado justamente los documentos
+     * que no tienen subetapa —o formato institucional— asignado.
      */
     @Query("""
             SELECT new co.sena.sicot.dto.documento.DocumentoResponse(
                 d.id,
                 c.id,
                 s.id,
+                fmt.id,
+                fmt.codigo,
+                fmt.nombre,
                 d.nombre,
                 d.tipo,
                 d.rutaArchivo,
@@ -53,6 +56,7 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
             FROM Documento d
             JOIN d.contrato c
             LEFT JOIN d.subetapa s
+            LEFT JOIN d.formato fmt
             LEFT JOIN d.subidoPor u
             LEFT JOIN d.firmadoPor f
             WHERE c.id = :contratoId

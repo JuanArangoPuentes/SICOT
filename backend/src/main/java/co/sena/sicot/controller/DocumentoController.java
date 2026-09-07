@@ -88,11 +88,15 @@ public class DocumentoController {
             @RequestParam(value = "subetapaId", required = false)
             @Positive(message = "El identificador de la subetapa debe ser un número positivo.")
             Long subetapaId,
+            @RequestParam(value = "formatoId", required = false)
+            @Positive(message = "El identificador del formato documental debe ser un número positivo.")
+            Long formatoId,
             @RequestParam(value = "nombre", required = false)
             @Size(max = 255, message = "El nombre del documento no puede superar 255 caracteres.")
             String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(documentoService.subir(contratoId, subetapaId, nombre, archivo));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(documentoService.subir(contratoId, subetapaId, formatoId, nombre, archivo));
     }
 
     @Operation(summary = "Descargar el archivo de un documento")

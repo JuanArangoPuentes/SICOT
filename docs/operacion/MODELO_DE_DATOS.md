@@ -38,6 +38,7 @@ erDiagram
 
     ETAPAS ||--o{ SUBETAPAS : "se divide en"
     SUBETAPAS ||--o{ DOCUMENTOS : "respalda con"
+    FORMATOS_DOCUMENTALES ||--o{ DOCUMENTOS : "da formato a"
 
     USUARIOS {
         bigserial id PK
@@ -157,6 +158,22 @@ diciendo con qué firma se selló, no apuntar a la vigente.
 `subetapa_id` es opcional y `ON DELETE SET NULL`: un documento puede existir sin
 estar atado a un paso concreto del procedimiento.
 
+`formato_id` dice **de qué formato institucional es instancia** este archivo — el
+Acta de Inicio, el GCCON-F-031 del paquete de asignación—. No confundir con
+`tipo`, que guarda el formato del ARCHIVO (`PDF`, `DOCX`, `XLSX`, `IMAGEN`,
+`OTRO`) y no el papel que el documento cumple en el proceso: sin esta columna,
+los cuatro documentos que el SENA envía al asignar un contrato eran
+indistinguibles entre sí una vez cargados.
+
+Es opcional por dos motivos. Los documentos anteriores a la `V14` no tienen forma
+de saber a qué formato corresponden y rellenarlos adivinando sería inventar; y no
+todo documento de un contrato es la instancia de un formato oficial — un soporte
+cualquiera que adjunta el supervisor no lo es, y obligar a clasificarlo empujaría
+a elegir cualquier entrada del catálogo con tal de poder guardar. Va con
+`ON DELETE SET NULL` y no `CASCADE`: retirar una entrada del catálogo no puede
+llevarse por delante los documentos reales de un contrato; se pierde la etiqueta,
+no el archivo.
+
 ### `firmas_electronicas`
 
 La firma electrónica asignada a una cuenta. Dos reglas, ambas en la base:
@@ -241,6 +258,7 @@ comportamiento correcto.
 | `V11__indices_compuestos_tablas_de_crecimiento_libre.sql` | `(contrato_id, fecha DESC)` en `alertas` y `registros` |
 | `V12__bloqueo_optimista.sql` | Columna `lock_version` en siete tablas |
 | `V13__huella_de_integridad_en_la_firma.sql` | `firma_hash_sha256` y `firmado_por_id` en `documentos` |
+| `V14__formato_institucional_del_documento.sql` | `formato_id` en `documentos`: qué formato del catálogo representa cada archivo |
 
 El salto de `V1` a `V9` es intencional: las `V1`–`V8` originales se consolidaron
 en la `V1` actual y la `V9` se conservó porque ya estaba aplicada en bases
