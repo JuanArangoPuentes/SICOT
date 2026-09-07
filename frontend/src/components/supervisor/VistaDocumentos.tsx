@@ -388,6 +388,9 @@ export default function VistaDocumentos({
                       marginTop: 2,
                     }}
                   >
+                    {doc.formatoCodigo
+                      ? `${doc.formatoCodigo} · `
+                      : ""}
                     {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}
                     {doc.generadoPorIa ? " · Generado por el Copiloto IA" : ""}
                     {doc.firmadoPorNombre

@@ -31,6 +31,17 @@ public class Documento {
     @JoinColumn(name = "subetapa_id")
     private Subetapa subetapa;
 
+    /**
+     * Entrada del catálogo institucional que este documento representa
+     * (GCCON-F-031, Acta de Inicio…). Opcional: no todo documento de un
+     * contrato es la instancia de un formato oficial, y los cargados antes de
+     * la migración V14 no tienen forma de saberlo sin adivinar. Ver
+     * {@code V14__formato_institucional_del_documento.sql}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "formato_id")
+    private FormatoDocumental formato;
+
     @Column(nullable = false, length = 255)
     private String nombre;
 
@@ -125,6 +136,9 @@ public class Documento {
 
     public Subetapa getSubetapa() { return subetapa; }
     public void setSubetapa(Subetapa subetapa) { this.subetapa = subetapa; }
+
+    public FormatoDocumental getFormato() { return formato; }
+    public void setFormato(FormatoDocumental formato) { this.formato = formato; }
 
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
