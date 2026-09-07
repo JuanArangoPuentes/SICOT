@@ -36,6 +36,25 @@ git checkout -b fix/nombre-corto-del-problema
 Prefijos en uso: `fix/` para corregir algo roto, `feat/` para funcionalidad
 nueva, `chore/` para mantenimiento, `docs/` para documentación.
 
+### La excepción: la configuración que GitHub lee de `master`
+
+Hay una clase de cambio que **no surte efecto aunque su PR contra `develop` esté
+mergeado y en verde**: la configuración que GitHub lee de la *rama por defecto*
+del repositorio, que aquí es `master`. Entran en esa categoría
+`.github/dependabot.yml`, `.github/CODEOWNERS`, las plantillas de issue y de pull
+request, y las políticas de seguridad.
+
+Ya ocurrió una vez, y conviene contarlo porque no se nota: la corrección que hacía
+que Dependabot abriera sus PRs contra `develop` se mergeó en `develop` el 4 de
+septiembre de 2026, y Dependabot siguió abriéndolos contra `master` cada lunes,
+porque el archivo que lee es el de `master`. El PR estaba verde, mergeado y
+cerrado; la corrección, inerte. Nadie tenía motivo para sospecharlo.
+
+Estos cambios se hacen igual que cualquier otro —rama propia, PR contra
+`develop`—, pero **no están activos hasta el siguiente `develop → master`**. Si el
+cambio corrige algo que está ocurriendo ahora, ese merge es parte del arreglo, no
+un paso posterior opcional.
+
 ## Commits
 
 El mensaje debe explicar **por qué**, no qué. El *qué* ya está en el diff.
