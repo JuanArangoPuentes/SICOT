@@ -30,6 +30,11 @@
 #      define ningún valor por defecto, así que en desarrollo el respaldo lo
 #      pone el perfil "dev" de Spring; aquí, además, se exige explícitamente
 #      para que un despliegue no pueda quedarse sin secreto propio.
+# TLS (ADR-009): este override añade un proxy inverso (Caddy) que pasa a ser el
+# ÚNICO servicio con puertos publicados. El frontend y el backend dejan de
+# publicarlos y solo se alcanzan por la red interna de Docker. Antes de esto, el
+# JWT y las credenciales viajaban por la red del centro en texto claro.
+#
 #   3. SPRING_PROFILES_ACTIVE se fija a "prod" de forma literal, NO
 #      interpolada desde el .env. Es deliberado: hace imposible desplegar el
 #      perfil "dev" usando este archivo. Con "dev" activo se sembrarían las
@@ -63,7 +68,68 @@ services:
       # Una vez creada la cuenta, ambas variables pueden retirarse del .env.
       SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:?Defina SICOT_ADMIN_EMAIL en el .env — es la cuenta de administrador con la que se entra por primera vez}
       SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:?Defina SICOT_ADMIN_PASSWORD en el .env con al menos 12 caracteres — genérela con `openssl rand -base64 24` y cámbiela desde la aplicación tras el primer ingreso}
+    # Deja de publicar el 8080 al host: el único camino hacia la API pasa por el
+    # proxy con TLS. Con el puerto publicado seguiría existiendo un acceso sin
+    # cifrar a los mismos datos, que es exactamente lo que ADR-009 prohíbe.
+    ports: !reset []
+
+  frontend:
+    # Deja de publicar al host: ahora se llega por el proxy. Publicar los dos
+    # caminos dejaría uno sin cifrar hacia los mismos datos, y ese nadie lo
+    # vigila (ADR-009).
+    ports: !reset []
+    build:
+      args:
+        # Mismo origen: el proxy sirve la SPA y enruta /api al backend, así que
+        # el navegador no necesita saber en qué host vive la API. Es además lo
+        # que elimina el problema que advertía el README — que VITE_API_URL
+        # queda horneado en el build y apuntando a "localhost" desde otra
+        # máquina no resuelve.
+        VITE_API_URL: ""
 
   adminer:
     profiles: ["tools"]
     ports: !reset []
+
+  # ── Proxy inverso con TLS (ADR-009) ──────────────────────────────────────
+  # Caddy obtiene y renueva certificados solo. Con SICOT_DOMINIO apuntando a un
+  # dominio público usa ACME; con un nombre interno emite un certificado local.
+  proxy:
+    image: caddy:2-alpine
+    container_name: sicot-proxy
+    restart: unless-stopped
+    environment:
+      SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — dominio público para certificado ACME, o nombre interno/IP para uno local}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Los certificados y las claves de cuenta ACME viven en volúmenes: sin
+      # esto, cada `docker compose up` volvería a pedir un certificado nuevo y
+      # agotaría los límites de emisión del proveedor en pocos días.
+      - sicot_caddy_data:/data
+      - sicot_caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
+    healthcheck:
+      # La API de administración de Caddy, no el sitio: pedir el sitio por HTTP
+      # devolvería la redirección a HTTPS y habría que decidir si eso cuenta
+      # como sano. Esto pregunta lo que de verdad importa aquí — si el proxy
+      # está en pie y con su configuración cargada.
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/config/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  sicot_caddy_data:
+  sicot_caddy_config:

@@ -13,6 +13,7 @@ import co.sena.sicot.repository.SubetapaRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -44,7 +45,12 @@ class EtapaServiceTest {
 
     @BeforeEach
     void setUp() {
-        RegistroService registroService = new RegistroService(registroRepository, contratoRepository);
+        // El publicador de eventos entra vacío: esta prueba comprueba el
+        // recálculo de etapas, no las automatizaciones. Un publicador que no
+        // hace nada mantiene el foco y evita que un cambio en las reglas
+        // rompa una prueba que no habla de ellas.
+        RegistroService registroService = new RegistroService(
+                registroRepository, contratoRepository, evento -> { });
         ContratoService contratoService = new ContratoService(contratoRepository,
                 null, registroService, etapaRepository);
         etapaService = new EtapaService(etapaRepository, subetapaRepository,
@@ -93,7 +99,7 @@ class EtapaServiceTest {
 
         // 3 subetapas completadas -> 3 SUBETAPA_AVANZADA + 3 recálculos de etapa
         // (0%->33%->67%->100%) con ETAPA_ACTUALIZADA. Ningún retroceso.
-        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId());
+        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId(), PageRequest.of(0, 100));
         assertThat(registros).hasSize(6);
         assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_AVANZADA")).hasSize(3);
         assertThat(registros).filteredOn(r -> r.getAccion().equals("ETAPA_ACTUALIZADA")).hasSize(3);
@@ -116,7 +122,7 @@ class EtapaServiceTest {
         assertThat(recargada.getEstado()).isEqualTo(EstadoEtapa.EN_CURSO);
         assertThat(recargada.getPorcentaje()).isEqualTo(67);
 
-        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId());
+        var registros = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId(), PageRequest.of(0, 100));
         assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_REVERTIDA")).hasSize(1);
         assertThat(registros).filteredOn(r -> r.getAccion().equals("ETAPA_RETROCEDIDA")).hasSize(1);
         assertThat(registros).filteredOn(r -> r.getAccion().equals("SUBETAPA_REVERTIDA"))
@@ -127,12 +133,12 @@ class EtapaServiceTest {
     void reenviarElMismoEstadoNoCambiaNadaNiGeneraTraza() {
         Subetapa primera = subetapaRepository.findByEtapaIdOrderByCodigoAsc(etapa.getId()).getFirst();
         etapaService.cambiarEstadoSubetapa(primera.getId(), EstadoSubetapa.COMPLETADA);
-        int registrosTrasCompletar = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId()).size();
+        int registrosTrasCompletar = registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId(), PageRequest.of(0, 100)).size();
 
         // Reenviar COMPLETADA sobre una subetapa ya COMPLETADA: no-op silencioso.
         etapaService.cambiarEstadoSubetapa(primera.getId(), EstadoSubetapa.COMPLETADA);
 
-        assertThat(registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId()))
+        assertThat(registroRepository.findByContratoIdOrderByFechaDesc(contrato.getId(), PageRequest.of(0, 100)))
                 .hasSize(registrosTrasCompletar);
     }
 

@@ -113,6 +113,12 @@ public class SecurityConfig {
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/copiloto/chat")
                             .hasAnyRole("SUPERVISOR", "ADMINISTRADOR");
 
+                    // Pantalla de operación del motor de automatizaciones
+                    // (ADR-008). Solo ADMINISTRADOR: la cola expone mensajes de
+                    // error internos y direcciones de correo de otras personas,
+                    // que no le corresponde ver ni a GESTION ni a un supervisor.
+                    auth.requestMatchers("/api/automatizaciones/**").hasRole("ADMINISTRADOR");
+
                     auth.anyRequest().authenticated();
                 })
                 // Spring Security ya añade por defecto nosniff, X-Frame-Options

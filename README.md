@@ -24,6 +24,12 @@ honesto.
                                   └───────────────────────┘
 ```
 
+Dentro del backend corre además el **motor de automatizaciones** (ADR-008): un
+módulo que genera las alertas del sistema —vencimientos, atrasos de cronograma,
+asignación de supervisor, integridad de documentos— sin ninguna herramienta
+externa. Reglas en Java, cola persistente en la misma base, y el modelo local
+solo para redactar. Detalle en [`backend/README.md §9`](./backend/README.md).
+
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
@@ -32,7 +38,10 @@ honesto.
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
 | [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
+| [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
 | [`docs/orca/`](./docs/orca) | Configuración de la flota de agentes y resultado de cada tarea | — |
+| [`docs/AUDITORIA_2026-09-08.md`](./docs/AUDITORIA_2026-09-08.md) | Auditoría técnica: qué se midió, qué está bien y los hallazgos con su evidencia | — |
+| [`docs/REVISION_ARQUITECTURA_2026-09-08.md`](./docs/REVISION_ARQUITECTURA_2026-09-08.md) | Revisión crítica de arquitectura y qué se corrigió | — |
 | [`docs/historico/`](./docs/historico) | Reportes de fases ya cerradas y auditorías de datos pasadas | — |
 
 ## Correr todo con Docker — entorno estándar del equipo
@@ -210,6 +219,9 @@ que volver a tomar, probablemente mal, si no estuvieran escritas— viven en
 | [005](./docs/decisiones/ADR-005-gestion-de-secretos.md) | Dónde viven las credenciales y cómo se rotan |
 | [006](./docs/decisiones/ADR-006-modelo-de-ia.md) | Qué modelo de IA local usa el Copiloto |
 | [007](./docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md) | Enrutado por URL y enlaces compartibles |
+| [008](./docs/decisiones/ADR-008-motor-de-automatizaciones.md) | Dónde viven las automatizaciones: dentro del backend, ni n8n ni un proceso aparte |
+| [009](./docs/decisiones/ADR-009-terminacion-tls.md) | Dónde termina TLS: un proxy inverso delante del stack |
+| [010](./docs/decisiones/ADR-010-versionado-de-la-api.md) | Versionado de la API: política de compatibilidad en vez de prefijo |
 
 Un ADR **no se edita para cambiar la decisión**: se escribe uno nuevo que lo
 reemplaza. El historial de por qué el sistema tuvo una forma anterior es parte

@@ -13,6 +13,10 @@
 // esta pantalla.
 
 import { useState, useRef, useEffect } from 'react'
+
+// Referencia estable: pasar `[]` en línea crearía un array nuevo en cada render
+// y el hook volvería a fijar el estado sin parar.
+const SIN_ALERTAS: never[] = []
 import { usePrefs } from '@/prefs'
 import AppShell, { type NavGroup } from '@/components/AppShell'
 import Registros, { type Registro } from '@/components/Registros'
@@ -34,9 +38,13 @@ import {
 } from '@/components/icons'
 import { AI_GENERATED_DOCS, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
-import type { AuthResponse, AlertaResponse, ContratoResponse, DocumentoResponse } from '@/services/api/types'
+import type { AuthResponse, AlertaResponse, ContratoResponse, DocumentoResponse,
+  CronogramaResponse,
+} from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
+import { getCronograma } from '@/services/cronogramaService'
+import { useRecursoDelContrato } from '@/hooks/useRecursoDelContrato'
 import { getDocumentosContrato, generarDocumento, firmarDocumento, preguntarCopiloto } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
@@ -209,29 +217,16 @@ export default function SupervisorPanel({
   // eso a un supervisor cuando en realidad no se pudo consultar el servicio es
   // el peor error posible de esta pantalla — le asegura que todo está en orden
   // justo cuando el sistema no lo sabe.
-  const [alertasApi, setAlertasApi] = useState<AlertaResponse[]>([])
-  const [errorAlertas, setErrorAlertas] = useState(false)
-  useEffect(() => {
-    if (!contrato) {
-      setAlertasApi([])
-      setErrorAlertas(false)
-      return
-    }
-    let cancelado = false
-    setErrorAlertas(false)
-    getAlertasContrato(contrato.id)
-      .then(lista => {
-        if (!cancelado) setAlertasApi(lista.filter(a => !a.leida))
-      })
-      .catch(err => {
-        console.error('No se pudieron cargar las alertas del contrato:', err)
-        if (!cancelado) {
-          setAlertasApi([])
-          setErrorAlertas(true)
-        }
-      })
-    return () => { cancelado = true }
-  }, [contrato])
+  const { datos: alertasCargadas, error: errorAlertas } = useRecursoDelContrato<AlertaResponse[]>(
+    contrato?.id ?? null,
+    async id => (await getAlertasContrato(id)).filter(a => !a.leida),
+    SIN_ALERTAS,
+  )
+  // Copia local porque marcar una alerta como leída la retira de la lista sin
+  // volver a pedirla al servidor. Se resincroniza cuando el hook trae datos
+  // nuevos (otro contrato, o una recarga).
+  const [alertasApi, setAlertasApi] = useState<AlertaResponse[]>(SIN_ALERTAS)
+  useEffect(() => { setAlertasApi(alertasCargadas) }, [alertasCargadas])
 
   // Documentos reales del contrato
   const [docsContrato, setDocsContrato] = useState<DocumentoResponse[]>([])
@@ -458,39 +453,31 @@ export default function SupervisorPanel({
   // El paso que el Copiloto debe guiar ahora mismo — cualquiera de los 6, no solo el 3.
   const activeStep = steps.find(s => s.status === 'active')
 
-  // ── Alerta de cronograma (semáforo verde/amarillo/rojo) ──
-  // Estimación calculada con las fechas REALES del contrato (fechaInicio/
-  // fechaFin) y el paso activo real — reparte el tiempo total del contrato
-  // en 6 partes iguales, una por paso, y compara con hoy. NO es un plazo
-  // oficial de SENA (no hay uno confirmado por paso) — por eso el mensaje
-  // aclara que es una estimación de cronograma, para no aparentar ser una
-  // regla institucional inventada.
-  const alertaCronograma: LiveAlert | null = (() => {
-    if (!contrato?.fechaInicio || !contrato?.fechaFin || !activeStep) return null
-    const inicio = new Date(contrato.fechaInicio)
-    const fin = new Date(contrato.fechaFin)
-    const totalDias = (fin.getTime() - inicio.getTime()) / 86400000
-    if (!(totalDias > 0)) return null
-    const segmentoDias = totalDias / 6
-    const finEsperado = new Date(inicio.getTime() + segmentoDias * activeStep.id * 86400000)
-    const hoy = new Date()
-    const diasDeAtraso = Math.round((hoy.getTime() - finEsperado.getTime()) / 86400000)
-    const fechaEsperadaTexto = finEsperado.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  // ── Alerta de cronograma ──
+  // El cálculo NO vive aquí. Vivía: este panel repartía el plazo en seis
+  // segmentos iguales y comparaba con la etapa activa, mientras el backend
+  // calculaba la brecha entre plazo consumido y avance para decidir si
+  // persistir una alerta. Dos algoritmos, dos definiciones de "atraso", y SICOT
+  // podía decir "el paso 3 va a tiempo" en la pantalla y "brecha de 39 puntos"
+  // en la bandeja del mismo contrato el mismo día.
+  //
+  // Ahora el cálculo está una sola vez, del lado que FR-002 declara autoridad de
+  // las reglas de negocio (service/Cronograma.java), y esta pantalla lo pinta.
+  const { datos: cronograma } = useRecursoDelContrato<CronogramaResponse | null>(
+    contrato?.id ?? null,
+    getCronograma,
+    null,
+  )
 
-    let severity: LiveAlert['severity']
-    let texto: string
-    if (diasDeAtraso <= 0) {
-      severity = 'ok'
-      texto = `Paso ${activeStep.id} (${activeStep.title}) va a tiempo según el cronograma estimado del contrato — debería cerrarse hacia el ${fechaEsperadaTexto}.`
-    } else if (diasDeAtraso <= segmentoDias * 0.5) {
-      severity = 'leve'
-      texto = `Paso ${activeStep.id} (${activeStep.title}) está atrasado: según el cronograma estimado debía cerrarse hacia el ${fechaEsperadaTexto}, hace ${diasDeAtraso} día(s).`
-    } else {
-      severity = 'critica'
-      texto = `Paso ${activeStep.id} (${activeStep.title}) está muy atrasado: según el cronograma estimado debía cerrarse hacia el ${fechaEsperadaTexto}, hace ${diasDeAtraso} día(s).`
-    }
-    return { id: 'cronograma-' + activeStep.id, severity, text: texto }
-  })()
+  const alertaCronograma: LiveAlert | null = cronograma && cronograma.semaforo !== 'SIN_DATOS'
+    ? {
+        id: 'cronograma-' + (cronograma.etapaActual ?? 0),
+        severity: cronograma.semaforo === 'ROJO' ? 'critica'
+          : cronograma.semaforo === 'AMARILLO' ? 'leve'
+            : 'ok',
+        text: cronograma.mensaje,
+      }
+    : null
 
   const dismiss = (id: string) => {
     setDismissed(prev => new Set(prev).add(id))

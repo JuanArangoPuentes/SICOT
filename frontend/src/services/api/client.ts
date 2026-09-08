@@ -3,7 +3,23 @@
 
 import type { ErrorResponse } from './types'
 
-export const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
+/**
+ * Origen del backend.
+ *
+ * Vacío significa **mismo origen**, no "sin configurar": es lo que usa el
+ * despliegue de producción, donde el proxy con TLS sirve la SPA y enruta /api al
+ * backend bajo el mismo dominio (ADR-009). Con mismo origen desaparece además el
+ * problema que arrastraba este proyecto — que Vite hornea esta URL en el build,
+ * así que un frontend compilado con "localhost" no funciona desde ninguna otra
+ * máquina.
+ *
+ * Se compara contra `undefined` y no se usa `??` a secas para que una cadena
+ * vacía sea una elección válida y no caiga al valor de desarrollo.
+ */
+const origenConfigurado = import.meta.env.VITE_API_URL
+export const API_BASE = origenConfigurado === undefined || origenConfigurado === null
+  ? 'http://localhost:8080'
+  : origenConfigurado
 
 export class ApiError extends Error {
   readonly status: number
