@@ -170,6 +170,8 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 
 ```
 co.sena.sicot
+├── automatizacion/ → motor de automatizaciones (ADR-008): reglas, cola persistente,
+│                  ejecutor con reintentos y carril de IA. Ver §9.
 ├── config/      → OpenAPI, DataInitializer (usuarios de desarrollo)
 ├── controller/  → REST + Swagger
 ├── dto/         → request/response (validación con Bean Validation)
@@ -217,7 +219,88 @@ No toca los datos del equipo: trabaja sobre un esquema desechable
 (`sicot_verificacion_esquema`) que borra y recrea en cada corrida; el esquema
 `public` queda intacto.
 
-## 9. Pendiente (fases siguientes)
+## 9. Motor de automatizaciones
+
+Genera alertas y avisos sin que nadie los dispare a mano. Vive **dentro** del
+backend, no en n8n ni en un proceso aparte — el porqué está en
+[ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
+
+### Cómo está armado
+
+```
+Algo pasa en SICOT                    El calendario avanza
+  (RegistroService.registrar)           (@Scheduled 06:00)
+         │                                      │
+         ▼                                      ▼
+   ReglaDeEvento                        ReglaDeCalendario
+         │                                      │
+         └──────────────┬───────────────────────┘
+                        ▼
+              TareaSolicitada  (la regla DECIDE, no hace)
+                        │
+                        ▼
+           tareas_automatizadas  (cola persistente, clave UNIQUE)
+                        │
+                        ▼  EjecutorDeTareas — sondeo cada minuto,
+                        │   pool propio, reintentos exponenciales
+         ┌──────────────┼──────────────┐
+         ▼              ▼              ▼
+   CrearAlerta    EnviarCorreo   RedactarResumenIA
+         │              │              │
+    AlertaService  EmailService   OllamaClient
+```
+
+**Las cuatro reglas invariantes** (ADR-008): ninguna regla escribe a la base
+directamente; la regla decide y la IA solo redacta; una regla es una clase con su
+prueba; toda tarea es idempotente por clave.
+
+### Las reglas que hay hoy
+
+| Código | Tipo | Qué detecta |
+|---|---|---|
+| `vencimiento-proximo` | calendario | Quedan 30, 15 o 7 días de plazo |
+| `contrato-vencido` | calendario | Pasó la fecha de fin y sigue ACTIVO |
+| `cronograma-atrasado` | calendario | Brecha ≥ 30 puntos entre plazo consumido y avance |
+| `supervisor-asignado` | evento | Alerta + correo al supervisor recién asignado |
+| `integridad-comprometida` | evento | Documento firmado cuyo contenido ya no coincide con su huella |
+| `resumen-semanal-ia` | calendario | Resumen del periodo redactado por el modelo (**apagada por defecto**) |
+
+### Operarlo
+
+```bash
+curl -s localhost:8080/api/automatizaciones/estado  -H "Authorization: Bearer $TOKEN_ADMIN"
+curl -s localhost:8080/api/automatizaciones/tareas?estado=FALLIDA -H "Authorization: Bearer $TOKEN_ADMIN"
+curl -s -X POST localhost:8080/api/automatizaciones/evaluar -H "Authorization: Bearer $TOKEN_ADMIN"
+```
+
+Las tres rutas exigen rol **ADMINISTRADOR**. `POST /evaluar` es idempotente:
+fuerza una pasada del calendario sin esperar a las 06:00, útil para comprobar una
+regla recién desplegada.
+
+Métricas en `/actuator/prometheus`: `sicot_automatizacion_tareas_encoladas`,
+`_completadas`, `_descartadas`, `_fallidas`, `sicot_automatizacion_reglas_fallos`.
+
+### Añadir una regla
+
+1. Crear la clase en `automatizacion/reglas/`, implementando `ReglaDeEvento` o
+   `ReglaDeCalendario`, anotada con `@Component`. Spring la descubre sola.
+2. Elegir una clave de idempotencia que identifique **el hecho, no el momento**.
+3. Escribir su prueba en `ReglasDeCalendarioTest` — sin Spring y sin base: se le
+   pasa una `FotoDelContrato` y se compara la lista devuelta.
+
+### Configuración
+
+Todo bajo `sicot.automatizacion.*` en `application.properties`, con variables de
+entorno equivalentes. Las que más se tocan:
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `AUTOMATIZACION_HABILITADA` | `true` | Apaga el motor entero sin afectar al resto |
+| `AUTOMATIZACION_DIAS_AVISO` | `30,15,7` | Umbrales de aviso previo al vencimiento |
+| `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
+| `AUTOMATIZACION_IA_HABILITADA` | `false` | Enciende el resumen semanal con IA |
+
+## 10. Pendiente (fases siguientes)
 
 - Integración SECOP II (consulta de procesos)
 - Firma electrónica con proveedor PKI real (hoy es una referencia interna registrada en el

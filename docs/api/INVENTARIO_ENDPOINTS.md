@@ -44,6 +44,9 @@ Generado el 2026-08-28. 13 controladores, 40 endpoints.
 | 37 | RegistroController | GET | /api/registros | ADMINISTRADOR | @PreAuthorize | 200 | `List<RegistroResponse>` |
 | 38 | ListaChequeoController | GET | /api/listas-chequeo | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<ListaChequeoResumen>` |
 | 39 | ListaChequeoController | GET | /api/listas-chequeo/{codigo} | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `ListaChequeoDetalle` |
+| 40 | AutomatizacionController | GET | /api/automatizaciones/estado | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `EstadoDelMotorResponse` |
+| 41 | AutomatizacionController | GET | /api/automatizaciones/tareas | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `List<TareaAutomatizadaResponse>` |
+| 42 | AutomatizacionController | POST | /api/automatizaciones/evaluar | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `{"tareasEncoladas": n}` |
 
 ---
 

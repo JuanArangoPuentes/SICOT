@@ -55,3 +55,4 @@ parte del valor.
 | [005](./ADR-005-gestion-de-secretos.md) | Dónde viven las credenciales y cómo se rotan | Aceptada |
 | [006](./ADR-006-modelo-de-ia.md) | Qué modelo de IA local usa el Copiloto | Aceptada |
 | [007](./ADR-007-enrutado-y-enlaces-profundos.md) | Enrutado por URL y enlaces compartibles | Aceptada |
+| [008](./ADR-008-motor-de-automatizaciones.md) | Dónde viven las automatizaciones de SICOT | Aceptada |

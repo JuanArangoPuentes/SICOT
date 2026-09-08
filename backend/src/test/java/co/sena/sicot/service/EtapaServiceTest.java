@@ -44,7 +44,12 @@ class EtapaServiceTest {
 
     @BeforeEach
     void setUp() {
-        RegistroService registroService = new RegistroService(registroRepository, contratoRepository);
+        // El publicador de eventos entra vacío: esta prueba comprueba el
+        // recálculo de etapas, no las automatizaciones. Un publicador que no
+        // hace nada mantiene el foco y evita que un cambio en las reglas
+        // rompa una prueba que no habla de ellas.
+        RegistroService registroService = new RegistroService(
+                registroRepository, contratoRepository, evento -> { });
         ContratoService contratoService = new ContratoService(contratoRepository,
                 null, registroService, etapaRepository);
         etapaService = new EtapaService(etapaRepository, subetapaRepository,

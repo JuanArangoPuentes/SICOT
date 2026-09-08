@@ -5,10 +5,13 @@ import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.EstadoEtapa;
 import co.sena.sicot.entity.enums.EstadoFormato;
 import co.sena.sicot.entity.enums.EstadoSubetapa;
+import co.sena.sicot.entity.enums.EstadoTareaAutomatizada;
+import co.sena.sicot.entity.enums.OrigenRegistro;
 import co.sena.sicot.entity.enums.PrioridadAlerta;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.entity.enums.TipoAlerta;
 import co.sena.sicot.entity.enums.TipoDocumento;
+import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -166,6 +169,9 @@ class EsquemaPostgreSqlIntegrationTest {
         assertThat(valoresPermitidosPor("ck_alertas_prioridad")).containsExactlyInAnyOrderElementsOf(nombresDe(PrioridadAlerta.values()));
         assertThat(valoresPermitidosPor("ck_formatos_tipo_archivo")).containsExactlyInAnyOrderElementsOf(nombresDe(TipoDocumento.values()));
         assertThat(valoresPermitidosPor("ck_formatos_estado")).containsExactlyInAnyOrderElementsOf(nombresDe(EstadoFormato.values()));
+        assertThat(valoresPermitidosPor("ck_tareas_automatizadas_tipo")).containsExactlyInAnyOrderElementsOf(nombresDe(TipoTareaAutomatizada.values()));
+        assertThat(valoresPermitidosPor("ck_tareas_automatizadas_estado")).containsExactlyInAnyOrderElementsOf(nombresDe(EstadoTareaAutomatizada.values()));
+        assertThat(valoresPermitidosPor("ck_registros_origen")).containsExactlyInAnyOrderElementsOf(nombresDe(OrigenRegistro.values()));
     }
 
     /**
@@ -177,7 +183,8 @@ class EsquemaPostgreSqlIntegrationTest {
     @Test
     void elEsquemaConservaLasRestriccionesDeIntegridadQueElCodigoDaPorSentadas() {
         assertThat(nombresDeRestricciones())
-                .contains("ck_contratos_valor", "ck_contratos_fechas", "ck_etapas_numero",
+                .contains("uq_tareas_automatizadas_idempotencia",
+                        "ck_contratos_valor", "ck_contratos_fechas", "ck_etapas_numero",
                         "ck_documentos_tamanio", "ck_formatos_tamanio",
                         "uq_firmas_electronicas_firma_id",
                         "uq_etapas_contrato_numero", "uq_subetapas_etapa_codigo");
@@ -188,7 +195,7 @@ class EsquemaPostgreSqlIntegrationTest {
         assertThat(nombresDeIndices()).contains("uq_firma_activa_por_usuario");
     }
 
-    /** Las nueve tablas del modelo, más el historial de Flyway. */
+    /** Las diez tablas del modelo, más el historial de Flyway. */
     @Test
     void elEsquemaTieneLasTablasDelModeloDeDatos() {
         List<String> tablas = jdbc.queryForList(
@@ -198,6 +205,7 @@ class EsquemaPostgreSqlIntegrationTest {
         assertThat(tablas).containsExactlyInAnyOrder(
                 "usuarios", "contratos", "etapas", "subetapas", "documentos",
                 "alertas", "registros", "formatos_documentales", "firmas_electronicas",
+                "tareas_automatizadas",
                 "flyway_schema_history");
     }
 

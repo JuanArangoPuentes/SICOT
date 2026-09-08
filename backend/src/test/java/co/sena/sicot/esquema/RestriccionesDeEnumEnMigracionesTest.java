@@ -5,10 +5,13 @@ import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.EstadoEtapa;
 import co.sena.sicot.entity.enums.EstadoFormato;
 import co.sena.sicot.entity.enums.EstadoSubetapa;
+import co.sena.sicot.entity.enums.EstadoTareaAutomatizada;
+import co.sena.sicot.entity.enums.OrigenRegistro;
 import co.sena.sicot.entity.enums.PrioridadAlerta;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.entity.enums.TipoAlerta;
 import co.sena.sicot.entity.enums.TipoDocumento;
+import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -69,17 +72,24 @@ class RestriccionesDeEnumEnMigracionesTest {
      * mapa; la última comprobación de la prueba se encarga de que no se pueda
      * agregar una nueva sin registrarla aquí.
      */
-    private static final Map<String, Class<? extends Enum<?>>> ENUM_POR_RESTRICCION = Map.of(
-            "ck_usuarios_rol", Rol.class,
-            "ck_contratos_estado", EstadoContrato.class,
-            "ck_etapas_estado", EstadoEtapa.class,
-            "ck_subetapas_estado", EstadoSubetapa.class,
-            "ck_documentos_tipo", TipoDocumento.class,
-            "ck_documentos_estado", EstadoDocumento.class,
-            "ck_alertas_tipo", TipoAlerta.class,
-            "ck_alertas_prioridad", PrioridadAlerta.class,
-            "ck_formatos_tipo_archivo", TipoDocumento.class,
-            "ck_formatos_estado", EstadoFormato.class);
+    private static final Map<String, Class<? extends Enum<?>>> ENUM_POR_RESTRICCION = Map.ofEntries(
+            // Map.ofEntries y no Map.of: esta fábrica admite como mucho diez
+            // pares, y V15 trajo tres restricciones más. Con Map.of, agregar la
+            // undécima no falla con un mensaje sobre el límite: falla con un
+            // error de resolución de sobrecarga que no dice nada de eso.
+            Map.entry("ck_usuarios_rol", Rol.class),
+            Map.entry("ck_contratos_estado", EstadoContrato.class),
+            Map.entry("ck_etapas_estado", EstadoEtapa.class),
+            Map.entry("ck_subetapas_estado", EstadoSubetapa.class),
+            Map.entry("ck_documentos_tipo", TipoDocumento.class),
+            Map.entry("ck_documentos_estado", EstadoDocumento.class),
+            Map.entry("ck_alertas_tipo", TipoAlerta.class),
+            Map.entry("ck_alertas_prioridad", PrioridadAlerta.class),
+            Map.entry("ck_formatos_tipo_archivo", TipoDocumento.class),
+            Map.entry("ck_formatos_estado", EstadoFormato.class),
+            Map.entry("ck_tareas_automatizadas_tipo", TipoTareaAutomatizada.class),
+            Map.entry("ck_tareas_automatizadas_estado", EstadoTareaAutomatizada.class),
+            Map.entry("ck_registros_origen", OrigenRegistro.class));
 
     @Test
     void cadaCheckDeEnumListaExactamenteLosValoresDelEnumDeJava() {
