@@ -4,6 +4,7 @@ import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.repository.ContratoRepository;
+import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +28,14 @@ public class LectorDeContratos {
 
     private final ContratoRepository contratoRepository;
     private final SubetapaRepository subetapaRepository;
+    private final EtapaRepository etapaRepository;
 
-    public LectorDeContratos(ContratoRepository contratoRepository, SubetapaRepository subetapaRepository) {
+    public LectorDeContratos(ContratoRepository contratoRepository,
+                             SubetapaRepository subetapaRepository,
+                             EtapaRepository etapaRepository) {
         this.contratoRepository = contratoRepository;
         this.subetapaRepository = subetapaRepository;
+        this.etapaRepository = etapaRepository;
     }
 
     /**
@@ -62,6 +67,8 @@ public class LectorDeContratos {
         List<Long> ids = contratos.stream().map(Contrato::getId).toList();
         Map<Long, ConteoDeSubetapas> conteos = subetapaRepository.contarPorContrato(ids).stream()
                 .collect(java.util.stream.Collectors.toMap(ConteoDeSubetapas::contratoId, Function.identity()));
+        Map<Long, EstadoDeEtapas> etapas = etapaRepository.estadoPorContrato(ids).stream()
+                .collect(java.util.stream.Collectors.toMap(EstadoDeEtapas::contratoId, Function.identity()));
 
         return contratos.stream().map(contrato -> {
             // Un contrato sin subetapas no aparece en el GROUP BY. No es un caso
@@ -71,6 +78,8 @@ public class LectorDeContratos {
             // afirmar nada sobre el avance.
             ConteoDeSubetapas conteo = conteos.getOrDefault(
                     contrato.getId(), new ConteoDeSubetapas(contrato.getId(), 0L, 0L));
+            EstadoDeEtapas etapa = etapas.getOrDefault(
+                    contrato.getId(), new EstadoDeEtapas(contrato.getId(), null, 0L));
             Usuario supervisor = contrato.getSupervisor();
             return new FotoDelContrato(
                     contrato.getId(),
@@ -82,7 +91,9 @@ public class LectorDeContratos {
                     supervisor != null ? supervisor.getNombre() : null,
                     supervisor != null ? supervisor.getEmail() : null,
                     conteo.totales(),
-                    conteo.completadas());
+                    conteo.completadas(),
+                    etapa.etapaActual(),
+                    (int) etapa.totalEtapas());
         }).toList();
     }
 }

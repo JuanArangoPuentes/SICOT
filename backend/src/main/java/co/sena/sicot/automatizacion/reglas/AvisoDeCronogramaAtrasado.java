@@ -6,6 +6,7 @@ import co.sena.sicot.automatizacion.ReglaDeCalendario;
 import co.sena.sicot.automatizacion.TareaSolicitada;
 import co.sena.sicot.entity.enums.PrioridadAlerta;
 import co.sena.sicot.entity.enums.TipoAlerta;
+import co.sena.sicot.service.Cronograma;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -44,9 +45,6 @@ public class AvisoDeCronogramaAtrasado implements ReglaDeCalendario {
 
     public static final String CODIGO = "cronograma-atrasado";
 
-    /** Brecha, en puntos porcentuales, a partir de la cual el atraso deja de ser ritmo normal. */
-    private static final double BRECHA_MINIMA = 0.30;
-
     @Override
     public String codigo() {
         return CODIGO;
@@ -54,34 +52,23 @@ public class AvisoDeCronogramaAtrasado implements ReglaDeCalendario {
 
     @Override
     public List<TareaSolicitada> evaluar(FotoDelContrato contrato, LocalDate hoy) {
-        Double plazo = contrato.fraccionDePlazoTranscurrida(hoy);
-        Double avance = contrato.fraccionDeAvance();
+        Cronograma cronograma = contrato.cronograma(hoy);
 
-        // Sin fechas completas o sin subetapas sembradas no se puede afirmar
-        // nada sobre el atraso. Callar es la respuesta correcta: una alerta
-        // basada en un dato que no se tiene es peor que no alertar.
-        if (plazo == null || avance == null) {
+        // Sin fechas completas o sin subetapas sembradas, `mereceAlerta` es
+        // falso porque el semáforo queda en SIN_DATOS. Callar es la respuesta
+        // correcta: una alerta basada en un dato que no se tiene es peor que no
+        // alertar.
+        if (!cronograma.mereceAlerta()) {
             return List.of();
         }
 
-        double brecha = plazo - avance;
-        if (brecha < BRECHA_MINIMA) {
-            return List.of();
-        }
-
-        int tramo = (int) (Math.floor(brecha * 10) * 10);
         return List.of(TareaSolicitada.ahora(
                 CODIGO,
-                CODIGO + ":contrato=" + contrato.contratoId() + ":tramo=" + tramo,
+                CODIGO + ":contrato=" + contrato.contratoId() + ":tramo=" + cronograma.tramoDeBrecha(),
                 contrato.contratoId(),
                 new PayloadDeTarea.CrearAlerta(
                         TipoAlerta.CRONOGRAMA,
-                        brecha >= 0.50 ? PrioridadAlerta.ALTA : PrioridadAlerta.MEDIA,
-                        ("El contrato %s lleva el %.0f%% del plazo consumido y solo el %.0f%% del flujo "
-                                + "completado (%d de %d subetapas): una brecha de %.0f puntos. "
-                                + "Revise el avance de las etapas pendientes.")
-                                .formatted(contrato.numeroContrato(), plazo * 100, avance * 100,
-                                        contrato.subetapasCompletadas(), contrato.subetapasTotales(),
-                                        brecha * 100))));
+                        cronograma.brecha() >= 0.50 ? PrioridadAlerta.ALTA : PrioridadAlerta.MEDIA,
+                        "Contrato " + contrato.numeroContrato() + ". " + cronograma.mensaje())));
     }
 }

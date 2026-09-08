@@ -37,6 +37,9 @@ import java.util.List;
  *                            quedó EN_PROCESO. Cubre el caso de matar el
  *                            backend a mitad de una ejecución: sin esto, esa
  *                            tarea no la reclama nadie nunca más.
+ * @param retencionDeTareas   cuánto se conservan las tareas ya resueltas antes
+ *                            de purgarlas. Solo afecta a COMPLETADA y
+ *                            DESCARTADA: una FALLIDA es evidencia y se queda.
  * @param diasDeAvisoPrevio   umbrales, en días antes del vencimiento, en los que
  *                            se avisa. Uno por alerta: 30, 15 y 7 producen tres
  *                            avisos y no treinta.
@@ -51,6 +54,7 @@ public record AutomatizacionProperties(
         int maximoDeIntentos,
         Duration esperaBase,
         Duration abandonoTrasVer,
+        Duration retencionDeTareas,
         List<Integer> diasDeAvisoPrevio,
         Ia ia
 ) {

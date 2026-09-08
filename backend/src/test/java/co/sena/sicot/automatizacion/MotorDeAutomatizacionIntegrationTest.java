@@ -11,6 +11,8 @@ import co.sena.sicot.repository.TareaAutomatizadaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -66,6 +68,9 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     @Autowired
     private JdbcTemplate jdbc;
 
+    /** Los listados por contrato llevan tope desde la auditoría; aquí se pide todo. */
+    private static final Pageable TODAS = PageRequest.of(0, 100);
+
     /**
      * El recorrido completo: un contrato a punto de vencer produce tareas al
      * evaluar el calendario, y esas tareas se convierten en alertas reales al
@@ -85,13 +90,13 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
         int encoladas = motor.evaluarCalendario(LocalDate.now());
         assertThat(encoladas).isEqualTo(3);
 
-        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId))
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS))
                 .as("las reglas no crean alertas: solo encolan tareas")
                 .isEmpty();
 
         ejecutor.procesarPendientes();
 
-        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId))
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS))
                 .hasSize(3)
                 .extracting(a -> a.getTipo())
                 .containsExactlyInAnyOrder(TipoAlerta.VENCIMIENTO, TipoAlerta.VENCIMIENTO, TipoAlerta.CRONOGRAMA);
@@ -116,7 +121,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
         assertThat(terceraPasada).isZero();
 
         ejecutor.procesarPendientes();
-        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId)).hasSize(3);
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS)).hasSize(3);
     }
 
     /**
@@ -144,7 +149,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
 
         ejecutor.procesarPendientes();
 
-        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId)).hasSize(1);
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS)).hasSize(1);
         // Sin SMTP configurado en la suite, el correo se DESCARTA con un motivo
         // claro. No es un fallo, y no debe contarse como tal: ver EnvioDeCorreo.
         assertThat(tareaRepository.findAll())

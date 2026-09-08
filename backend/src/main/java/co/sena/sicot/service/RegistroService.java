@@ -45,6 +45,9 @@ public class RegistroService {
     // sistema y sin límite terminaría cargando la tabla completa.
     private static final int MAX_REGISTROS_LISTADO = 500;
 
+    /** Tope del listado por contrato. Mismo criterio que en {@code AlertaService}. */
+    private static final int MAX_REGISTROS_POR_CONTRATO = 200;
+
     private final RegistroRepository registroRepository;
     // Se inyecta el repositorio (no ContratoService) a propósito: ContratoService
     // ya depende de RegistroService para registrar auditoría, así que depender
@@ -120,7 +123,8 @@ public class RegistroService {
         Contrato contrato = contratoRepository.findById(contratoId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Contrato", contratoId));
         SecurityUtils.verificarAccesoAlContrato(contrato);
-        return registroRepository.findByContratoIdOrderByFechaDesc(contratoId)
+        return registroRepository
+                .findByContratoIdOrderByFechaDesc(contratoId, PageRequest.of(0, MAX_REGISTROS_POR_CONTRATO))
                 .stream().map(RegistroMapper::toResponse).toList();
     }
 

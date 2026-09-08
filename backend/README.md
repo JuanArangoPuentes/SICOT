@@ -299,8 +299,37 @@ entorno equivalentes. Las que más se tocan:
 | `AUTOMATIZACION_DIAS_AVISO` | `30,15,7` | Umbrales de aviso previo al vencimiento |
 | `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
 | `AUTOMATIZACION_IA_HABILITADA` | `false` | Enciende el resumen semanal con IA |
+| `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
+| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO |
 
-## 10. Pendiente (fases siguientes)
+## 10. Cronograma del contrato
+
+`GET /api/contratos/{id}/cronograma` devuelve el semáforo, la brecha entre plazo
+consumido y avance, la etapa en curso y su cierre estimado.
+
+**Es el único cálculo de cronograma del sistema** ([`service/Cronograma.java`](./src/main/java/co/sena/sicot/service/Cronograma.java)).
+Antes había dos: el panel del supervisor lo calculaba en el navegador con un
+criterio y la regla de automatización con otro, así que SICOT podía decir «va a
+tiempo» en la pantalla y «atrasado 39 puntos» en la bandeja del mismo contrato el
+mismo día. Ahora la API calcula y el frontend pinta.
+
+La prueba que impide que vuelva a duplicarse es
+`CronogramaIntegrationTest.laPantallaYLaAlertaDicenLoMismoSobreElMismoContrato`.
+
+## 11. Vigilancia del respaldo
+
+ADR-002 compromete un RPO de 24 h apoyado en `scripts/respaldo-sicot.sh` con cron
+a las 02:00. **Ese cron lo instala quien despliega, a mano, en el servidor** — no
+lo pone este repositorio.
+
+Como «un paso manual escrito en un documento no es un control» (la lección de
+ADR-006), el sistema lo comprueba solo: mira a diario la antigüedad del respaldo
+más reciente en `RESPALDO_DIRECTORIO`, avisa en el log si supera el RPO y publica
+`sicot.respaldo.antiguedad.horas` en `/actuator/prometheus` (`-1` = no se pudo
+determinar). Sin la variable configurada, el arranque avisa de que el compromiso
+de ADR-002 está sin verificar.
+
+## 12. Pendiente (fases siguientes)
 
 - Integración SECOP II (consulta de procesos)
 - Firma electrónica con proveedor PKI real (hoy es una referencia interna registrada en el
@@ -308,4 +337,8 @@ entorno equivalentes. Las que más se tocan:
 - OCR de documentos escaneados sin texto legible (PaddleOCR)
 - RAG (base vectorial) para que el Copiloto consulte documentos largos en vez de solo el
   contexto que ya recibe en el prompt
-- Despliegue del lado "remoto" (servidor de la sala) con HTTPS y dominio propio
+- Obligar a cambiar la contraseña temporal en el primer ingreso (hallazgo E de la
+  auditoría del 8 de septiembre)
+- Auditoría de accesibilidad (Resolución 1519 de 2020) — hoy sin verificación
+  automática
+- Recolector de métricas: el backend publica once y nadie las raspa

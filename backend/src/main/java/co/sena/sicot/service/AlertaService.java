@@ -22,6 +22,14 @@ public class AlertaService {
     // límite con el uso normal del sistema hasta cargar la tabla entera.
     private static final int MAX_ALERTAS_LISTADO = 500;
 
+    /**
+     * Tope del listado por contrato. Más bajo que el global a propósito: aquí lo
+     * que importa es lo reciente, y quinientas alertas de un solo contrato no las
+     * lee nadie. Ver el javadoc del repositorio para por qué apareció este tope
+     * justo ahora.
+     */
+    private static final int MAX_ALERTAS_POR_CONTRATO = 200;
+
     private final AlertaRepository alertaRepository;
     private final ContratoService contratoService;
     // El repositorio directo, no ContratoService, para la ruta del sistema:
@@ -40,7 +48,9 @@ public class AlertaService {
     @Transactional(readOnly = true)
     public List<AlertaResponse> listarPorContrato(Long contratoId) {
         contratoService.buscar(contratoId);
-        return alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId).stream()
+        return alertaRepository
+                .findByContratoIdOrderByFechaCreacionDesc(contratoId, PageRequest.of(0, MAX_ALERTAS_POR_CONTRATO))
+                .stream()
                 .map(AlertaMapper::toResponse)
                 .toList();
     }

@@ -247,6 +247,22 @@ public class AlmacenDeTareas {
                 t.getFechaActualizacion());
     }
 
+    /**
+     * Borra las tareas ya resueltas que superaron la retención configurada.
+     *
+     * @return cuántas se borraron
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public int purgarResueltas() {
+        Instant limite = Instant.now().minus(propiedades.retencionDeTareas());
+        int borradas = tareaRepository.purgarResueltasAnterioresA(limite);
+        if (borradas > 0) {
+            log.info("Purga de la cola: se borraron {} tarea(s) resueltas con más de {} de antigüedad.",
+                    borradas, propiedades.retencionDeTareas());
+        }
+        return borradas;
+    }
+
     @Transactional(readOnly = true)
     public long contar(EstadoTareaAutomatizada estado) {
         return tareaRepository.countByEstado(estado);

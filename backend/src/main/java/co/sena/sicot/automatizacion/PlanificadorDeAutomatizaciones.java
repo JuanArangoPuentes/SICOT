@@ -37,13 +37,16 @@ public class PlanificadorDeAutomatizaciones {
 
     private final MotorDeAutomatizacion motor;
     private final EjecutorDeTareas ejecutor;
+    private final AlmacenDeTareas almacen;
     private final AutomatizacionProperties propiedades;
 
     public PlanificadorDeAutomatizaciones(MotorDeAutomatizacion motor,
                                           EjecutorDeTareas ejecutor,
+                                          AlmacenDeTareas almacen,
                                           AutomatizacionProperties propiedades) {
         this.motor = motor;
         this.ejecutor = ejecutor;
+        this.almacen = almacen;
         this.propiedades = propiedades;
         log.info("Automatizaciones activas: sondeo cada {}, {} trabajador(es), hasta {} intento(s) por tarea.",
                 propiedades.sondeo(), propiedades.trabajadores(), propiedades.maximoDeIntentos());
@@ -79,6 +82,23 @@ public class PlanificadorDeAutomatizaciones {
         } catch (Exception e) {
             log.error("Fallo inesperado evaluando las reglas de calendario. "
                     + "Se reintentará mañana; la cola no se ve afectada.", e);
+        }
+    }
+
+    /**
+     * Purga diaria de la cola, a las 05:00.
+     *
+     * <p>Entre la comprobación del respaldo (04:00) y la evaluación del
+     * calendario (06:00): así la tabla llega encogida a la pasada que va a
+     * escribir en ella, y el respaldo de las 02:00 todavía conserva lo que se
+     * borra aquí durante los días de retención que fija ADR-002.
+     */
+    @Scheduled(cron = "0 0 5 * * *")
+    public void purgarLaCola() {
+        try {
+            almacen.purgarResueltas();
+        } catch (Exception e) {
+            log.error("Fallo purgando la cola de automatizaciones. Se reintentará mañana.", e);
         }
     }
 

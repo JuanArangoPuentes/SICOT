@@ -53,7 +53,7 @@ public class AvisoDeContratoVencido implements ReglaDeCalendario {
         }
 
         long diasVencido = ChronoUnit.DAYS.between(contrato.fechaFin(), hoy);
-        String avance = contrato.fraccionDeAvance() == null
+        String avance = contrato.subetapasTotales() == 0
                 ? "sin subetapas registradas"
                 : "%d de %d subetapas completadas".formatted(
                         contrato.subetapasCompletadas(), contrato.subetapasTotales());

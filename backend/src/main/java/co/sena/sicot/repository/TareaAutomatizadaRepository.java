@@ -82,4 +82,26 @@ public interface TareaAutomatizadaRepository extends JpaRepository<TareaAutomati
     List<TareaAutomatizada> findAllByOrderByFechaCreacionDesc(Pageable limite);
 
     long countByEstado(EstadoTareaAutomatizada estado);
+
+    /**
+     * Borra las tareas ya resueltas más antiguas que el límite.
+     *
+     * <p>Solo COMPLETADA y DESCARTADA: una FALLIDA es evidencia de un problema y
+     * se conserva hasta que alguien la mire, y una PENDIENTE o EN_PROCESO es
+     * trabajo vivo. Borrar por antigüedad sin mirar el estado convertiría la
+     * purga en una forma silenciosa de perder trabajo.
+     *
+     * <p>Existe porque ADR-003 ya estableció que el tamaño de la base determina
+     * si la restauración cabe en el RTO de 4 h de ADR-002. Añadir una tabla que
+     * crece de forma monótona con seis reglas evaluándose a diario contradiría
+     * esa decisión.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            DELETE FROM TareaAutomatizada t
+             WHERE t.estado IN (co.sena.sicot.entity.enums.EstadoTareaAutomatizada.COMPLETADA,
+                                co.sena.sicot.entity.enums.EstadoTareaAutomatizada.DESCARTADA)
+               AND t.fechaActualizacion < :limite
+            """)
+    int purgarResueltasAnterioresA(@Param("limite") Instant limite);
 }

@@ -1,9 +1,9 @@
 package co.sena.sicot.automatizacion;
 
 import co.sena.sicot.entity.enums.EstadoContrato;
+import co.sena.sicot.service.Cronograma;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 
 /**
  * Todo lo que una regla de calendario necesita saber de un contrato, ya leído.
@@ -41,7 +41,9 @@ public record FotoDelContrato(
         String supervisorNombre,
         String supervisorEmail,
         long subetapasTotales,
-        long subetapasCompletadas
+        long subetapasCompletadas,
+        Integer etapaActual,
+        int totalEtapas
 ) {
 
     public boolean tieneSupervisorConCorreo() {
@@ -49,31 +51,16 @@ public record FotoDelContrato(
     }
 
     /**
-     * Fracción del plazo ya transcurrida, entre 0 y 1.
+     * Cómo va el contrato respecto a su plazo.
      *
-     * <p>Devuelve {@code null} cuando el contrato no tiene las dos fechas o el
-     * plazo es degenerado. No devuelve cero: cero significaría «acaba de
-     * empezar», y eso es una afirmación sobre un dato que no se tiene. Cada
-     * regla decide qué hacer ante la ausencia, y lo que ninguna debe hacer es
-     * alertar basándose en un valor inventado.
+     * <p>Delega en {@link Cronograma}, que es el único cálculo de cronograma del
+     * sistema: el mismo que alimenta el panel del supervisor. Antes esta
+     * información se calculaba dos veces con criterios distintos, y SICOT podía
+     * contradecirse a sí mismo sobre si un contrato iba atrasado.
      */
-    public Double fraccionDePlazoTranscurrida(LocalDate hoy) {
-        if (fechaInicio == null || fechaFin == null || !fechaFin.isAfter(fechaInicio)) {
-            return null;
-        }
-        double total = ChronoUnit.DAYS.between(fechaInicio, fechaFin);
-        double transcurrido = ChronoUnit.DAYS.between(fechaInicio, hoy);
-        if (transcurrido <= 0) {
-            return 0.0;
-        }
-        return Math.min(1.0, transcurrido / total);
+    public Cronograma cronograma(LocalDate hoy) {
+        return Cronograma.calcular(fechaInicio, fechaFin, subetapasTotales, subetapasCompletadas,
+                etapaActual, totalEtapas, hoy);
     }
 
-    /** Fracción del trabajo ya cerrada, o {@code null} si el contrato no tiene subetapas sembradas. */
-    public Double fraccionDeAvance() {
-        if (subetapasTotales <= 0) {
-            return null;
-        }
-        return subetapasCompletadas / (double) subetapasTotales;
-    }
 }

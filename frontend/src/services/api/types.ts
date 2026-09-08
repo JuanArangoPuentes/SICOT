@@ -251,6 +251,8 @@ export interface AlertaResponse {
 
 // ─── Registros ───────────────────────────────────────────────────────────────
 
+export type OrigenRegistro = 'USUARIO' | 'SISTEMA'
+
 export interface RegistroResponse {
   id: number
   contratoId: number
@@ -259,6 +261,34 @@ export interface RegistroResponse {
   accion: string
   descripcion: string | null
   fecha: string
+  // Quién produjo la entrada. Existe porque `usuarioNombre` nulo es ambiguo:
+  // puede ser el sistema, o una persona cuya cuenta se borró — `usuario_id`
+  // es ON DELETE SET NULL. Sin este campo, el panel atribuía al "Sistema"
+  // acciones de personas que ya no están en la organización.
+  origen: OrigenRegistro
+}
+
+// ─── Cronograma ──────────────────────────────────────────────────────────────
+
+export type SemaforoCronograma = 'SIN_DATOS' | 'VERDE' | 'AMARILLO' | 'ROJO'
+
+/**
+ * Estado de cronograma calculado POR EL BACKEND.
+ *
+ * Antes el panel lo calculaba por su cuenta, con un criterio distinto al de la
+ * alerta persistida: SICOT podía decir "va a tiempo" en la pantalla y
+ * "atrasado 39 puntos" en la bandeja del mismo contrato. El cálculo vive ahora
+ * una sola vez, del lado que FR-002 declara autoridad de las reglas de negocio.
+ */
+export interface CronogramaResponse {
+  semaforo: SemaforoCronograma
+  fraccionDePlazo: number | null
+  fraccionDeAvance: number | null
+  brecha: number | null
+  etapaActual: number | null
+  cierreEsperado: string | null
+  diasDeAtraso: number | null
+  mensaje: string
 }
 
 // ─── Formatos documentales (catálogo del Administrador) ──────────────────────

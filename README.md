@@ -40,6 +40,8 @@ solo para redactar. Detalle en [`backend/README.md §9`](./backend/README.md).
 | [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
 | [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
 | [`docs/orca/`](./docs/orca) | Configuración de la flota de agentes y resultado de cada tarea | — |
+| [`docs/AUDITORIA_2026-09-08.md`](./docs/AUDITORIA_2026-09-08.md) | Auditoría técnica: qué se midió, qué está bien y los hallazgos con su evidencia | — |
+| [`docs/REVISION_ARQUITECTURA_2026-09-08.md`](./docs/REVISION_ARQUITECTURA_2026-09-08.md) | Revisión crítica de arquitectura y qué se corrigió | — |
 | [`docs/historico/`](./docs/historico) | Reportes de fases ya cerradas y auditorías de datos pasadas | — |
 
 ## Correr todo con Docker — entorno estándar del equipo
@@ -218,6 +220,8 @@ que volver a tomar, probablemente mal, si no estuvieran escritas— viven en
 | [006](./docs/decisiones/ADR-006-modelo-de-ia.md) | Qué modelo de IA local usa el Copiloto |
 | [007](./docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md) | Enrutado por URL y enlaces compartibles |
 | [008](./docs/decisiones/ADR-008-motor-de-automatizaciones.md) | Dónde viven las automatizaciones: dentro del backend, ni n8n ni un proceso aparte |
+| [009](./docs/decisiones/ADR-009-terminacion-tls.md) | Dónde termina TLS: un proxy inverso delante del stack |
+| [010](./docs/decisiones/ADR-010-versionado-de-la-api.md) | Versionado de la API: política de compatibilidad en vez de prefijo |
 
 Un ADR **no se edita para cambiar la decisión**: se escribe uno nuevo que lo
 reemplaza. El historial de por qué el sistema tuvo una forma anterior es parte

@@ -30,7 +30,7 @@ class ReglasDeCalendarioTest {
 
     private final AutomatizacionProperties propiedades = new AutomatizacionProperties(
             true, Duration.ofMinutes(1), 25, 2, 5,
-            Duration.ofMinutes(1), Duration.ofMinutes(30),
+            Duration.ofMinutes(1), Duration.ofMinutes(30), Duration.ofDays(30),
             List.of(30, 15, 7),
             new AutomatizacionProperties.Ia(false, 7));
 
@@ -123,7 +123,7 @@ class ReglasDeCalendarioTest {
         // 50 % del plazo consumido, 3 de 27 subetapas cerradas (11 %): brecha de 39 puntos.
         FotoDelContrato contrato = new FotoDelContrato(1L, "CT-001", "Suministro",
                 HOY.minusDays(50), HOY.plusDays(50), EstadoContrato.ACTIVO,
-                "Ana", "ana@soy.sena.edu.co", 27, 3);
+                "Ana", "ana@soy.sena.edu.co", 27, 3, 2, 6);
 
         List<TareaSolicitada> tareas = regla.evaluar(contrato, HOY);
 
@@ -137,7 +137,7 @@ class ReglasDeCalendarioTest {
 
         FotoDelContrato contrato = new FotoDelContrato(1L, "CT-001", "Suministro",
                 HOY.minusDays(50), HOY.plusDays(50), EstadoContrato.ACTIVO,
-                "Ana", "ana@soy.sena.edu.co", 27, 13);
+                "Ana", "ana@soy.sena.edu.co", 27, 13, 3, 6);
 
         assertThat(regla.evaluar(contrato, HOY)).isEmpty();
     }
@@ -153,7 +153,7 @@ class ReglasDeCalendarioTest {
 
         FotoDelContrato contrato = new FotoDelContrato(1L, "CT-001", "Suministro",
                 HOY.minusDays(90), HOY.plusDays(10), EstadoContrato.ACTIVO,
-                "Ana", "ana@soy.sena.edu.co", 0, 0);
+                "Ana", "ana@soy.sena.edu.co", 0, 0, 1, 6);
 
         assertThat(regla.evaluar(contrato, HOY)).isEmpty();
     }
@@ -164,9 +164,9 @@ class ReglasDeCalendarioTest {
         AvisoDeCronogramaAtrasado regla = new AvisoDeCronogramaAtrasado();
 
         FotoDelContrato moderado = new FotoDelContrato(1L, "CT-001", "Suministro",
-                HOY.minusDays(50), HOY.plusDays(50), EstadoContrato.ACTIVO, "Ana", "a@b.co", 27, 3);
+                HOY.minusDays(50), HOY.plusDays(50), EstadoContrato.ACTIVO, "Ana", "a@b.co", 27, 3, 2, 6);
         FotoDelContrato grave = new FotoDelContrato(1L, "CT-001", "Suministro",
-                HOY.minusDays(90), HOY.plusDays(10), EstadoContrato.ACTIVO, "Ana", "a@b.co", 27, 3);
+                HOY.minusDays(90), HOY.plusDays(10), EstadoContrato.ACTIVO, "Ana", "a@b.co", 27, 3, 2, 6);
 
         assertThat(regla.evaluar(moderado, HOY).getFirst().claveIdempotencia())
                 .isNotEqualTo(regla.evaluar(grave, HOY).getFirst().claveIdempotencia());
@@ -174,6 +174,6 @@ class ReglasDeCalendarioTest {
 
     private FotoDelContrato contrato(LocalDate inicio, LocalDate fin) {
         return new FotoDelContrato(1L, "CT-001", "Suministro de mobiliario",
-                inicio, fin, EstadoContrato.ACTIVO, "Ana Gómez", "ana@soy.sena.edu.co", 27, 5);
+                inicio, fin, EstadoContrato.ACTIVO, "Ana Gómez", "ana@soy.sena.edu.co", 27, 5, 2, 6);
     }
 }

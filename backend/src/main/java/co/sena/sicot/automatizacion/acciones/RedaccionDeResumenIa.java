@@ -14,12 +14,15 @@ import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.ia.OllamaClient;
 import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.service.AlertaService;
+import co.sena.sicot.service.Cronograma;
+import org.springframework.data.domain.PageRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -112,7 +115,7 @@ public class RedaccionDeResumenIa implements AccionDeTarea {
 
         Instant desde = Instant.now().minus(Duration.ofDays(datos.diasDelPeriodo()));
         List<Registro> movimientos = registroRepository
-                .findByContratoIdOrderByFechaDesc(tarea.contratoId()).stream()
+                .findByContratoIdOrderByFechaDesc(tarea.contratoId(), PageRequest.of(0, 60)).stream()
                 .filter(r -> r.getFecha().isAfter(desde))
                 .limit(30)
                 .toList();
@@ -166,11 +169,15 @@ public class RedaccionDeResumenIa implements AccionDeTarea {
      * falsa con aspecto oficial es peor que no decir nada.
      */
     private String construirPrompt(FotoDelContrato contrato, List<Registro> movimientos, int dias) {
-        String avance = contrato.fraccionDeAvance() == null
+        // El avance sale del mismo cálculo que alimenta el panel del supervisor
+        // y la alerta de cronograma. Redactarlo aparte aquí habría reintroducido,
+        // dentro del prompt del modelo, la tercera versión del mismo dato.
+        Cronograma cronograma = contrato.cronograma(LocalDate.now());
+        String avance = cronograma.fraccionDeAvance() == null
                 ? "sin subetapas registradas"
                 : String.format("%d de %d subetapas completadas (%.0f%%)",
                         contrato.subetapasCompletadas(), contrato.subetapasTotales(),
-                        contrato.fraccionDeAvance() * 100);
+                        cronograma.fraccionDeAvance() * 100);
 
         String actividad = movimientos.stream()
                 .map(r -> "- " + FECHA.format(r.getFecha().atZone(ZoneId.systemDefault()))
