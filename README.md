@@ -127,8 +127,12 @@ Esto añade (ver [`docker-compose.prod.yml`](./docker-compose.prod.yml)):
   arriba para usarlo puntualmente).
 
 Antes de levantar así, en el `.env` de esta carpeta:
-1. Fijar `SPRING_PROFILES_ACTIVE=prod` (evita que se creen las cuentas de
-   prueba y restringe Swagger — ver `backend/src/main/resources/application-prod.properties`).
+1. Fijar `SPRING_PROFILES_ACTIVE=prod`. `docker-compose.prod.yml` ya lo fija de
+   forma literal y además es el valor por defecto de la aplicación desde
+   [ADR-011](./docs/decisiones/ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md);
+   se escribe igual en el `.env` para que quede a la vista de quien opere el
+   servidor qué perfil está corriendo. Evita que se creen las cuentas de prueba
+   y restringe Swagger — ver `backend/src/main/resources/application-prod.properties`.
 2. Fijar `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` a la IP/dominio **real** del
    servidor, no `localhost` — de lo contrario el frontend, ya compilado con
    `localhost` incrustado, no podrá hablarle al backend desde ninguna otra

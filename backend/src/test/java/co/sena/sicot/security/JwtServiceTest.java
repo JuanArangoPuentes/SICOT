@@ -116,6 +116,45 @@ class JwtServiceTest {
                 .isInstanceOfAny(JwtException.class, IllegalArgumentException.class);
     }
 
+    // ─── Arranque fail closed ────────────────────────────────────────────────
+    // El perfil por defecto de la aplicación es "prod", que no trae ningún
+    // secreto de conveniencia. Estas tres pruebas son las que hacen que eso
+    // signifique algo: sin ellas, un JWT_SECRET ausente, mal codificado o
+    // demasiado corto podría degradar en silencio en vez de detener el arranque.
+
+    @Test
+    void sinSecretoElArranqueSeDetieneYDiceComoGenerarlo() {
+        assertThatThrownBy(() -> new JwtService("", OCHO_HORAS_MS))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("JWT_SECRET")
+                .hasMessageContaining("openssl rand -base64");
+
+        assertThatThrownBy(() -> new JwtService("   ", OCHO_HORAS_MS))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThatThrownBy(() -> new JwtService(null, OCHO_HORAS_MS))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void unSecretoDemasiadoCortoNoSeAceptaAunqueSeaBase64Valido() {
+        // 16 bytes: Base64 perfectamente válido, pero la mitad de lo que exige
+        // HMAC-SHA256. Aceptarlo sería el peor caso — el sistema arranca, firma
+        // y todo "funciona" con una clave que se puede atacar por fuerza bruta.
+        String corto = Base64.getEncoder().encodeToString(new byte[16]);
+
+        assertThatThrownBy(() -> new JwtService(corto, OCHO_HORAS_MS))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("32");
+    }
+
+    @Test
+    void unSecretoQueNoEsBase64SeRechazaComoTal() {
+        assertThatThrownBy(() -> new JwtService("no es base64 ni de lejos ###", OCHO_HORAS_MS))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Base64");
+    }
+
     private Usuario usuario(String email, Rol rol) {
         Usuario usuario = new Usuario();
         usuario.setId(1L);
