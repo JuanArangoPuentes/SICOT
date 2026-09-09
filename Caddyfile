@@ -53,8 +53,21 @@
 	}
 
 	# Todo lo demás es la aplicación de React servida por su nginx.
+	#
+	# Puerto 8443, NO 80. La imagen del frontend es `nginx-unprivileged`, que
+	# corre como un usuario sin privilegios y por tanto no puede escuchar en un
+	# puerto por debajo de 1024: `frontend/nginx.conf` declara `listen 8443` y
+	# no hay nada sirviendo en el 80. Aquí decía 80, y con
+	# `docker-compose.prod.yml` —donde el frontend ya no publica puertos al host
+	# y sólo se alcanza por este proxy— eso dejaba TODA la aplicación
+	# inalcanzable: las rutas de arriba (/api, /actuator, /swagger) seguían
+	# funcionando, así que el backend respondía y sólo caía la SPA. Es decir, el
+	# fallo se presentaba como "la página no carga" con la API sana.
+	#
+	# El número tiene que coincidir con `listen` en frontend/nginx.conf, con el
+	# `EXPOSE` de frontend/Dockerfile y con el healthcheck de docker-compose.yml.
 	handle {
-		reverse_proxy frontend:80
+		reverse_proxy frontend:8443
 	}
 
 	# Cabeceras que corresponden al borde y no a la aplicación.

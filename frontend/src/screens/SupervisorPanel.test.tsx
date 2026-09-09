@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, render, screen } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import SupervisorPanel from "./SupervisorPanel"
 import { PrefsProvider } from "@/prefs"
@@ -37,8 +37,20 @@ vi.mock("@/services/firmaService", () => ({
   getMiFirma: vi.fn(),
 }))
 
-function montar(props: Partial<React.ComponentProps<typeof SupervisorPanel>> = {}) {
-  return render(
+/**
+ * Monta el panel y espera a que sus efectos terminen.
+ *
+ * El `await act` del final no es decorativo: el panel pide etapas, alertas,
+ * documentos y firma en sus efectos, y esas promesas simuladas se resuelven
+ * DESPUÉS de que `render` haya vuelto. Sin esperar aquí, cada prueba dejaba
+ * actualizaciones de estado cayendo fuera de act(...) y React lo avisaba por
+ * consola en cada ejecución. Un aviso que sale siempre entrena al equipo a no
+ * leer la salida de las pruebas, y entonces el aviso que sí importa tampoco se
+ * lee. Además, esperar aquí es lo correcto: las aserciones miran el panel ya
+ * asentado, no a medio cargar.
+ */
+async function montar(props: Partial<React.ComponentProps<typeof SupervisorPanel>> = {}) {
+  const resultado = render(
     <PrefsProvider>
       <SupervisorPanel
         vista="bandeja"
@@ -58,6 +70,8 @@ function montar(props: Partial<React.ComponentProps<typeof SupervisorPanel>> = {
       />
     </PrefsProvider>,
   )
+  await act(async () => {})
+  return resultado
 }
 
 describe("SupervisorPanel", () => {
@@ -77,8 +91,8 @@ describe("SupervisorPanel", () => {
     })
   })
 
-  it("mientras consulta el contrato NO afirma que no hay ninguno", () => {
-    montar({ cargandoContrato: true })
+  it("mientras consulta el contrato NO afirma que no hay ninguno", async () => {
+    await montar({ cargandoContrato: true })
 
     expect(screen.getByText(/consultando su contrato/i)).toBeInTheDocument()
     expect(screen.queryByText(/no tiene un contrato asignado/i)).not.toBeInTheDocument()
@@ -88,16 +102,16 @@ describe("SupervisorPanel", () => {
    * El error más grave posible de esta pantalla: decirle a alguien que no tiene
    * trabajo pendiente cuando lo que ocurrió es que el backend no respondió.
    */
-  it("si la consulta falla lo dice, en vez de fingir que no hay contrato", () => {
-    montar({ errorContrato: true })
+  it("si la consulta falla lo dice, en vez de fingir que no hay contrato", async () => {
+    await montar({ errorContrato: true })
 
     expect(screen.getByText(/no se pudo cargar su contrato/i)).toBeInTheDocument()
     expect(screen.queryByText(/no tiene un contrato asignado/i)).not.toBeInTheDocument()
     expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument()
   })
 
-  it("sin contrato y sin error sí muestra el estado vacío", () => {
-    montar()
+  it("sin contrato y sin error sí muestra el estado vacío", async () => {
+    await montar()
 
     // Por rol y no por texto suelto: el mensaje aparece como encabezado y
     // repetido en el cuerpo, y consultar por texto encontraría los dos.
@@ -107,7 +121,7 @@ describe("SupervisorPanel", () => {
   })
 
   it("con un contrato asignado muestra su número", async () => {
-    montar({ contrato: contrato() })
+    await montar({ contrato: contrato() })
 
     expect(await screen.findAllByText(/CTMA-2026-0184/)).not.toHaveLength(0)
   })
@@ -117,8 +131,8 @@ describe("SupervisorPanel", () => {
    * haberlo el menú se redujera a una entrada, parecería que el sistema perdió
    * funcionalidad. Quedan inactivas, no ocultas.
    */
-  it("mantiene visibles todas las secciones aunque no haya contrato", () => {
-    montar()
+  it("mantiene visibles todas las secciones aunque no haya contrato", async () => {
+    await montar()
 
     for (const seccion of [/contrato/i, /alertas/i, /documentos/i, /registros/i]) {
       expect(screen.getAllByText(seccion).length).toBeGreaterThan(0)

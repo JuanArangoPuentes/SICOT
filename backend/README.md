@@ -64,9 +64,10 @@ Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataI
 
 > ⚠️ **Estas contraseñas son públicas** (están en este archivo, en un repositorio
 > compartido) y por eso estas cuentas **solo existen bajo el perfil `dev`**.
-> `DataInitializer` no las crea con ningún otro perfil, y `docker-compose.prod.yml`
-> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal para que no puedan aparecer
-> en un servidor por un `.env` mal copiado. Si alguna vez ve estas cuentas en un
+> `DataInitializer` no las crea con ningún otro perfil, `docker-compose.prod.yml`
+> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal, y desde ADR-011 el perfil
+> por defecto de la aplicación es `prod`: un arranque que olvide declarar el
+> perfil no cae en `dev`, se detiene. Si alguna vez ve estas cuentas en un
 > despliegue real, ese despliegue está corriendo con el perfil equivocado.
 
 ## 3. Configuración (variables de entorno)
@@ -75,7 +76,7 @@ Copie `.env.example` a un `.env` (o exporte las variables) — los valores por d
 
 | Variable | Descripción |
 |---|---|
-| `SPRING_PROFILES_ACTIVE` | `dev` por defecto (siembra los usuarios de prueba de la tabla de abajo). El servidor remoto de producción **debe** fijarlo a otro valor (p. ej. `prod`) para que esas cuentas conocidas nunca se creen ahí |
+| `SPRING_PROFILES_ACTIVE` | **`prod` por defecto** (arranque *fail closed*, ver ADR-011). Sin declararlo, el backend exige `JWT_SECRET` real y se niega a arrancar sin él. `dev` —el único perfil que siembra los usuarios de prueba de la tabla de abajo— se activa solo en los caminos de desarrollo: `./mvnw spring-boot:run` y `docker compose up` con el archivo base |
 | `DB_URL` | URL JDBC (por defecto `jdbc:postgresql://localhost:5432/sicot`) |
 | `DB_USERNAME` / `DB_PASSWORD` | Credenciales de la base |
 | `JWT_SECRET` | Clave HMAC-SHA256 ≥ 32 bytes **en Base64** (`openssl rand -base64 48`) |
@@ -104,8 +105,20 @@ su `.env`. No requiere ningún cambio de código — el backend es agnóstico al
 
 ```bash
 mvn spring-boot:run
-# o
-mvn clean package && java -jar target/sicot-backend-0.1.0.jar
+```
+
+`spring-boot:run` activa el perfil `dev` desde la configuración del plugin en el
+`pom.xml`; no hace falta declarar nada.
+
+El JAR empaquetado **no**. Es deliberado (ADR-011): el perfil por defecto de la
+aplicación es `prod`, así que un `java -jar` sin configurar se detiene con un
+mensaje que dice qué falta, en vez de levantarse con el secreto de firma
+publicado en este repositorio y las cuentas demo sembradas. Para ejecutarlo a
+mano en desarrollo hay que decirlo:
+
+```bash
+mvn clean package
+SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 ```
 
 - API: <http://localhost:8080/api>

@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -132,7 +133,7 @@ public class AutomatizacionController {
             @ApiResponse(responseCode = "403", description = "Requiere rol ADMINISTRADOR",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
     })
-    @org.springframework.web.bind.annotation.PostMapping("/evaluar")
+    @PostMapping("/evaluar")
     public ResponseEntity<Map<String, Integer>> evaluar() {
         int encoladas = motor.evaluarCalendario(LocalDate.now());
         return ResponseEntity.ok(Map.of("tareasEncoladas", encoladas));

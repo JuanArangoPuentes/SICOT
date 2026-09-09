@@ -74,9 +74,12 @@ services:
       db:
         condition: service_healthy
     environment:
-      # "dev" siembra los usuarios de prueba (contraseñas conocidas). En el
-      # servidor remoto de producción, fije SPRING_PROFILES_ACTIVE=prod (o
-      # cualquier valor distinto de "dev") en el .env de la raíz.
+      # "dev" siembra los usuarios de prueba (contraseñas conocidas). Se declara
+      # AQUÍ y no como valor por defecto de la aplicación: desde ADR-011 el
+      # defecto de SICOT es "prod", y un arranque que no diga nada se detiene en
+      # vez de levantar desarrollo. Este archivo es el de desarrollo local, así
+      # que sí puede pedir "dev" en voz alta; docker-compose.prod.yml fija "prod"
+      # de forma literal.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       DB_URL: jdbc:postgresql://db:5432/sicot
       DB_USERNAME: sicot
