@@ -171,10 +171,18 @@ jobs:
     name: Vulnerabilidades en dependencias
     runs-on: ubuntu-latest
 
-    # No había ningún escaneo de dependencias: una vulnerabilidad publicada en
-    # una librería que el proyecto ya usa no habría producido ninguna señal.
-    # Se ejecuta como job propio para que su fallo sea legible y no quede
-    # escondido dentro del job de build.
+    # LA COMPUERTA de dependencias, y está separada del informe de abajo por una
+    # razón concreta: para que pueda ser un chequeo OBLIGATORIO de la rama.
+    #
+    # Antes esto y OWASP Dependency-Check vivían en el mismo job, y eso ataba la
+    # duración del conjunto a la del más lento: Dependency-Check descarga la base
+    # de la NVD y tarda más de media hora. Un chequeo obligatorio de 35 minutos
+    # en un equipo de tres personas no se tolera dos semanas — se termina
+    # quitando de la lista, y entonces no hay compuerta ninguna, que es
+    # exactamente el estado del que venimos (ver ADR-011).
+    #
+    # Así, esto tarda ~3 minutos y puede exigirse de verdad; el informe completo
+    # sigue publicándose aparte sin bloquear a nadie.
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -250,14 +258,28 @@ jobs:
               --skip-dirs target \
               /proyecto
 
+  informe-de-dependencias:
+    name: Informe de dependencias (OWASP)
+    runs-on: ubuntu-latest
+
+    # Segunda opinión sobre el backend, con otra base de datos (la NVD). NO es
+    # compuerta y no debe serlo: depende de un servicio externo que se cae y
+    # limita por IP, así que como bloqueo produciría PRs rojos que no dicen nada
+    # del código. La compuerta es Trivy, en el job de arriba. Éste aporta el
+    # informe HTML detallado, que es lo que se mira cuando hay que entender un
+    # hallazgo en vez de sólo saber que existe.
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
       - name: Auditar dependencias del backend (OWASP Dependency-Check)
         working-directory: backend
-        # Segunda opinión sobre el backend, con otra base de datos (la NVD).
-        # Sigue en `continue-on-error` a propósito, y ahora con un motivo firme
-        # en vez de "durante el rodaje": depende de un servicio externo que se
-        # cae y limita por IP, así que como compuerta produciría PRs rojos que
-        # no dicen nada del código. La compuerta es Trivy, arriba. Éste aporta
-        # el informe HTML detallado que se publica como artefacto.
         continue-on-error: true
         run: >-
           ./mvnw -B -ntp org.owasp:dependency-check-maven:12.1.0:check
