@@ -1,6 +1,20 @@
-# Inventario completo de endpoints SICOT — Rama `fix/consistencia-api`
+# Inventario completo de endpoints SICOT
 
-Generado el 2026-08-28. 13 controladores, 40 endpoints.
+**Revisado el 2026-09-09 contra el código. 14 controladores, 44 endpoints.**
+
+> Este documento se verifica a mano, así que se queda viejo en cuanto alguien
+> añade una ruta. La comprobación es un comando, y conviene correrla antes de
+> confiar en la tabla:
+>
+> ```bash
+> grep -rhoE '@(Get|Post|Put|Patch|Delete)Mapping' backend/src/main/java/co/sena/sicot/controller/ | wc -l
+> ```
+>
+> Si ese número no es 44, la tabla está desactualizada. La fuente de verdad
+> ejecutable es Swagger (`/swagger-ui.html`), que se genera del código; esta
+> tabla existe para lo que Swagger no muestra: **dónde** se comprueba el acceso
+> de cada ruta, que en SICOT unas veces es `@PreAuthorize` y otras una llamada a
+> `SecurityUtils.verificarAccesoAlContrato` dentro del servicio.
 
 | # | Controlador | Método | Ruta | Rol en `@PreAuthorize` | Control de acceso real | Éxito | Forma de respuesta |
 |---|-------------|--------|------|------------------------|------------------------|-------|-------------------|
@@ -17,6 +31,7 @@ Generado el 2026-08-28. 13 controladores, 40 endpoints.
 | 11 | ContratoController | PUT | /api/contratos/{id} | GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `ContratoResponse` |
 | 12 | ContratoController | PATCH | /api/contratos/{id}/supervisor | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
+| 13b | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
 | 14 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 16 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
