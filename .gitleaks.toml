@@ -1,0 +1,105 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Configuración de Gitleaks — detección de secretos en el código y el historial
+#
+# POR QUÉ EXISTE ESTE ARCHIVO
+#
+# Sin él, Gitleaks reporta nueve coincidencias sobre este repositorio. Las nueve
+# son valores de laboratorio: contraseñas de las cuentas demo que sólo existen
+# con los perfiles `dev` y `test`, el secreto JWT de conveniencia que ya está
+# publicado en `application-dev.properties`, y los valores de relleno que el CI
+# necesita para validar la ESTRUCTURA de `docker-compose.prod.yml` sin usar
+# secretos reales. Ninguna es una credencial que dé acceso a nada.
+#
+# Un informe que siempre trae nueve hallazgos y siempre son los mismos nueve
+# deja de leerse en dos semanas, y el día que aparezca el décimo —el que sí
+# importa— nadie va a notar la diferencia. El objetivo de este archivo es que el
+# escaneo salga en CERO, para que cualquier hallazgo futuro signifique algo.
+#
+# CÓMO SE PERMITE, Y CÓMO NO
+#
+# Se permite por CONTENIDO (el valor exacto), nunca por ruta. Excluir
+# `src/test/**` sería más corto y sería un error: escondería una credencial real
+# pegada por descuido en una prueba, que es justo uno de los sitios donde eso
+# pasa. Con esta forma, un secreto NUEVO en cualquiera de estos mismos archivos
+# se sigue reportando.
+#
+# CÓMO AÑADIR UNA ENTRADA
+#
+# Sólo si el valor es de laboratorio y no abre nada, con una línea que diga qué
+# es y dónde vive. Si duda, no lo añada: rótelo.
+#
+# Ejecutarlo:
+#   docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest git /repo --redact
+#   docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest dir /repo --redact
+#
+# Nota sobre el escaneo `dir` en local: reporta además su `.env`, que contiene
+# secretos de verdad. Es correcto que lo haga y por eso NO está permitido aquí;
+# ese archivo está en `.gitignore` y nunca ha entrado al repositorio. En CI no
+# existe, así que el resultado allí es cero.
+# ═══════════════════════════════════════════════════════════════════════════
+
+title = "SICOT"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+Valores de laboratorio del proyecto. Se permiten por su contenido exacto: \
+cualquier otro secreto en estos mismos archivos se sigue reportando."""
+targets = ["content"]
+regexTarget = "match"
+regexes = [
+  # Secreto JWT de conveniencia de los perfiles `dev`, `test` y `esquema-it`.
+  # Está publicado a propósito en `application-dev.properties`. Cualquier perfil
+  # distinto exige JWT_SECRET real o el backend rehúsa arrancar — ver
+  # `application.properties` y `JwtService`.
+  #
+  # Se listan las DOS formas porque Gitleaks decodifica el Base64 y reporta el
+  # texto de dentro: permitir sólo la cadena Base64 dejaba el hallazgo abierto.
+  '''ZGl2ZWxvcG1lbnQtc2ljb3Qtc2VjcmV0by1qd3Qta2V5LW11eS1sYXJnbzY0LWJ5dGVzLXNlZ3Vybw==''',
+  '''divelopment-sicot-secreto-jwt-key-muy-largo64-bytes-seguro''',
+
+  # Relleno del CI (`.github/workflows/ci.yml`). El perfil de producción exige
+  # que estas variables existan, y ese paso sólo valida que los archivos de
+  # Compose se fusionen bien; no se conecta a nada.
+  '''dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==''',
+  '''valor-de-relleno-para-ci''',
+  '''relleno-solo-para-ci-1234''',
+
+  # Números de contrato de SECOP inventados para la suite. No son un secreto de
+  # ningún tipo: es el formato oficial de identificador de un contrato estatal
+  # colombiano, y la regla genérica los confunde con una clave por su forma
+  # (mayúsculas, puntos y guiones sin espacios).
+  '''CO1\.PCCNTR\.[A-Za-z0-9._-]+''',
+
+  # Constantes de contraseña internas de la suite: se generan y se consumen
+  # dentro de la misma prueba y nunca salen de ella.
+  '''Contrasena-Larga-2026''',
+  '''Aislamiento123''',
+
+  # Contraseñas de las cuentas demo, documentadas en `backend/README.md` y
+  # declaradas fuera de alcance en `SECURITY.md`. `DataInitializer` sólo las
+  # siembra con los perfiles `dev` y `test`. Hoy las reglas por defecto no las
+  # marcan —son demasiado cortas—; se listan de forma preventiva para que una
+  # futura versión de Gitleaks que sí lo haga no reabra un hallazgo ya resuelto.
+  '''Admin123\*''',
+  '''Gestion123\*''',
+  '''Supervisor123\*''',
+]
+
+[[allowlists]]
+description = """
+Rutas que no forman parte del código fuente: salida de compilación, \
+dependencias descargadas y herramientas locales de asistentes de IA. Las tres \
+están en `.gitignore`, así que nunca llegan al repositorio; se excluyen para \
+que el escaneo de directorio en una copia de trabajo dé el mismo resultado que \
+el del historial."""
+paths = [
+  '''(^|/)target/''',
+  '''(^|/)node_modules/''',
+  '''(^|/)dist/''',
+  '''(^|/)\.claude/''',
+  '''(^|/)playwright-report/''',
+  '''(^|/)test-results/''',
+]

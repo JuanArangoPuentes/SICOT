@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useRecursoDelContrato } from './useRecursoDelContrato'
@@ -81,7 +81,15 @@ describe('useRecursoDelContrato', () => {
     const { result } = renderHook(() => useRecursoDelContrato(7, cargar, [] as string[]))
 
     await waitFor(() => expect(result.current.datos).toEqual(['primera']))
-    result.current.recargar()
+
+    // Dentro de `act`: `recargar` cambia el estado del hook, y llamarla suelta
+    // hace que React avise de una actualización fuera de act(...). Es sólo un
+    // aviso, pero un aviso permanente en la salida de las pruebas entrena al
+    // equipo a no leerla, y el día que aparezca uno de verdad no se verá.
+    await act(async () => {
+      result.current.recargar()
+    })
+
     await waitFor(() => expect(result.current.datos).toEqual(['segunda']))
   })
 })

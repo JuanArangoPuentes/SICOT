@@ -50,3 +50,31 @@ Documentado en detalle en [`docs/decisiones/`](docs/decisiones/):
 autenticación JWT, autorización en dos capas, límite de intentos por cuenta y
 por red, huella SHA-256 que ata cada firma a su documento, cabeceras de
 seguridad y aislamiento entre supervisores con pruebas dedicadas.
+
+## Qué comprueba el CI en cada PR
+
+Cuatro compuertas, todas con herramientas libres, sin cuenta ni clave y sin
+límite de uso. La decisión de cuál bloquea y cuál sólo informa está razonada en
+[ADR-011](docs/decisiones/ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md).
+
+| Herramienta | Qué mira | Bloquea |
+| --- | --- | --- |
+| **Trivy** | CVE en las dependencias de los tres ecosistemas (Maven, npm del frontend, npm del MCP) | Sí, en `CRITICAL` y `HIGH` con corrección publicada |
+| **Semgrep** | Fallos de seguridad en el código propio (`security-audit`, `secrets`, `owasp-top-ten`) | Sí, cualquier hallazgo |
+| **Gitleaks** | Credenciales en el árbol y en **todo el historial** de Git | Sí, cualquier hallazgo |
+| **npm audit** | Dos umbrales: `moderate` en el árbol de producción, `high` en el completo | Sí |
+| OWASP Dependency-Check | Segunda opinión sobre el backend con la base de la NVD | No — informa y publica el HTML |
+
+Los tres primeros salen en **cero** hoy. Es el punto: un informe que siempre
+trae los mismos hallazgos deja de leerse, y el día que aparezca el que importa
+nadie notará la diferencia. Si añade una excepción, escriba al lado por qué no
+aplica — en `.gitleaks.toml` se permite por contenido y nunca por ruta, y en
+Semgrep se silencia por regla y en su línea, nunca por archivo.
+
+Para reproducirlos en local hace falta sólo Docker:
+
+```bash
+docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --redact
+docker run --rm -v "$PWD:/proyecto" -v "$HOME/.m2:/root/.m2" aquasec/trivy:0.74.0 \
+  fs --scanners vuln --severity CRITICAL,HIGH --skip-dirs node_modules --skip-dirs target /proyecto
+```

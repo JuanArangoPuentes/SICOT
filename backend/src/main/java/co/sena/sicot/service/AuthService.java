@@ -30,7 +30,12 @@ public class AuthService {
      * correos institucionales tienen cuenta — precisamente lo que el mensaje
      * de error idéntico trataba de ocultar.
      */
+    // Semgrep marca esta constante como "hash BCrypt filtrado". No lo es: es un
+    // hash señuelo cuyo texto original no es la contraseña de ninguna cuenta y
+    // contra el que nunca se autentica a nadie (ver arriba). Se silencia por
+    // regla y no por archivo para que un hash de verdad pegado aquí sí salte.
     private static final String HASH_SEÑUELO =
+            // nosemgrep: generic.secrets.security.detected-bcrypt-hash.detected-bcrypt-hash
             "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
     private final UsuarioRepository usuarioRepository;
