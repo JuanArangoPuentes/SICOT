@@ -5,9 +5,9 @@
 // que una prueba fallida diga qué dejó de funcionar para el usuario y no qué
 // nodo del DOM cambió.
 
-import "@testing-library/jest-dom/vitest"
-import { cleanup } from "@testing-library/react"
-import { afterEach, beforeEach, vi } from "vitest"
+import '@testing-library/jest-dom/vitest'
+import { cleanup } from '@testing-library/react'
+import { afterEach, beforeEach, vi } from 'vitest'
 
 afterEach(() => {
   // Desmonta lo montado en la prueba anterior. Sin esto, dos pruebas que

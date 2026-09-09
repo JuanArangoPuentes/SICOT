@@ -43,7 +43,10 @@ export function cambiarEstadoUsuario(id: number, request: CambiarEstadoUsuarioRe
 
 // Envío real de correo (SMTP) — devuelve enviado:false con el error real si
 // el correo no está configurado o falla, nunca finge éxito.
-export function enviarCredenciales(id: number, request: EnviarCredencialesRequest): Promise<EnviarCredencialesResponse> {
+export function enviarCredenciales(
+  id: number,
+  request: EnviarCredencialesRequest,
+): Promise<EnviarCredencialesResponse> {
   return apiFetch<EnviarCredencialesResponse>(`/api/usuarios/${id}/enviar-credenciales`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

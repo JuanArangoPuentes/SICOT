@@ -5,7 +5,15 @@
 import { useEffect, useRef, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
 import { Chip, Modal, type ChipType } from '@/components/ui'
-import { IconCheckCircle, IconClipboardList, IconContract, IconFileText, IconLoader, IconPlay, IconUpload } from '@/components/icons'
+import {
+  IconCheckCircle,
+  IconClipboardList,
+  IconContract,
+  IconFileText,
+  IconLoader,
+  IconPlay,
+  IconUpload,
+} from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
 import { getContratos, crearContrato } from '@/services/contratoService'
@@ -37,7 +45,10 @@ const ETAPAS_GCCON_P010 = [
 
 // Supervisores disponibles para asignación — se cargan desde /api/usuarios
 // (solo visible para ADMINISTRADOR; el rol GESTION recibe 403 y crea sin asignar)
-interface SupervisorOption { id: number; nombre: string }
+interface SupervisorOption {
+  id: number
+  nombre: string
+}
 
 const CENTROS_COSTO = ['920510 — CTMA Formación', '920511 — CTMA Ebanistería', '920512 — CTMA Tapicería']
 
@@ -87,7 +98,12 @@ const isoADisplay = (iso: string | null | undefined): string => {
   return `${d}/${m}/${y}`
 }
 
-export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStartTour }: {
+export default function GestionPanel({
+  usuario,
+  onLogout,
+  onOpenSettings,
+  onStartTour,
+}: {
   usuario: AuthResponse
   onLogout: () => void
   onOpenSettings: () => void
@@ -126,33 +142,50 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
   useEffect(() => {
     let cancelado = false
     getContratos()
-      .then(lista => {
+      .then((lista) => {
         if (!cancelado) setContratos(lista.map(mapContratoRow))
       })
-      .catch(err => console.error('No se pudieron cargar los contratos:', err))
-    return () => { cancelado = true }
+      .catch((err) => console.error('No se pudieron cargar los contratos:', err))
+    return () => {
+      cancelado = true
+    }
   }, [])
 
   // Supervisores para asignación (solo ADMINISTRADOR tiene acceso)
   useEffect(() => {
     let cancelado = false
     getUsuarios()
-      .then(lista => {
+      .then((lista) => {
         if (cancelado) return
-        const sups = lista.filter(u => u.rol === 'SUPERVISOR' && u.activo)
-          .map(u => ({ id: u.id, nombre: u.nombre }))
+        const sups = lista
+          .filter((u) => u.rol === 'SUPERVISOR' && u.activo)
+          .map((u) => ({ id: u.id, nombre: u.nombre }))
         setSupervisores(sups)
         setSupervisor(String(sups[0]?.id ?? ''))
       })
-      .catch(err => console.error('No se pudieron cargar los supervisores:', err))
-    return () => { cancelado = true }
+      .catch((err) => console.error('No se pudieron cargar los supervisores:', err))
+    return () => {
+      cancelado = true
+    }
   }, [])
 
   const openUpload = () => {
-    setShowModal(true); setUploadState('idle'); setProgress(0); setAdjuntosSubidos(0)
-    setExtraccion(null); setErrorExtraccion(''); setArchivosSeleccionados([])
-    setIdContrato(''); setObjeto(''); setProveedor(''); setValor(''); setVigencia('')
-    setNit(''); setRepresentanteLegal(''); setLugarEjecucion(''); setRegistroPresupuestal('')
+    setShowModal(true)
+    setUploadState('idle')
+    setProgress(0)
+    setAdjuntosSubidos(0)
+    setExtraccion(null)
+    setErrorExtraccion('')
+    setArchivosSeleccionados([])
+    setIdContrato('')
+    setObjeto('')
+    setProveedor('')
+    setValor('')
+    setVigencia('')
+    setNit('')
+    setRepresentanteLegal('')
+    setLugarEjecucion('')
+    setRegistroPresupuestal('')
   }
 
   const handleFileSelect = () => fileInputRef.current?.click()
@@ -193,9 +226,18 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
     const num = idContrato.trim()
     const obj = objeto.trim()
     const val = parseValor(valor)
-    if (!num) { setErrorCrear('El ID del contrato es obligatorio.'); return }
-    if (!obj) { setErrorCrear('El objeto del contrato es obligatorio.'); return }
-    if (val == null) { setErrorCrear('El valor debe ser un número mayor que cero.'); return }
+    if (!num) {
+      setErrorCrear('El ID del contrato es obligatorio.')
+      return
+    }
+    if (!obj) {
+      setErrorCrear('El objeto del contrato es obligatorio.')
+      return
+    }
+    if (val == null) {
+      setErrorCrear('El valor debe ser un número mayor que cero.')
+      return
+    }
     setBusyCrear(true)
     setErrorCrear('')
     try {
@@ -222,15 +264,19 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
       // contrato ya está creado, así que un fallo aquí no es motivo para
       // abortar — pero sí para decirlo.
       if (archivosSeleccionados.length > 0) {
-        const resultados = await Promise.all(archivosSeleccionados.map(archivo =>
-          subirDocumento(creado.id, archivo).then(() => true).catch(() => false)
-        ))
+        const resultados = await Promise.all(
+          archivosSeleccionados.map((archivo) =>
+            subirDocumento(creado.id, archivo)
+              .then(() => true)
+              .catch(() => false),
+          ),
+        )
         setAdjuntosSubidos(resultados.filter(Boolean).length)
       } else {
         setAdjuntosSubidos(0)
       }
       setUploadState('done')
-      const sup = supervisores.find(s => String(s.id) === supervisor)
+      const sup = supervisores.find((s) => String(s.id) === supervisor)
       setLastProcessedContract({ id: creado.numeroContrato, supervisor: sup?.nombre ?? '— Sin asignar —' })
       const lista = await getContratos()
       setContratos(lista.map(mapContratoRow))
@@ -245,20 +291,29 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
     }
   }
 
-  const navGroups: NavGroup[] = [{
-    label: 'Gestión y contratación',
-    items: [
-      { id: 'contratos', label: 'Contratos', icon: <IconContract size={17} />, count: contratos.length },
-      { id: 'cargar', label: 'Cargar nueva ficha', icon: <IconUpload size={17} />, title: 'Cargar una ficha de contrato en PDF' },
-    ],
-  }]
+  const navGroups: NavGroup[] = [
+    {
+      label: 'Gestión y contratación',
+      items: [
+        { id: 'contratos', label: 'Contratos', icon: <IconContract size={17} />, count: contratos.length },
+        {
+          id: 'cargar',
+          label: 'Cargar nueva ficha',
+          icon: <IconUpload size={17} />,
+          title: 'Cargar una ficha de contrato en PDF',
+        },
+      ],
+    },
+  ]
 
   return (
     <AppShell
       roleBadge="Panel Gestión"
       groups={navGroups}
       activeId="contratos"
-      onNavigate={id => { if (id === 'cargar') openUpload() }}
+      onNavigate={(id) => {
+        if (id === 'cargar') openUpload()
+      }}
       usuario={usuario}
       avatarColor="#7c3aed"
       avatarTextColor="#ffffff"
@@ -268,27 +323,74 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
       subtitle="Carga de fichas, registro y asignación al supervisor"
       actions={
         <>
-          <button className="btn-ghost" onClick={onStartTour} style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <button
+            className="btn-ghost"
+            onClick={onStartTour}
+            style={{ padding: '7px 13px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
             <IconPlay size={10} /> Tutorial
           </button>
-          <button data-tour="cargar" className="btn-green" onClick={openUpload} style={{ padding: '8px 15px', fontSize: 12.5 }}>
+          <button
+            data-tour="cargar"
+            className="btn-green"
+            onClick={openUpload}
+            style={{ padding: '8px 15px', fontSize: 12.5 }}
+          >
             + Cargar nueva ficha
           </button>
         </>
       }
     >
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', minWidth: 0 }}>
-
         {/* Ficha procesada card — solo se muestra tras cargar y procesar una ficha real */}
         {lastProcessedContract && (
-          <div data-tour="ficha" className="card" style={{ padding: '14px 16px', marginBottom: 20, borderLeft: '4px solid var(--accent)', display: 'flex', alignItems: 'center', gap: 16 }}>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--chip-green-bg)', border: '1.5px solid var(--chip-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✓</div>
+          <div
+            data-tour="ficha"
+            className="card"
+            style={{
+              padding: '14px 16px',
+              marginBottom: 20,
+              borderLeft: '4px solid var(--accent)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 16,
+            }}
+          >
+            <div
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                background: 'var(--chip-green-bg)',
+                border: '1.5px solid var(--chip-green)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: 18,
+                flexShrink: 0,
+              }}
+            >
+              ✓
+            </div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.06em', marginBottom: 2 }}>FICHA PROCESADA</div>
+              <div
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: 'var(--accent)',
+                  letterSpacing: '0.06em',
+                  marginBottom: 2,
+                }}
+              >
+                FICHA PROCESADA
+              </div>
               {/* No se dice "el Copiloto asignó automáticamente": la asignación la
                   hace una persona en el formulario. La IA solo propuso datos a
                   partir del documento cargado, y siempre pasan por confirmación. */}
-              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>Contrato <strong>{lastProcessedContract.id}</strong> creado · Supervisor: {lastProcessedContract.supervisor}.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                Contrato <strong>{lastProcessedContract.id}</strong> creado · Supervisor:{' '}
+                {lastProcessedContract.supervisor}.
+              </div>
             </div>
             <Chip text="Asignado" type="done" />
           </div>
@@ -296,32 +398,86 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
 
         {/* Contracts table */}
         <div data-tour="tabla" className="card" style={{ overflow: 'hidden' }}>
-          <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.06em', background: 'var(--bg-surface)' }}>
+          <div
+            style={{
+              padding: '12px 16px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 12,
+              fontWeight: 600,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.06em',
+              background: 'var(--bg-surface)',
+            }}
+          >
             REGISTRO DE CONTRATOS
           </div>
           {/* Header row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr 180px 160px 120px 180px', padding: '8px 16px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', letterSpacing: '0.04em', gap: 12, background: 'var(--bg-surface)' }}>
-            <span>CONTRATO</span><span>OBJETO</span><span>SUPERVISOR</span><span>ESTADO</span><span>VALOR</span><span>VIGENCIA</span>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
+              padding: '8px 16px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.04em',
+              gap: 12,
+              background: 'var(--bg-surface)',
+            }}
+          >
+            <span>CONTRATO</span>
+            <span>OBJETO</span>
+            <span>SUPERVISOR</span>
+            <span>ESTADO</span>
+            <span>VALOR</span>
+            <span>VIGENCIA</span>
           </div>
           {/* Empty state */}
           {contratos.length === 0 && (
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
               <IconClipboardList size={26} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
-              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>Aún no tiene contratos registrados</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargue una ficha de contrato en PDF y el Copiloto propondrá los datos para que usted los revise.</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                Aún no tiene contratos registrados
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Cargue una ficha de contrato en PDF y el Copiloto propondrá los datos para que usted los revise.
+              </div>
             </div>
           )}
           {/* Data rows */}
-          {contratos.map(c => (
-            <div key={c.id}
-              style={{ display: 'grid', gridTemplateColumns: '180px 1fr 180px 160px 120px 180px', padding: '12px 16px', borderBottom: '1px solid var(--border)', fontSize: 13, gap: 12, alignItems: 'center', transition: 'background 0.1s', cursor: 'default' }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'var(--accent-soft)')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+          {contratos.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
+                padding: '12px 16px',
+                borderBottom: '1px solid var(--border)',
+                fontSize: 13,
+                gap: 12,
+                alignItems: 'center',
+                transition: 'background 0.1s',
+                cursor: 'default',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-soft)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>{c.id}</span>
               <span style={{ color: 'var(--text-primary)', fontSize: 12 }}>{c.object}</span>
-              <span style={{ color: c.supervisor === '— Sin asignar —' ? 'var(--text-muted)' : 'var(--text-secondary)', fontSize: 12, fontStyle: c.supervisor === '— Sin asignar —' ? 'italic' : 'normal' }}>{c.supervisor}</span>
+              <span
+                style={{
+                  color: c.supervisor === '— Sin asignar —' ? 'var(--text-muted)' : 'var(--text-secondary)',
+                  fontSize: 12,
+                  fontStyle: c.supervisor === '— Sin asignar —' ? 'italic' : 'normal',
+                }}
+              >
+                {c.supervisor}
+              </span>
               <Chip text={c.statusLabel} type={c.statusType} />
-              <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{c.value}</span>
+              <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                {c.value}
+              </span>
               <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{c.vigencia}</span>
             </div>
           ))}
@@ -330,202 +486,382 @@ export default function GestionPanel({ usuario, onLogout, onOpenSettings, onStar
 
       {/* Upload modal */}
       {showModal && (
-        <Modal title="Cargar nueva ficha de contrato" onClose={() => setShowModal(false)} width={480} hideClose={uploadState === 'done'}>
-            {uploadState === 'idle' && (
-              <div>
-                <input ref={fileInputRef} type="file" accept=".pdf" multiple style={{ display: 'none' }}
-                  onChange={e => { const f = Array.from(e.target.files ?? []); e.target.value = ''; handleFilesChosen(f) }} />
-                <div onClick={handleFileSelect}
-                  style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: '40px 20px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-dim)')}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
-                  <IconFileText size={34} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
-                    Haga clic para seleccionar uno o varios documentos<br />
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>PDF — max 20 MB cada uno, hasta 6 archivos</span>
-                  </p>
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
-                  El Copiloto IA (Ollama local) lee los PDF que cargue y combina lo que encuentre en todos
-                  para proponer los datos del contrato — usted los revisa, corrige y confirma antes de crear
-                  el contrato. Los archivos quedan adjuntos al contrato de todas formas, se analicen o no.
-                </p>
-                <p style={{ color: 'var(--accent)', fontSize: 11, marginTop: 8, textAlign: 'center', fontWeight: 600 }}>
-                  Recomendado: cargue solo el Acta de Inicio y/o la notificación del supervisor — son los
-                  que realmente traen datos del contrato. El Manual de Supervisión y los formatos en blanco
-                  (GCCON-F-031, etc.) no aportan datos y son documentos largos que pueden tardar 10+ minutos
-                  cada uno en esta máquina sin encontrar nada útil.
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8, textAlign: 'center' }}>
-                  El análisis toma 1 a 4 minutos por documento en esta máquina (se procesan uno por uno). La
-                  lectura de DOCX estará disponible en una fase posterior; por ahora cargue en PDF.
+        <Modal
+          title="Cargar nueva ficha de contrato"
+          onClose={() => setShowModal(false)}
+          width={480}
+          hideClose={uploadState === 'done'}
+        >
+          {uploadState === 'idle' && (
+            <div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                multiple
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const f = Array.from(e.target.files ?? [])
+                  e.target.value = ''
+                  handleFilesChosen(f)
+                }}
+              />
+              <div
+                onClick={handleFileSelect}
+                style={{
+                  border: '2px dashed var(--border)',
+                  borderRadius: 10,
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'border-color 0.15s',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-dim)')}
+                onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                <IconFileText size={34} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
+                  Haga clic para seleccionar uno o varios documentos
+                  <br />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    PDF — max 20 MB cada uno, hasta 6 archivos
+                  </span>
                 </p>
               </div>
-            )}
+              <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
+                El Copiloto IA (Ollama local) lee los PDF que cargue y combina lo que encuentre en todos para proponer
+                los datos del contrato — usted los revisa, corrige y confirma antes de crear el contrato. Los archivos
+                quedan adjuntos al contrato de todas formas, se analicen o no.
+              </p>
+              <p style={{ color: 'var(--accent)', fontSize: 11, marginTop: 8, textAlign: 'center', fontWeight: 600 }}>
+                Recomendado: cargue solo el Acta de Inicio y/o la notificación del supervisor — son los que realmente
+                traen datos del contrato. El Manual de Supervisión y los formatos en blanco (GCCON-F-031, etc.) no
+                aportan datos y son documentos largos que pueden tardar 10+ minutos cada uno en esta máquina sin
+                encontrar nada útil.
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8, textAlign: 'center' }}>
+                El análisis toma 1 a 4 minutos por documento en esta máquina (se procesan uno por uno). La lectura de
+                DOCX estará disponible en una fase posterior; por ahora cargue en PDF.
+              </p>
+            </div>
+          )}
 
-            {uploadState === 'uploading' && (
-              <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                <IconUpload size={32} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
-                <p style={{ fontSize: 14, marginBottom: 12 }}>
-                  Subiendo {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'}...
-                </p>
-                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${progress}%`, background: 'var(--accent)', borderRadius: 2, transition: 'width 0.12s' }} />
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>{progress}%</p>
+          {uploadState === 'uploading' && (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <IconUpload size={32} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
+              <p style={{ fontSize: 14, marginBottom: 12 }}>
+                Subiendo {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'}...
+              </p>
+              <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${progress}%`,
+                    background: 'var(--accent)',
+                    borderRadius: 2,
+                    transition: 'width 0.12s',
+                  }}
+                />
               </div>
-            )}
+              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>{progress}%</p>
+            </div>
+          )}
 
-            {uploadState === 'analyzing' && (
-              <div style={{ textAlign: 'center', padding: '32px 0' }}>
-                <IconLoader size={30} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
-                <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600 }}>
-                  Analizando {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'}...
-                </p>
-                <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>
-                  El Copiloto IA está extrayendo los datos del contrato — esto corre en un modelo local (sin
-                  costo por consumo) y puede tardar varios minutos en esta máquina. No cierre esta ventana.
-                </p>
-                <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
-                  {archivosSeleccionados.map(f => <div key={f.name}>{f.name}</div>)}
-                </div>
+          {uploadState === 'analyzing' && (
+            <div style={{ textAlign: 'center', padding: '32px 0' }}>
+              <IconLoader size={30} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
+              <p style={{ color: 'var(--accent)', fontSize: 14, fontWeight: 600 }}>
+                Analizando {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'}...
+              </p>
+              <p style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                El Copiloto IA está extrayendo los datos del contrato — esto corre en un modelo local (sin costo por
+                consumo) y puede tardar varios minutos en esta máquina. No cierre esta ventana.
+              </p>
+              <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-muted)' }}>
+                {archivosSeleccionados.map((f) => (
+                  <div key={f.name}>{f.name}</div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
 
-            {uploadState === 'detect' && (
-              <div>
-                <div className="card" style={{ padding: 0, overflow: 'hidden', borderColor: 'var(--accent-line)' }}>
-                  <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--accent)' }}>
-                    ◆ ANÁLISIS DEL COPILOTO IA — DATOS PROPUESTOS
-                  </div>
-                  <div style={{ padding: '14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                      <IconCheckCircle size={16} style={{ color: 'var(--accent)' }} />
-                      <strong style={{ fontSize: 14 }}>{tipo}</strong>
-                    </div>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 6 }}>CARACTERÍSTICAS DETECTADAS</div>
-                    {[
-                      ['Contrato', extraccion?.idContrato],
-                      ['Proveedor', extraccion?.proveedor],
-                      ['NIT', extraccion?.nit],
-                      ['Monto', extraccion?.valor],
-                      ['Lugar de ejecución', extraccion?.lugarEjecucion],
-                    ].map(([k, v]) => (
-                      <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '3px 0', color: 'var(--text-secondary)' }}>
-                        <span>{k}</span>
-                        <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>{v || '— no detectado —'}</span>
-                      </div>
-                    ))}
-                    <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.5 }}>
-                      Estos datos vienen del documento cargado, no de un catálogo — revise y corrija lo que
-                      haga falta en el siguiente paso.
-                    </p>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', margin: '14px 0 6px' }}>ETAPAS DEL PROCESO (GCCON-P-010)</div>
-                    {ETAPAS_GCCON_P010.map((e, i) => (
-                      <div key={e} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '3px 0' }}>
-                        <span style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{i + 1}</span>
-                        {e}
-                      </div>
-                    ))}
-                  </div>
+          {uploadState === 'detect' && (
+            <div>
+              <div className="card" style={{ padding: 0, overflow: 'hidden', borderColor: 'var(--accent-line)' }}>
+                <div
+                  style={{
+                    padding: '10px 14px',
+                    borderBottom: '1px solid var(--border)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: '0.1em',
+                    color: 'var(--accent)',
+                  }}
+                >
+                  ◆ ANÁLISIS DEL COPILOTO IA — DATOS PROPUESTOS
                 </div>
-                <button className="btn-green" onClick={() => setUploadState('review')} style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }}>
-                  Continuar a confirmación →
-                </button>
-              </div>
-            )}
-
-            {uploadState === 'review' && (
-              <div>
-                {errorExtraccion ? (
-                  <div style={{ marginBottom: 16, padding: '10px 14px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 13, color: 'var(--text-primary)' }}>
-                    El Copiloto IA no pudo analizar los documentos: {errorExtraccion} Diligencie los datos manualmente.
+                <div style={{ padding: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <IconCheckCircle size={16} style={{ color: 'var(--accent)' }} />
+                    <strong style={{ fontSize: 14 }}>{tipo}</strong>
                   </div>
-                ) : (
-                  <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--accent-soft)', border: '1px solid var(--accent-line)', borderRadius: 8, fontSize: 13, color: 'var(--accent)' }}>
-                    ✓ Documento analizado. Revise, corrija y confirme los datos extraídos.
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      color: 'var(--text-muted)',
+                      marginBottom: 6,
+                    }}
+                  >
+                    CARACTERÍSTICAS DETECTADAS
                   </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[
-                    { label: 'ID Contrato', value: idContrato, onChange: setIdContrato, mono: true },
-                    { label: 'Objeto', value: objeto, onChange: setObjeto, mono: false },
-                    { label: 'Proveedor / Contratista', value: proveedor, onChange: setProveedor, mono: false },
-                    { label: 'NIT o CC del contratista', value: nit, onChange: setNit, mono: true },
-                    { label: 'Representante legal', value: representanteLegal, onChange: setRepresentanteLegal, mono: false },
-                    { label: 'Valor', value: valor, onChange: setValor, mono: true },
-                    { label: 'Vigencia (dd/mm/aaaa – dd/mm/aaaa)', value: vigencia, onChange: setVigencia, mono: false },
-                    { label: 'Lugar de ejecución', value: lugarEjecucion, onChange: setLugarEjecucion, mono: false },
-                    { label: 'Número de registro presupuestal', value: registroPresupuestal, onChange: setRegistroPresupuestal, mono: true },
-                  ].map(f => (
-                    <div key={f.label}>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>
-                      <input type="text" value={f.value} onChange={e => f.onChange(e.target.value)}
-                        style={{ width: '100%', padding: '8px 12px', fontFamily: f.mono ? 'var(--font-mono)' : 'inherit', fontSize: 13 }} />
+                    ['Contrato', extraccion?.idContrato],
+                    ['Proveedor', extraccion?.proveedor],
+                    ['NIT', extraccion?.nit],
+                    ['Monto', extraccion?.valor],
+                    ['Lugar de ejecución', extraccion?.lugarEjecucion],
+                  ].map(([k, v]) => (
+                    <div
+                      key={k}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        fontSize: 12.5,
+                        padding: '3px 0',
+                        color: 'var(--text-secondary)',
+                      }}
+                    >
+                      <span>{k}</span>
+                      <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+                        {v || '— no detectado —'}
+                      </span>
                     </div>
                   ))}
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo de contrato</div>
-                    <select value={tipo} onChange={e => setTipo(e.target.value)}>
-                      {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
-                    </select>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
-                      Todos los contratos siguen las mismas 6 etapas del GCCON-P-010.
+                  <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.5 }}>
+                    Estos datos vienen del documento cargado, no de un catálogo — revise y corrija lo que haga falta en
+                    el siguiente paso.
+                  </p>
+                  <div
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.1em',
+                      color: 'var(--text-muted)',
+                      margin: '14px 0 6px',
+                    }}
+                  >
+                    ETAPAS DEL PROCESO (GCCON-P-010)
+                  </div>
+                  {ETAPAS_GCCON_P010.map((e, i) => (
+                    <div
+                      key={e}
+                      style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5, padding: '3px 0' }}
+                    >
+                      <span
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: '50%',
+                          background: 'var(--accent-soft)',
+                          color: 'var(--accent)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {i + 1}
+                      </span>
+                      {e}
                     </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Centro de costo</div>
-                    <select value={centro} onChange={e => setCentro(e.target.value)}>
-                      {CENTROS_COSTO.map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Supervisor asignado</div>
-                    <select value={supervisor} onChange={e => setSupervisor(e.target.value)}>
-                      {supervisores.length === 0 && <option value="">— Sin asignar —</option>}
-                      {supervisores.map(s => <option key={s.id} value={String(s.id)}>{s.nombre}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                {errorCrear && (
-                  <div style={{ marginTop: 12, padding: '8px 12px', border: '1px solid var(--chip-red)', background: 'var(--chip-red-bg)', borderRadius: 8, fontSize: 12.5, color: 'var(--text-primary)' }}>
-                    {errorCrear}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-                  <button className="btn-ghost" onClick={() => setUploadState('idle')} style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}>✗ Rechazar</button>
-                  {/* El botón "Revisión IA" se retiró: no llamaba a ninguna IA — solo
-                      desplegaba una lista fija de documentos por tipo de contrato. La
-                      detección de inconsistencias sigue sin implementarse. */}
-                  <button className="btn-green" onClick={handleAsignar} disabled={busyCrear} style={{ flex: 2, padding: '10px 0', fontSize: 13, minWidth: 170, opacity: busyCrear ? 0.6 : 1, cursor: busyCrear ? 'default' : 'pointer' }}>
-                    {busyCrear ? 'Guardando…' : '✓ Confirmar y cargar'}
-                  </button>
+                  ))}
                 </div>
               </div>
-            )}
+              <button
+                className="btn-green"
+                onClick={() => setUploadState('review')}
+                style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }}
+              >
+                Continuar a confirmación →
+              </button>
+            </div>
+          )}
 
-            {uploadState === 'done' && (
-              <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                <IconCheckCircle size={44} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
-                <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>Contrato creado.</p>
-                {/* No se dice "ha sido notificado": SICOT no envía ningún aviso al
+          {uploadState === 'review' && (
+            <div>
+              {errorExtraccion ? (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: '10px 14px',
+                    border: '1px solid var(--chip-red)',
+                    background: 'var(--chip-red-bg)',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  El Copiloto IA no pudo analizar los documentos: {errorExtraccion} Diligencie los datos manualmente.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: '10px 14px',
+                    background: 'var(--accent-soft)',
+                    border: '1px solid var(--accent-line)',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    color: 'var(--accent)',
+                  }}
+                >
+                  ✓ Documento analizado. Revise, corrija y confirme los datos extraídos.
+                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[
+                  { label: 'ID Contrato', value: idContrato, onChange: setIdContrato, mono: true },
+                  { label: 'Objeto', value: objeto, onChange: setObjeto, mono: false },
+                  { label: 'Proveedor / Contratista', value: proveedor, onChange: setProveedor, mono: false },
+                  { label: 'NIT o CC del contratista', value: nit, onChange: setNit, mono: true },
+                  {
+                    label: 'Representante legal',
+                    value: representanteLegal,
+                    onChange: setRepresentanteLegal,
+                    mono: false,
+                  },
+                  { label: 'Valor', value: valor, onChange: setValor, mono: true },
+                  { label: 'Vigencia (dd/mm/aaaa – dd/mm/aaaa)', value: vigencia, onChange: setVigencia, mono: false },
+                  { label: 'Lugar de ejecución', value: lugarEjecucion, onChange: setLugarEjecucion, mono: false },
+                  {
+                    label: 'Número de registro presupuestal',
+                    value: registroPresupuestal,
+                    onChange: setRegistroPresupuestal,
+                    mono: true,
+                  },
+                ].map((f) => (
+                  <div key={f.label}>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>
+                    <input
+                      type="text"
+                      value={f.value}
+                      onChange={(e) => f.onChange(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        fontFamily: f.mono ? 'var(--font-mono)' : 'inherit',
+                        fontSize: 13,
+                      }}
+                    />
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo de contrato</div>
+                  <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                    {CONTRACT_TYPES.map((t) => (
+                      <option key={t}>{t}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
+                    Todos los contratos siguen las mismas 6 etapas del GCCON-P-010.
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Centro de costo</div>
+                  <select value={centro} onChange={(e) => setCentro(e.target.value)}>
+                    {CENTROS_COSTO.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Supervisor asignado</div>
+                  <select value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
+                    {supervisores.length === 0 && <option value="">— Sin asignar —</option>}
+                    {supervisores.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {errorCrear && (
+                <div
+                  style={{
+                    marginTop: 12,
+                    padding: '8px 12px',
+                    border: '1px solid var(--chip-red)',
+                    background: 'var(--chip-red-bg)',
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {errorCrear}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() => setUploadState('idle')}
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+                >
+                  ✗ Rechazar
+                </button>
+                {/* El botón "Revisión IA" se retiró: no llamaba a ninguna IA — solo
+                      desplegaba una lista fija de documentos por tipo de contrato. La
+                      detección de inconsistencias sigue sin implementarse. */}
+                <button
+                  className="btn-green"
+                  onClick={handleAsignar}
+                  disabled={busyCrear}
+                  style={{
+                    flex: 2,
+                    padding: '10px 0',
+                    fontSize: 13,
+                    minWidth: 170,
+                    opacity: busyCrear ? 0.6 : 1,
+                    cursor: busyCrear ? 'default' : 'pointer',
+                  }}
+                >
+                  {busyCrear ? 'Guardando…' : '✓ Confirmar y cargar'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {uploadState === 'done' && (
+            <div style={{ textAlign: 'center', padding: '24px 0' }}>
+              <IconCheckCircle size={44} style={{ color: 'var(--accent)', margin: '0 auto 12px' }} />
+              <p style={{ color: 'var(--accent)', fontSize: 15, fontWeight: 600, margin: 0 }}>Contrato creado.</p>
+              {/* No se dice "ha sido notificado": SICOT no envía ningún aviso al
                     crear o asignar un contrato — solo escribe un registro de
                     auditoría. Prometer una notificación inexistente haría que el
                     supervisor no se enterara y nadie lo supiera. */}
-                <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
-                  {tipo} · {centro.split(' — ')[0]} · Supervisor: {lastProcessedContract?.supervisor ?? '—'}
+              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 8 }}>
+                {tipo} · {centro.split(' — ')[0]} · Supervisor: {lastProcessedContract?.supervisor ?? '—'}
+              </p>
+              {archivosSeleccionados.length > 0 && (
+                <p
+                  style={{
+                    color: adjuntosSubidos < archivosSeleccionados.length ? 'var(--chip-red)' : 'var(--text-muted)',
+                    fontSize: 12,
+                    marginTop: 6,
+                  }}
+                >
+                  {adjuntosSubidos === archivosSeleccionados.length
+                    ? `${adjuntosSubidos} documento${adjuntosSubidos === 1 ? '' : 's'} adjunto${adjuntosSubidos === 1 ? '' : 's'} al contrato.`
+                    : `Se adjuntaron ${adjuntosSubidos} de ${archivosSeleccionados.length} documentos. Los demás no se pudieron cargar; vuelva a intentarlo desde el contrato.`}
                 </p>
-                {archivosSeleccionados.length > 0 && (
-                  <p style={{ color: adjuntosSubidos < archivosSeleccionados.length ? 'var(--chip-red)' : 'var(--text-muted)', fontSize: 12, marginTop: 6 }}>
-                    {adjuntosSubidos === archivosSeleccionados.length
-                      ? `${adjuntosSubidos} documento${adjuntosSubidos === 1 ? '' : 's'} adjunto${adjuntosSubidos === 1 ? '' : 's'} al contrato.`
-                      : `Se adjuntaron ${adjuntosSubidos} de ${archivosSeleccionados.length} documentos. Los demás no se pudieron cargar; vuelva a intentarlo desde el contrato.`}
-                  </p>
-                )}
-              </div>
-            )}
+              )}
+            </div>
+          )}
         </Modal>
       )}
     </AppShell>

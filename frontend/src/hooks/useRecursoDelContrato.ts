@@ -57,13 +57,13 @@ export function useRecursoDelContrato<T>(
     setError(false)
 
     cargar(contratoId)
-      .then(resultado => {
+      .then((resultado) => {
         if (!cancelado) {
           setDatos(resultado)
           setCargando(false)
         }
       })
-      .catch(err => {
+      .catch((err) => {
         // El detalle al log del navegador; a la interfaz, el hecho de que falló.
         console.error('No se pudo cargar un recurso del contrato ' + contratoId + ':', err)
         if (!cancelado) {
@@ -82,5 +82,5 @@ export function useRecursoDelContrato<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contratoId, intento])
 
-  return { datos, cargando, error, recargar: () => setIntento(n => n + 1) }
+  return { datos, cargando, error, recargar: () => setIntento((n) => n + 1) }
 }
