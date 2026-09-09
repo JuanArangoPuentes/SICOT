@@ -15,7 +15,12 @@ import type { AuthResponse } from '@/services/api/types'
 
 // ─── Armazón compartido por los estados sin contrato ──────────────────────────
 
-function ShellMinimo({ usuario, onLogout, onOpenSettings, children }: {
+function ShellMinimo({
+  usuario,
+  onLogout,
+  onOpenSettings,
+  children,
+}: {
   usuario: AuthResponse
   onLogout: () => void
   onOpenSettings: () => void
@@ -55,7 +60,16 @@ function ShellMinimo({ usuario, onLogout, onOpenSettings, children }: {
       title="Bandeja de entrada"
       subtitle="Supervisión de contratos"
     >
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, overflowY: 'auto' }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 24,
+          overflowY: 'auto',
+        }}
+      >
         {children}
       </div>
     </AppShell>
@@ -63,7 +77,12 @@ function ShellMinimo({ usuario, onLogout, onOpenSettings, children }: {
 }
 
 // ─── Estado vacío — Supervisor sin contrato asignado ────────────────────────
-export function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartTour }: {
+export function EmptyContractState({
+  usuario,
+  onLogout,
+  onOpenSettings,
+  onStartTour,
+}: {
   usuario: AuthResponse
   onLogout: () => void
   onOpenSettings: () => void
@@ -75,14 +94,45 @@ export function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartT
         <div style={{ width: 40, height: 2, background: 'var(--accent)', borderRadius: 1, margin: '0 auto 20px' }} />
         <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No tiene un contrato asignado</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-          Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la
-          información aparecerá aquí.
+          Actualmente no tiene un contrato asignado para seguimiento. Cuando Gestión le asigne uno, la información
+          aparecerá aquí.
         </p>
-        <div className="surface" style={{ padding: '12px 16px', marginBottom: 24, fontSize: 13, color: 'var(--text-secondary)', textAlign: 'left' }}>
-          <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.09em', marginBottom: 6, color: 'var(--accent)' }}>ESTADO</div>
+        <div
+          className="surface"
+          style={{
+            padding: '12px 16px',
+            marginBottom: 24,
+            fontSize: 13,
+            color: 'var(--text-secondary)',
+            textAlign: 'left',
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              marginBottom: 6,
+              color: 'var(--accent)',
+            }}
+          >
+            ESTADO
+          </div>
           <div>Esperando asignación de Gestión y Contratación</div>
         </div>
-        <button className="btn-ghost" onClick={onStartTour} style={{ width: '100%', padding: '12px 0', fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <button
+          className="btn-ghost"
+          onClick={onStartTour}
+          style={{
+            width: '100%',
+            padding: '12px 0',
+            fontSize: 13,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+          }}
+        >
           <IconPlay size={10} /> Ver tutorial del proceso
         </button>
       </div>
@@ -97,21 +147,34 @@ export function EmptyContractState({ usuario, onLogout, onOpenSettings, onStartT
  * "no tiene un contrato asignado" cuando lo que pasó es que el backend no
  * respondió llevaría al supervisor a creer que no tiene nada que hacer.
  */
-export function ErrorContratoState({ usuario, onLogout, onOpenSettings }: {
+export function ErrorContratoState({
+  usuario,
+  onLogout,
+  onOpenSettings,
+}: {
   usuario: AuthResponse
   onLogout: () => void
   onOpenSettings: () => void
 }) {
   return (
     <ShellMinimo usuario={usuario} onLogout={onLogout} onOpenSettings={onOpenSettings}>
-      <div className="card" style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--alert-critica)' }}>
-        <div style={{ width: 40, height: 2, background: 'var(--alert-critica)', borderRadius: 1, margin: '0 auto 20px' }} />
+      <div
+        className="card"
+        style={{ maxWidth: 480, width: '100%', padding: 32, textAlign: 'center', borderColor: 'var(--alert-critica)' }}
+      >
+        <div
+          style={{ width: 40, height: 2, background: 'var(--alert-critica)', borderRadius: 1, margin: '0 auto 20px' }}
+        />
         <h2 style={{ margin: '0 0 12px', fontSize: 18 }}>No se pudo cargar su contrato</h2>
         <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, margin: '0 0 24px' }}>
-          El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga
-          ninguno: vuelva a intentarlo y, si el problema persiste, avise al área de sistemas.
+          El sistema no pudo consultar sus contratos asignados. Esto no significa que no tenga ninguno: vuelva a
+          intentarlo y, si el problema persiste, avise al área de sistemas.
         </p>
-        <button className="btn-green" onClick={() => window.location.reload()} style={{ width: '100%', padding: '12px 0', fontSize: 13 }}>
+        <button
+          className="btn-green"
+          onClick={() => window.location.reload()}
+          style={{ width: '100%', padding: '12px 0', fontSize: 13 }}
+        >
           Reintentar
         </button>
       </div>
@@ -120,7 +183,11 @@ export function ErrorContratoState({ usuario, onLogout, onOpenSettings }: {
 }
 
 // ─── Estado de carga — mientras se consulta el contrato real del supervisor ──
-export function CargandoContratoState({ usuario, onLogout, onOpenSettings }: {
+export function CargandoContratoState({
+  usuario,
+  onLogout,
+  onOpenSettings,
+}: {
   usuario: AuthResponse
   onLogout: () => void
   onOpenSettings: () => void

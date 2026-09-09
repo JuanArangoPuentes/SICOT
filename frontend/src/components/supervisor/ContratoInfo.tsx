@@ -17,7 +17,12 @@ const ESTADO_CHIP: Record<EstadoContrato, { label: string; type: ChipType }> = {
   CANCELADO: { label: 'Cancelado', type: 'conflicto' },
 }
 
-function Dato({ label, value, mono, ancho }: {
+function Dato({
+  label,
+  value,
+  mono,
+  ancho,
+}: {
   label: string
   value: string | null | undefined
   mono?: boolean
@@ -26,17 +31,28 @@ function Dato({ label, value, mono, ancho }: {
   const vacio = value === null || value === undefined || value.trim() === ''
   return (
     <div style={{ gridColumn: ancho ? '1 / -1' : undefined, minWidth: 0 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 3 }}>
+      <div
+        style={{
+          fontSize: 10,
+          fontWeight: 700,
+          letterSpacing: '0.09em',
+          textTransform: 'uppercase',
+          color: 'var(--text-muted)',
+          marginBottom: 3,
+        }}
+      >
         {label}
       </div>
-      <div style={{
-        fontSize: 13,
-        lineHeight: 1.5,
-        color: vacio ? 'var(--text-muted)' : 'var(--text-primary)',
-        fontStyle: vacio ? 'italic' : 'normal',
-        fontFamily: !vacio && mono ? 'var(--font-mono)' : 'var(--font-ui)',
-        wordBreak: 'break-word',
-      }}>
+      <div
+        style={{
+          fontSize: 13,
+          lineHeight: 1.5,
+          color: vacio ? 'var(--text-muted)' : 'var(--text-primary)',
+          fontStyle: vacio ? 'italic' : 'normal',
+          fontFamily: !vacio && mono ? 'var(--font-mono)' : 'var(--font-ui)',
+          wordBreak: 'break-word',
+        }}
+      >
         {vacio ? 'No registrado' : value}
       </div>
     </div>
@@ -50,25 +66,51 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
   const fin = contrato.fechaFin ? new Date(contrato.fechaFin) : null
   const diasRestantes = fin ? Math.ceil((fin.getTime() - Date.now()) / 86400000) : null
   const vigenciaTexto =
-    diasRestantes === null ? null
-      : diasRestantes < 0 ? `Vencido hace ${Math.abs(diasRestantes)} día(s)`
-        : diasRestantes === 0 ? 'Vence hoy'
+    diasRestantes === null
+      ? null
+      : diasRestantes < 0
+        ? `Vencido hace ${Math.abs(diasRestantes)} día(s)`
+        : diasRestantes === 0
+          ? 'Vence hoy'
           : `Faltan ${diasRestantes} día(s)`
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       {/* Encabezado */}
-      <div style={{
-        display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-        gap: 16, flexWrap: 'wrap',
-        padding: '15px 18px', background: 'var(--bg-elevated)', borderBottom: '1px solid var(--border)',
-      }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 16,
+          flexWrap: 'wrap',
+          padding: '15px 18px',
+          background: 'var(--bg-elevated)',
+          borderBottom: '1px solid var(--border)',
+        }}
+      >
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: 4 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              color: 'var(--text-muted)',
+              marginBottom: 4,
+            }}
+          >
             CONTRATO ASIGNADO
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 600, color: 'var(--accent-tech)', letterSpacing: '0.02em' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: 16,
+                fontWeight: 600,
+                color: 'var(--accent-tech)',
+                letterSpacing: '0.02em',
+              }}
+            >
               {contrato.numeroContrato}
             </span>
             <Chip text={estado.label} type={estado.type} />
@@ -80,12 +122,28 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
         </div>
 
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--text-muted)' }}>VALOR DEL CONTRATO</div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.09em', color: 'var(--text-muted)' }}>
+            VALOR DEL CONTRATO
+          </div>
+          <div
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 22,
+              fontWeight: 700,
+              color: 'var(--text-primary)',
+              lineHeight: 1.25,
+            }}
+          >
             {formatCOP(contrato.valor)}
           </div>
           {vigenciaTexto && (
-            <div style={{ fontSize: 11.5, color: diasRestantes !== null && diasRestantes < 0 ? 'var(--alert-critica)' : 'var(--text-muted)', marginTop: 2 }}>
+            <div
+              style={{
+                fontSize: 11.5,
+                color: diasRestantes !== null && diasRestantes < 0 ? 'var(--alert-critica)' : 'var(--text-muted)',
+                marginTop: 2,
+              }}
+            >
               {vigenciaTexto}
             </div>
           )}
@@ -93,10 +151,14 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
       </div>
 
       {/* Datos */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))',
-        gap: '15px 22px', padding: '16px 18px 18px',
-      }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(215px, 1fr))',
+          gap: '15px 22px',
+          padding: '16px 18px 18px',
+        }}
+      >
         <Dato label="Contratista" value={contrato.contratista} />
         <Dato label="NIT / Identificación" value={contrato.contratistaNit} mono />
         <Dato label="Representante legal" value={contrato.representanteLegal} />
@@ -104,11 +166,19 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
         <Dato label="Fecha de terminación" value={contrato.fechaFin ? formatFecha(contrato.fechaFin) : null} mono />
         <Dato label="Lugar de ejecución" value={contrato.lugarEjecucion} />
         <Dato label="Registro presupuestal" value={contrato.numeroRegistroPresupuestal} mono />
-        <Dato label="Fecha del registro presupuestal" value={contrato.fechaRegistroPresupuestal ? formatFecha(contrato.fechaRegistroPresupuestal) : null} mono />
+        <Dato
+          label="Fecha del registro presupuestal"
+          value={contrato.fechaRegistroPresupuestal ? formatFecha(contrato.fechaRegistroPresupuestal) : null}
+          mono
+        />
         <Dato label="Centro de costo" value={contrato.centroCosto} />
         <Dato label="Supervisor designado" value={contrato.supervisorNombre} />
         <Dato label="Correo del supervisor" value={contrato.supervisorEmail} />
-        <Dato label="Registrado en SICOT" value={contrato.fechaCreacion ? formatFecha(contrato.fechaCreacion.slice(0, 10)) : null} mono />
+        <Dato
+          label="Registrado en SICOT"
+          value={contrato.fechaCreacion ? formatFecha(contrato.fechaCreacion.slice(0, 10)) : null}
+          mono
+        />
       </div>
     </div>
   )

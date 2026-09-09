@@ -55,8 +55,14 @@ describe('useRecursoDelContrato', () => {
    */
   it('descarta la respuesta del contrato anterior si llega tarde', async () => {
     let resolverLenta: (v: string[]) => void = () => {}
-    const cargar = vi.fn()
-      .mockImplementationOnce(() => new Promise<string[]>(res => { resolverLenta = res }))
+    const cargar = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<string[]>((res) => {
+            resolverLenta = res
+          }),
+      )
       .mockResolvedValueOnce(['del contrato 8'])
 
     const { result, rerender } = renderHook(
@@ -74,9 +80,7 @@ describe('useRecursoDelContrato', () => {
   })
 
   it('vuelve a pedir cuando se le indica recargar', async () => {
-    const cargar = vi.fn()
-      .mockResolvedValueOnce(['primera'])
-      .mockResolvedValueOnce(['segunda'])
+    const cargar = vi.fn().mockResolvedValueOnce(['primera']).mockResolvedValueOnce(['segunda'])
 
     const { result } = renderHook(() => useRecursoDelContrato(7, cargar, [] as string[]))
 

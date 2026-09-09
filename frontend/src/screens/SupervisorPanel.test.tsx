@@ -1,8 +1,8 @@
-import { act, render, screen } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import SupervisorPanel from "./SupervisorPanel"
-import { PrefsProvider } from "@/prefs"
-import { contrato, sesionSupervisor } from "@/test/dobles"
+import { act, render, screen } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import SupervisorPanel from './SupervisorPanel'
+import { PrefsProvider } from '@/prefs'
+import { contrato, sesionSupervisor } from '@/test/dobles'
 
 /**
  * Pruebas de la pantalla que ve un supervisor todos los días.
@@ -17,15 +17,15 @@ import { contrato, sesionSupervisor } from "@/test/dobles"
 
 // El panel llama al backend en sus efectos. Se interceptan los servicios para
 // que la prueba controle el escenario y no dependa de que haya un servidor.
-vi.mock("@/services/etapaService", () => ({
+vi.mock('@/services/etapaService', () => ({
   getEtapasContrato: vi.fn(),
   cambiarEstadoSubetapa: vi.fn(),
 }))
-vi.mock("@/services/alertaService", () => ({
+vi.mock('@/services/alertaService', () => ({
   getAlertasContrato: vi.fn(),
   marcarAlertaLeida: vi.fn(),
 }))
-vi.mock("@/services/documentoService", () => ({
+vi.mock('@/services/documentoService', () => ({
   getDocumentosContrato: vi.fn(),
   generarDocumento: vi.fn(),
   firmarDocumento: vi.fn(),
@@ -33,7 +33,7 @@ vi.mock("@/services/documentoService", () => ({
   verificarIntegridad: vi.fn(),
   descargarDocumento: vi.fn(),
 }))
-vi.mock("@/services/firmaService", () => ({
+vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
 }))
 
@@ -74,7 +74,7 @@ async function montar(props: Partial<React.ComponentProps<typeof SupervisorPanel
   return resultado
 }
 
-describe("SupervisorPanel", () => {
+describe('SupervisorPanel', () => {
   // Los valores de retorno se restablecen en CADA prueba, no una sola vez al
   // definir el mock: `setup.ts` llama a `vi.restoreAllMocks()` en su `afterEach`
   // global, que limpia las implementaciones. Sin esto, solo la primera prueba
@@ -82,16 +82,16 @@ describe("SupervisorPanel", () => {
   // — un fallo que parece del componente y en realidad es del andamiaje.
   beforeEach(async () => {
     localStorage.clear()
-    vi.mocked((await import("@/services/etapaService")).getEtapasContrato).mockResolvedValue([])
-    vi.mocked((await import("@/services/alertaService")).getAlertasContrato).mockResolvedValue([])
-    vi.mocked((await import("@/services/documentoService")).getDocumentosContrato).mockResolvedValue([])
-    vi.mocked((await import("@/services/firmaService")).getMiFirma).mockResolvedValue({
+    vi.mocked((await import('@/services/etapaService')).getEtapasContrato).mockResolvedValue([])
+    vi.mocked((await import('@/services/alertaService')).getAlertasContrato).mockResolvedValue([])
+    vi.mocked((await import('@/services/documentoService')).getDocumentosContrato).mockResolvedValue([])
+    vi.mocked((await import('@/services/firmaService')).getMiFirma).mockResolvedValue({
       tieneFirmaActiva: true,
-      firmaId: "FIRMA-TEST",
+      firmaId: 'FIRMA-TEST',
     })
   })
 
-  it("mientras consulta el contrato NO afirma que no hay ninguno", async () => {
+  it('mientras consulta el contrato NO afirma que no hay ninguno', async () => {
     await montar({ cargandoContrato: true })
 
     expect(screen.getByText(/consultando su contrato/i)).toBeInTheDocument()
@@ -102,25 +102,23 @@ describe("SupervisorPanel", () => {
    * El error más grave posible de esta pantalla: decirle a alguien que no tiene
    * trabajo pendiente cuando lo que ocurrió es que el backend no respondió.
    */
-  it("si la consulta falla lo dice, en vez de fingir que no hay contrato", async () => {
+  it('si la consulta falla lo dice, en vez de fingir que no hay contrato', async () => {
     await montar({ errorContrato: true })
 
     expect(screen.getByText(/no se pudo cargar su contrato/i)).toBeInTheDocument()
     expect(screen.queryByText(/no tiene un contrato asignado/i)).not.toBeInTheDocument()
-    expect(screen.getByRole("button", { name: /reintentar/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument()
   })
 
-  it("sin contrato y sin error sí muestra el estado vacío", async () => {
+  it('sin contrato y sin error sí muestra el estado vacío', async () => {
     await montar()
 
     // Por rol y no por texto suelto: el mensaje aparece como encabezado y
     // repetido en el cuerpo, y consultar por texto encontraría los dos.
-    expect(
-      screen.getByRole("heading", { name: /no tiene un contrato asignado/i }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /no tiene un contrato asignado/i })).toBeInTheDocument()
   })
 
-  it("con un contrato asignado muestra su número", async () => {
+  it('con un contrato asignado muestra su número', async () => {
     await montar({ contrato: contrato() })
 
     expect(await screen.findAllByText(/CTMA-2026-0184/)).not.toHaveLength(0)
@@ -131,7 +129,7 @@ describe("SupervisorPanel", () => {
    * haberlo el menú se redujera a una entrada, parecería que el sistema perdió
    * funcionalidad. Quedan inactivas, no ocultas.
    */
-  it("mantiene visibles todas las secciones aunque no haya contrato", async () => {
+  it('mantiene visibles todas las secciones aunque no haya contrato', async () => {
     await montar()
 
     for (const seccion of [/contrato/i, /alertas/i, /documentos/i, /registros/i]) {

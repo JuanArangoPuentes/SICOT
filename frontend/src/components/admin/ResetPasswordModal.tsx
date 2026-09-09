@@ -21,7 +21,11 @@ import { mapUser, randomPassword, type UserRow } from './tipos'
  * administrador necesita poder entregarla a mano — el resultado del envío se
  * informa tal como llegó, sin fingir éxito.
  */
-export function ResetPasswordModal({ usuario, onClose, onActualizado }: {
+export function ResetPasswordModal({
+  usuario,
+  onClose,
+  onActualizado,
+}: {
   usuario: UserRow
   onClose: () => void
   onActualizado: (u: UserRow) => void
@@ -38,7 +42,10 @@ export function ResetPasswordModal({ usuario, onClose, onActualizado }: {
 
   const restablecer = async () => {
     if (busy) return
-    if (!tel.trim()) { setError('El número de teléfono es obligatorio para guardar los datos del usuario.'); return }
+    if (!tel.trim()) {
+      setError('El número de teléfono es obligatorio para guardar los datos del usuario.')
+      return
+    }
     setError('')
     setBusy(true)
     try {
@@ -76,23 +83,50 @@ export function ResetPasswordModal({ usuario, onClose, onActualizado }: {
           </p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{usuario.correo}</p>
 
-          <div style={{
-            marginTop: 14, padding: '10px 14px', borderRadius: 8, fontSize: 12.5, textAlign: 'left',
-            background: enviando ? 'var(--bg-surface)' : envioResultado?.enviado ? 'var(--accent-soft)' : 'var(--chip-red-bg)',
-            border: `1px solid ${enviando ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
-          }}>
+          <div
+            style={{
+              marginTop: 14,
+              padding: '10px 14px',
+              borderRadius: 8,
+              fontSize: 12.5,
+              textAlign: 'left',
+              background: enviando
+                ? 'var(--bg-surface)'
+                : envioResultado?.enviado
+                  ? 'var(--accent-soft)'
+                  : 'var(--chip-red-bg)',
+              border: `1px solid ${enviando ? 'var(--border)' : envioResultado?.enviado ? 'var(--accent-line)' : 'var(--chip-red)'}`,
+            }}
+          >
             {enviando && 'Enviando correo…'}
             {!enviando && envioResultado?.enviado && `Correo enviado a ${usuario.correo}.`}
             {!enviando && envioResultado && !envioResultado.enviado && (
-              <>No fue posible enviar el correo: {envioResultado.error}. Copie la contraseña y entréguela de forma manual.</>
+              <>
+                No fue posible enviar el correo: {envioResultado.error}. Copie la contraseña y entréguela de forma
+                manual.
+              </>
             )}
           </div>
 
-          <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left' }}>
+          <div
+            style={{
+              marginTop: 14,
+              padding: '10px 14px',
+              background: 'var(--bg-surface)',
+              borderRadius: 8,
+              fontSize: 12,
+              color: 'var(--text-secondary)',
+              textAlign: 'left',
+            }}
+          >
             Contraseña temporal: <span style={{ fontFamily: 'var(--font-mono)' }}>{pw}</span>
           </div>
 
-          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }} onClick={onClose}>
+          <button
+            className="btn-green"
+            style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 16 }}
+            onClick={onClose}
+          >
             Aceptar
           </button>
         </div>
@@ -103,25 +137,57 @@ export function ResetPasswordModal({ usuario, onClose, onActualizado }: {
   return (
     <Modal title="Restablecer contraseña" onClose={onClose} width={460}>
       <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 14px' }}>
-        Se le asignará una contraseña temporal nueva a <strong style={{ color: 'var(--text-primary)' }}>{usuario.nombre}</strong>{' '}
-        ({usuario.correo}) y se enviará a su correo institucional. La contraseña anterior deja de servir de inmediato.
+        Se le asignará una contraseña temporal nueva a{' '}
+        <strong style={{ color: 'var(--text-primary)' }}>{usuario.nombre}</strong> ({usuario.correo}) y se enviará a su
+        correo institucional. La contraseña anterior deja de servir de inmediato.
       </p>
 
       <Field label="Teléfono de contacto">
-        <input type="text" value={tel} onChange={e => setTel(e.target.value)}
-          placeholder="Número de contacto del usuario" style={{ width: '100%', padding: '9px 10px' }} />
+        <input
+          type="text"
+          value={tel}
+          onChange={(e) => setTel(e.target.value)}
+          placeholder="Número de contacto del usuario"
+          style={{ width: '100%', padding: '9px 10px' }}
+        />
       </Field>
 
-      <div style={{ padding: '10px 14px', background: 'var(--bg-surface)', borderRadius: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-        Contraseña temporal que se asignará: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{pw}</span>
+      <div
+        style={{
+          padding: '10px 14px',
+          background: 'var(--bg-surface)',
+          borderRadius: 8,
+          fontSize: 12,
+          color: 'var(--text-secondary)',
+        }}
+      >
+        Contraseña temporal que se asignará:{' '}
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-primary)' }}>{pw}</span>
       </div>
 
       {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '10px 0 0' }}>{error}</p>}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={onClose} disabled={busy}>Cancelar</button>
-        <button className="btn-green" style={{ flex: 2, padding: '10px 0', fontSize: 13, opacity: busy ? 0.6 : 1, cursor: busy ? 'default' : 'pointer' }}
-          onClick={restablecer} disabled={busy}>
+        <button
+          className="btn-ghost"
+          style={{ flex: 1, padding: '10px 0', fontSize: 13 }}
+          onClick={onClose}
+          disabled={busy}
+        >
+          Cancelar
+        </button>
+        <button
+          className="btn-green"
+          style={{
+            flex: 2,
+            padding: '10px 0',
+            fontSize: 13,
+            opacity: busy ? 0.6 : 1,
+            cursor: busy ? 'default' : 'pointer',
+          }}
+          onClick={restablecer}
+          disabled={busy}
+        >
           {busy ? 'Restableciendo…' : 'Restablecer y enviar'}
         </button>
       </div>

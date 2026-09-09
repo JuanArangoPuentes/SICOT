@@ -17,9 +17,8 @@ import type { ErrorResponse } from './types'
  * vacía sea una elección válida y no caiga al valor de desarrollo.
  */
 const origenConfigurado = import.meta.env.VITE_API_URL
-export const API_BASE = origenConfigurado === undefined || origenConfigurado === null
-  ? 'http://localhost:8080'
-  : origenConfigurado
+export const API_BASE =
+  origenConfigurado === undefined || origenConfigurado === null ? 'http://localhost:8080' : origenConfigurado
 
 export class ApiError extends Error {
   readonly status: number
@@ -120,7 +119,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   const text = await res.text()
-  return (text ? (JSON.parse(text) as T) : (undefined as T))
+  return text ? (JSON.parse(text) as T) : (undefined as T)
 }
 
 export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {

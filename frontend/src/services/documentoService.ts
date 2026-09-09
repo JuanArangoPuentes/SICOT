@@ -50,19 +50,18 @@ export function firmarDocumento(contratoId: number, documentoId: number): Promis
 // backend recalcula el SHA-256 del contenido y lo compara con la huella que
 // registró al firmar. Es lo que permite decirle a un supervisor si el archivo
 // que está viendo es exactamente el que firmó.
-export function verificarIntegridad(
-  contratoId: number,
-  documentoId: number,
-): Promise<VerificacionIntegridadResponse> {
-  return apiFetch<VerificacionIntegridadResponse>(
-    `/api/contratos/${contratoId}/documentos/${documentoId}/verificacion`,
-  )
+export function verificarIntegridad(contratoId: number, documentoId: number): Promise<VerificacionIntegridadResponse> {
+  return apiFetch<VerificacionIntegridadResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/verificacion`)
 }
 
 // Descarga el archivo real (PDF generado por la IA o cargado manualmente)
 // vía fetch con token Bearer — apiFetch no sirve aquí porque la respuesta es
 // binaria, no JSON (mismo patrón que formatoService.descargarFormato).
-export async function descargarDocumento(contratoId: number, documentoId: number, nombreArchivo: string): Promise<void> {
+export async function descargarDocumento(
+  contratoId: number,
+  documentoId: number,
+  nombreArchivo: string,
+): Promise<void> {
   const blob = await apiFetchBlob(`/api/contratos/${contratoId}/documentos/${documentoId}/archivo`)
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -80,7 +79,7 @@ export async function descargarDocumento(contratoId: number, documentoId: number
 // encuentre en cada uno. No crea nada, solo propone valores para revisión.
 export function extraerDatosContrato(archivos: File[]): Promise<ExtraccionContratoResponse> {
   const form = new FormData()
-  archivos.forEach(archivo => form.append('archivos', archivo))
+  archivos.forEach((archivo) => form.append('archivos', archivo))
   return apiFetch<ExtraccionContratoResponse>('/api/ia/extraer-contrato', { method: 'POST', body: form })
 }
 
@@ -96,7 +95,7 @@ export function preguntarCopiloto(contratoId: number, pregunta: string, historia
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       pregunta,
-      historial: historial?.map(m => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
+      historial: historial?.map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
     }),
   })
 }

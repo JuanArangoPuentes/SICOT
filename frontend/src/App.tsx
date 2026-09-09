@@ -39,17 +39,41 @@ import { mapRegistros } from '@/services/mappers'
 // apuntaban a pestañas y tarjetas que solo existían en una vista concreta (o
 // que ya no existen), y el tutorial resaltaba el vacío.
 const TOUR_SUPERVISOR: TourStep[] = [
-  { selector: '[data-tour="nav-bandeja"]', text: 'Su bandeja de entrada: aquí ve lo que le falta y en qué paso va su contrato.' },
-  { selector: '[data-tour="nav-contrato"]', text: 'En Contrato están el recorrido de las etapas, la ficha completa, el Copiloto y las gráficas.' },
-  { selector: '[data-tour="nav-alertas"]', text: 'Las alertas del contrato, con el semáforo de cronograma calculado con sus fechas reales.' },
-  { selector: '[data-tour="nav-documentos"]', text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.' },
-  { selector: '[data-tour="nav-registros"]', text: 'La bitácora de todo lo que se ha ejecutado sobre el contrato; puede descargarla en CSV.' },
+  {
+    selector: '[data-tour="nav-bandeja"]',
+    text: 'Su bandeja de entrada: aquí ve lo que le falta y en qué paso va su contrato.',
+  },
+  {
+    selector: '[data-tour="nav-contrato"]',
+    text: 'En Contrato están el recorrido de las etapas, la ficha completa, el Copiloto y las gráficas.',
+  },
+  {
+    selector: '[data-tour="nav-alertas"]',
+    text: 'Las alertas del contrato, con el semáforo de cronograma calculado con sus fechas reales.',
+  },
+  {
+    selector: '[data-tour="nav-documentos"]',
+    text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.',
+  },
+  {
+    selector: '[data-tour="nav-registros"]',
+    text: 'La bitácora de todo lo que se ha ejecutado sobre el contrato; puede descargarla en CSV.',
+  },
 ]
 
 const TOUR_GESTION: TourStep[] = [
-  { selector: '[data-tour="nav-contratos"]', text: 'El registro de contratos del Centro: todos los que ya están cargados en SICOT.' },
-  { selector: '[data-tour="cargar"]', text: 'Empiece aquí para cargar la ficha de un contrato en PDF. El Copiloto propone los datos y usted los confirma.' },
-  { selector: '[data-tour="tabla"]', text: 'Confirme los datos antes de asignar el contrato a un supervisor: aquí ve a quién quedó asignado cada uno.' },
+  {
+    selector: '[data-tour="nav-contratos"]',
+    text: 'El registro de contratos del Centro: todos los que ya están cargados en SICOT.',
+  },
+  {
+    selector: '[data-tour="cargar"]',
+    text: 'Empiece aquí para cargar la ficha de un contrato en PDF. El Copiloto propone los datos y usted los confirma.',
+  },
+  {
+    selector: '[data-tour="tabla"]',
+    text: 'Confirme los datos antes de asignar el contrato a un supervisor: aquí ve a quién quedó asignado cada uno.',
+  },
 ]
 
 // Ruta inicial de cada rol. La URL es la fuente de verdad de qué se ve; el rol
@@ -106,12 +130,12 @@ function AppInner() {
     setCargandoContrato(true)
     setErrorContrato(false)
     getContratos(session.usuarioId)
-      .then(lista => {
+      .then((lista) => {
         if (cancelado) return
-        const activo = lista.find(c => c.estado === 'ACTIVO') ?? lista[0] ?? null
+        const activo = lista.find((c) => c.estado === 'ACTIVO') ?? lista[0] ?? null
         setContrato(activo)
       })
-      .catch(err => {
+      .catch((err) => {
         // Un fallo al consultar NO es lo mismo que "no tiene contrato": el panel
         // del supervisor pinta un estado definitivo ("Actualmente no tiene un
         // contrato asignado") que sería mentira si lo que ocurrió fue que el
@@ -125,7 +149,9 @@ function AppInner() {
       .finally(() => {
         if (!cancelado) setCargandoContrato(false)
       })
-    return () => { cancelado = true }
+    return () => {
+      cancelado = true
+    }
   }, [session])
 
   // Registros de auditoría reales del contrato asignado (autoridad: backend)
@@ -136,11 +162,13 @@ function AppInner() {
     }
     let cancelado = false
     getRegistrosContrato(contrato.id)
-      .then(lista => {
+      .then((lista) => {
         if (!cancelado) setRegistros(mapRegistros(lista))
       })
       .catch(() => {})
-    return () => { cancelado = true }
+    return () => {
+      cancelado = true
+    }
   }, [contrato])
 
   const handleLogin = (auth: AuthResponse) => {
@@ -202,7 +230,7 @@ function AppInner() {
 
           <Route
             path="/supervisor/:vista"
-            element={conSesion(['SUPERVISOR'], s => (
+            element={conSesion(['SUPERVISOR'], (s) => (
               <PanelSupervisorEnRuta
                 usuario={s}
                 steps={steps}
@@ -222,7 +250,7 @@ function AppInner() {
 
           <Route
             path="/gestion"
-            element={conSesion(['GESTION'], s => (
+            element={conSesion(['GESTION'], (s) => (
               <GestionPanel
                 usuario={s}
                 onLogout={logout}
@@ -234,12 +262,8 @@ function AppInner() {
 
           <Route
             path="/admin/:vista"
-            element={conSesion(['ADMINISTRADOR'], s => (
-              <PanelAdminEnRuta
-                usuario={s}
-                onLogout={logout}
-                onOpenSettings={() => setSettingsOpen(true)}
-              />
+            element={conSesion(['ADMINISTRADOR'], (s) => (
+              <PanelAdminEnRuta usuario={s} onLogout={logout} onOpenSettings={() => setSettingsOpen(true)} />
             ))}
           />
           <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
@@ -277,7 +301,7 @@ function PanelSupervisorEnRuta(props: Omit<React.ComponentProps<typeof Superviso
     <SupervisorPanel
       {...props}
       vista={vistaValida<Tab>(vista, VISTAS_SUPERVISOR, 'bandeja')}
-      onCambiarVista={t => navigate(`/supervisor/${t}`)}
+      onCambiarVista={(t) => navigate(`/supervisor/${t}`)}
     />
   )
 }
@@ -289,7 +313,7 @@ function PanelAdminEnRuta(props: Omit<React.ComponentProps<typeof AdminPanel>, '
     <AdminPanel
       {...props}
       vista={vistaValida<AdminTab>(vista, VISTAS_ADMIN, 'dashboard')}
-      onCambiarVista={t => navigate(`/admin/${t}`)}
+      onCambiarVista={(t) => navigate(`/admin/${t}`)}
     />
   )
 }

@@ -9,8 +9,16 @@ export type TipoDocumento = 'PDF' | 'DOCX' | 'XLSX' | 'IMAGEN' | 'OTRO'
 export type EstadoDocumento = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO'
 export type PrioridadAlerta = 'ALTA' | 'MEDIA' | 'BAJA'
 export type TipoAlerta =
-  | 'VENCIMIENTO' | 'DOCUMENTO' | 'FACTURA' | 'FIRMA' | 'IA'
-  | 'SECOP' | 'RECORDATORIO' | 'SOLICITUD' | 'RECHAZADO' | 'CRONOGRAMA'
+  | 'VENCIMIENTO'
+  | 'DOCUMENTO'
+  | 'FACTURA'
+  | 'FIRMA'
+  | 'IA'
+  | 'SECOP'
+  | 'RECORDATORIO'
+  | 'SOLICITUD'
+  | 'RECHAZADO'
+  | 'CRONOGRAMA'
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
