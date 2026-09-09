@@ -39,8 +39,29 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 # —justo lo que la variante "unprivileged" viene a evitar.
 USER root
 COPY --from=build /build/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
+# `envsubst` todo lo que haya en templates/ y deja el resultado en conf.d. Es lo
+# que permite que la CSP cambie entre desarrollo y producción sin duplicar el
+# archivo — ver la cabecera de nginx.conf.template.
+COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 USER 101
+
+# Orígenes que se AÑADEN a `connect-src 'self'` en la CSP.
+#
+# Vacío por defecto, que es el valor de producción: allí el proxy sirve la SPA y
+# la API en el mismo origen (ADR-009) y no hace falta ninguna excepción. Es
+# desarrollo quien la pide, desde docker-compose.yml.
+#
+# La variable tiene que estar DEFINIDA aunque esté vacía: `envsubst` solo
+# sustituye las variables presentes en el entorno, y si faltara dejaría el texto
+# literal "${CSP_CONNECT_SRC_EXTRA}" dentro de la cabecera CSP.
+ENV CSP_CONNECT_SRC_EXTRA=""
+
+# Limita la sustitución a las variables que empiezan por CSP_. Sin este filtro,
+# `envsubst` recibiría la lista COMPLETA del entorno del contenedor y bastaría
+# una variable llamada como una de nginx ($uri, $csp, $host…) para vaciarla en
+# la configuración generada y romper el arranque de formas difíciles de rastrear.
+ENV NGINX_ENVSUBST_FILTER="^CSP_"
 
 EXPOSE 8443
 

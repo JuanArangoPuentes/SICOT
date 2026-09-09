@@ -1,3 +1,27 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# ESTE ARCHIVO ES UNA PLANTILLA, NO UNA CONFIGURACIÓN LISTA
+#
+# La imagen `nginxinc/nginx-unprivileged` procesa al arrancar todo lo que
+# encuentre en /etc/nginx/templates/*.template: sustituye las variables de
+# entorno con `envsubst` y escribe el resultado en /etc/nginx/conf.d/. Por eso
+# frontend/Dockerfile copia este archivo a
+# /etc/nginx/templates/default.conf.template y NO a conf.d directamente.
+#
+# Se hizo así por UNA sola línea: los orígenes extra de `connect-src` (ver el
+# bloque de la CSP más abajo), que hacen falta en desarrollo y sobran en
+# producción. Todo lo demás es idéntico en los dos entornos. La alternativa
+# —mantener dos archivos casi iguales— envejece mal: se corrige algo en uno, se
+# olvida el otro, y la única diferencia real queda enterrada entre cien líneas
+# repetidas.
+#
+# CUIDADO al editar: `envsubst` reemplazaría también las variables PROPIAS de
+# nginx ($uri, $csp, $host…) si coincidieran con nombres del entorno. Por eso
+# frontend/Dockerfile fija NGINX_ENVSUBST_FILTER="^CSP_": solo se sustituyen
+# las variables cuyo nombre empieza por CSP_. Si algún día se añade otra
+# variable a esta plantilla, tiene que respetar ese prefijo o hay que ampliar
+# el filtro.
+# ═══════════════════════════════════════════════════════════════════════════
+
 # Oculta la versión exacta de nginx en la cabecera Server y en las páginas de
 # error. No es una defensa por sí sola, pero publicar "nginx/1.27.5" le ahorra
 # a un escáner el trabajo de averiguar contra qué versión probar.
@@ -32,10 +56,7 @@ server {
     # Sobre la CSP: `script-src 'self'` basta porque Vite compila a archivos
     # externos, sin scripts en línea. `style-src` admite 'unsafe-inline'
     # porque Tailwind y React inyectan estilos en línea en tiempo de
-    # ejecución; restringirlo rompería la interfaz. `connect-src` incluye
-    # explícitamente el backend además de 'self' porque la aplicación llama a
-    # otro origen (VITE_API_URL, puerto 8080) — si se despliega en un dominio
-    # real hay que actualizar esta línea junto con VITE_API_URL.
+    # ejecución; restringirlo rompería la interfaz.
     # `style-src` ya NO admite dominios externos: las tipografías se sirven desde
     # este mismo origen (ver frontend/src/fuentes.css), así que no hay ninguna
     # excepción de terceros que mantener
@@ -50,7 +71,36 @@ server {
     # justo lo que necesita la instalación de escritorio de ADR-001), evitaría
     # que la IP de cada funcionario llegue a Google, y quitaría una petición
     # externa que bloquea el pintado. Queda anotado en ADR-004.
-    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' http://localhost:8080 http://127.0.0.1:8080; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    #
+    # ── Por qué `connect-src` depende del entorno ────────────────────────────
+    #
+    # En DESARROLLO (docker-compose.yml) la SPA se sirve en :8443 y llama al
+    # backend en :8080. Son orígenes distintos, así que 'self' no alcanza: hay
+    # que nombrar el backend explícitamente o el navegador bloquea todas las
+    # peticiones de la aplicación.
+    #
+    # En PRODUCCIÓN (docker-compose.prod.yml) sobran: el frontend se construye
+    # con VITE_API_URL="" y el proxy Caddy sirve la SPA y enruta /api al mismo
+    # dominio (ADR-009), así que 'self' ya cubre todas las llamadas. Dejar ahí
+    # los orígenes de localhost no habilitaría nada útil y sí relajaría la
+    # política: `connect-src http://localhost:8080` NO autoriza conexiones al
+    # localhost del SERVIDOR, sino al del NAVEGADOR de quien abre la página. Un
+    # script inyectado podría hablarle a lo que esa persona tenga escuchando en
+    # su propio puerto 8080. Riesgo bajo, pero gratis de eliminar.
+    #
+    # El valor por defecto (vacío, fijado en frontend/Dockerfile) es el
+    # restrictivo a propósito: si un despliegue nuevo olvida definir la
+    # variable, la CSP queda de más estricta, no de más laxa. Le toca a
+    # desarrollo pedir la excepción en voz alta, no a producción acordarse de
+    # quitarla.
+    #
+    # Con la variable vacía el resultado es "connect-src 'self' ;". Ese espacio
+    # de más es inofensivo —el navegador separa la directiva por espacios y
+    # descarta los huecos vacíos— y está así a propósito: evitarlo obligaría a
+    # que el valor de la variable empezara por un espacio, un detalle invisible
+    # que cualquiera limpiaría sin darse cuenta, dejando 'self'http://… pegado
+    # y la directiva rota.
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${CSP_CONNECT_SRC_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 
     location / {
         # SICOT no usa router de navegador (la pantalla se controla por estado en
