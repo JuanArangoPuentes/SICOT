@@ -14,17 +14,56 @@
 # evalúe con tiempo, y mezclado con las actualizaciones rutinarias hace que
 # nadie lea ninguna.
 #
-# Las versiones mayores se suben a mano, a propósito y de una en una. Las
-# actualizaciones de SEGURIDAD no pasan por este filtro: Dependabot las abre
-# igual aunque impliquen un salto mayor, que es justo lo que se quiere.
+# Las versiones mayores se suben a mano, a propósito y de una en una.
+#
+# OJO CON LO QUE ESTE FILTRO SÍ ALCANZA. Aquí decía que las actualizaciones de
+# SEGURIDAD no pasaban por él y que Dependabot las abría igual aunque
+# implicaran un salto mayor. No es cierto, y se comprobó del peor modo: la
+# alerta crítica de Apache Tika (CVE-2025-66516, XXE) se abrió el 2 de
+# septiembre de 2026 con `dependabot_security_updates` habilitado en el
+# repositorio, y NUNCA llegó un PR — porque el arreglo estaba en la 3.2.2 y
+# esto es un salto mayor desde la 2.9.4 que teníamos.
+#
+# Consecuencia práctica: una vulnerabilidad cuya corrección viva en una versión
+# mayor NO se va a corregir sola. Hay que mirar las alertas de Dependabot
+# (pestaña Security del repositorio, o `gh api repos/OWNER/REPO/dependabot/alerts`)
+# y subir esa versión a mano. Este filtro sigue mereciendo la pena para el ruido
+# rutinario, pero no es una red de seguridad.
+#
+# `target-branch: develop` en todos los ecosistemas. Por defecto Dependabot
+# abre sus PRs contra la rama POR DEFECTO del repositorio, que aquí es
+# `master`. Eso se saltaba el modelo de ramas del proyecto: una actualización
+# entraba directa a la rama estable sin pasar por integración, y dejaba
+# `develop` atrás. Ocurrió de verdad con la primera corrección de seguridad
+# que llegó.
+
+# ENFRIAMIENTO ANTES DE ADOPTAR UNA VERSIÓN (`cooldown`, en los cuatro
+# ecosistemas). Los compromisos de paquetes que se han visto en npm y en Maven
+# siguen todos el mismo patrón: se publica una versión con código añadido y se
+# retira o se marca en cuestión de horas. Un actualizador automático sin espera
+# es justo el mecanismo que la mete en el repositorio dentro de esa ventana.
+# Esperar unos días no elimina el riesgo —mueve la adopción a después de que el
+# ecosistema haya reaccionado—, y a cambio no cuesta nada: aquí nada depende de
+# tener el último parche de una librería el día que sale.
+#
+# Siete días para todo y catorce para los saltos mayores. Siete es la cifra que
+# recomienda GitHub y la que se ha visto suficiente en los incidentes reales: los
+# paquetes comprometidos se retiraron en horas, no en semanas. Los saltos mayores
+# esperan el doble porque además de riesgo traen cambios de comportamiento, y
+# aquí ya se revisan a mano de uno en uno (ver el filtro `ignore` de abajo).
 
 version: 2
 updates:
   - package-ecosystem: maven
     directory: /backend
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
+    # Enfriamiento — ver la nota de arriba.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 3
     labels: [dependencias, backend]
     commit-message:
@@ -35,9 +74,14 @@ updates:
 
   - package-ecosystem: npm
     directory: /frontend
+    target-branch: develop
     schedule:
       interval: weekly
       day: monday
+    # Enfriamiento — ver la nota de arriba.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 3
     labels: [dependencias, frontend]
     commit-message:
@@ -54,8 +98,13 @@ updates:
 
   - package-ecosystem: npm
     directory: /mcp
+    target-branch: develop
     schedule:
       interval: monthly
+    # Enfriamiento — ver la nota de arriba.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 2
     labels: [dependencias, mcp]
     commit-message:
@@ -68,8 +117,16 @@ updates:
   # es código de terceros ejecutándose con acceso al repositorio.
   - package-ecosystem: github-actions
     directory: /
+    target-branch: develop
     schedule:
       interval: monthly
+    # Enfriamiento — ver la nota de arriba. Aquí SOLO `default-days`: Dependabot
+    # rechaza `semver-major-days` para el ecosistema `github-actions`, porque
+    # las acciones no se versionan con semver estricto (`actions/checkout@v4` es
+    # una etiqueta móvil, no una versión). Con la configuración anterior el
+    # archivo entero quedaba inválido y NINGÚN ecosistema se actualizaba.
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 2
     labels: [dependencias, ci]
     ignore:

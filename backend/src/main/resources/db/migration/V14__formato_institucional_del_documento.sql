@@ -1,0 +1,52 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- Qué formato institucional es cada documento cargado.
+--
+-- EL PROBLEMA QUE RESUELVE
+-- ------------------------
+-- Cuando el SENA asigna un contrato a un supervisor le envía por correo un
+-- paquete de documentos reales: la carta de notificación, el manual de
+-- supervisión GCCON-M-002, el formato de informe GCCON-F-031 y el Acta de
+-- Inicio. SICOT ya sabe recibirlos —el endpoint de extracción acepta varios
+-- archivos a la vez precisamente por eso— y ya sabe guardarlos en `documentos`.
+--
+-- Lo que no sabía es CUÁL ES CUÁL. La columna `tipo` de `documentos` no sirve
+-- para eso: guarda el formato del ARCHIVO (PDF, DOCX, XLSX, IMAGEN, OTRO), no
+-- el papel que el documento cumple en el proceso. Así que, una vez cargados,
+-- los cuatro documentos eran indistinguibles entre sí salvo por el nombre del
+-- archivo que trajera cada uno — un dato que escribe quien lo sube y que no
+-- se puede consultar de forma fiable.
+--
+-- La tabla `formatos_documentales` ya es el catálogo correcto: tiene `codigo`
+-- (GCCON-F-031), `nombre`, `version` y `estado`. Solo faltaba la referencia
+-- desde el documento concreto hasta la entrada del catálogo que representa.
+--
+-- POR QUÉ UNA REFERENCIA Y NO UN ENUM NUEVO
+-- -----------------------------------------
+-- Un enum en el código exigiría decidir hoy la lista completa de formatos
+-- institucionales, y esa lista no está confirmada: los cuatro documentos de
+-- asignación se conocen, pero el catálogo completo del proceso lo entrega la
+-- entidad. Con una referencia al catálogo, los códigos los administra quien
+-- tiene la autoridad para conocerlos, y añadir uno nuevo no es un despliegue.
+--
+-- POR QUÉ ES OPCIONAL
+-- -------------------
+-- Nullable a propósito, por dos motivos. Uno: los documentos que ya existen no
+-- tienen forma de saber a qué formato corresponden, y rellenarlos adivinando
+-- sería inventar. Dos: no todo documento de un contrato es la instancia de un
+-- formato institucional — un soporte cualquiera que adjunta el supervisor no
+-- lo es, y obligar a clasificarlo empujaría a elegir cualquier entrada del
+-- catálogo con tal de poder guardar.
+--
+-- ON DELETE SET NULL y no CASCADE: retirar una entrada del catálogo no puede
+-- llevarse por delante los documentos reales de un contrato. El documento
+-- sigue siendo válido aunque su formato deje de estar registrado; lo que se
+-- pierde es la etiqueta, no el archivo.
+-- ═══════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE documentos
+    ADD COLUMN formato_id BIGINT REFERENCES formatos_documentales (id) ON DELETE SET NULL;
+
+-- Para responder «¿qué documentos de este contrato son el GCCON-F-031?» sin
+-- recorrer la tabla entera. Parcial porque la gran mayoría de las filas tendrá
+-- la columna nula y no aportan nada al índice.
+CREATE INDEX idx_documentos_formato ON documentos (formato_id) WHERE formato_id IS NOT NULL;

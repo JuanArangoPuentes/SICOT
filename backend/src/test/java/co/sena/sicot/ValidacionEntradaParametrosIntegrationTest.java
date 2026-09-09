@@ -4,11 +4,8 @@ import co.sena.sicot.dto.auth.AuthResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -23,10 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * un valor demasiado largo se colaba hasta la columna y volvía como 409. Estas
  * pruebas fijan que ahora se rechaza con 400 <b>antes</b> de tocar la base.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class ValidacionEntradaParametrosIntegrationTest {
+class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
 
     private static final byte[] PDF_FALSO = "%PDF-1.4 contenido de prueba".getBytes();
 

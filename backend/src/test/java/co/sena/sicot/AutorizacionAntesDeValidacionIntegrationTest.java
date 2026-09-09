@@ -4,10 +4,7 @@ import co.sena.sicot.dto.auth.AuthResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -31,10 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * <p>Todas las peticiones de aquí llevan cuerpos <b>deliberadamente inválidos</b>:
  * es la única forma de comprobar que el 403 gana la carrera a la validación.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class AutorizacionAntesDeValidacionIntegrationTest {
+class AutorizacionAntesDeValidacionIntegrationTest extends PruebaDeIntegracion {
 
     @Autowired
     private MockMvc mockMvc;

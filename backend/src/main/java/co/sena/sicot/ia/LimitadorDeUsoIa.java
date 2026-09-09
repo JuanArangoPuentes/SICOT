@@ -101,6 +101,23 @@ public class LimitadorDeUsoIa {
         }
     }
 
+    /**
+     * Olvida la frecuencia acumulada por usuario.
+     *
+     * <p>Mismo motivo que {@code LoginAttemptService.reiniciar()}: la ventana
+     * deslizante vive en memoria y la comparten todas las pruebas de
+     * integración, así que una que agote el cupo a propósito dejaba a la
+     * siguiente recibiendo 429.
+     *
+     * <p>No toca el semáforo de concurrencia: sus permisos se liberan siempre
+     * en el {@code finally} de {@link #ejecutar}, de modo que ya está
+     * equilibrado al terminar cada prueba. Reponerlo a mano aquí escondería
+     * precisamente el fallo de una fuga de permisos.
+     */
+    public void reiniciar() {
+        ventanaPorUsuario.clear();
+    }
+
     private void verificarFrecuencia(String operacion) {
         Usuario usuario = SecurityUtils.currentUsuario();
         if (usuario == null) {

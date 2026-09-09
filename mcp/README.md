@@ -68,3 +68,25 @@ Agregar en la configuración de servidores MCP (`claude_desktop_config.json` o e
 Cada herramienta en `src/index.ts` sigue el mismo patrón: `server.registerTool(nombre, { description, inputSchema }, handler)`,
 donde el handler llama `sicotFetch` (en `src/sicotClient.ts`) contra una ruta que **ya existe** en
 el backend. No agregar una herramienta para un endpoint que no existe todavía.
+
+## Por qué hay un `overrides` de `hono` en `package.json`
+
+`hono` no la pide este paquete: entra como dependencia transitiva de
+`@modelcontextprotocol/sdk`, que declara `^4.11.4`. Con ese rango npm resolvía
+**4.13.2**, y `npm audit` reportaba tres avisos moderados —escritura fuera del
+directorio en `toSSG()`, agotamiento de memoria por anidamiento en `parseBody()`
+y lectura de parámetros después del fragmento de la URL, todos corregidos en
+4.13.5—. Al no ser una dependencia directa, no hay forma de subirla desde
+`dependencies`; `overrides` es el mecanismo previsto para eso.
+
+**Ninguno de los tres avisos era alcanzable aquí**: este servidor usa
+`StdioServerTransport` (`src/index.ts`) y nunca levanta un servidor HTTP, así que
+el enrutador de Hono no llega a ejecutarse. Se sube igual por dos motivos. Uno,
+una dependencia vulnerable en el árbol hace que `npm audit` tenga siempre un
+hallazgo, y un informe que nunca sale limpio deja de leerse. Dos, el día que
+alguien cambie el transporte a Streamable HTTP —un cambio que no parece tocar
+nada de seguridad— las tres rutas pasarían a estar vivas de golpe.
+
+Se fija `>=4.13.5` y no una versión exacta: pone el suelo sin congelar el árbol.
+**Retirar esta entrada** cuando el SDK pida por sí mismo una versión ya
+corregida; `npm ls hono` dice cuál se está resolviendo de verdad.

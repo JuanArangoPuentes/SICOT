@@ -6,11 +6,8 @@ import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -37,10 +34,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * de verdad guardaba — así que conviene que se rompan juntas si alguien las
  * revierte.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class IntegridadYContentTypeIntegrationTest {
+class IntegridadYContentTypeIntegrationTest extends PruebaDeIntegracion {
 
     private static final byte[] PDF = "%PDF-1.4 acta de inicio del contrato".getBytes(StandardCharsets.UTF_8);
 

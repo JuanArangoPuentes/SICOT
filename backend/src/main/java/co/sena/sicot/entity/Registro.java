@@ -1,5 +1,6 @@
 package co.sena.sicot.entity;
 
+import co.sena.sicot.entity.enums.OrigenRegistro;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -27,6 +28,15 @@ public class Registro {
     @Column(columnDefinition = "TEXT")
     private String descripcion;
 
+    /**
+     * Quién produjo la entrada. Existe porque {@code usuario} nulo es ambiguo:
+     * podría ser el sistema o un dato perdido. Ver ADR-008 y
+     * {@code V15__motor_de_automatizaciones.sql}.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private OrigenRegistro origen = OrigenRegistro.USUARIO;
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant fecha;
@@ -45,6 +55,9 @@ public class Registro {
 
     public String getDescripcion() { return descripcion; }
     public void setDescripcion(String descripcion) { this.descripcion = descripcion; }
+
+    public OrigenRegistro getOrigen() { return origen; }
+    public void setOrigen(OrigenRegistro origen) { this.origen = origen; }
 
     public Instant getFecha() { return fecha; }
 }

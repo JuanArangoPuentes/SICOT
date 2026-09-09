@@ -64,9 +64,10 @@ Los **usuarios** se crean al arrancar (solo si la tabla está vacía) por `DataI
 
 > ⚠️ **Estas contraseñas son públicas** (están en este archivo, en un repositorio
 > compartido) y por eso estas cuentas **solo existen bajo el perfil `dev`**.
-> `DataInitializer` no las crea con ningún otro perfil, y `docker-compose.prod.yml`
-> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal para que no puedan aparecer
-> en un servidor por un `.env` mal copiado. Si alguna vez ve estas cuentas en un
+> `DataInitializer` no las crea con ningún otro perfil, `docker-compose.prod.yml`
+> fija `SPRING_PROFILES_ACTIVE=prod` de forma literal, y desde ADR-011 el perfil
+> por defecto de la aplicación es `prod`: un arranque que olvide declarar el
+> perfil no cae en `dev`, se detiene. Si alguna vez ve estas cuentas en un
 > despliegue real, ese despliegue está corriendo con el perfil equivocado.
 
 ## 3. Configuración (variables de entorno)
@@ -75,7 +76,7 @@ Copie `.env.example` a un `.env` (o exporte las variables) — los valores por d
 
 | Variable | Descripción |
 |---|---|
-| `SPRING_PROFILES_ACTIVE` | `dev` por defecto (siembra los usuarios de prueba de la tabla de abajo). El servidor remoto de producción **debe** fijarlo a otro valor (p. ej. `prod`) para que esas cuentas conocidas nunca se creen ahí |
+| `SPRING_PROFILES_ACTIVE` | **`prod` por defecto** (arranque *fail closed*, ver ADR-011). Sin declararlo, el backend exige `JWT_SECRET` real y se niega a arrancar sin él. `dev` —el único perfil que siembra los usuarios de prueba de la tabla de abajo— se activa solo en los caminos de desarrollo: `./mvnw spring-boot:run` y `docker compose up` con el archivo base |
 | `DB_URL` | URL JDBC (por defecto `jdbc:postgresql://localhost:5432/sicot`) |
 | `DB_USERNAME` / `DB_PASSWORD` | Credenciales de la base |
 | `JWT_SECRET` | Clave HMAC-SHA256 ≥ 32 bytes **en Base64** (`openssl rand -base64 48`) |
@@ -104,8 +105,20 @@ su `.env`. No requiere ningún cambio de código — el backend es agnóstico al
 
 ```bash
 mvn spring-boot:run
-# o
-mvn clean package && java -jar target/sicot-backend-0.1.0.jar
+```
+
+`spring-boot:run` activa el perfil `dev` desde la configuración del plugin en el
+`pom.xml`; no hace falta declarar nada.
+
+El JAR empaquetado **no**. Es deliberado (ADR-011): el perfil por defecto de la
+aplicación es `prod`, así que un `java -jar` sin configurar se detiene con un
+mensaje que dice qué falta, en vez de levantarse con el secreto de firma
+publicado en este repositorio y las cuentas demo sembradas. Para ejecutarlo a
+mano en desarrollo hay que decirlo:
+
+```bash
+mvn clean package
+SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 ```
 
 - API: <http://localhost:8080/api>
@@ -170,6 +183,8 @@ mvn clean package && java -jar target/sicot-backend-0.1.0.jar
 
 ```
 co.sena.sicot
+├── automatizacion/ → motor de automatizaciones (ADR-008): reglas, cola persistente,
+│                  ejecutor con reintentos y carril de IA. Ver §9.
 ├── config/      → OpenAPI, DataInitializer (usuarios de desarrollo)
 ├── controller/  → REST + Swagger
 ├── dto/         → request/response (validación con Bean Validation)
@@ -217,7 +232,117 @@ No toca los datos del equipo: trabaja sobre un esquema desechable
 (`sicot_verificacion_esquema`) que borra y recrea en cada corrida; el esquema
 `public` queda intacto.
 
-## 9. Pendiente (fases siguientes)
+## 9. Motor de automatizaciones
+
+Genera alertas y avisos sin que nadie los dispare a mano. Vive **dentro** del
+backend, no en n8n ni en un proceso aparte — el porqué está en
+[ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
+
+### Cómo está armado
+
+```
+Algo pasa en SICOT                    El calendario avanza
+  (RegistroService.registrar)           (@Scheduled 06:00)
+         │                                      │
+         ▼                                      ▼
+   ReglaDeEvento                        ReglaDeCalendario
+         │                                      │
+         └──────────────┬───────────────────────┘
+                        ▼
+              TareaSolicitada  (la regla DECIDE, no hace)
+                        │
+                        ▼
+           tareas_automatizadas  (cola persistente, clave UNIQUE)
+                        │
+                        ▼  EjecutorDeTareas — sondeo cada minuto,
+                        │   pool propio, reintentos exponenciales
+         ┌──────────────┼──────────────┐
+         ▼              ▼              ▼
+   CrearAlerta    EnviarCorreo   RedactarResumenIA
+         │              │              │
+    AlertaService  EmailService   OllamaClient
+```
+
+**Las cuatro reglas invariantes** (ADR-008): ninguna regla escribe a la base
+directamente; la regla decide y la IA solo redacta; una regla es una clase con su
+prueba; toda tarea es idempotente por clave.
+
+### Las reglas que hay hoy
+
+| Código | Tipo | Qué detecta |
+|---|---|---|
+| `vencimiento-proximo` | calendario | Quedan 30, 15 o 7 días de plazo |
+| `contrato-vencido` | calendario | Pasó la fecha de fin y sigue ACTIVO |
+| `cronograma-atrasado` | calendario | Brecha ≥ 30 puntos entre plazo consumido y avance |
+| `supervisor-asignado` | evento | Alerta + correo al supervisor recién asignado |
+| `integridad-comprometida` | evento | Documento firmado cuyo contenido ya no coincide con su huella |
+| `resumen-semanal-ia` | calendario | Resumen del periodo redactado por el modelo (**apagada por defecto**) |
+
+### Operarlo
+
+```bash
+curl -s localhost:8080/api/automatizaciones/estado  -H "Authorization: Bearer $TOKEN_ADMIN"
+curl -s localhost:8080/api/automatizaciones/tareas?estado=FALLIDA -H "Authorization: Bearer $TOKEN_ADMIN"
+curl -s -X POST localhost:8080/api/automatizaciones/evaluar -H "Authorization: Bearer $TOKEN_ADMIN"
+```
+
+Las tres rutas exigen rol **ADMINISTRADOR**. `POST /evaluar` es idempotente:
+fuerza una pasada del calendario sin esperar a las 06:00, útil para comprobar una
+regla recién desplegada.
+
+Métricas en `/actuator/prometheus`: `sicot_automatizacion_tareas_encoladas`,
+`_completadas`, `_descartadas`, `_fallidas`, `sicot_automatizacion_reglas_fallos`.
+
+### Añadir una regla
+
+1. Crear la clase en `automatizacion/reglas/`, implementando `ReglaDeEvento` o
+   `ReglaDeCalendario`, anotada con `@Component`. Spring la descubre sola.
+2. Elegir una clave de idempotencia que identifique **el hecho, no el momento**.
+3. Escribir su prueba en `ReglasDeCalendarioTest` — sin Spring y sin base: se le
+   pasa una `FotoDelContrato` y se compara la lista devuelta.
+
+### Configuración
+
+Todo bajo `sicot.automatizacion.*` en `application.properties`, con variables de
+entorno equivalentes. Las que más se tocan:
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `AUTOMATIZACION_HABILITADA` | `true` | Apaga el motor entero sin afectar al resto |
+| `AUTOMATIZACION_DIAS_AVISO` | `30,15,7` | Umbrales de aviso previo al vencimiento |
+| `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
+| `AUTOMATIZACION_IA_HABILITADA` | `false` | Enciende el resumen semanal con IA |
+| `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
+| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO |
+
+## 10. Cronograma del contrato
+
+`GET /api/contratos/{id}/cronograma` devuelve el semáforo, la brecha entre plazo
+consumido y avance, la etapa en curso y su cierre estimado.
+
+**Es el único cálculo de cronograma del sistema** ([`service/Cronograma.java`](./src/main/java/co/sena/sicot/service/Cronograma.java)).
+Antes había dos: el panel del supervisor lo calculaba en el navegador con un
+criterio y la regla de automatización con otro, así que SICOT podía decir «va a
+tiempo» en la pantalla y «atrasado 39 puntos» en la bandeja del mismo contrato el
+mismo día. Ahora la API calcula y el frontend pinta.
+
+La prueba que impide que vuelva a duplicarse es
+`CronogramaIntegrationTest.laPantallaYLaAlertaDicenLoMismoSobreElMismoContrato`.
+
+## 11. Vigilancia del respaldo
+
+ADR-002 compromete un RPO de 24 h apoyado en `scripts/respaldo-sicot.sh` con cron
+a las 02:00. **Ese cron lo instala quien despliega, a mano, en el servidor** — no
+lo pone este repositorio.
+
+Como «un paso manual escrito en un documento no es un control» (la lección de
+ADR-006), el sistema lo comprueba solo: mira a diario la antigüedad del respaldo
+más reciente en `RESPALDO_DIRECTORIO`, avisa en el log si supera el RPO y publica
+`sicot.respaldo.antiguedad.horas` en `/actuator/prometheus` (`-1` = no se pudo
+determinar). Sin la variable configurada, el arranque avisa de que el compromiso
+de ADR-002 está sin verificar.
+
+## 12. Pendiente (fases siguientes)
 
 - Integración SECOP II (consulta de procesos)
 - Firma electrónica con proveedor PKI real (hoy es una referencia interna registrada en el
@@ -225,4 +350,8 @@ No toca los datos del equipo: trabaja sobre un esquema desechable
 - OCR de documentos escaneados sin texto legible (PaddleOCR)
 - RAG (base vectorial) para que el Copiloto consulte documentos largos en vez de solo el
   contexto que ya recibe en el prompt
-- Despliegue del lado "remoto" (servidor de la sala) con HTTPS y dominio propio
+- Obligar a cambiar la contraseña temporal en el primer ingreso (hallazgo E de la
+  auditoría del 8 de septiembre)
+- Auditoría de accesibilidad (Resolución 1519 de 2020) — hoy sin verificación
+  automática
+- Recolector de métricas: el backend publica once y nadie las raspa

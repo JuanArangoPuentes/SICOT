@@ -55,3 +55,7 @@ parte del valor.
 | [005](./ADR-005-gestion-de-secretos.md) | Dónde viven las credenciales y cómo se rotan | Aceptada |
 | [006](./ADR-006-modelo-de-ia.md) | Qué modelo de IA local usa el Copiloto | Aceptada |
 | [007](./ADR-007-enrutado-y-enlaces-profundos.md) | Enrutado por URL y enlaces compartibles | Aceptada |
+| [008](./ADR-008-motor-de-automatizaciones.md) | Dónde viven las automatizaciones de SICOT | Aceptada |
+| [009](./ADR-009-terminacion-tls.md) | Dónde termina TLS y por qué hoy no hay HTTPS | Aceptada |
+| [010](./ADR-010-versionado-de-la-api.md) | Versionado de la API y política de compatibilidad | Aceptada |
+| [011](./ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md) | Arranque fail closed y qué escáner es compuerta en el CI | Aceptada |

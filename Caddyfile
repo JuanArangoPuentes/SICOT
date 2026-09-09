@@ -1,0 +1,91 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# Terminación TLS de SICOT — ver docs/decisiones/ADR-009.
+#
+# Hasta este archivo, SICOT no servía HTTPS en ningún entorno: el JWT vivía en
+# localStorage y viajaba por la red del centro en texto claro junto con las
+# credenciales del formulario de acceso. La cabecera Strict-Transport-Security
+# que ya emitía SecurityConfig no protegía nada, porque un navegador la ignora
+# cuando llega por HTTP.
+#
+# Este proxy es el ÚNICO servicio que publica puertos al exterior. El frontend y
+# el backend dejan de publicarlos y solo se alcanzan por la red interna de
+# Docker, igual que ya hacía PostgreSQL en el perfil de producción.
+#
+# CÓMO ELIGE EL CERTIFICADO
+# -------------------------
+# Depende de lo que valga SICOT_DOMINIO en el .env:
+#
+#   - Un dominio público (sicot.ejemplo.gov.co): Caddy obtiene y renueva un
+#     certificado de Let's Encrypt solo, sin configuración adicional. Requiere
+#     que los puertos 80 y 443 sean alcanzables desde Internet.
+#   - Un nombre interno o una IP: Caddy emite un certificado local. Cifra
+#     igual; el navegador pide confiar en él una vez. Es el caso más probable
+#     en la red del centro.
+#
+# POR QUÉ EL BACKEND VA ANTES QUE EL FRONTEND
+# -------------------------------------------
+# Caddy evalúa los bloques por especificidad, no por orden de escritura, pero
+# se listan así para que se lea igual que se resuelve: /api y /actuator y
+# /swagger van al backend; todo lo demás, a la SPA.
+# ═══════════════════════════════════════════════════════════════════════════
+
+{$SICOT_DOMINIO:localhost} {
+
+	# La API, la documentación y las métricas.
+	#
+	# Se enrutan por prefijo hacia el backend por su nombre de servicio en la
+	# red interna de Docker. El puerto 8080 NO está publicado al host: solo
+	# este proxy puede alcanzarlo.
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+	handle /actuator/* {
+		reverse_proxy backend:8080
+	}
+	handle /swagger-ui/* {
+		reverse_proxy backend:8080
+	}
+	handle /v3/api-docs/* {
+		reverse_proxy backend:8080
+	}
+	handle /swagger-ui.html {
+		reverse_proxy backend:8080
+	}
+
+	# Todo lo demás es la aplicación de React servida por su nginx.
+	#
+	# Puerto 8443, NO 80. La imagen del frontend es `nginx-unprivileged`, que
+	# corre como un usuario sin privilegios y por tanto no puede escuchar en un
+	# puerto por debajo de 1024: `frontend/nginx.conf` declara `listen 8443` y
+	# no hay nada sirviendo en el 80. Aquí decía 80, y con
+	# `docker-compose.prod.yml` —donde el frontend ya no publica puertos al host
+	# y sólo se alcanza por este proxy— eso dejaba TODA la aplicación
+	# inalcanzable: las rutas de arriba (/api, /actuator, /swagger) seguían
+	# funcionando, así que el backend respondía y sólo caía la SPA. Es decir, el
+	# fallo se presentaba como "la página no carga" con la API sana.
+	#
+	# El número tiene que coincidir con `listen` en frontend/nginx.conf, con el
+	# `EXPOSE` de frontend/Dockerfile y con el healthcheck de docker-compose.yml.
+	handle {
+		reverse_proxy frontend:8443
+	}
+
+	# Cabeceras que corresponden al borde y no a la aplicación.
+	#
+	# HSTS lo emite también SecurityConfig para las rutas de /api. Aquí se
+	# emite para TODO el sitio —incluida la SPA— porque es el único punto por
+	# el que entra el tráfico. Sin `preload` a propósito: enviar una lista de
+	# precarga es una decisión con años de consecuencias y no le corresponde
+	# tomarla a un archivo de configuración.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	# El acceso queda en la salida estándar del contenedor, que es donde
+	# `docker compose logs` lo encuentra.
+	log {
+		output stdout
+		format console
+	}
+}

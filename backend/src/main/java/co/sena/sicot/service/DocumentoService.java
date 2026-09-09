@@ -5,6 +5,7 @@ import co.sena.sicot.dto.documento.VerificacionIntegridadResponse;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Documento;
 import co.sena.sicot.entity.FirmaElectronica;
+import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.entity.Subetapa;
 import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.TipoDocumento;
@@ -13,6 +14,7 @@ import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.DocumentoMapper;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.FirmaElectronicaRepository;
+import co.sena.sicot.repository.FormatoDocumentalRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.security.SecurityUtils;
 import org.slf4j.Logger;
@@ -35,16 +37,19 @@ public class DocumentoService {
     private final ContratoService contratoService;
     private final SubetapaRepository subetapaRepository;
     private final FirmaElectronicaRepository firmaElectronicaRepository;
+    private final FormatoDocumentalRepository formatoDocumentalRepository;
     private final RegistroService registroService;
     private final ArchivoValidator archivoValidator;
 
     public DocumentoService(DocumentoRepository documentoRepository, ContratoService contratoService,
                              SubetapaRepository subetapaRepository, FirmaElectronicaRepository firmaElectronicaRepository,
+                             FormatoDocumentalRepository formatoDocumentalRepository,
                              RegistroService registroService, ArchivoValidator archivoValidator) {
         this.documentoRepository = documentoRepository;
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
         this.firmaElectronicaRepository = firmaElectronicaRepository;
+        this.formatoDocumentalRepository = formatoDocumentalRepository;
         this.registroService = registroService;
         this.archivoValidator = archivoValidator;
     }
@@ -62,7 +67,17 @@ public class DocumentoService {
     }
 
     @Transactional
-    public DocumentoResponse subir(Long contratoId, Long subetapaId, String nombre, MultipartFile archivo) {
+    /**
+     * Carga un documento contra un contrato.
+     *
+     * <p>{@code formatoId} indica de qué formato institucional es instancia este
+     * archivo —el Acta de Inicio, el GCCON-F-031 del paquete de asignación…—.
+     * Es opcional porque no todo documento de un contrato lo es: un soporte
+     * cualquiera que adjunta el supervisor no representa ningún formato
+     * oficial, y obligar a clasificarlo llevaría a elegir cualquier entrada del
+     * catálogo con tal de poder guardar.
+     */
+    public DocumentoResponse subir(Long contratoId, Long subetapaId, Long formatoId, String nombre, MultipartFile archivo) {
         Contrato contrato = contratoService.buscar(contratoId);
         String nombreLimpio = nombre == null || nombre.isBlank()
                 ? (archivo != null ? archivo.getOriginalFilename() : null)
@@ -81,6 +96,9 @@ public class DocumentoService {
         if (subetapaId != null) {
             documento.setSubetapa(buscarSubetapaDelContrato(subetapaId, contrato));
         }
+        if (formatoId != null) {
+            documento.setFormato(buscarFormatoDelCatalogo(formatoId));
+        }
         documento.setNombre(nombreLimpio);
         documento.setTipo(tipo);
         documento.setContentType(archivoValidator.contentTypeDe(tipo));
@@ -95,6 +113,17 @@ public class DocumentoService {
 
         Documento guardado = documentoRepository.save(documento);
         return DocumentoMapper.toResponse(guardado);
+    }
+
+    /**
+     * El formato tiene que existir en el catálogo. Se rechaza con un error de
+     * negocio y no con un 404 porque quien se equivoca aquí no está pidiendo un
+     * recurso inexistente: está cargando un archivo y eligiendo mal la etiqueta.
+     */
+    private FormatoDocumental buscarFormatoDelCatalogo(Long formatoId) {
+        return formatoDocumentalRepository.findById(formatoId)
+                .orElseThrow(() -> new BusinessException(
+                        "El formato documental indicado no existe en el catálogo."));
     }
 
     @Transactional(readOnly = true)

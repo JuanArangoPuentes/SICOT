@@ -4,10 +4,7 @@ import co.sena.sicot.dto.auth.AuthResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -23,10 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * genérico, y una fecha de fin anterior al inicio solo la frenaba el servicio con
  * un mensaje sin {@code fieldErrors}.
  */
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
-class ValidacionEntradaContratoIntegrationTest {
+class ValidacionEntradaContratoIntegrationTest extends PruebaDeIntegracion {
 
     @Autowired
     private MockMvc mockMvc;

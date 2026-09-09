@@ -16,15 +16,20 @@ export function getDocumentosContrato(contratoId: number): Promise<DocumentoResp
   return apiFetch<DocumentoResponse[]>(`/api/contratos/${contratoId}/documentos`)
 }
 
+// `formatoId` indica de qué formato institucional es instancia el archivo — el
+// Acta de Inicio, el GCCON-F-031 del paquete de asignación… Es opcional: no
+// todo documento de un contrato representa un formato oficial, y obligar a
+// elegir uno llevaría a etiquetar cualquier cosa con tal de poder guardar.
 export function subirDocumento(
   contratoId: number,
   archivo: File,
-  opciones?: { nombre?: string; subetapaId?: number },
+  opciones?: { nombre?: string; subetapaId?: number; formatoId?: number },
 ): Promise<DocumentoResponse> {
   const form = new FormData()
   form.append('archivo', archivo)
   if (opciones?.nombre) form.append('nombre', opciones.nombre)
   if (opciones?.subetapaId != null) form.append('subetapaId', String(opciones.subetapaId))
+  if (opciones?.formatoId != null) form.append('formatoId', String(opciones.formatoId))
   return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos`, { method: 'POST', body: form })
 }
 

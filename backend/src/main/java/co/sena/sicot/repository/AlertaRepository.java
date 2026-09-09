@@ -8,7 +8,16 @@ import java.util.List;
 
 public interface AlertaRepository extends JpaRepository<Alerta, Long> {
 
-    List<Alerta> findByContratoIdOrderByFechaCreacionDesc(Long contratoId);
+    /**
+     * Alertas de un contrato, acotadas.
+     *
+     * <p>Llevaba {@code Pageable} desde que el motor de automatizaciones empezó
+     * a escribir en esta tabla. Antes daba igual: nada creaba alertas nunca, así
+     * que la lista por contrato estaba siempre vacía. Ahora crece sola, y un
+     * contrato de varios años acumularía cientos de filas que se cargan enteras
+     * en cada apertura del panel.
+     */
+    List<Alerta> findByContratoIdOrderByFechaCreacionDesc(Long contratoId, Pageable limite);
 
     List<Alerta> findByContratoIsNullOrderByFechaCreacionDesc();
 

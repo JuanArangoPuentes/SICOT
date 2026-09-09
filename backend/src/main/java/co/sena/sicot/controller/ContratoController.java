@@ -6,7 +6,9 @@ import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
 import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
 import co.sena.sicot.entity.enums.EstadoContrato;
+import co.sena.sicot.dto.cronograma.CronogramaResponse;
 import co.sena.sicot.service.ContratoService;
+import co.sena.sicot.service.CronogramaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -28,8 +30,10 @@ import java.util.List;
 public class ContratoController {
 
     private final ContratoService contratoService;
+    private final CronogramaService cronogramaService;
 
-    public ContratoController(ContratoService contratoService) {
+    public ContratoController(ContratoService contratoService, CronogramaService cronogramaService) {
+        this.cronogramaService = cronogramaService;
         this.contratoService = contratoService;
     }
 
@@ -152,5 +156,28 @@ public class ContratoController {
     public ResponseEntity<ContratoResponse> cambiarEstado(@PathVariable Long id,
                                                           @Valid @RequestBody CambiarEstadoContratoRequest request) {
         return ResponseEntity.ok(contratoService.cambiarEstado(id, request));
+    }
+
+    /**
+     * Cómo va el contrato respecto a su plazo.
+     *
+     * <p>No lleva {@code @PreAuthorize}: la autorización real la aplica
+     * {@code CronogramaService} llamando a {@code ContratoService.buscar}, que
+     * ejecuta {@code verificarAccesoAlContrato}. Un SUPERVISOR solo alcanza el
+     * cronograma del contrato que tiene asignado. Mismo patrón que las alertas y
+     * los registros por contrato.
+     */
+    @Operation(summary = "Estado de cronograma del contrato (semáforo, brecha y etapa en curso)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Estado de cronograma",
+                    content = @Content(schema = @Schema(implementation = CronogramaResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/cronograma")
+    public ResponseEntity<CronogramaResponse> cronograma(@PathVariable Long id) {
+        return ResponseEntity.ok(CronogramaResponse.de(cronogramaService.de(id)));
     }
 }

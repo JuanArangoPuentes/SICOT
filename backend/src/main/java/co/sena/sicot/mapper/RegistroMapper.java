@@ -18,6 +18,7 @@ public final class RegistroMapper {
                 u != null ? u.getNombre() : null,
                 r.getAccion(),
                 r.getDescripcion(),
-                r.getFecha());
+                r.getFecha(),
+                r.getOrigen());
     }
 }

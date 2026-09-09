@@ -83,7 +83,12 @@ export function mapRegistros(registros: RegistroResponse[]): Registro[] {
     id: 'r' + r.id,
     tipo: CATEGORIA_POR_ACCION[r.accion.toUpperCase()] ?? 'Otro',
     accion: humanizarAccion(r.accion),
-    actor: r.usuarioNombre ?? 'Sistema',
+    // `origen` y no "¿hay nombre?": usuario_id es ON DELETE SET NULL, así que
+    // borrar una cuenta dejaba sus acciones atribuidas al "Sistema" en el
+    // registro que existe precisamente para saber quién hizo qué.
+    actor: r.origen === 'SISTEMA'
+      ? 'Sistema'
+      : (r.usuarioNombre ?? 'Usuario eliminado'),
     fecha: formatRegistroFecha(r.fecha),
     asunto: r.descripcion ?? humanizarAccion(r.accion),
   }))

@@ -17,6 +17,12 @@ public record DocumentoResponse(
         Long id,
         Long contratoId,
         Long subetapaId,
+        /** Entrada del catálogo institucional que representa, o {@code null} si no es la instancia de un formato oficial. */
+        Long formatoId,
+        /** Código del formato institucional (GCCON-F-031…). {@code null} si no tiene formato asociado. */
+        String formatoCodigo,
+        /** Nombre del formato institucional. {@code null} si no tiene formato asociado. */
+        String formatoNombre,
         String nombre,
         TipoDocumento tipo,
         String rutaArchivo,
