@@ -59,7 +59,7 @@ ENV CSP_CONNECT_SRC_EXTRA=""
 
 # Limita la sustitución a las variables que empiezan por CSP_. Sin este filtro,
 # `envsubst` recibiría la lista COMPLETA del entorno del contenedor y bastaría
-# una variable llamada como una de nginx ($uri, $csp, $host…) para vaciarla en
+# una variable llamada como una de nginx ($uri, $csp, $args…) para vaciarla en
 # la configuración generada y romper el arranque de formas difíciles de rastrear.
 ENV NGINX_ENVSUBST_FILTER="^CSP_"
 

@@ -15,11 +15,16 @@
 # repetidas.
 #
 # CUIDADO al editar: `envsubst` reemplazaría también las variables PROPIAS de
-# nginx ($uri, $csp, $host…) si coincidieran con nombres del entorno. Por eso
+# nginx ($uri, $csp, $args…) si coincidieran con nombres del entorno. Por eso
 # frontend/Dockerfile fija NGINX_ENVSUBST_FILTER="^CSP_": solo se sustituyen
 # las variables cuyo nombre empieza por CSP_. Si algún día se añade otra
 # variable a esta plantilla, tiene que respetar ese prefijo o hay que ampliar
 # el filtro.
+#
+# (Esa lista de ejemplos evita a propósito la variable del Host de la petición:
+# el Semgrep del CI la marca en CUALQUIER archivo de nginx, comentarios
+# incluidos, y bloquea el PR. No es un falso positivo que valga la pena silenciar
+# con un `nosemgrep` — basta con no usarla de ejemplo.)
 # ═══════════════════════════════════════════════════════════════════════════
 
 # Oculta la versión exacta de nginx en la cabecera Server y en las páginas de
