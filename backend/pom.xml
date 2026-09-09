@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.12</version>
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
@@ -25,8 +25,78 @@
         <maven.compiler.release>25</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <jjwt.version>0.13.0</jjwt.version>
-        <springdoc.version>2.8.9</springdoc.version>
-        <jacoco.version>0.8.13</jacoco.version>
+        <springdoc.version>2.9.0</springdoc.version>
+        <jacoco.version>0.8.15</jacoco.version>
+
+        <!--
+            Se ADELANTA a la versión que gestiona el parent. Spring Boot 3.5.16
+            fija 42.7.11, que corrige CVE-2026-42198 (un servidor malicioso pide
+            un número enorme de iteraciones PBKDF2 durante SCRAM-SHA-256 y el
+            cliente quema CPU sin límite) pero NO CVE-2026-54291: hasta 42.7.11
+            el driver comprueba que el servidor anunció un mecanismo `-PLUS`,
+            pero nunca verifica cuál se negoció de verdad ni rechaza un valor de
+            channel binding vacío, así que un intermediario puede degradar la
+            sesión de SCRAM-SHA-256-PLUS a SCRAM-SHA-256 en silencio y sin error
+            en el cliente. Eso se corrige en 42.7.12.
+
+            Hoy la base es un contenedor en la red interna de Compose y no se
+            publica al exterior (ver docker-compose.prod.yml), así que ninguno de
+            los dos es alcanzable desde fuera; pero la propiedad existe para que
+            la corrección no dependa de cuándo el parent decida subirla. Cuando
+            el parent gestione 42.7.12 o superior, esta línea puede retirarse.
+        -->
+        <postgresql.version>42.7.13</postgresql.version>
+
+        <!--
+            ADELANTOS AL PARENT — cerrar CVE que Spring Boot 3.5.16 todavía no
+            recoge. 3.5.16 es la última de la línea 3.5 publicada, así que
+            esperar a una versión del parent no era una opción; y saltar a 4.0.x
+            es una migración mayor que no se hace por esto.
+
+            Todas son subidas de PARCHE dentro de la misma línea que ya gestiona
+            el parent (misma API, mismo Jakarta EE). Ninguna es un salto mayor:
+            Tomcat se queda en 10.1.x porque Spring Boot 3.5 exige Jakarta EE 10;
+            11.0.x rompería la aplicación entera.
+
+            Cada una se retira en cuanto el parent gestione esa versión o una
+            superior. `mvn dependency:list` dice qué se está resolviendo de
+            verdad, que es lo único que cuenta.
+
+            · tomcat 10.1.55 → 10.1.59 (tres CRÍTICAS)
+              CVE-2026-65182 salto de restricciones de seguridad por control de
+              acceso incorrecto, CVE-2026-65905 repetición limitada contra el
+              autenticador DIGEST y CVE-2026-68525 acceso no autorizado por
+              salto de la autenticación FORM. SICOT no usa ni DIGEST ni la
+              autenticación FORM del contenedor ni <security-constraint> —toda
+              la autorización pasa por la cadena de filtros de Spring Security y
+              el JWT (ver SecurityConfig)—, así que las tres afectan a mecanismos
+              que aquí no están activos. Se suben igual: son CRÍTICAS, el arreglo
+              es una línea, y el argumento "esa ruta no la usamos" envejece mal
+              en cuanto alguien añada una configuración que sí la use.
+
+            · jackson-databind 2.21.4 → 2.21.6
+              CVE-2026-59889 (escalada de privilegios por manejo indebido de
+              @JsonUnwrapped) y CVE-2026-54515 (propiedades marcadas como
+              ignoradas que sí se modifican). Esta sí está en la ruta caliente:
+              jackson deserializa TODOS los cuerpos JSON que entran por la API,
+              y "una propiedad que se ignoraba deja de ignorarse" es exactamente
+              la clase de fallo que convierte un DTO de entrada en un vector
+              para escribir campos que el cliente no debería poder tocar.
+
+            · commons-lang3 3.17.0 → 3.18.0
+              CVE-2025-48924, recursión no controlada. Entra por debajo de Tika.
+
+            · log4j2 2.24.3 → 2.25.5
+              CVE-2026-49844. SICOT registra con Logback; de log4j sólo entra el
+              puente `log4j-to-slf4j` que trae spring-boot-starter-logging. Aun
+              así queda declarado en el árbol, y una dependencia vulnerable que
+              se deja porque "no se usa" obliga a volver a demostrarlo cada vez
+              que alguien lee el informe del escáner.
+        -->
+        <tomcat.version>10.1.59</tomcat.version>
+        <jackson-bom.version>2.21.6</jackson-bom.version>
+        <commons-lang3.version>3.18.0</commons-lang3.version>
+        <log4j2.version>2.25.5</log4j2.version>
     </properties>
 
     <dependencies>
@@ -159,9 +229,29 @@
 
     <build>
         <plugins>
+            <!--
+                `./mvnw spring-boot:run` arranca con el perfil "dev".
+
+                Se declara aquí y no como valor por defecto de
+                application.properties a propósito. El defecto de la aplicación
+                es "prod" (arranque fail closed): un JAR ejecutado sin variables
+                se DETIENE en vez de levantarse con el secreto de conveniencia
+                publicado en el repositorio y las cuentas demo sembradas. Pero
+                ejecutar el plugin de Maven no es desplegar —hace falta el código
+                fuente, el pom y el wrapper— así que ese camino sí puede asumir
+                desarrollo local sin abrir nada.
+
+                Sólo afecta a `spring-boot:run`. `package`, `verify` y el JAR
+                resultante no lo heredan.
+            -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <profiles>
+                        <profile>dev</profile>
+                    </profiles>
+                </configuration>
             </plugin>
 
             <!--
