@@ -354,9 +354,14 @@ jobs:
         run: docker build -t sicot-frontend:ci ./frontend
 
       - name: Comprobar la configuración de nginx dentro de la imagen
-        # Un error de sintaxis en nginx.conf no rompe el `docker build` — la
-        # imagen se construye igual y el contenedor falla al arrancar. `nginx -t`
-        # lo detecta aquí.
+        # Un error de sintaxis en nginx.conf.template no rompe el `docker build`
+        # — la imagen se construye igual y el contenedor falla al arrancar.
+        # `nginx -t` lo detecta aquí.
+        #
+        # Cubre además el paso de plantilla: `docker run <imagen> nginx …` pasa
+        # por el entrypoint de la imagen, que es quien ejecuta `envsubst` sobre
+        # /etc/nginx/templates. Así que esto comprueba la configuración YA
+        # generada, con la que arrancaría de verdad, y no el archivo fuente.
         run: docker run --rm sicot-frontend:ci nginx -t
 
       - name: Validar los archivos de Compose

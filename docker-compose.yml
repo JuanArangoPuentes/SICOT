@@ -148,6 +148,24 @@ services:
     labels:
       org.opencontainers.image.title: "SICOT · Frontend"
       org.opencontainers.image.description: "UI React servida por nginx — http://localhost:8443"
+    environment:
+      # Orígenes que se añaden a `connect-src` en la CSP que emite nginx.
+      #
+      # Aquí, en desarrollo, la SPA vive en :8443 y llama al backend en :8080:
+      # son orígenes distintos, así que sin esta excepción el navegador bloquea
+      # todas las peticiones de la aplicación y la interfaz se queda vacía sin
+      # que nada falle del lado del servidor. La imagen trae el valor VACÍO por
+      # defecto (frontend/Dockerfile), que es el de producción — ver ADR-009 y
+      # la cabecera de frontend/nginx.conf.template.
+      #
+      # Se aplica al ARRANCAR el contenedor, no al construirlo (a diferencia de
+      # VITE_API_URL, que Vite hornea en el build): cambiarlo solo necesita un
+      # `docker compose up -d frontend`, sin reconstruir la imagen.
+      #
+      # Si cambia VITE_API_URL de arriba —por ejemplo a la IP de la máquina para
+      # abrir SICOT desde otro equipo de la LAN— hay que añadir ESE mismo origen
+      # aquí, o la CSP bloqueará las llamadas.
+      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-http://localhost:8080 http://127.0.0.1:8080}
     depends_on:
       backend:
         condition: service_healthy
