@@ -35,6 +35,7 @@ erDiagram
     CONTRATOS ||--o{ DOCUMENTOS : "acumula"
     CONTRATOS ||--o{ ALERTAS : "genera"
     CONTRATOS ||--o{ REGISTROS : "deja traza en"
+    CONTRATOS ||--o{ TAREAS_AUTOMATIZADAS : "encola trabajo de"
 
     ETAPAS ||--o{ SUBETAPAS : "se divide en"
     SUBETAPAS ||--o{ DOCUMENTOS : "respalda con"
@@ -212,6 +213,33 @@ está acotado por lo que el centro alcanza a tramitar. De ahí dos decisiones:
 modifican ni se borran. `alertas.contrato_id` puede ser nulo (alerta del sistema,
 no de un contrato concreto).
 
+### `tareas_automatizadas`
+
+La cola del motor de automatizaciones (ADR-008), añadida en `V15`. Es la
+**tercera tabla que crece sin techo**, y la única cuyo crecimiento se poda solo:
+`sicot.automatizacion.retencion-de-tareas` purga a diario las `COMPLETADA` y
+`DESCARTADA` pasado el plazo. Las `FALLIDA` **no** se purgan nunca — una tarea
+fallida es la evidencia de un problema y se queda hasta que alguien la mire.
+
+Tres detalles del esquema hacen el trabajo que de otro modo tendría que hacer el
+código, y por eso están en la base y no en Java:
+
+- `uq_tareas_automatizadas_idempotencia UNIQUE (clave_idempotencia)` — es lo que
+  garantiza que una regla que se evalúa dos veces no encole la misma tarea dos
+  veces. Sin esa restricción, la idempotencia dependería de que dos hilos no
+  consultaran a la vez, que es exactamente la clase de garantía que falla en
+  producción y no en las pruebas.
+- `idx_tareas_automatizadas_pendientes` es un índice **parcial**
+  (`WHERE estado = 'PENDIENTE'`): una cola sana tiene casi todas sus filas en
+  `COMPLETADA`, y esas no aportan nada a la consulta que corre cada minuto.
+- `contrato_id` es nulable y `ON DELETE CASCADE`: hay tareas que no pertenecen a
+  ningún contrato, y borrar un contrato debe llevarse su trabajo pendiente.
+
+`V15` añade además `registros.origen` (`USUARIO` | `SISTEMA`). Existe porque
+`registros.usuario_id` es `ON DELETE SET NULL`, y sin esta columna borrar una
+cuenta dejaba las acciones de esa persona atribuidas al «Sistema» — en el
+registro que existe precisamente para saber quién hizo qué.
+
 ## Concurrencia: `lock_version`
 
 Siete tablas tienen una columna `lock_version` que gestiona Hibernate
@@ -252,13 +280,14 @@ comportamiento correcto.
 
 | Archivo | Qué hace |
 | --- | --- |
-| `V1__create_sicot_schema.sql` | Línea base: las nueve tablas, sus restricciones e índices |
+| `V1__create_sicot_schema.sql` | Línea base: nueve tablas, sus restricciones e índices (la décima, `tareas_automatizadas`, llega en `V15`) |
 | `V9__add_indices_fecha_alertas_registros.sql` | Índices por fecha para los listados globales |
 | `V10__reconcilia_esquema_con_la_linea_base.sql` | Restaura las siete restricciones que faltaban en las bases antiguas |
 | `V11__indices_compuestos_tablas_de_crecimiento_libre.sql` | `(contrato_id, fecha DESC)` en `alertas` y `registros` |
 | `V12__bloqueo_optimista.sql` | Columna `lock_version` en siete tablas |
 | `V13__huella_de_integridad_en_la_firma.sql` | `firma_hash_sha256` y `firmado_por_id` en `documentos` |
 | `V14__formato_institucional_del_documento.sql` | `formato_id` en `documentos`: qué formato del catálogo representa cada archivo |
+| `V15__motor_de_automatizaciones.sql` | Tabla `tareas_automatizadas` (la cola de ADR-008) y `registros.origen` |
 
 El salto de `V1` a `V9` es intencional: las `V1`–`V8` originales se consolidaron
 en la `V1` actual y la `V9` se conservó porque ya estaba aplicada en bases
