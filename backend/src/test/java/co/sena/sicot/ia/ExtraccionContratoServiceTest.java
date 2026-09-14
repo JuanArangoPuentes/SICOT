@@ -66,8 +66,11 @@ class ExtraccionContratoServiceTest {
 
     @BeforeEach
     void construirElServicio() {
+        // ExtraccionDeterminista va real, no simulada: no tiene dependencias
+        // y es la que ahora resuelve los campos con forma fija.
         servicio = new ExtraccionContratoService(
-                pdfTextExtractor, ollamaClient, new ObjectMapper(), archivoValidator);
+                pdfTextExtractor, ollamaClient, new ObjectMapper(), archivoValidator,
+                new ExtraccionDeterminista());
         // El presupuesto es un @Value: en una prueba unitaria no hay contexto de
         // Spring que lo rellene y quedaría en 0, cortando tras el primer archivo.
         ReflectionTestUtils.setField(servicio, "presupuestoSegundos", 900L);

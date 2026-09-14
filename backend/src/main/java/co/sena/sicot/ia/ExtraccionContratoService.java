@@ -43,7 +43,7 @@ public class ExtraccionContratoService {
      *
      * {@code sicot.ia.timeout-seconds} acota una sola llamada a Ollama, pero
      * aquí se hacen hasta {@value #MAX_ARCHIVOS} en serie: con el valor por
-     * defecto (900 s) una única petición podía retener un hilo de Tomcat hasta
+     * defecto de entonces (900 s) una única petición podía retener un hilo de Tomcat hasta
      * 90 minutos. Con unas pocas simultáneas se agota el pool de hilos y deja
      * de responder toda la API, no solo la extracción.
      *
@@ -54,12 +54,16 @@ public class ExtraccionContratoService {
     @Value("${sicot.ia.presupuesto-extraccion-seconds:900}")
     private long presupuestoSegundos;
 
+    private final ExtraccionDeterminista extraccionDeterminista;
+
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
-                                      ObjectMapper objectMapper, ArchivoValidator archivoValidator) {
+                                      ObjectMapper objectMapper, ArchivoValidator archivoValidator,
+                                      ExtraccionDeterminista extraccionDeterminista) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
         this.archivoValidator = archivoValidator;
+        this.extraccionDeterminista = extraccionDeterminista;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -132,6 +136,19 @@ public class ExtraccionContratoService {
         // pero no aportan datos — igual se recortan para no gastar minutos de CPU en ellos.
         String textoRecortado = texto.length() > 6000 ? texto.substring(0, 6000) : texto;
 
+        // PRIMERO lo que no necesita modelo. Número de contrato, NIT, valor,
+        // fechas y registro presupuestal tienen forma fija en un contrato
+        // estatal colombiano: sacarlos con expresiones regulares cuesta menos de
+        // un milisegundo y no se equivoca. La medición del 14 de septiembre de
+        // 2026 mostró que era justo donde fallaban los modelos —el de 3B no
+        // encontró el valor del contrato, el de 7B pegó la cédula al nombre del
+        // representante— y que cada intento costaba más de dos minutos de CPU.
+        // Ver ExtraccionDeterminista para las cifras completas.
+        ExtraccionContratoResponse deterministica = extraccionDeterminista.extraer(texto);
+
+        // Al modelo solo le quedan el objeto (prosa) y el tipo (clasificación).
+        // El prompt encoge en consecuencia, que es lo que hace el trabajo
+        // abordable por un modelo pequeño — el objetivo de fondo del proyecto.
         String prompt = """
                 Eres un asistente que extrae datos de documentos de contratación pública colombiana (SENA).
                 Del siguiente texto, extrae ÚNICAMENTE los datos que aparezcan explícitamente. Si un dato no
@@ -139,18 +156,13 @@ public class ExtraccionContratoService {
                 en blanco o una plantilla sin diligenciar (en ese caso casi todos los campos serán null; eso
                 es correcto, no inventes datos para llenarlos).
 
-                Responde solo con un objeto JSON con exactamente estas claves:
-                idContrato (número de contrato, ej. CO1.PCCNTR.xxxxxxx), objeto (objeto contractual),
-                proveedor (razón social del contratista), nit (NIT o cédula del contratista),
-                representanteLegal,
-                valor (SOLO la cifra numérica del valor del contrato, sin texto, sin "$", sin puntos ni
-                comas de miles — un entero plano. Ejemplo: si el documento dice "DIEZ MILLONES DE PESOS
-                ($10.000.000 COP)" o "$10.000.000", el valor es 10000000. Si no hay cifra numérica clara,
-                usa null),
-                vigenciaInicio (fecha de inicio en formato AAAA-MM-DD), vigenciaFin (fecha de terminación
-                en formato AAAA-MM-DD), lugarEjecucion, registroPresupuestal (número de registro
-                presupuestal), tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras",
-                "Arrendamiento" — la que mejor describa el objeto; si no es clara, usa null).
+                Responde solo con un objeto JSON con exactamente estas dos claves:
+                objeto (el objeto contractual: qué se contrata, en una o dos frases tomadas del documento),
+                tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras", "Arrendamiento" — la
+                que mejor describa el objeto; si no es clara, usa null).
+
+                No incluyas ninguna otra clave. Los demás datos del contrato —número, NIT, valor, fechas,
+                registro presupuestal— ya se extrajeron por otro medio y no se te están pidiendo.
 
                 %s
 
@@ -164,7 +176,11 @@ public class ExtraccionContratoService {
         String respuestaCruda = ollamaClient.generar(prompt, true);
         log.info("Extracción de '{}' completada en {} ms", archivo.getOriginalFilename(), System.currentTimeMillis() - inicio);
         try {
-            return objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
+            // El determinista manda: si sacó un campo, ese valor gana. combinar()
+            // toma el primero no nulo, y va primero porque una cifra copiada por
+            // una expresión regular es más de fiar que la misma cifra redactada
+            // por el modelo — que es exactamente lo que la medición mostró.
+            return combinar(deterministica, objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class));
         } catch (IOException e) {
             // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
             // PDF (incluido un intento de inyección) y no tiene por qué quedar
@@ -172,7 +188,11 @@ public class ExtraccionContratoService {
             String muestra = respuestaCruda.length() > 300 ? respuestaCruda.substring(0, 300) + "…" : respuestaCruda;
             log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), muestra);
             // Un documento con formato inesperado no debe tumbar el análisis de los demás.
-            return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
+            // Antes aquí se devolvía todo vacío; ahora se devuelve lo que sacó el
+            // extractor determinista, que no dependía del modelo y sigue siendo
+            // correcto. Que el modelo se atragante con el objeto no es motivo
+            // para tirar el número de contrato, el NIT y el valor.
+            return deterministica;
         }
     }
 
