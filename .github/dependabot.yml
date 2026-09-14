@@ -120,10 +120,13 @@ updates:
     target-branch: develop
     schedule:
       interval: monthly
-    # Enfriamiento — ver la nota de arriba.
+    # Enfriamiento — ver la nota de arriba. Aquí SOLO `default-days`: Dependabot
+    # rechaza `semver-major-days` para el ecosistema `github-actions`, porque
+    # las acciones no se versionan con semver estricto (`actions/checkout@v4` es
+    # una etiqueta móvil, no una versión). Con la configuración anterior el
+    # archivo entero quedaba inválido y NINGÚN ecosistema se actualizaba.
     cooldown:
       default-days: 7
-      semver-major-days: 14
     open-pull-requests-limit: 2
     labels: [dependencias, ci]
     ignore:
