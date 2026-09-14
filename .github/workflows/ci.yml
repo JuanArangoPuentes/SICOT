@@ -8,12 +8,22 @@ name: CI
 # backend, PostgreSQL y las cuentas sembradas del perfil `dev`. Se ejecuta a mano
 # (`npm run test:e2e`, ver frontend/README.md) hasta que se monte con servicios.
 #
-# NOTA: `npm run format:check` (oxfmt) deliberadamente NO está en esta compuerta.
-# Se probó al preparar este workflow y reescribe tipos objeto en línea
-# (`{ a: T; b: U }` → `{ a: T b: U }`), sintaxis inválida, sobre archivos que ya
-# compilaban — confirmado en este mismo repo, no una sospecha. Gatear la CI con
-# eso rompería cualquier PR que tocara un archivo con ese patrón. Revisar de
-# nuevo cuando oxfmt publique una versión más allá de 0.2.x.
+# NOTA: `npm run format:check` (oxfmt) SÍ está en esta compuerta desde oxfmt
+# 0.66.0. Estuvo fuera mientras el proyecto usaba la serie 0.2.x, que reescribía
+# los tipos objeto en línea (`{ a: T; b: U }` → `{ a: T b: U }`, sintaxis
+# inválida) sobre archivos que ya compilaban. Ese defecto se volvió a probar en
+# 0.66.0 y ya no ocurre: los 11 archivos del frontend con ese patrón conservan
+# sus punto y coma, `tsc --noEmit` queda en verde y las 36 pruebas pasan. Se
+# comprobó además comparando los bundles de `npm run build` antes y después de
+# formatear: el JavaScript emitido es equivalente.
+#
+# El formateador no corre con los valores por defecto de oxfmt, sino con
+# `frontend/.oxfmtrc.json`, que lo pliega al estilo que ya usaba el frontend en
+# vez de reescribirlo a otro. El porqué de cada opción está comentado ahí.
+#
+# La primera pasada del formateador tocó 47 archivos de golpe. Está en un commit
+# propio y exclusivamente mecánico, listado en `.git-blame-ignore-revs` para que
+# no se coma el `git blame` del frontend.
 #
 # ACCIONES FIJADAS POR SHA, NO POR ETIQUETA. Cada `uses:` apunta al commit
 # exacto, con la versión legible en un comentario al lado. Una etiqueta como
@@ -134,6 +144,13 @@ jobs:
 
       - name: Chequeo de tipos
         run: npm run typecheck
+
+      - name: Chequeo de formato
+        # Después del chequeo de tipos a propósito: si un PR trae las dos cosas
+        # mal, primero debe verse el error de tipos, que es un fallo real, y no
+        # quedar tapado por uno de formato. Este se arregla solo con
+        # `npm run format`.
+        run: npm run format:check
 
       - name: Pruebas
         run: npm run test:run

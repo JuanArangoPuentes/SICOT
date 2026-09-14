@@ -12,19 +12,24 @@ import { crearFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { mapFirma, type FirmaRow, type UserRow } from './tipos'
 
-export function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCreate }: {
+export function NewFirmaModal({
+  usuarios,
+  usuarioPreseleccionado,
+  onClose,
+  onCreate,
+}: {
   usuarios: UserRow[]
   usuarioPreseleccionado: UserRow | null
   onClose: () => void
   onCreate: (f: FirmaRow) => void
 }) {
-  const activos = usuarios.filter(u => u.activo)
+  const activos = usuarios.filter((u) => u.activo)
   const [usuarioId, setUsuarioId] = useState(usuarioPreseleccionado?.id ?? String(activos[0]?.id ?? ''))
   const [phase, setPhase] = useState<'form' | 'gen' | 'done'>('form')
   const [creada, setCreada] = useState<FirmaResponse | null>(null)
   const [error, setError] = useState('')
 
-  const seleccionado = activos.find(u => u.id === usuarioId) ?? null
+  const seleccionado = activos.find((u) => u.id === usuarioId) ?? null
 
   const generar = async () => {
     if (!seleccionado) return
@@ -50,31 +55,43 @@ export function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCre
       {phase === 'form' && (
         <>
           {activos.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No hay cuentas activas disponibles para asignar una firma.</p>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              No hay cuentas activas disponibles para asignar una firma.
+            </p>
           ) : (
             <Field label="Cuenta">
-              <select value={usuarioId} onChange={e => setUsuarioId(e.target.value)}>
-                {activos.map(u => <option key={u.id} value={u.id}>{u.nombre} — {u.rol}</option>)}
+              <select value={usuarioId} onChange={(e) => setUsuarioId(e.target.value)}>
+                {activos.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.nombre} — {u.rol}
+                  </option>
+                ))}
               </select>
             </Field>
           )}
 
           {seleccionado && (
-            <div className="card" style={{ padding: '10px 14px', marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
+            <div
+              className="card"
+              style={{ padding: '10px 14px', marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}
+            >
               {seleccionado.correo} · {seleccionado.cargo}
             </div>
           )}
 
           <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 14px', lineHeight: 1.5 }}>
-            Esto asigna un identificador de firma de referencia a la cuenta y queda guardado en
-            el sistema. La integración con un proveedor real de firma electrónica (PKI) se
-            implementa en una fase posterior.
+            Esto asigna un identificador de firma de referencia a la cuenta y queda guardado en el sistema. La
+            integración con un proveedor real de firma electrónica (PKI) se implementa en una fase posterior.
           </p>
 
           {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '0 0 10px' }}>{error}</p>}
 
-          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, opacity: seleccionado ? 1 : 0.6 }}
-            onClick={generar} disabled={!seleccionado}>
+          <button
+            className="btn-green"
+            style={{ width: '100%', padding: '10px 0', fontSize: 13, opacity: seleccionado ? 1 : 0.6 }}
+            onClick={generar}
+            disabled={!seleccionado}
+          >
             Asignar firma
           </button>
         </>
@@ -90,11 +107,17 @@ export function NewFirmaModal({ usuarios, usuarioPreseleccionado, onClose, onCre
       {phase === 'done' && creada && (
         <div style={{ textAlign: 'center' }}>
           <IconSignature size={34} style={{ color: 'var(--accent)', margin: '0 auto 6px' }} />
-          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>Firma {creada.firmaId} asignada</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent)', margin: '8px 0 2px' }}>
+            Firma {creada.firmaId} asignada
+          </p>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
             Cuenta: {creada.usuarioNombre} ({creada.usuarioEmail})
           </p>
-          <button className="btn-green" style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 18 }} onClick={confirmar}>
+          <button
+            className="btn-green"
+            style={{ width: '100%', padding: '10px 0', fontSize: 13, marginTop: 18 }}
+            onClick={confirmar}
+          >
             Aceptar
           </button>
         </div>
