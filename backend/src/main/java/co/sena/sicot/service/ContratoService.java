@@ -16,6 +16,8 @@ import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.SecurityUtils;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,19 @@ import java.util.List;
 
 @Service
 public class ContratoService {
+
+    /**
+     * Tope del listado de contratos.
+     *
+     * <p>Mismo criterio que {@code MAX_ALERTAS_LISTADO} y
+     * {@code MAX_REGISTROS_LISTADO}: no es una paginación de verdad —que el
+     * frontend todavía no sabe recorrer— sino un techo que impide que una
+     * pantalla cargue la tabla entera. Quinientos contratos es más de lo que un
+     * Centro maneja en varios años, así que hoy nadie lo alcanza; está para que
+     * el día que se alcance el sistema siga respondiendo en lugar de degradarse
+     * sin que nadie sepa por qué.
+     */
+    private static final int MAX_CONTRATOS_LISTADO = 500;
 
     private final ContratoRepository contratoRepository;
     private final UsuarioRepository usuarioRepository;
@@ -49,15 +64,17 @@ public class ContratoService {
             // parámetro, y sin filtro no ve el listado completo del sistema.
             supervisorId = actual.getId();
         }
+        Pageable limite = PageRequest.of(0, MAX_CONTRATOS_LISTADO);
         List<Contrato> contratos;
         if (supervisorId != null && estado != null) {
-            contratos = contratoRepository.findBySupervisorIdAndEstado(supervisorId, estado);
+            contratos = contratoRepository
+                    .findBySupervisorIdAndEstadoOrderByFechaCreacionDesc(supervisorId, estado, limite);
         } else if (supervisorId != null) {
-            contratos = contratoRepository.findBySupervisorId(supervisorId);
+            contratos = contratoRepository.findBySupervisorIdOrderByFechaCreacionDesc(supervisorId, limite);
         } else if (estado != null) {
-            contratos = contratoRepository.findByEstado(estado);
+            contratos = contratoRepository.findByEstadoOrderByFechaCreacionDesc(estado, limite);
         } else {
-            contratos = contratoRepository.findAll();
+            contratos = contratoRepository.findAllByOrderByFechaCreacionDesc(limite);
         }
         return contratos.stream().map(ContratoMapper::toResponse).toList();
     }
