@@ -226,11 +226,18 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
         given(ollamaClient.generar(anyString(), anyBoolean())).willReturn("respuesta de prueba del Copiloto");
 
         // El supervisor asignado sí puede.
+        //
+        // La pregunta es abierta a propósito. «¿En qué paso vamos?» la contesta
+        // ahora GuiaDelPasoActual sin llamar al modelo, así que con esa pregunta
+        // esta prueba estaría afirmando la respuesta de la plantilla en vez de
+        // la del cliente simulado — y dejaría de comprobar lo que le importa,
+        // que es que el camino completo hasta Ollama se abre para el supervisor
+        // asignado y se cierra para el ajeno.
         String tokenAsignado = login("supervisor@soy.sena.edu.co", "Supervisor123*");
         mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
                         .header("Authorization", "Bearer " + tokenAsignado)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"pregunta\":\"¿en qué paso vamos?\"}"))
+                        .content("{\"pregunta\":\"¿de dónde saco la póliza de cumplimiento?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.respuesta").value("respuesta de prueba del Copiloto"));
 
@@ -246,6 +253,52 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
         // Ollama se llamó exactamente una vez: la del supervisor legítimo. La
         // petición del contrato ajeno se cortó antes de construir el prompt.
         verify(ollamaClient, times(1)).generar(anyString(), anyBoolean());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // El atajo sin modelo (GuiaDelPasoActual) NO es una puerta de servicio.
+    //
+    // Cuando «¿en qué paso voy?» dejó de pasar por Ollama, apareció un riesgo
+    // nuevo: ese camino responde con el estado real de las etapas de un contrato
+    // —qué falta, por dónde va— y si se hubiera colocado antes del control de
+    // acceso, cualquier supervisor habría podido leer el avance del contrato de
+    // otro sin que ninguna prueba se quejara, porque el del contrato ajeno ya
+    // estaba cubierto solo para el camino del modelo.
+    //
+    // Va aparte y no dentro de la prueba de arriba justamente porque aquella
+    // tuvo que cambiar su pregunta por una abierta: sin esta, el camino corto
+    // se quedaba sin ninguna prueba de acceso.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void elAtajoSinModeloTampocoDejaVerElContratoAjeno() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        String admin = login("administrador@soy.sena.edu.co", "Admin123*");
+
+        long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
+        asegurarSupervisorAjeno(admin);
+        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "Ajeno123*");
+
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-ATAJO", supervisorAsignadoId);
+
+        // Pregunta que SÍ activa el atajo determinista.
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + tokenAjeno)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"¿en qué paso voy?\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", containsString("recurso solicitado no existe")));
+
+        // Y el supervisor legítimo sí obtiene su guía — sin gastar el modelo.
+        String tokenAsignado = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + tokenAsignado)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"¿en qué paso voy?\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.respuesta", containsString("Está en el paso 1")));
+
+        verifyNoInteractions(ollamaClient);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

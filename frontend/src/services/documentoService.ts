@@ -83,6 +83,25 @@ export function extraerDatosContrato(archivos: File[]): Promise<ExtraccionContra
   return apiFetch<ExtraccionContratoResponse>('/api/ia/extraer-contrato', { method: 'POST', body: form })
 }
 
+// Deja el contexto del contrato caliente en el modelo, antes de que el
+// supervisor pregunte nada.
+//
+// Medido el 14 de septiembre de 2026: la PRIMERA pregunta sobre un contrato
+// tardaba ~158 s, de los que ~120 eran solo que el modelo leyera el prompt; la
+// SEGUNDA tardaba 0,8 s en esa fase, porque Ollama reutiliza el prefijo
+// cacheado. Llamando a esto al abrir el contrato, ese minuto y medio transcurre
+// mientras el supervisor lee la ficha en vez de mientras mira una pantalla
+// parada esperando su respuesta.
+//
+// No devuelve nada útil y NO se espera: si falla —Ollama apagado, por ejemplo—
+// no debe estropear la apertura del contrato. El copiloto seguirá funcionando,
+// solo que la primera pregunta será lenta como antes.
+export function precalentarCopiloto(contratoId: number): void {
+  void apiFetch<void>(`/api/contratos/${contratoId}/copiloto/precalentar`, { method: 'POST' }).catch(() => {
+    /* Silencio deliberado: es una optimización, no una función. */
+  })
+}
+
 // Chat real del Copiloto IA (Ollama) — reemplaza el antiguo CHAT_RESPONSES por
 // coincidencia de palabras clave. La respuesta viene anclada a los datos
 // reales del contrato y al estado real de sus etapas (ver CopilotoChatService).

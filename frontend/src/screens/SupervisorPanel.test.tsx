@@ -29,6 +29,10 @@ vi.mock('@/services/documentoService', () => ({
   getDocumentosContrato: vi.fn(),
   generarDocumento: vi.fn(),
   firmarDocumento: vi.fn(),
+  // Se simula aunque ninguna prueba lo compruebe: el panel lo dispara al abrir
+  // el contrato y, sin simular, la prueba saldría a la red de verdad a un
+  // backend que aquí no existe.
+  precalentarCopiloto: vi.fn(),
   preguntarCopiloto: vi.fn(),
   verificarIntegridad: vi.fn(),
   descargarDocumento: vi.fn(),
