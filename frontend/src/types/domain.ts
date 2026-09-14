@@ -31,4 +31,7 @@ export interface Step {
   status: 'completed' | 'active' | 'pending'
 }
 
-export interface ChatMsg { role: 'ai' | 'user'; text: string }
+export interface ChatMsg {
+  role: 'ai' | 'user'
+  text: string
+}

@@ -12,10 +12,10 @@
 // confirmar. Ese estado gobierna también el recorrido de etapas, así que vive
 // en el panel y esta columna solo lo presenta.
 
-import type { RefObject } from "react"
-import { AvatarIcon, IconArrowRight, IconChevron } from "@/components/icons"
-import type { ChatMsg, Step } from "@/types/domain"
-import type { ContratoResponse } from "@/services/api/types"
+import type { RefObject } from 'react'
+import { AvatarIcon, IconArrowRight, IconChevron } from '@/components/icons'
+import type { ChatMsg, Step } from '@/types/domain'
+import type { ContratoResponse } from '@/services/api/types'
 
 export type RevisionPaso = {
   stepId: number
@@ -70,56 +70,54 @@ export default function PanelCopiloto({
         width: 420,
         minWidth: 340,
         flexShrink: 0,
-        borderLeft: "1px solid var(--border)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        background: "var(--bg-rail)",
+        borderLeft: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        background: 'var(--bg-rail)',
       }}
     >
       <div
         style={{
-          padding: "12px 16px",
-          borderBottom: "1px solid var(--border)",
+          padding: '12px 16px',
+          borderBottom: '1px solid var(--border)',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div
             style={{
               width: 36,
               height: 36,
-              borderRadius: "50%",
-              color: "var(--accent)",
-              background: "var(--bg-card)",
-              border: "1.5px solid var(--accent)",
-              boxShadow: "0 0 0 3px var(--accent-soft)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              borderRadius: '50%',
+              color: 'var(--accent)',
+              background: 'var(--bg-card)',
+              border: '1.5px solid var(--accent)',
+              boxShadow: '0 0 0 3px var(--accent-soft)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             <AvatarIcon id={prefs.avatarId} size={18} />
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>
-                {prefs.avatarName}
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>{prefs.avatarName}</span>
               <span
                 style={{
                   fontSize: 10,
                   fontWeight: 600,
-                  color: "var(--on-accent)",
-                  background: "var(--accent)",
-                  padding: "1px 6px",
+                  color: 'var(--on-accent)',
+                  background: 'var(--accent)',
+                  padding: '1px 6px',
                   borderRadius: 3,
                 }}
               >
                 Activo
               </span>
             </div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               Asistente contractual · {contrato.numeroContrato}
             </div>
           </div>
@@ -130,12 +128,12 @@ export default function PanelCopiloto({
             title="Ocultar el panel del Copiloto"
             aria-label="Ocultar el panel del Copiloto"
             style={{
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              cursor: "pointer",
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
               padding: 4,
-              display: "flex",
+              display: 'flex',
             }}
           >
             <IconChevron size={15} />
@@ -147,10 +145,10 @@ export default function PanelCopiloto({
       <div
         style={{
           flex: 1,
-          overflowY: "auto",
-          padding: "14px 14px 8px",
-          display: "flex",
-          flexDirection: "column",
+          overflowY: 'auto',
+          padding: '14px 14px 8px',
+          display: 'flex',
+          flexDirection: 'column',
           gap: 10,
         }}
       >
@@ -158,36 +156,36 @@ export default function PanelCopiloto({
           <div
             key={i}
             style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: m.role === "user" ? "flex-end" : "flex-start",
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: m.role === 'user' ? 'flex-end' : 'flex-start',
             }}
           >
-            {m.role === "ai" ? (
-              <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+            {m.role === 'ai' ? (
+              <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
                 <div
                   style={{
                     width: 24,
                     height: 24,
-                    borderRadius: "50%",
-                    background: "var(--accent-soft)",
-                    border: "1px solid var(--accent-line)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    borderRadius: '50%',
+                    background: 'var(--accent-soft)',
+                    border: '1px solid var(--accent-line)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     flexShrink: 0,
                     marginTop: 2,
-                    color: "var(--accent)",
+                    color: 'var(--accent)',
                   }}
                 >
                   <AvatarIcon id={prefs.avatarId} size={13} />
                 </div>
-                <div className="copiloto-msg" style={{ maxWidth: "92%" }}>
+                <div className="copiloto-msg" style={{ maxWidth: '92%' }}>
                   {m.text}
                 </div>
               </div>
             ) : (
-              <div className="user-msg" style={{ maxWidth: "88%" }}>
+              <div className="user-msg" style={{ maxWidth: '88%' }}>
                 {m.text}
               </div>
             )}
@@ -195,21 +193,21 @@ export default function PanelCopiloto({
         ))}
 
         {pensando && (
-          <div style={{ display: "flex", gap: 6, alignItems: "flex-start" }}>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
             <div
               style={{
                 width: 24,
                 height: 24,
-                borderRadius: "50%",
-                background: "var(--accent-soft)",
-                border: "1px solid var(--accent-line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                borderRadius: '50%',
+                background: 'var(--accent-soft)',
+                border: '1px solid var(--accent-line)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 fontSize: 12,
                 flexShrink: 0,
                 marginTop: 2,
-                color: "var(--accent)",
+                color: 'var(--accent)',
               }}
             >
               ★
@@ -217,13 +215,12 @@ export default function PanelCopiloto({
             <div
               className="copiloto-msg"
               style={{
-                maxWidth: "92%",
-                fontStyle: "italic",
-                color: "var(--text-muted)",
+                maxWidth: '92%',
+                fontStyle: 'italic',
+                color: 'var(--text-muted)',
               }}
             >
-              Pensando… puede tardar uno o varios minutos según la carga del
-              servidor. No cierre esta ventana.
+              Pensando… puede tardar uno o varios minutos según la carga del servidor. No cierre esta ventana.
             </div>
           </div>
         )}
@@ -234,10 +231,10 @@ export default function PanelCopiloto({
               className="btn-green"
               onClick={() => onIniciarPaso(activeStep.id)}
               style={{
-                padding: "8px 16px",
+                padding: '8px 16px',
                 fontSize: 13,
-                display: "inline-flex",
-                alignItems: "center",
+                display: 'inline-flex',
+                alignItems: 'center',
                 gap: 7,
               }}
             >
@@ -250,23 +247,15 @@ export default function PanelCopiloto({
           <div
             style={{
               paddingLeft: 30,
-              display: "flex",
+              display: 'flex',
               gap: 8,
-              flexWrap: "wrap",
+              flexWrap: 'wrap',
             }}
           >
-            <button
-              className="btn-green"
-              onClick={onConfirmarRevision}
-              style={{ padding: "8px 16px", fontSize: 13 }}
-            >
+            <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
               Confirmar Paso {revisionPaso.stepId} como completado
             </button>
-            <button
-              className="btn-ghost"
-              onClick={onCancelarRevision}
-              style={{ padding: "8px 16px", fontSize: 13 }}
-            >
+            <button className="btn-ghost" onClick={onCancelarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
               Cancelar, quiero revisar algo antes
             </button>
           </div>
@@ -277,11 +266,11 @@ export default function PanelCopiloto({
       {/* Sugerencias rápidas */}
       <div
         style={{
-          padding: "8px 12px",
-          borderTop: "1px solid var(--border)",
-          display: "flex",
+          padding: '8px 12px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
           gap: 6,
-          flexWrap: "wrap",
+          flexWrap: 'wrap',
           flexShrink: 0,
         }}
       >
@@ -291,21 +280,19 @@ export default function PanelCopiloto({
             onClick={() => onSugerencia(question)}
             disabled={bloqueado}
             style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border)",
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border)',
               borderRadius: 20,
-              padding: "4px 10px",
+              padding: '4px 10px',
               fontSize: 11,
-              color: "var(--text-secondary)",
-              cursor: bloqueado ? "default" : "pointer",
+              color: 'var(--text-secondary)',
+              cursor: bloqueado ? 'default' : 'pointer',
               opacity: bloqueado ? 0.5 : 1,
-              fontFamily: "var(--font-ui)",
-              transition: "border-color 0.15s",
+              fontFamily: 'var(--font-ui)',
+              transition: 'border-color 0.15s',
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.borderColor = "var(--accent-dim)")}
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.borderColor = "var(--border)")}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-dim)')}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
           >
             {label}
           </button>
@@ -315,9 +302,9 @@ export default function PanelCopiloto({
       {/* Entrada */}
       <div
         style={{
-          padding: "8px 12px 12px",
-          borderTop: "1px solid var(--border)",
-          display: "flex",
+          padding: '8px 12px 12px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex',
           gap: 8,
           flexShrink: 0,
         }}
@@ -327,27 +314,29 @@ export default function PanelCopiloto({
           value={chatInput}
           onChange={(e) => onCambiarEntrada(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") onEnviar()
+            if (e.key === 'Enter') onEnviar()
           }}
-          placeholder={pensando
-            ? "Esperando respuesta del Copiloto…"
-            : revisionPaso && !revisionPaso.listaParaConfirmar
-            ? "Describa qué hizo o verificó en este paso..."
-            : "Escriba una orden o pregunta a la IA..."}
+          placeholder={
+            pensando
+              ? 'Esperando respuesta del Copiloto…'
+              : revisionPaso && !revisionPaso.listaParaConfirmar
+                ? 'Describa qué hizo o verificó en este paso...'
+                : 'Escriba una orden o pregunta a la IA...'
+          }
           disabled={pensando}
-          style={{ flex: 1, padding: "9px 12px", opacity: pensando ? 0.6 : 1 }}
+          style={{ flex: 1, padding: '9px 12px', opacity: pensando ? 0.6 : 1 }}
         />
         <button
           className="btn-green"
           onClick={onEnviar}
           disabled={pensando}
           style={{
-            padding: "8px 14px",
+            padding: '8px 14px',
             fontSize: 13,
             opacity: pensando ? 0.6 : 1,
-            cursor: pensando ? "default" : "pointer",
-            display: "inline-flex",
-            alignItems: "center",
+            cursor: pensando ? 'default' : 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
           }}
         >
           <IconArrowRight size={14} />

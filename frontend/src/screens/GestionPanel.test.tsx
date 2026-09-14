@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from "@testing-library/react"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import GestionPanel from "./GestionPanel"
-import { PrefsProvider } from "@/prefs"
-import { contrato, sesionGestion } from "@/test/dobles"
+import { render, screen, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import GestionPanel from './GestionPanel'
+import { PrefsProvider } from '@/prefs'
+import { contrato, sesionGestion } from '@/test/dobles'
 
 /**
  * Pruebas del panel de Gestión Contractual.
@@ -15,18 +15,18 @@ import { contrato, sesionGestion } from "@/test/dobles"
  * mostrar algo aproximado.
  */
 
-vi.mock("@/services/contratoService", () => ({
+vi.mock('@/services/contratoService', () => ({
   getContratos: vi.fn(),
   crearContrato: vi.fn(),
 }))
-vi.mock("@/services/usuarioService", () => ({
+vi.mock('@/services/usuarioService', () => ({
   getUsuarios: vi.fn(),
   crearUsuario: vi.fn(),
   actualizarUsuario: vi.fn(),
   cambiarEstadoUsuario: vi.fn(),
   enviarCredenciales: vi.fn(),
 }))
-vi.mock("@/services/documentoService", () => ({
+vi.mock('@/services/documentoService', () => ({
   extraerDatosContrato: vi.fn(),
   subirDocumento: vi.fn(),
 }))
@@ -34,34 +34,29 @@ vi.mock("@/services/documentoService", () => ({
 function montar() {
   return render(
     <PrefsProvider>
-      <GestionPanel
-        usuario={sesionGestion()}
-        onLogout={vi.fn()}
-        onOpenSettings={vi.fn()}
-        onStartTour={vi.fn()}
-      />
+      <GestionPanel usuario={sesionGestion()} onLogout={vi.fn()} onOpenSettings={vi.fn()} onStartTour={vi.fn()} />
     </PrefsProvider>,
   )
 }
 
-describe("GestionPanel", () => {
+describe('GestionPanel', () => {
   // Ver la nota de SupervisorPanel.test.tsx sobre el `restoreAllMocks` global.
   beforeEach(async () => {
     localStorage.clear()
-    vi.mocked((await import("@/services/contratoService")).getContratos).mockResolvedValue([])
-    vi.mocked((await import("@/services/usuarioService")).getUsuarios).mockResolvedValue([])
+    vi.mocked((await import('@/services/contratoService')).getContratos).mockResolvedValue([])
+    vi.mocked((await import('@/services/usuarioService')).getUsuarios).mockResolvedValue([])
   })
 
-  it("consulta los contratos reales al montar", async () => {
-    const { getContratos } = await import("@/services/contratoService")
+  it('consulta los contratos reales al montar', async () => {
+    const { getContratos } = await import('@/services/contratoService')
 
     montar()
 
     await waitFor(() => expect(getContratos).toHaveBeenCalled())
   })
 
-  it("muestra el número de un contrato existente", async () => {
-    const { getContratos } = await import("@/services/contratoService")
+  it('muestra el número de un contrato existente', async () => {
+    const { getContratos } = await import('@/services/contratoService')
     vi.mocked(getContratos).mockResolvedValue([contrato()])
 
     montar()
@@ -74,27 +69,23 @@ describe("GestionPanel", () => {
    * romperse: quien gestiona contratos debe poder seguir viendo la interfaz y
    * reintentar.
    */
-  it("sobrevive a un fallo del backend sin romper el render", async () => {
-    const { getContratos } = await import("@/services/contratoService")
-    vi.mocked(getContratos).mockRejectedValue(new Error("backend caído"))
+  it('sobrevive a un fallo del backend sin romper el render', async () => {
+    const { getContratos } = await import('@/services/contratoService')
+    vi.mocked(getContratos).mockRejectedValue(new Error('backend caído'))
 
     montar()
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/contrato/i).length).toBeGreaterThan(0),
-    )
+    await waitFor(() => expect(screen.getAllByText(/contrato/i).length).toBeGreaterThan(0))
   })
 
   /**
    * Sin contratos cargados, la tabla no debe inventar filas de ejemplo. Es la
    * regla de "no simular" del proyecto aplicada a esta pantalla.
    */
-  it("sin contratos no muestra ningún número de contrato inventado", async () => {
+  it('sin contratos no muestra ningún número de contrato inventado', async () => {
     montar()
 
-    await waitFor(() =>
-      expect(screen.getAllByText(/contrato/i).length).toBeGreaterThan(0),
-    )
+    await waitFor(() => expect(screen.getAllByText(/contrato/i).length).toBeGreaterThan(0))
     expect(screen.queryByText(/CTMA-2026-0184/)).not.toBeInTheDocument()
   })
 })

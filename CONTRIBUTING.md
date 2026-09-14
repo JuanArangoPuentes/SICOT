@@ -103,6 +103,9 @@ Estas reglas no son estilo, son lo que mantiene el sistema entendible:
 - Backend: `./mvnw verify` en `backend/`. Debe quedar en verde antes de abrir
   el PR.
 - Frontend: `npm run test:run` y `npm run typecheck` en `frontend/`.
+- Formato del frontend: `npm run format` en `frontend/`. El CI lo comprueba con
+  `npm run format:check`, así que un PR sin formatear no pasa. No hay que
+  discutir el estilo: lo fija `frontend/.oxfmtrc.json` y lo arregla el comando.
 - Si corrige un fallo, **añada la prueba que lo habría detectado**. Es la única
   forma de que no vuelva.
 

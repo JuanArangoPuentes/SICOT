@@ -1,0 +1,42 @@
+{
+  // Configuración de oxfmt para el frontend.
+  //
+  // Existe para que el formateador se adapte al código que ya está escrito, y
+  // no al revés. Con los valores por defecto de oxfmt, activar el formateador
+  // reescribía los ~8.200 renglones de `src/` a un estilo distinto del que usa
+  // todo el equipo: eso no es formatear, es cambiar de convención a escondidas
+  // dentro de un commit de mantenimiento.
+
+  // El código del frontend no usa punto y coma ni comillas dobles. No es un
+  // descuido: es uniforme en los 51 archivos de `src/`. El formateador se
+  // pliega a esa convención en vez de imponer la suya.
+  "semi": false,
+  "singleQuote": true,
+
+  // Por defecto oxfmt corta en 100. Medido sobre `src/` antes de formatear, el
+  // percentil 95 de longitud de línea es 118: el equipo escribe cómodo por
+  // encima de 100, y cortar ahí parte en dos un montón de líneas que hoy se
+  // leen bien de un vistazo. 120 es el ancho que ya se estaba usando de hecho.
+  "printWidth": 120,
+
+  "ignorePatterns": [
+    // `package.json` lo escriben npm y Dependabot, no una persona. oxfmt además
+    // le reordena las claves (mueve `private` detrás de `version`), así que
+    // gatear el CI con eso sería pelear contra las herramientas que generan el
+    // archivo. El formateador no manda sobre un manifiesto que no edita nadie
+    // a mano.
+    "package.json",
+    "package-lock.json",
+
+    // La documentación está escrita a mano y en español, con tablas alineadas
+    // a criterio de quien las escribió. Reformatearla no aporta nada y mete
+    // ruido en los diffs de documentación.
+    "**/*.md",
+
+    // Artefactos generados: no son código fuente.
+    "dist",
+    "coverage",
+    "playwright-report",
+    "test-results"
+  ]
+}

@@ -1,0 +1,21 @@
+# Commits que solo reformatean: `git blame` debe saltárselos.
+#
+# Un reformateo masivo reescribe miles de líneas sin cambiar una sola decisión
+# de diseño. Si `blame` los cuenta, la respuesta a «¿quién escribió esto y por
+# qué?» pasa a ser el día en que se pasó el formateador, y se pierde el rastro
+# de la persona y el commit que sí explican la línea.
+#
+# GitHub usa este archivo automáticamente. En local hay que decírselo a git una
+# sola vez, desde la raíz del repositorio:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Regla para añadir aquí un commit: solo si es exclusivamente mecánico, es
+# decir, si su diff es la salida literal de un formateador y no contiene ningún
+# cambio escrito a mano. Un commit que además arregle algo NO va en esta lista,
+# porque entonces `blame` escondería ese arreglo.
+
+# Aplica oxfmt a todo el frontend en una sola pasada (47 archivos).
+# Primera pasada del formateador, al activarlo en la compuerta de CI: hasta
+# entonces oxfmt estaba fuera del CI porque la versión 0.2.x rompía la sintaxis.
+8da411463b1071cfc04f8cbeecf7b67e907adcf7

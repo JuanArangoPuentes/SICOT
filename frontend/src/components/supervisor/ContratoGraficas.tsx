@@ -6,8 +6,16 @@
 // tiene etapas cargadas, cada panel lo dice en vez de dibujar una curva falsa.
 
 import {
-  Bar, BarChart, CartesianGrid, Legend, Pie, PieChart,
-  ResponsiveContainer, Tooltip, XAxis, YAxis,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
 } from 'recharts'
 import type { Step } from '@/types/domain'
 import type { ContratoResponse, DocumentoResponse } from '@/services/api/types'
@@ -29,7 +37,12 @@ const TOOLTIP_STYLE = {
   color: 'var(--text-primary)',
 } as const
 
-function Panel({ title, desc, children, alto = 230 }: {
+function Panel({
+  title,
+  desc,
+  children,
+  alto = 230,
+}: {
   title: string
   desc: string
   children: React.ReactNode
@@ -38,7 +51,9 @@ function Panel({ title, desc, children, alto = 230 }: {
   return (
     <div className="card" style={{ padding: '15px 17px 12px', display: 'flex', flexDirection: 'column' }}>
       <div className="section-title">{title}</div>
-      <div className="section-sub" style={{ margin: '3px 0 12px' }}>{desc}</div>
+      <div className="section-sub" style={{ margin: '3px 0 12px' }}>
+        {desc}
+      </div>
       <div style={{ height: alto, width: '100%' }}>{children}</div>
     </div>
   )
@@ -46,13 +61,29 @@ function Panel({ title, desc, children, alto = 230 }: {
 
 function SinDatos({ texto }: { texto: string }) {
   return (
-    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 16px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+    <div
+      style={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        textAlign: 'center',
+        padding: '0 16px',
+        fontSize: 12.5,
+        color: 'var(--text-muted)',
+        lineHeight: 1.5,
+      }}
+    >
       {texto}
     </div>
   )
 }
 
-export default function ContratoGraficas({ steps, docs, contrato }: {
+export default function ContratoGraficas({
+  steps,
+  docs,
+  contrato,
+}: {
   steps: Step[]
   docs: DocumentoResponse[]
   contrato: ContratoResponse
@@ -60,9 +91,9 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
   const hayEtapas = steps.length > 0
 
   // ── 1. Avance por etapa (datos reales de subetapas) ──
-  const porEtapa = steps.map(s => {
+  const porEtapa = steps.map((s) => {
     const total = s.subSteps.length
-    const hechos = s.subSteps.filter(ss => ss.completed).length
+    const hechos = s.subSteps.filter((ss) => ss.completed).length
     const pct = total ? Math.round((hechos / total) * 100) : 0
     return {
       etapa: `P${s.id}`,
@@ -77,13 +108,13 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
   })
 
   // ── 2. Distribución de sub-pasos ──
-  const todosSubPasos = steps.flatMap(s => s.subSteps)
-  const completados = todosSubPasos.filter(ss => ss.completed).length
+  const todosSubPasos = steps.flatMap((s) => s.subSteps)
+  const completados = todosSubPasos.filter((ss) => ss.completed).length
   const pendientes = todosSubPasos.length - completados
   const distribucion = [
     { name: 'Completados', value: completados, fill: 'var(--accent)' },
     { name: 'Pendientes', value: pendientes, fill: 'var(--step-pending)' },
-  ].filter(d => d.value > 0)
+  ].filter((d) => d.value > 0)
 
   // ── 3. Tiempo transcurrido frente a avance ejecutado ──
   const inicio = contrato.fechaInicio ? new Date(contrato.fechaInicio) : null
@@ -92,15 +123,18 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
   const diasCorridos = inicio ? (Date.now() - inicio.getTime()) / 86400000 : 0
   const pctTiempo = totalDias > 0 ? Math.max(0, Math.min(100, Math.round((diasCorridos / totalDias) * 100))) : null
   const pctAvance = todosSubPasos.length ? Math.round((completados / todosSubPasos.length) * 100) : 0
-  const comparacion = pctTiempo === null ? [] : [
-    { name: 'Tiempo transcurrido', valor: pctTiempo, fill: 'var(--chip-blue)' },
-    { name: 'Avance ejecutado', valor: pctAvance, fill: 'var(--accent)' },
-  ]
+  const comparacion =
+    pctTiempo === null
+      ? []
+      : [
+          { name: 'Tiempo transcurrido', valor: pctTiempo, fill: 'var(--chip-blue)' },
+          { name: 'Avance ejecutado', valor: pctAvance, fill: 'var(--accent)' },
+        ]
 
   // ── 4. Documentos formales del proceso ──
-  const generados = FORMAL_DOCS.map(d => docs.find(x => x.generadoPorIa && x.nombre.startsWith(d.name)))
-  const firmados = generados.filter(d => d?.estado === 'APROBADO').length
-  const sinFirmar = generados.filter(d => d && d.estado !== 'APROBADO').length
+  const generados = FORMAL_DOCS.map((d) => docs.find((x) => x.generadoPorIa && x.nombre.startsWith(d.name)))
+  const firmados = generados.filter((d) => d?.estado === 'APROBADO').length
+  const sinFirmar = generados.filter((d) => d && d.estado !== 'APROBADO').length
   const sinGenerar = FORMAL_DOCS.length - firmados - sinFirmar
   const documentos = [
     { name: 'Firmados', valor: firmados, fill: 'var(--accent)' },
@@ -110,7 +144,6 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
-
       <Panel title="Avance por etapa" desc="Porcentaje de sub-pasos cerrados en cada una de las etapas del proceso.">
         {!hayEtapas ? (
           <SinDatos texto="Las etapas del contrato todavía no se han cargado desde el servidor." />
@@ -118,8 +151,19 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={porEtapa} margin={{ top: 6, right: 10, left: -22, bottom: 0 }}>
               <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis dataKey="etapa" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
-              <YAxis domain={[0, 100]} unit="%" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+              <XAxis
+                dataKey="etapa"
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--border)' }}
+                tickLine={false}
+              />
+              <YAxis
+                domain={[0, 100]}
+                unit="%"
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
               <Tooltip
                 cursor={{ fill: 'var(--accent-soft)' }}
                 contentStyle={TOOLTIP_STYLE}
@@ -135,7 +179,10 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
         )}
       </Panel>
 
-      <Panel title="Distribución de sub-pasos" desc="Cuántos puntos de control del contrato están cerrados y cuántos siguen abiertos.">
+      <Panel
+        title="Distribución de sub-pasos"
+        desc="Cuántos puntos de control del contrato están cerrados y cuántos siguen abiertos."
+      >
         {!todosSubPasos.length ? (
           <SinDatos texto="Sin sub-pasos cargados para este contrato." />
         ) : (
@@ -152,10 +199,7 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
                 strokeWidth={2}
                 isAnimationActive={false}
               />
-              <Tooltip
-                contentStyle={TOOLTIP_STYLE}
-                formatter={(v, n) => [`${String(v)} sub-paso(s)`, String(n)]}
-              />
+              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${String(v)} sub-paso(s)`, String(n)]} />
               <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-secondary)' }} />
             </PieChart>
           </ResponsiveContainer>
@@ -172,22 +216,58 @@ export default function ContratoGraficas({ steps, docs, contrato }: {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={comparacion} layout="vertical" margin={{ top: 10, right: 26, left: 8, bottom: 0 }}>
               <CartesianGrid stroke="var(--border)" horizontal={false} />
-              <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} />
-              <YAxis type="category" dataKey="name" width={130} tick={{ fill: 'var(--text-secondary)', fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ fill: 'var(--accent-soft)' }} contentStyle={TOOLTIP_STYLE} formatter={v => [`${String(v)}%`, '']} />
+              <XAxis
+                type="number"
+                domain={[0, 100]}
+                unit="%"
+                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+                axisLine={{ stroke: 'var(--border)' }}
+                tickLine={false}
+              />
+              <YAxis
+                type="category"
+                dataKey="name"
+                width={130}
+                tick={{ fill: 'var(--text-secondary)', fontSize: 11 }}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                cursor={{ fill: 'var(--accent-soft)' }}
+                contentStyle={TOOLTIP_STYLE}
+                formatter={(v) => [`${String(v)}%`, '']}
+              />
               <Bar dataKey="valor" name="Porcentaje" radius={[0, 5, 5, 0]} barSize={26} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         )}
       </Panel>
 
-      <Panel title="Documentos formales del proceso" desc="Estado real de los documentos que el Copiloto redacta y el supervisor firma.">
+      <Panel
+        title="Documentos formales del proceso"
+        desc="Estado real de los documentos que el Copiloto redacta y el supervisor firma."
+      >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={documentos} margin={{ top: 6, right: 10, left: -26, bottom: 0 }}>
             <CartesianGrid stroke="var(--border)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 10.5 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} interval={0} />
-            <YAxis allowDecimals={false} tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-            <Tooltip cursor={{ fill: 'var(--accent-soft)' }} contentStyle={TOOLTIP_STYLE} formatter={v => [`${String(v)} documento(s)`, '']} />
+            <XAxis
+              dataKey="name"
+              tick={{ fill: 'var(--text-muted)', fontSize: 10.5 }}
+              axisLine={{ stroke: 'var(--border)' }}
+              tickLine={false}
+              interval={0}
+            />
+            <YAxis
+              allowDecimals={false}
+              tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <Tooltip
+              cursor={{ fill: 'var(--accent-soft)' }}
+              contentStyle={TOOLTIP_STYLE}
+              formatter={(v) => [`${String(v)} documento(s)`, '']}
+            />
             <Bar dataKey="valor" name="Documentos" radius={[4, 4, 0, 0]} barSize={46} isAnimationActive={false} />
           </BarChart>
         </ResponsiveContainer>
