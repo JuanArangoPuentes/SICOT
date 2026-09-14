@@ -63,6 +63,7 @@ import {
   getDocumentosContrato,
   generarDocumento,
   firmarDocumento,
+  precalentarCopiloto,
   preguntarCopiloto,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
@@ -294,6 +295,22 @@ export default function SupervisorPanel({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMsgs])
+
+  // Precalentar el Copiloto en cuanto se abre el contrato.
+  //
+  // No pinta nada ni se espera: solo le pide al backend que vaya cargando el
+  // contexto de este contrato en el modelo. La primera pregunta al Copiloto
+  // tardaba ~158 s porque el modelo tenía que leerse el prompt entero; la
+  // segunda, 0,8 s, porque ese prefijo ya estaba cacheado. Disparándolo aquí,
+  // esa espera ocurre mientras el supervisor lee la ficha.
+  //
+  // Va en su propio efecto, y no dentro del de las etapas, porque no tiene
+  // nada que ver con ellas: si mañana cambia cómo se cargan las etapas, esto
+  // no debería verse arrastrado.
+  useEffect(() => {
+    if (!contrato) return
+    precalentarCopiloto(contrato.id)
+  }, [contrato])
 
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)
   useEffect(() => {
