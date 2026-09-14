@@ -32,7 +32,7 @@ class ReglasDeCalendarioTest {
             true, Duration.ofMinutes(1), 25, 2, 5,
             Duration.ofMinutes(1), Duration.ofMinutes(30), Duration.ofDays(30),
             List.of(30, 15, 7),
-            new AutomatizacionProperties.Ia(false, 7));
+            new AutomatizacionProperties.Resumen(7));
 
     // ── AvisoDeVencimientoProximo ──────────────────────────────────────────
 
