@@ -9,9 +9,9 @@ package co.sena.sicot.entity.enums;
  * contenido; lo que las diferencia es la regla que las produjo, y eso ya queda
  * en la columna {@code regla}.
  *
- * <p>Cada valor tiene que estar en el CHECK de
- * {@code V15__motor_de_automatizaciones.sql}: añadir uno aquí sin migrarlo
- * compila, pasa la suite sobre H2 y falla en el primer INSERT contra
+ * <p>Cada valor tiene que estar en el CHECK que fija la última migración que lo
+ * tocó ({@code V16__resumen_semanal_sin_modelo.sql}): añadir uno aquí sin
+ * migrarlo compila, pasa la suite sobre H2 y falla en el primer INSERT contra
  * PostgreSQL. La prueba {@code RestriccionesDeEnumEnMigracionesTest} está para
  * atrapar exactamente eso.
  */
@@ -23,6 +23,14 @@ public enum TipoTareaAutomatizada {
     /** Envía un correo real. Depende de un servidor SMTP configurado y puede fallar de forma transitoria. */
     ENVIAR_CORREO,
 
-    /** Pide al modelo local que redacte un texto a partir de datos ya extraídos de la base. */
-    REDACTAR_RESUMEN_IA
+    /**
+     * Compone el resumen del periodo a partir de datos ya extraídos de la base.
+     *
+     * <p>Se llamó {@code REDACTAR_RESUMEN_IA} mientras el texto lo escribía el
+     * modelo local. Dejó de hacerlo: ver el encabezado de
+     * {@code V16__resumen_semanal_sin_modelo.sql} para las mediciones que
+     * motivaron el cambio. Como todas las demás, es un efecto interno que no
+     * depende de nada externo y por tanto no puede fallar de forma transitoria.
+     */
+    REDACTAR_RESUMEN
 }

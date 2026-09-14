@@ -92,7 +92,15 @@ export default function AppShell({
           <SenaLogo size={30} />
           {!collapsed && (
             <div className="rail-label" style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700, lineHeight: 1.1, letterSpacing: '-0.01em' }}>
+              <div
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 15,
+                  fontWeight: 700,
+                  lineHeight: 1.1,
+                  letterSpacing: '-0.01em',
+                }}
+              >
                 SICOT
               </div>
               <div style={{ fontSize: 9.5, color: 'var(--text-muted)', letterSpacing: '0.08em', lineHeight: 1.3 }}>
@@ -107,13 +115,15 @@ export default function AppShell({
             <div key={grupo.label ?? gi}>
               {grupo.label && !collapsed && <div className="rail-section rail-label">{grupo.label}</div>}
               {grupo.label && collapsed && <div style={{ height: 14 }} />}
-              {grupo.items.map(item => (
+              {grupo.items.map((item) => (
                 <button
                   key={item.id}
                   type="button"
                   data-tour={`nav-${item.id}`}
                   className={`nav-item${activeId === item.id ? ' active' : ''}`}
-                  onClick={() => { if (!item.disabled) onNavigate(item.id) }}
+                  onClick={() => {
+                    if (!item.disabled) onNavigate(item.id)
+                  }}
                   disabled={item.disabled}
                   aria-current={activeId === item.id ? 'page' : undefined}
                   aria-disabled={item.disabled || undefined}
@@ -129,10 +139,17 @@ export default function AppShell({
                     <span className={`nav-count ${item.countTone === 'alert' ? 'alert' : 'normal'}`}>{item.count}</span>
                   )}
                   {collapsed && item.count !== undefined && item.count > 0 && (
-                    <span style={{
-                      position: 'absolute', top: 6, right: 12, width: 7, height: 7, borderRadius: '50%',
-                      background: item.countTone === 'alert' ? 'var(--alert-critica)' : 'var(--accent)',
-                    }} />
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 12,
+                        width: 7,
+                        height: 7,
+                        borderRadius: '50%',
+                        background: item.countTone === 'alert' ? 'var(--alert-critica)' : 'var(--accent)',
+                      }}
+                    />
                   )}
                 </button>
               ))}
@@ -148,19 +165,24 @@ export default function AppShell({
             title="Configuración"
             style={collapsed ? { justifyContent: 'center', padding: '10px 0' } : undefined}
           >
-            <span className="nav-icon"><IconSettings size={16} /></span>
+            <span className="nav-icon">
+              <IconSettings size={16} />
+            </span>
             {!collapsed && <span className="rail-label">Configuración</span>}
           </button>
           <button
             type="button"
             className="nav-item"
-            onClick={() => setCollapsed(v => !v)}
+            onClick={() => setCollapsed((v) => !v)}
             title={collapsed ? 'Expandir el menú' : 'Contraer el menú'}
             aria-label={collapsed ? 'Expandir el menú' : 'Contraer el menú'}
             style={collapsed ? { justifyContent: 'center', padding: '10px 0' } : undefined}
           >
             <span className="nav-icon">
-              <IconChevron size={15} style={{ transform: collapsed ? 'none' : 'rotate(180deg)', transition: 'transform var(--t)' }} />
+              <IconChevron
+                size={15}
+                style={{ transform: collapsed ? 'none' : 'rotate(180deg)', transition: 'transform var(--t)' }}
+              />
             </span>
             {!collapsed && <span className="rail-label">Contraer menú</span>}
           </button>
@@ -171,11 +193,27 @@ export default function AppShell({
       <div className="app-main">
         <header className="app-header">
           <div style={{ minWidth: 0 }}>
-            <h1 style={{ fontSize: 16, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <h1
+              style={{
+                fontSize: 16,
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
               {title}
             </h1>
             {subtitle && (
-              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div
+                style={{
+                  fontSize: 11.5,
+                  color: 'var(--text-muted)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {subtitle}
               </div>
             )}

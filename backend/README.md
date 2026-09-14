@@ -184,7 +184,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 ```
 co.sena.sicot
 ├── automatizacion/ → motor de automatizaciones (ADR-008): reglas, cola persistente,
-│                  ejecutor con reintentos y carril de IA. Ver §9.
+│                  ejecutor con reintentos. Determinista de punta a punta. Ver §9.
 ├── config/      → OpenAPI, DataInitializer (usuarios de desarrollo)
 ├── controller/  → REST + Swagger
 ├── dto/         → request/response (validación con Bean Validation)
@@ -276,7 +276,17 @@ prueba; toda tarea es idempotente por clave.
 | `cronograma-atrasado` | calendario | Brecha ≥ 30 puntos entre plazo consumido y avance |
 | `supervisor-asignado` | evento | Alerta + correo al supervisor recién asignado |
 | `integridad-comprometida` | evento | Documento firmado cuyo contenido ya no coincide con su huella |
-| `resumen-semanal-ia` | calendario | Resumen del periodo redactado por el modelo (**apagada por defecto**) |
+| `resumen-semanal` | calendario | Resumen del periodo, compuesto con los datos registrados |
+
+> **El motor no usa el modelo de IA.** La regla `resumen-semanal` se llamó
+> `resumen-semanal-ia` y su texto lo escribía Ollama; nacía apagada por eso. Se
+> midió el 10 de septiembre de 2026 y ninguno de los tres tamaños de modelo
+> probados sostenía los hechos sin alterarlos — las cifras están en la sección
+> «Revisión» de [ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
+> Ahora el resumen se compone con plantillas, y el motor completo funciona en un
+> equipo sin Ollama instalado. El modelo local sigue en SICOT para el chat del
+> copiloto y la extracción de datos de un PDF (§ correspondiente), donde su
+> trabajo no es repetir cifras.
 
 ### Operarlo
 
@@ -311,7 +321,7 @@ entorno equivalentes. Las que más se tocan:
 | `AUTOMATIZACION_HABILITADA` | `true` | Apaga el motor entero sin afectar al resto |
 | `AUTOMATIZACION_DIAS_AVISO` | `30,15,7` | Umbrales de aviso previo al vencimiento |
 | `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
-| `AUTOMATIZACION_IA_HABILITADA` | `false` | Enciende el resumen semanal con IA |
+| `AUTOMATIZACION_RESUMEN_DIAS` | `7` | Periodo que abarca el resumen y ritmo con el que se emite |
 | `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
 | `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO |
 
