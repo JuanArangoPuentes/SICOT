@@ -78,6 +78,17 @@ services:
     # caminos dejaría uno sin cifrar hacia los mismos datos, y ese nadie lo
     # vigila (ADR-009).
     ports: !reset []
+    environment:
+      # Vacío y LITERAL, no interpolado desde el .env — mismo criterio que
+      # SPRING_PROFILES_ACTIVE arriba. El archivo base añade a `connect-src` los
+      # orígenes de localhost:8080 que desarrollo necesita; aquí no hacen falta,
+      # porque el proxy sirve la SPA y la API en el mismo origen y 'self' ya los
+      # cubre. Y no son inocuos: `connect-src http://localhost:8080` autoriza
+      # conexiones al localhost del NAVEGADOR de quien visita la página, no al
+      # del servidor. Escribirlo literal impide que un CSP_CONNECT_SRC_EXTRA
+      # olvidado en el .env de un servidor reabra esa excepción sin que nadie lo
+      # note.
+      CSP_CONNECT_SRC_EXTRA: ""
     build:
       args:
         # Mismo origen: el proxy sirve la SPA y enruta /api al backend, así que
