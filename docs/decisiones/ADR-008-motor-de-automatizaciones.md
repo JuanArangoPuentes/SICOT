@@ -94,9 +94,10 @@ Las automatizaciones viven **dentro del backend**, en el paquete
    con un solo host y un RPO de 24 h (ADR-002), una cola en memoria pierde trabajo
    en cada reinicio sin que nadie se entere.
 
-4. **Carril de IA con presupuesto propio.** Las tareas que llaman al modelo se
-   ejecutan de una en una y con su propio cupo, separado del que consumen los
-   usuarios del copiloto.
+4. **Ninguna tarea del motor llama al modelo.** Hubo un carril de IA con
+   presupuesto propio, para la única regla que generaba prosa. Se retiró el 10 de
+   septiembre de 2026 tras medirlo; ver «Revisión» al final. El motor entero es
+   ahora determinista y funciona en un equipo sin Ollama instalado.
 
 ### Las cuatro reglas invariantes del módulo
 
@@ -105,9 +106,12 @@ Estas son las que evitan que el módulo crezca hasta volverse otro sistema:
 1. **Ninguna regla escribe a la base directamente.** Toda escritura pasa por los
    servicios existentes (`AlertaService`, `EmailService`, `OllamaClient`), de modo
    que la máquina de estados, la auditoría y el bloqueo optimista se mantienen.
-2. **La regla decide, la IA solo redacta.** Vencimientos, atrasos y umbrales son
-   aritmética de fechas y estados: deterministas, reproducibles y auditables, sin
-   modelo. El modelo solo entra cuando el resultado es prosa.
+2. **Todo lo que el motor afirma es aritmética verificable.** Vencimientos,
+   atrasos, umbrales y ahora también el resumen periódico son cálculo sobre
+   fechas y estados: determinista, reproducible y auditable. Esta invariante
+   decía antes «la regla decide, la IA solo redacta», y la práctica demostró que
+   la frontera no se sostenía: al modelo se le pedía no alterar los hechos al
+   redactarlos, y los alteraba. Ver «Revisión».
 3. **Una regla es una clase con su prueba.** Es precisamente lo que n8n no puede
    dar: las reglas entran por *pull request* y se revisan.
 4. **Toda tarea es idempotente por clave.** Sin esto, una regla de calendario
@@ -144,7 +148,8 @@ estorbo.
 
 **Lo que queda prohibido.**
 - Que una regla escriba a la base sin pasar por un servicio de dominio.
-- Que una automatización llame al modelo de IA por fuera de `OllamaClient`.
+- Que una automatización llame al modelo de IA. Ya no queda ninguna que lo
+  haga, y reintroducir una exige antes responder la pregunta de «Revisión».
 - Que una tarea de calendario se cree sin clave de idempotencia.
 
 **Relación con FR-010.** El semáforo del navegador **no se retira**. Sigue siendo
@@ -172,3 +177,49 @@ tendría sentido bajo las interpretaciones A o C, que están fuera de alcance.
 - Si el volumen de tareas supera lo que una tabla y un sondeo cada minuto
   atienden con holgura. El siguiente escalón es `LISTEN/NOTIFY` de PostgreSQL,
   no un intermediario de mensajes.
+
+---
+
+## Revisión — 10 de septiembre de 2026: fuera el modelo del motor
+
+La regla `resumen-semanal-ia` era la única del módulo que consumía el modelo
+local. Se midió con el prompt real y los tres tamaños de modelo que caben en un
+portátil corriente, seis salidas por configuración:
+
+| Modelo | Generación | Salidas sin errores de hecho |
+| --- | --- | --- |
+| `qwen2.5:7b` | 3,6 tok/s | 2 de 6 |
+| `qwen2.5:3b` | 8,7 tok/s | 0 de 6 |
+| `qwen2.5:1.5b` | 16,3 tok/s | 0 de 6 |
+
+Endurecer el prompt mejoró el formato y **no** la fidelidad. Los fallos no eran
+de estilo: «12 subetapas (44%)» donde el propio prompt decía 11 y 41%; una
+subetapa dada por completada y por «en curso» en la misma frase; «el 41% del
+plazo total» confundiendo avance con plazo; y, en la prueba de punta a punta con
+el motor real, los códigos internos de auditoría (`ETAPA_ACTUALIZADA`) volcados
+al texto que lee el supervisor, junto a la palabra inexistente «veintís».
+
+**El diagnóstico no es que el modelo fuera pequeño.** Es que se le estaba
+pidiendo lo único que un modelo de lenguaje no garantiza —sostener hechos—
+cuando esos hechos ya venían calculados en Java antes de construir el prompt. La
+invariante nº 2 confiaba en una frontera entre «decidir» y «redactar» que en la
+práctica no existe: redactar sin alterar los datos ya es sostenerlos.
+
+El resumen se compone ahora con plantillas sobre los mismos datos
+(`RedaccionDeResumen`). Es correcto por construcción, tarda microsegundos en
+lugar de ~100 s, sus pruebas pueden afirmar el texto exacto —cosa imposible
+mientras lo escribía el modelo— y el motor completo funciona en un equipo sin
+Ollama instalado.
+
+Eso último es lo que más importa para SICOT: el objetivo del motor era que el
+sistema no dependiera de un modelo grande para funcionar bien. La conclusión de
+esta medición lo lleva un paso más allá — para este trabajo no hace falta modelo
+ninguno. El modelo local sigue donde su tarea no es repetir cifras: el chat del
+copiloto y la extracción de datos de un PDF.
+
+**Si alguien vuelve a plantear meter un modelo en el motor**, la pregunta a
+responder primero es: ¿qué información aporta el modelo que el código no tenga
+ya calculada? Si la respuesta es «ninguna, solo la redacta», la respuesta a la
+propuesta es no.
+
+Migración: `V16__resumen_semanal_sin_modelo.sql`.

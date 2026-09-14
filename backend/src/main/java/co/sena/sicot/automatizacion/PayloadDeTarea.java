@@ -49,19 +49,23 @@ public sealed interface PayloadDeTarea {
     }
 
     /**
-     * Pedir al modelo local que redacte un resumen del periodo.
+     * Componer el resumen del periodo para el supervisor.
      *
      * <p>El payload solo dice <b>qué periodo</b>. Los hechos los recoge el
      * ejecutor de la base en el momento de correr la tarea, no la regla al
      * encolarla: entre una cosa y otra pueden pasar horas, y un resumen que
      * describe el contrato tal como estaba cuando se encoló sería un resumen
      * falso presentado como actual.
+     *
+     * <p>El nombre del campo se mantiene aunque el récord se haya renombrado:
+     * el payload se persiste como JSON plano y las tareas que quedaran
+     * encoladas al desplegar se leen con este mismo mapeo.
      */
-    record RedactarResumenIa(int diasDelPeriodo) implements PayloadDeTarea {
+    record RedactarResumen(int diasDelPeriodo) implements PayloadDeTarea {
 
         @Override
         public TipoTareaAutomatizada tipo() {
-            return TipoTareaAutomatizada.REDACTAR_RESUMEN_IA;
+            return TipoTareaAutomatizada.REDACTAR_RESUMEN;
         }
     }
 }

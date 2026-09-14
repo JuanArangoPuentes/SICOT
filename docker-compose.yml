@@ -120,6 +120,18 @@ services:
       # Docker Desktop de Windows/Mac ya funciona sin eso).
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      # Motor de automatizaciones. Sin estas líneas el motor solo era
+      # configurable editando este archivo: application.properties las lee del
+      # entorno, pero Compose no las pasaba, así que dentro del contenedor
+      # quedaban siempre en su valor por omisión — y no había forma de apagar el
+      # motor ni de acelerar el sondeo para probarlo sin tocar el compose, que
+      # es justo el cambio que nadie quiere llevar en su copia local ni subir
+      # por accidente.
+      AUTOMATIZACION_HABILITADA: ${AUTOMATIZACION_HABILITADA:-true}
+      # Cada cuánto se mira la cola. Se expone porque el valor útil al probar y
+      # el útil en operación no son el mismo: PT1M es holgado para producción y
+      # eterno cuando se está comprobando a mano si una tarea se ejecuta.
+      AUTOMATIZACION_SONDEO: ${AUTOMATIZACION_SONDEO:-PT1M}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

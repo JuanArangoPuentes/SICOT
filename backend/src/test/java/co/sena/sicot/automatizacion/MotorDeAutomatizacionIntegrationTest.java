@@ -213,16 +213,27 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     }
 
     /**
-     * La regla de IA está apagada por defecto, y apagada significa que el bean
-     * no existe — no que exista y se salte con un {@code if}.
+     * El resumen periódico está registrado siempre, como las otras cinco reglas.
+     *
+     * <p>Esta prueba comprobaba lo contrario: que {@code resumen-semanal-ia} NO
+     * apareciera, porque era la única regla que consumía el modelo local y nacía
+     * apagada tras un {@code @ConditionalOnProperty}. El resumen dejó de pasar
+     * por el modelo —las mediciones están en el encabezado de
+     * {@code V16__resumen_semanal_sin_modelo.sql}—, así que ya no hay carril que
+     * apagar ni motivo para que la regla falte.
+     *
+     * <p>Se conserva la comprobación en negativo sobre el código viejo a
+     * propósito: si alguien reintroduce una regla que llame al modelo dentro del
+     * motor, esta prueba lo hace visible en lugar de dejarlo pasar.
      */
     @Test
-    void laReglaDeIaNoEstaRegistradaCuandoElCarrilEstaApagado() throws Exception {
+    void elResumenPeriodicoEstaRegistradoYNingunaReglaDependeDelModelo() throws Exception {
         String admin = login("administrador@soy.sena.edu.co", "Admin123*");
 
         mockMvc.perform(get("/api/automatizaciones/estado")
                         .header("Authorization", "Bearer " + admin))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reglas", org.hamcrest.Matchers.hasItem("resumen-semanal")))
                 .andExpect(jsonPath("$.reglas", org.hamcrest.Matchers.not(
                         org.hamcrest.Matchers.hasItem("resumen-semanal-ia"))));
     }
