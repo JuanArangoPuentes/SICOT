@@ -2,6 +2,7 @@ package co.sena.sicot.repository;
 
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.enums.EstadoContrato;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -22,16 +23,45 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
     @EntityGraph(attributePaths = "supervisor")
     Optional<Contrato> findById(Long id);
 
-    @Override
-    @EntityGraph(attributePaths = "supervisor")
-    List<Contrato> findAll();
-
-    @EntityGraph(attributePaths = "supervisor")
-    List<Contrato> findBySupervisorId(Long supervisorId);
-
+    /**
+     * Barrido COMPLETO de contratos por estado, deliberadamente SIN tope.
+     *
+     * <p>Lo usa {@link co.sena.sicot.automatizacion.LectorDeContratos} para
+     * evaluar las reglas de calendario sobre todos los contratos activos. Aquí
+     * un tope no acotaría una pantalla: haría que el motor dejara de mirar los
+     * contratos que quedaran fuera, y eso no produce ningún error visible — las
+     * alertas de esos contratos sencillamente no se crearían nunca.
+     *
+     * <p><b>No usar desde un controlador.</b> Para listar en pantalla están los
+     * métodos con {@code Pageable} de abajo.
+     */
     @EntityGraph(attributePaths = "supervisor")
     List<Contrato> findByEstado(EstadoContrato estado);
 
+    // ── Listados de pantalla, acotados ─────────────────────────────────────
+    //
+    // Los cuatro llevan Pageable por el mismo motivo que ya lo llevan alertas y
+    // registros: `contratos` crece de forma monótona y GET /api/contratos se
+    // pide en cada carga del panel de GESTIÓN. Con el horizonte de 3-4 años del
+    // proyecto, "todos los contratos que han existido" deja de ser una consulta
+    // razonable mucho antes de que a nadie le parezca lenta.
+    //
+    // Van ordenados por fecha de creación descendente y no sin orden: un tope
+    // sobre un conjunto sin ordenar recorta filas arbitrarias, de modo que el
+    // contrato que falta cambia entre dos peticiones idénticas. Ordenando, lo
+    // que se pierde es siempre lo más antiguo, que es lo que alguien esperaría.
+
     @EntityGraph(attributePaths = "supervisor")
-    List<Contrato> findBySupervisorIdAndEstado(Long supervisorId, EstadoContrato estado);
+    List<Contrato> findAllByOrderByFechaCreacionDesc(Pageable limite);
+
+    @EntityGraph(attributePaths = "supervisor")
+    List<Contrato> findBySupervisorIdOrderByFechaCreacionDesc(Long supervisorId, Pageable limite);
+
+    @EntityGraph(attributePaths = "supervisor")
+    List<Contrato> findByEstadoOrderByFechaCreacionDesc(EstadoContrato estado, Pageable limite);
+
+    @EntityGraph(attributePaths = "supervisor")
+    List<Contrato> findBySupervisorIdAndEstadoOrderByFechaCreacionDesc(Long supervisorId,
+                                                                      EstadoContrato estado,
+                                                                      Pageable limite);
 }
