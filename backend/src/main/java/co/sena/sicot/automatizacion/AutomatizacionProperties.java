@@ -43,7 +43,7 @@ import java.util.List;
  * @param diasDeAvisoPrevio   umbrales, en días antes del vencimiento, en los que
  *                            se avisa. Uno por alerta: 30, 15 y 7 producen tres
  *                            avisos y no treinta.
- * @param ia                  ajustes del carril de IA.
+ * @param resumen             ajustes del resumen periódico al supervisor.
  */
 @ConfigurationProperties(prefix = "sicot.automatizacion")
 public record AutomatizacionProperties(
@@ -56,15 +56,21 @@ public record AutomatizacionProperties(
         Duration abandonoTrasVer,
         Duration retencionDeTareas,
         List<Integer> diasDeAvisoPrevio,
-        Ia ia
+        Resumen resumen
 ) {
 
     /**
-     * @param habilitado      si las reglas que llaman al modelo están activas.
-     *                        <b>Apagado por defecto</b>, a propósito: generar
-     *                        texto sin que nadie lo haya pedido, en un sistema de
-     *                        contratación pública, es una decisión que toma quien
-     *                        despliega y no un valor por omisión.
+     * Ajustes del resumen periódico.
+     *
+     * <p>Este bloque se llamaba {@code ia} y tenía además un interruptor
+     * {@code habilitado}, apagado por defecto, porque el texto lo escribía el
+     * modelo local y encender la generación automática de prosa en un sistema
+     * de contratación pública era una decisión de quien despliega. El resumen
+     * ya no pasa por el modelo —ver el encabezado de
+     * {@code V16__resumen_semanal_sin_modelo.sql}—, así que el interruptor
+     * desaparece: la regla es ahora tan determinista y tan verificable como las
+     * otras cinco, y no hay motivo para que nazca apagada.
+     *
      * @param diasDelPeriodo  cuánto abarca el resumen. Es también el ritmo con
      *                        el que se emite: la regla se evalúa en la pasada
      *                        diaria, pero su clave de idempotencia incluye la
@@ -72,6 +78,6 @@ public record AutomatizacionProperties(
      *                        contrato y semana sin necesidad de un segundo
      *                        temporizador que mantener sincronizado.
      */
-    public record Ia(boolean habilitado, int diasDelPeriodo) {
+    public record Resumen(int diasDelPeriodo) {
     }
 }
