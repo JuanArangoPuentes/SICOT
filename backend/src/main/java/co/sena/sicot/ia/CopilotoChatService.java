@@ -7,10 +7,13 @@ import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.EtapaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.concurrent.DelegatingSecurityContextExecutorService;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 /**
@@ -75,10 +78,79 @@ public class CopilotoChatService {
     private final EtapaService etapaService;
     private final OllamaClient ollamaClient;
 
-    public CopilotoChatService(ContratoService contratoService, EtapaService etapaService, OllamaClient ollamaClient) {
+    private final GuiaDelPasoActual guiaDelPasoActual;
+
+    /**
+     * Un solo hilo, propio y con nombre, para el precalentado.
+     *
+     * <p>Propio y no el de Tomcat porque precalentar es trabajo de fondo que no
+     * debe competir con las peticiones que sí espera alguien. Uno solo porque
+     * Ollama atiende el modelo casi en serie: lanzar varios precalentados a la
+     * vez no los acelera, solo hace esperar a más gente.
+     *
+     * <p><b>Va envuelto en {@link DelegatingSecurityContextExecutorService} y eso
+     * no es un adorno.</b> El contexto de seguridad vive en un {@code ThreadLocal},
+     * así que en un hilo suelto {@code SecurityUtils.currentUsuario()} devuelve
+     * {@code null} — y {@code verificarAccesoAlContrato} está escrito para dejar
+     * pasar cuando no hay usuario (lo normal en tareas del sistema, como el motor
+     * de automatizaciones). El precalentado habría funcionado, sí, pero
+     * <b>saltándose la comprobación de que quien abre el contrato tiene derecho a
+     * verlo</b>. Hoy no filtra nada porque la respuesta se descarta; sería un
+     * agujero el día que alguien decida devolverla. Propagando el contexto, el
+     * hilo de fondo corre como el usuario real y la comprobación se aplica igual
+     * que en cualquier otra petición.
+     */
+    private final ExecutorService precalentador = new DelegatingSecurityContextExecutorService(
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "copiloto-precalentado");
+                t.setDaemon(true);
+                return t;
+            }));
+
+    public CopilotoChatService(ContratoService contratoService, EtapaService etapaService,
+                               OllamaClient ollamaClient, GuiaDelPasoActual guiaDelPasoActual) {
         this.contratoService = contratoService;
         this.etapaService = etapaService;
         this.ollamaClient = ollamaClient;
+        this.guiaDelPasoActual = guiaDelPasoActual;
+    }
+
+    /**
+     * Deja el contexto de este contrato caliente en Ollama, sin que nadie espere.
+     *
+     * <h2>Por qué esto existe</h2>
+     * Medido el 14 de septiembre de 2026: la <b>primera</b> pregunta sobre un
+     * contrato tardó 158 s con el modelo por defecto, de los cuales <b>119,6 s
+     * fueron solo leer el prompt</b> (1545 tokens) y 36 s escribir la respuesta.
+     * La <b>segunda</b> pregunta sobre el mismo contrato tardó 0,8 s en leer el
+     * prompt: Ollama reutiliza el prefijo que ya tiene cacheado.
+     *
+     * <p>Es decir, el coste alto se paga una sola vez por contrato — y hoy lo
+     * paga el supervisor, mirando una pantalla parada. Llamando a esto cuando
+     * abre el contrato, ese minuto y medio transcurre mientras lee la ficha, y
+     * su primera pregunta real llega ya con la caché poblada.
+     *
+     * <p>No devuelve nada y no falla hacia fuera: si Ollama no está disponible,
+     * se anota en el log y ya. Un precalentado que falla no debe romper la
+     * apertura de un contrato — el copiloto seguirá funcionando (lento) igual.
+     */
+    public void precalentar(Long contratoId) {
+        precalentador.submit(() -> {
+            try {
+                long inicio = System.currentTimeMillis();
+                // Se manda un saludo a propósito: construye el MISMO prefijo de
+                // prompt (datos del contrato + estado de las etapas) que usará
+                // la pregunta real, que es lo que Ollama cachea, y genera una
+                // respuesta corta que se tira.
+                responder(contratoId, "hola", List.of());
+                log.info("Contexto del contrato {} precalentado en {} ms.",
+                        contratoId, System.currentTimeMillis() - inicio);
+            } catch (RuntimeException e) {
+                log.info("No se pudo precalentar el contexto del contrato {}: {}. "
+                        + "El copiloto seguirá funcionando, solo que la primera pregunta será lenta.",
+                        contratoId, e.getMessage());
+            }
+        });
     }
 
     // Cuántos turnos previos como máximo se incluyen en el prompt — suficiente
@@ -92,7 +164,7 @@ public class CopilotoChatService {
     private static final int MAX_CARACTERES_ENTRADA = 8000;
 
     // Sin @Transactional a propósito: ollamaClient.generar() más abajo puede
-    // tardar hasta sicot.ia.timeout-seconds (900s por defecto). Si este método
+    // tardar hasta sicot.ia.timeout-seconds (240s por defecto). Si este método
     // mantuviera una transacción abierta durante esa llamada, retendría una
     // conexión del pool de Hikari (10 por defecto) todo ese tiempo — con solo
     // un puñado de preguntas al Copiloto simultáneas se agotaría el pool
@@ -107,6 +179,24 @@ public class CopilotoChatService {
         // el supervisor asignado a este contrato (ver SecurityUtils.verificarAccesoAlContrato).
         Contrato contrato = contratoService.buscar(contratoId);
         List<EtapaResponse> etapas = etapaService.listarPorContrato(contratoId);
+
+        // ATAJO SIN MODELO. «¿En qué paso voy?» tiene una respuesta que el
+        // sistema ya conoce, y pedírsela al modelo salía mal por partida doble:
+        // tardaba ~150 s y los modelos que caben en un portátil corriente
+        // indicaban la etapa equivocada (ver GuiaDelPasoActual para las
+        // mediciones del 14 de septiembre de 2026). Aquí se compone exacta, en
+        // microsegundos, y sin Ollama de por medio.
+        //
+        // Si la pregunta no encaja en el atajo, sigue su camino normal: esto
+        // solo atiende las preguntas cuya respuesta completa es el estado del
+        // contrato, nunca las abiertas.
+        if (guiaDelPasoActual.puedeResponder(pregunta)) {
+            var respuestaDirecta = guiaDelPasoActual.responder(etapas);
+            if (respuestaDirecta.isPresent()) {
+                log.info("Pregunta de contrato {} resuelta sin modelo por GuiaDelPasoActual.", contratoId);
+                return respuestaDirecta.get();
+            }
+        }
 
         String datosContrato = """
                 Contrato Nro.: %s
