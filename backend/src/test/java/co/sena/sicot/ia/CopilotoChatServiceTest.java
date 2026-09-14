@@ -60,7 +60,11 @@ class CopilotoChatServiceTest {
 
     @BeforeEach
     void construirElServicio() {
-        servicio = new CopilotoChatService(contratoService, etapaService, ollamaClient);
+        // GuiaDelPasoActual va real y no simulada: es determinista y sin
+        // dependencias, asi que simularla solo escondería el encaminamiento
+        // que estas pruebas quieren ver.
+        servicio = new CopilotoChatService(contratoService, etapaService, ollamaClient,
+                new GuiaDelPasoActual());
 
         Usuario supervisor = new Usuario();
         supervisor.setId(2L);
