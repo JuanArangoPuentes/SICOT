@@ -1,0 +1,530 @@
+<title>Avances SICOT · Septiembre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+  :root {
+    --ground: #fbfaf6;
+    --surface: #ffffff;
+    --surface-2: #f3f2ec;
+    --ink: #17211b;
+    --ink-mid: #414c45;
+    --ink-soft: #6b756f;
+    --line: #dfded4;
+    --line-firm: #c7c6ba;
+    --accent: #2c6e3a;
+    --accent-soft: #e7f0e5;
+    --sena: #39a900;
+    --warn: #9a6100;
+    --warn-soft: #f7efdf;
+    --info: #1f5f7a;
+
+    --f-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --f-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+
+    --measure: 68ch;
+    --pad: clamp(20px, 5vw, 60px);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+      --ground: #10150f;
+      --surface: #171d16;
+      --surface-2: #1d241c;
+      --ink: #e9ece7;
+      --ink-mid: #b3bcb1;
+      --ink-soft: #8b958a;
+      --line: #2b332a;
+      --line-firm: #3b443a;
+      --accent: #6fbf73;
+      --accent-soft: #1b2a1c;
+      --sena: #57c81b;
+      --warn: #d9a441;
+      --warn-soft: #2a2314;
+      --info: #7fb9d1;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --ground: #10150f;
+    --surface: #171d16;
+    --surface-2: #1d241c;
+    --ink: #e9ece7;
+    --ink-mid: #b3bcb1;
+    --ink-soft: #8b958a;
+    --line: #2b332a;
+    --line-firm: #3b443a;
+    --accent: #6fbf73;
+    --accent-soft: #1b2a1c;
+    --sena: #57c81b;
+    --warn: #d9a441;
+    --warn-soft: #2a2314;
+    --info: #7fb9d1;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding-inline: var(--pad);
+    padding-block: clamp(32px, 6vw, 72px) 80px;
+  }
+
+  p, li { max-width: var(--measure); }
+
+  /* ── Cabecera ───────────────────────────────────────────── */
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  header.doc { border-bottom: 2px solid var(--ink); padding-bottom: 28px; }
+
+  h1 {
+    font-size: clamp(30px, 5.2vw, 46px);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin: 14px 0 0;
+    text-wrap: balance;
+  }
+
+  .periodo {
+    font-family: var(--f-mono);
+    font-size: 15px;
+    color: var(--accent);
+    margin-top: 10px;
+    font-weight: 500;
+  }
+
+  .firma {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 28px;
+    margin-top: 22px;
+    font-size: 14px;
+    color: var(--ink-mid);
+  }
+  .firma b { color: var(--ink); font-weight: 600; }
+
+  /* ── Cifras ─────────────────────────────────────────────── */
+  .cifras {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    margin: 40px 0 8px;
+  }
+  .cifra { background: var(--surface); padding: 18px 20px; }
+  .cifra .n {
+    font-family: var(--f-mono);
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+  .cifra .t {
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+  .nota-cifras { font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; }
+
+  /* ── Secciones ──────────────────────────────────────────── */
+  section { margin-top: 56px; }
+
+  h2 {
+    font-size: clamp(21px, 3vw, 27px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 8px 0 14px;
+    text-wrap: balance;
+    line-height: 1.22;
+  }
+
+  h3 {
+    font-size: 16.5px;
+    font-weight: 600;
+    margin: 30px 0 8px;
+    letter-spacing: -0.005em;
+  }
+
+  .sec-head { border-top: 1px solid var(--line-firm); padding-top: 22px; }
+
+  p { margin: 0 0 14px; }
+
+  a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  code, .mono { font-family: var(--f-mono); font-size: 0.9em; }
+  code {
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--ink-mid);
+  }
+
+  strong { font-weight: 600; }
+
+  ul { padding-left: 20px; margin: 0 0 14px; }
+  li { margin-bottom: 7px; }
+
+  /* ── Estado ─────────────────────────────────────────────── */
+  .estado {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 3px;
+    vertical-align: middle;
+  }
+  .estado.ok { background: var(--accent-soft); color: var(--accent); }
+  .estado.curso { background: var(--warn-soft); color: var(--warn); }
+  .estado::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* ── Figuras ────────────────────────────────────────────── */
+  figure {
+    margin: 26px 0 30px;
+    border: 1px solid var(--line-firm);
+    background: var(--surface);
+  }
+  figure img, figure video { display: block; width: 100%; height: auto; }
+  figure video { background: #0b0f0c; aspect-ratio: 16 / 9; }
+  figcaption {
+    font-size: 13px;
+    color: var(--ink-soft);
+    padding: 11px 16px;
+    border-top: 1px solid var(--line);
+    background: var(--surface-2);
+    max-width: none;
+  }
+  figcaption b { color: var(--ink-mid); font-weight: 600; }
+
+  /* ── Bloque de evidencia ────────────────────────────────── */
+  .evidencia {
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    padding: 16px 20px;
+    margin: 22px 0;
+  }
+  .evidencia .eyebrow { color: var(--accent); }
+  .evidencia p:last-child, .evidencia ul:last-child { margin-bottom: 0; }
+
+  /* ── Tablas ─────────────────────────────────────────────── */
+  .tabla-cont { overflow-x: auto; margin: 20px 0 26px; }
+  table { border-collapse: collapse; width: 100%; min-width: 460px; font-size: 14.5px; }
+  th, td {
+    text-align: left;
+    padding: 9px 14px 9px 0;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 500;
+    border-bottom-color: var(--line-firm);
+  }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ── Lo que sigue: sí es una secuencia ──────────────────── */
+  .pasos { list-style: none; padding: 0; margin: 22px 0 0; counter-reset: p; }
+  .pasos > li {
+    counter-increment: p;
+    display: grid;
+    grid-template-columns: 34px 1fr;
+    gap: 16px;
+    padding-bottom: 22px;
+    max-width: none;
+  }
+  .pasos > li::before {
+    content: counter(p);
+    font-family: var(--f-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    border: 1px solid var(--line-firm);
+    border-radius: 50%;
+    width: 30px; height: 30px;
+    display: grid;
+    place-items: center;
+  }
+  .pasos h3 { margin: 3px 0 5px; }
+  .pasos p { margin-bottom: 0; }
+
+  footer.doc {
+    margin-top: 64px;
+    border-top: 2px solid var(--ink);
+    padding-top: 20px;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  @media (max-width: 560px) {
+    .firma { flex-direction: column; gap: 4px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="doc">
+    <div class="eyebrow">MediaLab · Centro Tecnológico del Mobiliario · SENA</div>
+    <h1>SICOT — Informe de avances</h1>
+    <div class="periodo">1 → 15 de septiembre de 2026</div>
+    <div class="firma">
+      <span>Elaborado por <b>Juan Arango</b></span>
+      <span>Para <b>Alex Fernando Zapata</b></span>
+      <span>Proyecto <b>SICOT (Gestión de Contratos)</b></span>
+    </div>
+  </header>
+
+  <div class="cifras">
+    <div class="cifra"><div class="n">87</div><div class="t">commits integrados en <span class="mono">develop</span></div></div>
+    <div class="cifra"><div class="n">32</div><div class="t">tareas cerradas en Linear</div></div>
+    <div class="cifra"><div class="n">409</div><div class="t">pruebas automáticas, todas en verde</div></div>
+    <div class="cifra"><div class="n">11</div><div class="t">decisiones de arquitectura documentadas</div></div>
+    <div class="cifra"><div class="n">0</div><div class="t">pruebas en rojo y 0 tareas fallidas</div></div>
+  </div>
+  <p class="nota-cifras">245 archivos modificados · 21.149 líneas añadidas en el periodo.</p>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Situación</div></div>
+    <h2>Dónde vamos</h2>
+    <p>SICOT funciona de punta a punta con los tres roles reales del proceso —<strong>Gestión</strong>, <strong>Supervisor</strong> y <strong>Administrador</strong>— sobre el procedimiento <span class="mono">GCCON-P-010</span> completo: sus <strong>6 etapas y 27 sub-pasos</strong>, con el avance calculado por el servidor y no simulado en pantalla.</p>
+    <p>El sistema ya no es una maqueta: un supervisor entra, ve el contrato que le asignaron, sabe en qué paso va, qué le falta y qué está atrasado, y el sistema le avisa solo sin que nadie tenga que acordarse de mirar.</p>
+
+    <figure>
+      <img src="img/01-bandeja.png" alt="Bandeja de entrada del supervisor: saludo, barra de avance al 56 por ciento, siguiente sub-paso y lista de alertas y pendientes.">
+      <figcaption><b>Bandeja del Supervisor.</b> Pantalla de aterrizaje: en qué paso va, el avance del contrato y todo lo pendiente en una sola vista. Las alertas que se ven las generó el sistema por su cuenta.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Demostración</div></div>
+    <h2>El sistema en uso, de principio a fin</h2>
+    <p>Un recorrido completo de <strong>50 segundos</strong>, grabado contra el sistema real y no montado: se inicia sesión como supervisor, se recorre su bandeja, el contrato con sus barras de avance, se le pregunta al copiloto y se revisan las alertas y los documentos. Todo lo que aparece en pantalla son los datos reales del contrato.</p>
+
+    <figure>
+      <video controls preload="metadata" poster="img/01-bandeja.png" playsinline>
+        <source src="video/sicot-en-uso.webm" type="video/webm">
+        Su navegador no puede reproducir este vídeo. Las capturas de las secciones siguientes muestran las mismas pantallas.
+      </video>
+      <figcaption>
+        <b>Recorrido del panel del Supervisor.</b> En el segundo 35 se le pregunta al copiloto
+        «¿qué me falta para cerrar el paso en el que estoy?» y responde con el paso correcto y sus
+        dos sub-pasos pendientes, en un segundo.
+      </figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Frente principal del periodo</div></div>
+    <h2>Motor de automatizaciones <span class="estado ok">Probado y funcionando</span></h2>
+    <p>Es el avance más importante del periodo. Antes, <strong>nada en el sistema creaba nunca una alerta</strong>: la tabla existía desde la primera versión de la base de datos y no había una sola línea que insertara una fila. Lo único que avisaba era un semáforo en pantalla, que estaba en rojo <em>solo mientras alguien lo estuviera mirando</em>. No quedaba constancia de cuándo se puso en rojo ni de si alguien lo vio.</p>
+    <p>Hoy el sistema vigila los contratos solo, todos los días, y deja la alerta escrita en el expediente con su fecha. Hay <strong>seis reglas</strong> en funcionamiento:</p>
+
+    <div class="tabla-cont">
+      <table>
+        <thead>
+          <tr><th>Regla</th><th>Qué detecta</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="mono">vencimiento-proximo</td><td>Quedan 30, 15 o 7 días de plazo</td></tr>
+          <tr><td class="mono">contrato-vencido</td><td>Pasó la fecha de fin y el contrato sigue activo</td></tr>
+          <tr><td class="mono">cronograma-atrasado</td><td>Brecha entre el plazo consumido y el avance real</td></tr>
+          <tr><td class="mono">supervisor-asignado</td><td>Avisa al supervisor recién designado</td></tr>
+          <tr><td class="mono">integridad-comprometida</td><td>Un documento firmado cuyo contenido ya no coincide</td></tr>
+          <tr><td class="mono">resumen-semanal</td><td>Resumen del periodo con los datos registrados</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="evidencia">
+      <div class="eyebrow">Cómo se comprobó — 15 de septiembre</div>
+      <p>Se forzó una pasada completa del calendario contra la base de datos real y se observó la cola de principio a fin:</p>
+      <ul>
+        <li>Pasada sobre los contratos vigentes: <strong>597 milisegundos</strong>.</li>
+        <li>4 tareas encoladas → <strong>4 completadas</strong>, cola vacía en menos de 10 segundos.</li>
+        <li><strong>0 tareas fallidas</strong> y ningún reintento, ni en esta pasada ni en el histórico.</li>
+        <li>Las alertas resultantes aparecieron en la bandeja del supervisor con cifras correctas.</li>
+      </ul>
+    </div>
+
+    <figure>
+      <img src="img/03-alertas.png" alt="Vista de alertas del contrato con cuatro alertas generadas por el sistema, incluyendo el resumen automático del periodo.">
+      <figcaption><b>Salida real del motor.</b> Alertas de cronograma, de asignación y el resumen automático del periodo, todas producidas por el sistema sin intervención de nadie.</figcaption>
+    </figure>
+
+    <h3>Por qué este motor y no n8n</h3>
+    <p>Se evaluó formalmente usar <strong>n8n</strong>, la herramienta externa de automatizaciones, y se verificó que <strong>el motor propio encaja mejor con este proyecto</strong>. La decisión quedó documentada con su razonamiento. Los tres motivos que pesaron:</p>
+    <ul>
+      <li><strong>Licencia.</strong> n8n se distribuye bajo una licencia que no es software libre y restringe usos comerciales. SICOT tiene la regla de mantenerse en herramientas gratuitas y sin límite de uso; una licencia con condiciones es exactamente lo que esa regla existe para evitar.</li>
+      <li><strong>Las reglas saldrían del repositorio.</strong> Un flujo de n8n es un diagrama editado en un navegador: no pasa por revisión, no tiene pruebas y no queda en el historial del proyecto. Aquí <strong>cada regla es una clase con su prueba automática</strong>. En contratación pública, una regla que decide cuándo se alerta sobre un contrato es lógica de negocio y debe ser revisable.</li>
+      <li><strong>Un solo sistema que operar.</strong> n8n traería su propio servidor, su propia base de datos y su propio depósito de credenciales. Para un equipo pequeño es un segundo sistema completo que mantener, respaldar y actualizar; el motor actual son unas clases y una tabla dentro de lo que ya existe.</li>
+    </ul>
+    <p>El único argumento real a favor de una herramienta visual sería que personal no técnico editara las reglas sin desplegar. Hoy no aplica, y los valores que más se tocarían —los días de aviso previo— <strong>ya son configurables sin tocar código</strong>.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Asistente</div></div>
+    <h2>Copiloto de IA, funcionando en local y sin costo</h2>
+    <p>El copiloto cumple dos funciones distintas, las dos con un modelo que <strong>corre en la máquina del Centro</strong>: sin cuenta, sin costo por consulta y sin límite de uso.</p>
+    <ul>
+      <li><strong>Para Gestión:</strong> lee un PDF de contratación y propone los datos de la ficha, que la persona revisa y confirma. Probado contra <strong>documentos reales del SENA</strong> —un acta de inicio <span class="mono">GCCON-F-018</span> y una notificación de supervisión—, de los que ahora extrae la totalidad de los campos presentes en el documento.</li>
+      <li><strong>Para el Supervisor:</strong> responde preguntas sobre su contrato con los datos reales de ese contrato, y redacta los documentos formales que el supervisor solo revisa y firma.</li>
+    </ul>
+    <p>El hallazgo más útil del periodo fue que <strong>a la IA no hay que pedirle lo que el sistema ya sabe calcular</strong>. La pregunta más frecuente del supervisor —«¿en qué paso voy y qué me falta?»— se responde con el estado real de las etapas, <strong>sin pasar por el modelo</strong>: tarda <strong>1 segundo</strong> en lugar de minutos, y es correcta por construcción porque la compone el mismo código que lleva la cuenta de los sub-pasos.</p>
+    <p>Esa vía se reforzó hoy mismo. Al probar el sistema se detectó que una variante tan natural como «¿qué <em>me</em> falta?» no entraba por ella y acababa contestándola el modelo, que en esa prueba señaló una etapa equivocada. <strong>Ya está corregido y con una prueba automática que lo fija</strong>: hoy la pregunta se responde con el paso correcto y sus sub-pasos reales. Al modelo le quedan solo las preguntas abiertas, que es donde sí aporta.</p>
+
+    <figure>
+      <img src="img/02-contrato.png" alt="Vista de contrato del supervisor con la barra de recorrido de las seis etapas, los indicadores y el panel del copiloto a la derecha.">
+      <figcaption><b>Vista de contrato con el copiloto.</b> El recorrido de las seis etapas con su porcentaje real, los indicadores del contrato y el asistente disponible en la misma pantalla.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Interfaz</div></div>
+    <h2>Panel del Supervisor, simplificado</h2>
+    <p>Atendiendo la indicación de hacerlo más simple conservando lo esencial, se revisó el panel con un contrato real delante. Lo que lo hacía denso no era la cantidad de información: <strong>era que la misma información salía varias veces</strong> —el avance global aparecía dos veces y el avance por etapa hasta tres, cada vez con una forma distinta.</p>
+    <p>Se retiraron las repeticiones, no el contenido. <strong>Todas las barras y todos los porcentajes siguen ahí, cada uno una sola vez</strong>, y se sumó la barra de avance a la pantalla de entrada, que es donde «¿cómo voy?» debe responderse sin hacer ni un clic.</p>
+
+    <figure>
+      <img src="img/05-etapas.png" alt="Acordeón de etapas del contrato con su barra de progreso individual y el tablero de indicadores debajo.">
+      <figcaption><b>Etapas y tablero.</b> Cada paso con su barra y su fracción de sub-pasos cerrados, y debajo la comparación entre plazo transcurrido y avance ejecutado.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Registro y asignación</div></div>
+    <h2>Gestión de contratos</h2>
+    <p>La Unidad de Gestión Contractual registra las fichas, las asigna a un supervisor y sigue su estado. La carga puede hacerse a mano o partiendo del PDF, que el copiloto lee para proponer los campos.</p>
+
+    <figure>
+      <img src="img/06-gestion.png" alt="Panel de gestión con el registro de contratos: número, objeto, supervisor, estado, valor y vigencia.">
+      <figcaption><b>Registro de contratos.</b> Estado, valor y vigencia de cada contrato, con el supervisor asignado a cada uno.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Base técnica</div></div>
+    <h2>Calidad y seguridad del sistema</h2>
+    <p>Buena parte del periodo se dedicó a que el sistema sea sostenible los próximos años y no solo a que funcione hoy:</p>
+    <ul>
+      <li><strong>409 pruebas automáticas</strong> que se ejecutan en cada cambio y lo bloquean si algo se rompe.</li>
+      <li><strong>Arranque seguro en producción:</strong> el sistema se niega a arrancar si no está bien configurado, en lugar de levantarse con valores de prueba.</li>
+      <li><strong>11 decisiones de arquitectura escritas</strong>, cada una con su motivo, para que dentro de un año se sepa por qué el sistema es como es.</li>
+      <li><strong>Revisión automática de vulnerabilidades</strong> en cada cambio, con las dependencias al día.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Entregable de hoy</div></div>
+    <h2>Instalador para el Supervisor <span class="estado ok">Construido y probado</span></h2>
+    <p>Gestión y Administración usan SICOT de forma remota, pero el <strong>supervisor necesita la aplicación instalada en su equipo</strong>. Hoy quedó construida: se empaquetó sobre la misma base de código que ya existe, sin duplicarla, y genera los <strong>dos instaladores de Windows</strong> habituales.</p>
+    <p>El supervisor obtiene un icono del SENA en su escritorio y una ventana propia, con la aplicación completa dentro. No es un navegador con SICOT abierto: es una aplicación instalada.</p>
+
+    <figure>
+      <img src="img/11-app-escritorio.png" alt="La aplicación de escritorio SICOT abierta en su propia ventana, con el supervisor Alex dentro de su bandeja de entrada y la barra de avance al 56 por ciento.">
+      <figcaption><b>La aplicación instalada, funcionando.</b> Ventana propia con el icono del SENA, y dentro el panel real del supervisor: Paso 3 de 6, avance 56%, 15 de 27 sub-pasos y sus 7 pendientes.</figcaption>
+    </figure>
+
+    <h3>Dos problemas que solo aparecen al instalarla y usarla</h3>
+    <p>Ninguno de los dos se ve desde el navegador, y los dos dejaban la aplicación inservible para un supervisor. Aparecieron al abrirla e intentar entrar de verdad:</p>
+    <ul>
+      <li><strong>La aplicación no podía hablar con el servidor.</strong> El backend autorizaba las direcciones del navegador y nada más; una aplicación instalada se identifica de otra forma, y el servidor rechazaba cada petición. Lo único que la aplicación podía decir era «no se pudo conectar con el servidor», sin más pista. Ya está autorizada.</li>
+      <li><strong>La ventana no cabía en la pantalla.</strong> Con el tamaño inicial, en un equipo de 1280×720 —una pantalla corriente— la mitad derecha del inicio de sesión quedaba fuera: la aplicación abría bien y no había forma de escribir las credenciales. Ahora arranca ajustada a la pantalla que haya.</li>
+    </ul>
+
+    <h3>A qué servidor se conecta</h3>
+    <p>El instalador <strong>no lleva la dirección del servidor dentro</strong>, y esa fue la decisión de diseño del día. Si la llevara, el ejecutable que descarga un supervisor apuntaría para siempre a un servidor concreto, y mover el servidor obligaría a recompilar y volver a publicar el instalador para todo el mundo. La dirección se guarda en cada equipo y se cambia desde <strong>Configuración → Servidor</strong>, así que <strong>un mismo instalador sirve para cualquier despliegue</strong>.</p>
+
+    <h3>Cómo se entrega</h3>
+    <p>Los instaladores se publican como <strong><em>GitHub Releases</em></strong> del propio repositorio, no como una página de descargas. El motivo es la trazabilidad institucional: hay que poder responder «¿qué versión tiene instalada este supervisor?» y poder revertir una entrega defectuosa. Releases lo resuelve de forma nativa —cada versión con su etiqueta, su fecha y sus notas de cambios— y es gratuito. El mecanismo ya está en uso.</p>
+
+    <figure>
+      <img src="img/09-releases.png" alt="Página de versiones publicadas del repositorio de SICOT en GitHub, mostrando la versión v0.2.0 marcada como la más reciente con sus notas de cambios.">
+      <figcaption><b>Versiones publicadas.</b> Cada entrega queda con su etiqueta, su fecha y sus notas de cambios, y las anteriores siguen disponibles para volver atrás.</figcaption>
+    </figure>
+
+    <p>Queda una cosa por decidir, y no es técnica: el instalador <strong>no está firmado con un certificado de código</strong>, así que Windows advierte de «editor desconocido» al instalarlo. Firmarlo exige un certificado de pago, lo que choca con la regla de que SICOT se mantenga en herramientas gratuitas. Es una decisión que corresponde al SENA y conviene plantearla en la reunión institucional.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Siguiente fase</div></div>
+    <h2>Aplicación móvil con cámara para la evidencia en sitio</h2>
+    <p>Terminadas las pruebas y el instalador, la siguiente planificación es una <strong>aplicación móvil con cámara integrada</strong>. No es una idea añadida: responde a un sub-paso que el propio procedimiento exige.</p>
+
+    <div class="evidencia">
+      <div class="eyebrow">El sub-paso que lo justifica</div>
+      <p><span class="mono">3.2</span> — <strong>Carga de evidencia fotográfica georreferenciada</strong>, dentro del Paso 3, <em>Inspección — Monitoreo y Ejecución</em>.</p>
+    </div>
+
+    <p>La entrega de insumos y materiales se verifica <strong>en bodega o en obra</strong>, no frente a un computador. Pedirle al supervisor que tome la foto con el teléfono, la pase a un equipo y la suba después es justamente donde se pierde la evidencia: la foto se traspapela, o se sube una que no corresponde a esa entrega.</p>
+    <p>Una aplicación móvil resuelve las dos mitades del requisito en el mismo gesto: <strong>la cámara</strong> captura la evidencia en el momento de la entrega, y <strong>el GPS del teléfono</strong> aporta la georreferenciación que el sub-paso pide por su nombre y que un computador de escritorio no puede dar.</p>
+
+    <ol class="pasos">
+      <li>
+        <div>
+          <h3>Publicar la primera versión del instalador</h3>
+          <p>El instalador ya está construido y probado; queda etiquetarlo y publicarlo como versión descargable, con sus notas de cambios redactadas para el usuario final.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Instalarlo en el equipo de un supervisor real</h3>
+          <p>Probarlo fuera de la máquina de desarrollo, apuntando al servidor del Centro desde la pantalla de Configuración.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Planificación de la aplicación móvil</h3>
+          <p>Alcance, captura con cámara y GPS, y cómo la evidencia llega al expediente del contrato en el sub-paso 3.2.</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="sec-head"><div class="eyebrow">Método</div></div>
+    <h2>Cómo se verificó todo lo anterior</h2>
+    <p>Ninguna de las afirmaciones de este informe proviene de un entorno de demostración. Todo se comprobó contra el sistema real, con la base de datos real y un contrato poblado de verdad —etapas cerradas, otras a medias y sub-pasos pendientes—, porque un contrato vacío no demuestra que las barras funcionen.</p>
+    <p>Las capturas de pantalla de este documento se tomaron de esa misma ejecución, hoy, entrando con las tres cuentas del sistema. La del instalador no es una maqueta: es la aplicación ya compilada, abierta en su ventana, con un inicio de sesión real contra el servidor.</p>
+  </section>
+
+  <footer class="doc">
+    SICOT — Sistema Inteligente para la Gestión y Acompañamiento de Contratos · Centro Tecnológico del Mobiliario, SENA Regional Antioquia · Informe del 15 de septiembre de 2026.
+  </footer>
+
+</div>
