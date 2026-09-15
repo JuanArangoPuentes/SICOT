@@ -1,6 +1,7 @@
 package co.sena.sicot.ia;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -29,6 +30,23 @@ public class OllamaClient {
 
     private final String ollamaUrl;
     private final String modelo;
+
+    /**
+     * Cuánto mantiene Ollama el modelo cargado tras responder.
+     *
+     * <p>Su valor por defecto son 5 minutos, y eso echaba a perder el
+     * precalentado: al descargar el modelo se pierde con él la caché del prefijo
+     * del prompt, que es todo lo que el precalentado había construido. El
+     * supervisor abre la ficha del contrato, la lee con calma, pregunta a los
+     * seis minutos y vuelve a pagar los ~160 s enteros como si no se hubiera
+     * precalentado nada.
+     *
+     * <p>Se configura en vez de fijarse porque el precio de subirlo es memoria
+     * retenida —unos 5 GB con el modelo por defecto— y esa cuenta no sale igual
+     * en el equipo del supervisor que en un servidor.
+     */
+    private final String keepAlive;
+
     private final LimitadorDeUsoIa limitador;
 
     /**
@@ -51,9 +69,11 @@ public class OllamaClient {
     public OllamaClient(@Value("${sicot.ia.ollama-url}") String ollamaUrl,
                         @Value("${sicot.ia.ollama-model}") String modelo,
                         @Value("${sicot.ia.timeout-seconds}") int timeoutSeconds,
+                        @Value("${sicot.ia.keep-alive}") String keepAlive,
                         LimitadorDeUsoIa limitador) {
         this.ollamaUrl = ollamaUrl;
         this.modelo = modelo;
+        this.keepAlive = keepAlive;
         this.limitador = limitador;
 
         SimpleClientHttpRequestFactory fabrica = new SimpleClientHttpRequestFactory();
@@ -77,7 +97,8 @@ public class OllamaClient {
 
     private String llamar(String prompt, boolean formatoJson) {
         try {
-            GenerateRequest request = new GenerateRequest(modelo, prompt, false, formatoJson ? "json" : null);
+            GenerateRequest request =
+                    new GenerateRequest(modelo, prompt, false, formatoJson ? "json" : null, keepAlive);
             GenerateResponse respuesta = restClient.post()
                     .uri("/api/generate")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -103,7 +124,14 @@ public class OllamaClient {
         }
     }
 
-    private record GenerateRequest(String model, String prompt, boolean stream, String format) {
+    /**
+     * {@code keep_alive} lleva {@code @JsonProperty} porque Ollama espera ese
+     * nombre exacto, con guion bajo. Un {@code keepAlive} en camelCase se
+     * serializa sin error, Ollama lo ignora en silencio y el modelo se descarga
+     * igual a los 5 minutos — un fallo que no deja rastro en ningún log.
+     */
+    private record GenerateRequest(String model, String prompt, boolean stream, String format,
+                                   @JsonProperty("keep_alive") String keepAlive) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

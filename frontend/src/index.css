@@ -777,6 +777,38 @@ input[type='radio'] {
   box-shadow: 0 0 0 3px var(--accent-glow);
 }
 
+/* Rótulo de cada segmento: hasta dos líneas, sin recortar con puntos
+   suspensivos. En una sola línea, «ACTA DE INICIO» quedaba en «ACTA DE …», que
+   no distingue el Acta de Inicio del Acta de Recibo — dos etapas distintas del
+   mismo proceso. El color lo pone el componente, porque depende del estado. */
+.journey-seg-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.25;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* En pantalla estrecha, seis segmentos dejan menos de 40 px para cada rótulo, y
+   el nombre de la etapa se parte en trozos ilegibles: «ES Y.», «AC D.», «CI».
+   Un fragmento así no informa de nada y además parece un fallo de la pantalla.
+   Se ocultan los rótulos y quedan el número, la barra y el porcentaje, que sí
+   se leen a ese tamaño; el nombre completo de la etapa en curso sigue arriba,
+   en el título grande de la tarjeta, y el de cualquier otra sale al tocarla.
+   No se envuelven en varias filas a propósito: la barra representa un recorrido
+   de izquierda a derecha, y partirla en dos renglones rompe esa lectura. */
+@media (max-width: 640px) {
+  .journey-seg-label {
+    display: none;
+  }
+}
+
 /* ── Copiloto chat ── */
 .copiloto-msg {
   background: var(--bg-surface);

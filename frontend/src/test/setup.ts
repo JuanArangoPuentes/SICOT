@@ -22,3 +22,15 @@ beforeEach(() => {
   // localStorage, y una sesión heredada de otra prueba cambiaría el resultado.
   localStorage.clear()
 })
+
+// jsdom no implementa scrollIntoView: no tiene disposición ni ventana real que
+// desplazar, así que el método sencillamente no existe en sus elementos.
+//
+// Se define aquí, y no en la prueba que se tropezó con él, porque no es una
+// particularidad de esa prueba: cualquier vista que lleve el copiloto —o
+// cualquier otra lista que se autodesplace— revienta igual en cuanto se monte.
+// El panel del Supervisor lo usa para mantener a la vista el último mensaje del
+// chat. Es una carencia del entorno de pruebas, no del componente.
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {}
+}

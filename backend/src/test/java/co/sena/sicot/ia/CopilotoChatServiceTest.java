@@ -11,6 +11,7 @@ import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.EtapaService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -22,7 +23,11 @@ import org.mockito.quality.Strictness;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -64,7 +69,7 @@ class CopilotoChatServiceTest {
         // dependencias, asi que simularla solo escondería el encaminamiento
         // que estas pruebas quieren ver.
         servicio = new CopilotoChatService(contratoService, etapaService, ollamaClient,
-                new GuiaDelPasoActual());
+                new GuiaDelPasoActual(), 5);
 
         Usuario supervisor = new Usuario();
         supervisor.setId(2L);
@@ -110,7 +115,12 @@ class CopilotoChatServiceTest {
 
     @Test
     void elEstadoRealDeLasEtapasYSubetapasViajaEnElPrompt() {
-        servicio.responder(1L, "¿qué me falta?", null);
+        // La pregunta tiene que ser ABIERTA para que llegue al modelo, que es
+        // lo que esta prueba mira. Antes decía «¿qué me falta?», y esa la
+        // atiende ahora GuiaDelPasoActual sin construir prompt alguno — el
+        // arreglo del 15 de septiembre de 2026, que impide que una pregunta por
+        // el paso actual acabe contestada por el modelo con la etapa cambiada.
+        servicio.responder(1L, "¿qué riesgos ve en este contrato?", null);
 
         assertThat(promptCapturado())
                 .contains("Paso 4 — Recepción")
@@ -272,5 +282,109 @@ class CopilotoChatServiceTest {
         ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
         verify(ollamaClient).generar(prompt.capture(), anyBoolean());
         return prompt.getValue();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Precalentado: la pregunta lo espera en vez de competir con él
+    //
+    // El fallo que esto fija se midió contra el stack real el 14 de septiembre
+    // de 2026: el precalentado arrancó al abrir el contrato, la pregunta llegó
+    // 16 s después, y las dos inferencias se estorbaron sobre una Ollama que
+    // corre en CPU hasta pasarse ambas del tiempo límite de 240 s. El supervisor
+    // vio «El servicio de IA no está disponible».
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("una pregunta no abre una segunda inferencia mientras el precalentado corre")
+    void laPreguntaEsperaAlPrecalentadoEnVezDeCompetirConEl() throws Exception {
+        CountDownLatch precalentadoEnCurso = new CountDownLatch(1);
+        CountDownLatch sueltaAlPrecalentado = new CountDownLatch(1);
+        List<String> ordenDeLlamadas = Collections.synchronizedList(new ArrayList<>());
+
+        given(ollamaClient.generar(anyString(), anyBoolean())).willAnswer(invocacion -> {
+            String promptRecibido = invocacion.getArgument(0);
+            boolean esElPrecalentado = ordenDeLlamadas.isEmpty();
+            if (esElPrecalentado) {
+                ordenDeLlamadas.add("precalentado:inicio");
+                precalentadoEnCurso.countDown();
+                // Se queda dentro de Ollama hasta que la prueba lo suelte: así
+                // la pregunta llega con el precalentado vivo, que es justo el
+                // caso que fallaba.
+                sueltaAlPrecalentado.await(5, TimeUnit.SECONDS);
+                ordenDeLlamadas.add("precalentado:fin");
+            } else {
+                ordenDeLlamadas.add("pregunta");
+            }
+            return "respuesta de " + promptRecibido.length() + " caracteres";
+        });
+
+        servicio.precalentar(1L);
+        assertThat(precalentadoEnCurso.await(5, TimeUnit.SECONDS))
+                .as("el precalentado debía haber arrancado").isTrue();
+
+        Thread preguntando = new Thread(() -> servicio.responder(1L, "¿qué riesgos ve?", null));
+        preguntando.start();
+        // Margen para que la pregunta llegue y se quede esperando. Si no
+        // esperara, entraría aquí y dejaría "pregunta" entre las dos marcas del
+        // precalentado, que es exactamente lo que la aserción de abajo prohíbe.
+        Thread.sleep(300);
+        sueltaAlPrecalentado.countDown();
+        preguntando.join(10_000);
+
+        assertThat(ordenDeLlamadas)
+                .containsExactly("precalentado:inicio", "precalentado:fin", "pregunta");
+    }
+
+    @Test
+    @DisplayName("el atajo sin modelo no espera a nadie, aunque el precalentado esté corriendo")
+    void laPreguntaPorElPasoActualNoEsperaAlPrecalentado() throws Exception {
+        CountDownLatch precalentadoEnCurso = new CountDownLatch(1);
+        CountDownLatch sueltaAlPrecalentado = new CountDownLatch(1);
+
+        given(ollamaClient.generar(anyString(), anyBoolean())).willAnswer(invocacion -> {
+            precalentadoEnCurso.countDown();
+            sueltaAlPrecalentado.await(5, TimeUnit.SECONDS);
+            return "hola";
+        });
+
+        servicio.precalentar(1L);
+        assertThat(precalentadoEnCurso.await(5, TimeUnit.SECONDS)).isTrue();
+
+        // GuiaDelPasoActual responde esto sin tocar Ollama, así que esperar al
+        // precalentado sería castigar gratis a la pregunta más frecuente.
+        long inicio = System.currentTimeMillis();
+        String respuesta = servicio.responder(1L, "¿en qué paso voy?", null);
+        long tardo = System.currentTimeMillis() - inicio;
+
+        sueltaAlPrecalentado.countDown();
+        assertThat(respuesta).isNotBlank();
+        assertThat(tardo).as("no debía quedarse esperando al precalentado").isLessThan(2_000);
+    }
+
+    @Test
+    @DisplayName("abrir dos veces el mismo contrato no encola dos precalentados")
+    void noSeEncolanPrecalentadosDuplicadosDelMismoContrato() throws Exception {
+        CountDownLatch primeroEnCurso = new CountDownLatch(1);
+        CountDownLatch suelta = new CountDownLatch(1);
+        AtomicInteger llamadasAOllama = new AtomicInteger();
+
+        given(ollamaClient.generar(anyString(), anyBoolean())).willAnswer(invocacion -> {
+            llamadasAOllama.incrementAndGet();
+            primeroEnCurso.countDown();
+            suelta.await(5, TimeUnit.SECONDS);
+            return "hola";
+        });
+
+        servicio.precalentar(1L);
+        assertThat(primeroEnCurso.await(5, TimeUnit.SECONDS)).isTrue();
+        servicio.precalentar(1L);
+        servicio.precalentar(1L);
+
+        suelta.countDown();
+        Thread.sleep(300);
+
+        assertThat(llamadasAOllama.get())
+                .as("el segundo y el tercero solo servirían para hacer esperar al primero")
+                .isEqualTo(1);
     }
 }

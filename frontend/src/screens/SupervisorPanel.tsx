@@ -31,12 +31,11 @@ import {
   EmptyContractState,
   ErrorContratoState,
 } from '@/components/supervisor/EstadosSinContrato'
-import { Chip, SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
+import { SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
 import {
   AvatarIcon,
   IconArrowRight,
   IconBell,
-  IconChart,
   IconCheck,
   IconChevron,
   IconClock,
@@ -126,6 +125,37 @@ function etiquetaCorta(titulo: string): string {
   const cabeza = titulo.split('—')[0].trim()
   const texto = cabeza || titulo
   return texto.charAt(0).toUpperCase() + texto.slice(1).toLowerCase()
+}
+
+/** "INICIO — Acta de Inicio (GCCON-F-018)" -> "Acta de Inicio". */
+function etiquetaDeCola(titulo: string): string {
+  const cola = titulo.split('—').slice(1).join('—')
+  return cola.replace(/\([^)]*\)/g, '').trim()
+}
+
+/**
+ * Etiquetas cortas y **distinguibles entre sí** para la barra de recorrido.
+ *
+ * <p>El GCCON-P-010 llama "INICIO" a sus dos primeros pasos: «INICIO — Estudios
+ * y Suscripción» e «INICIO — Acta de Inicio». Quedarse con la cabeza, que es lo
+ * que se hacía, ponía dos segmentos rotulados igual, uno al lado del otro. En
+ * una barra cuyo trabajo es responder "¿en cuál voy?", dos rótulos idénticos
+ * son justo el fallo que no puede tener.
+ *
+ * <p>Cuando la cabeza se repite se usa la cola, que es la parte que de verdad
+ * los diferencia. No se concatenan las dos ("Inicio: Estudios y Suscripción")
+ * porque el segmento es estrecho y la parte repetida se comería el espacio de
+ * la parte que distingue. El nombre completo sigue disponible en el título
+ * grande y al pasar el ratón sobre el segmento.
+ */
+function etiquetasDeBarra(titulos: string[]): string[] {
+  const cabezas = titulos.map(etiquetaCorta)
+  return titulos.map((titulo, i) => {
+    const seRepite = cabezas.filter((c) => c === cabezas[i]).length > 1
+    if (!seRepite) return cabezas[i]
+    const cola = etiquetaDeCola(titulo)
+    return cola || cabezas[i]
+  })
 }
 
 const TITULO_VISTA: Record<Tab, { titulo: string; sub: string }> = {
@@ -670,7 +700,8 @@ export default function SupervisorPanel({
   // El color de cada sección sale del estado real: verde si el paso está
   // cerrado, el semáforo del cronograma si es el paso en curso, y gris si
   // todavía no se ha tocado.
-  const stages: Stage[] = steps.map((s) => {
+  const etiquetasBarra = etiquetasDeBarra(steps.map((s) => s.title))
+  const stages: Stage[] = steps.map((s, indice) => {
     const total = s.subSteps.length
     const hechos = s.subSteps.filter((ss) => ss.completed).length
     const pct = total ? Math.round((hechos / total) * 100) : 0
@@ -690,7 +721,7 @@ export default function SupervisorPanel({
     const detalleBase = DETALLE_PASO[s.id] ?? `${hechos} de ${total} sub-pasos cerrados en este paso.`
     return {
       key: claveDePaso(s.id),
-      label: etiquetaCorta(s.title),
+      label: etiquetasBarra[indice],
       fullLabel: s.title,
       pct,
       state,
@@ -894,6 +925,11 @@ export default function SupervisorPanel({
           nombre={usuario.nombre}
           contrato={contrato}
           steps={steps}
+          // Se pasa calculado, no se recalcula dentro: es la misma cifra que la
+          // barra de la vista Contrato. Dos cálculos del "mismo" porcentaje
+          // acaban divergiendo, y entonces el supervisor ve dos números para lo
+          // que él lee como una sola cosa.
+          avanceGlobal={avanceGlobal}
           items={itemsBandeja}
           errorAlertas={errorAlertas}
           onIrAContrato={() => setTab('contrato')}
@@ -916,7 +952,12 @@ export default function SupervisorPanel({
               />
             </div>
 
-            {/* Indicadores del contrato */}
+            {/* Indicadores del contrato.
+
+                Eran cuatro y la primera era «Avance global», el mismo número que
+                la barra de arriba ya muestra en grande. Verlo dos veces seguidas
+                no lo refuerza: hace dudar de si son dos cifras distintas. Las
+                tres que quedan dicen cada una algo que la barra no dice. */}
             <div
               style={{
                 display: 'grid',
@@ -925,12 +966,6 @@ export default function SupervisorPanel({
                 marginBottom: 16,
               }}
             >
-              <StatCard
-                label="Avance global"
-                value={`${avanceGlobal}%`}
-                hint={`${todosLosSubPasos.filter((ss) => ss.completed).length} de ${todosLosSubPasos.length} sub-pasos cerrados`}
-                icon={<IconChart size={15} />}
-              />
               <StatCard
                 label="Etapas cerradas"
                 value={`${etapasCerradas}/${steps.length}`}
@@ -1134,21 +1169,39 @@ export default function SupervisorPanel({
                                   )}
                                 </span>
                               </div>
+                              {/* Responsable y documento van como texto, no como
+                                  etiquetas de color.
+
+                                  Eran tres «chips» por sub-paso y hay 27 sub-pasos:
+                                  81 rectángulos de color en una sola pantalla,
+                                  todos con el mismo peso visual que las cosas que
+                                  sí piden acción. El dato sigue estando; lo que se
+                                  quita es el grito.
+
+                                  El estado «Pendiente» desapareció porque ya se lee
+                                  dos veces en la misma fila: el círculo va vacío y
+                                  el texto va sin tachar. Cuando SÍ está cerrado se
+                                  dice, porque «Firmado» y «Completado» no son lo
+                                  mismo y esa diferencia sí importa. */}
                               <div
                                 style={{
                                   display: 'flex',
-                                  gap: 6,
+                                  gap: 8,
                                   flexWrap: 'wrap',
                                   paddingLeft: 26,
                                   alignItems: 'center',
+                                  fontSize: 11.5,
+                                  color: 'var(--text-muted)',
+                                  lineHeight: 1.5,
                                 }}
                               >
-                                <Chip text={ss.responsible} type="responsible" />
-                                <Chip text={ss.document} type="document" />
-                                {ss.completed ? (
-                                  <Chip text={completedLabel} type={isAiDoc ? 'signed' : 'done'} />
-                                ) : (
-                                  <Chip text="Pendiente" type="pending" />
+                                <span>
+                                  {ss.responsible} · {ss.document}
+                                </span>
+                                {ss.completed && (
+                                  <span style={{ color: isAiDoc ? 'var(--info)' : 'var(--accent)', fontWeight: 600 }}>
+                                    {completedLabel}
+                                  </span>
                                 )}
                                 {isActiveTutorial && !ss.completed && (
                                   <button

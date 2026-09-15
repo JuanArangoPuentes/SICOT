@@ -66,7 +66,28 @@ public class GuiaDelPasoActual {
             "que tengo que hacer", "qué tengo que hacer", "que debo hacer",
             "qué debo hacer", "que hago ahora", "qué hago ahora",
             "por donde empiezo", "por dónde empiezo", "en que voy", "en qué voy",
-            "cual es mi paso", "cuál es mi paso", "que falta", "qué falta");
+            "cual es mi paso", "cuál es mi paso", "que falta", "qué falta",
+            // ── Variantes con pronombre ──────────────────────────────────
+            //
+            // Medido el 15 de septiembre de 2026 contra el sistema real: a la
+            // pregunta «¿Qué me falta para cerrar el paso en el que estoy?»,
+            // con el contrato en el paso 3, el copiloto respondió que faltaba
+            // cerrar el PASO 4 y mandó al supervisor a los sub-pasos 4.1 y 4.2.
+            //
+            // El atajo existe justo para que esa pregunta no llegue al modelo,
+            // y no la atajó por un detalle de literalidad: la lista traía
+            // «qué falta», y «qué ME falta» no contiene esa subcadena. La
+            // pregunta cayó en la ruta del modelo, que es la que ya se había
+            // medido como poco fiable para identificar la etapa.
+            //
+            // Es la misma lección que motivó esta clase, aplicada a su propia
+            // puerta de entrada: no basta con tener el camino determinista, hay
+            // que asegurarse de que la forma en que la gente pregunta de verdad
+            // entra por él. Se cubren los clíticos, no cada frase entera: «me
+            // falta» atrapa «¿qué me falta?», «me falta para cerrar» y demás.
+            "me falta", "me hace falta", "me queda pendiente",
+            "falta para cerrar", "falta para terminar", "falta por hacer",
+            "me toca", "me corresponde");
 
     /**
      * ¿Es una pregunta que se puede contestar sin modelo?

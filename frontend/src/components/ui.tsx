@@ -173,11 +173,12 @@ export function StageJourney({
                   {(actual.fullLabel ?? actual.label).toUpperCase()}
                 </h2>
               </div>
-              <div
-                style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 3, lineHeight: 1.5, maxWidth: 620 }}
-              >
-                {actual.detail}
-              </div>
+              {/* La descripción de la etapa NO se repite aquí a propósito. Estaba
+                  dos veces en esta misma tarjeta —bajo el título y otra vez en el
+                  bloque de detalle del pie—, y el bloque del pie hace además algo
+                  que este párrafo no hacía: cambia al señalar otra etapa. Tener el
+                  mismo texto dos veces obligaba a leerlo dos veces para descubrir
+                  que era el mismo. */}
             </>
           ) : (
             <h2 style={{ fontSize: 19 }}>Etapas del contrato</h2>
@@ -222,7 +223,12 @@ export function StageJourney({
               title={`${s.label} — ${s.pct}% completado`}
             >
               {/* Etiqueta superior */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6, minHeight: 18 }}>
+              {/* alignItems flex-start y no center: con el rótulo a dos líneas,
+                  centrarlo dejaba el número de la etapa flotando a media altura
+                  y desalineado respecto a los demás segmentos, que sí caben en
+                  una. minHeight reserva las dos líneas para que todos los
+                  segmentos tengan el riel a la misma altura. */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 6, minHeight: 30 }}>
                 <span
                   style={{
                     width: 17,
@@ -242,16 +248,26 @@ export function StageJourney({
                 >
                   {completa ? '✓' : i + 1}
                 </span>
+                {/* Hasta dos líneas, en vez de una sola recortada con puntos
+                    suspensivos.
+
+                    En una sola línea, seis segmentos repartidos a lo ancho
+                    dejaban rótulos como «ACTA DE …» o «CERTIFI…», que no
+                    identifican nada: «ACTA DE …» puede ser el Acta de Inicio o
+                    el Acta de Recibo, que son dos etapas distintas de este
+                    mismo proceso. La barra existe para responder «¿en cuál
+                    voy?»; un rótulo que hay que adivinar no la deja hacer su
+                    trabajo. Dos líneas cuestan unos píxeles de alto y hacen
+                    legible el nombre entero. */}
+                {/* Solo el color va en línea, porque depende del estado de la
+                    etapa. El resto vive en .journey-seg-label (index.css), y no
+                    por prolijidad: un `display` en el atributo style gana a
+                    cualquier hoja de estilos, así que la regla que oculta estos
+                    rótulos en pantalla estrecha no llegaba a aplicarse nunca. */}
                 <span
+                  className="journey-seg-label"
                   style={{
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    letterSpacing: '0.06em',
-                    textTransform: 'uppercase',
                     color: esActual ? color : s.state === 'idle' ? 'var(--text-muted)' : 'var(--text-secondary)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
                   }}
                 >
                   {s.label}

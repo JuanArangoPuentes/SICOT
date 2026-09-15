@@ -5,18 +5,7 @@
 // fechas del contrato). No hay series de ejemplo: si el contrato todavía no
 // tiene etapas cargadas, cada panel lo dice en vez de dibujar una curva falsa.
 
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { Step } from '@/types/domain'
 import type { ContratoResponse, DocumentoResponse } from '@/services/api/types'
 import { FORMAL_DOCS } from '@/data/contractFlow'
@@ -88,35 +77,11 @@ export default function ContratoGraficas({
   docs: DocumentoResponse[]
   contrato: ContratoResponse
 }) {
-  const hayEtapas = steps.length > 0
-
-  // ── 1. Avance por etapa (datos reales de subetapas) ──
-  const porEtapa = steps.map((s) => {
-    const total = s.subSteps.length
-    const hechos = s.subSteps.filter((ss) => ss.completed).length
-    const pct = total ? Math.round((hechos / total) * 100) : 0
-    return {
-      etapa: `P${s.id}`,
-      nombre: s.title,
-      pct,
-      hechos,
-      total,
-      // El color viaja en el propio dato (`fill`): en recharts 3 los <Cell>
-      // dentro de <Bar>/<Pie> dejan la figura sin dibujar.
-      fill: pct === 100 ? 'var(--accent)' : pct > 0 ? 'var(--chip-blue)' : 'var(--step-pending)',
-    }
-  })
-
-  // ── 2. Distribución de sub-pasos ──
+  // Sub-pasos cerrados sobre el total: alimenta la comparacion de abajo.
   const todosSubPasos = steps.flatMap((s) => s.subSteps)
   const completados = todosSubPasos.filter((ss) => ss.completed).length
-  const pendientes = todosSubPasos.length - completados
-  const distribucion = [
-    { name: 'Completados', value: completados, fill: 'var(--accent)' },
-    { name: 'Pendientes', value: pendientes, fill: 'var(--step-pending)' },
-  ].filter((d) => d.value > 0)
 
-  // ── 3. Tiempo transcurrido frente a avance ejecutado ──
+  // ── 1. Tiempo transcurrido frente a avance ejecutado ──
   const inicio = contrato.fechaInicio ? new Date(contrato.fechaInicio) : null
   const fin = contrato.fechaFin ? new Date(contrato.fechaFin) : null
   const totalDias = inicio && fin ? (fin.getTime() - inicio.getTime()) / 86400000 : 0
@@ -131,7 +96,7 @@ export default function ContratoGraficas({
           { name: 'Avance ejecutado', valor: pctAvance, fill: 'var(--accent)' },
         ]
 
-  // ── 4. Documentos formales del proceso ──
+  // ── 2. Documentos formales del proceso ──
   const generados = FORMAL_DOCS.map((d) => docs.find((x) => x.generadoPorIa && x.nombre.startsWith(d.name)))
   const firmados = generados.filter((d) => d?.estado === 'APROBADO').length
   const sinFirmar = generados.filter((d) => d && d.estado !== 'APROBADO').length
@@ -144,68 +109,15 @@ export default function ContratoGraficas({
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
-      <Panel title="Avance por etapa" desc="Porcentaje de sub-pasos cerrados en cada una de las etapas del proceso.">
-        {!hayEtapas ? (
-          <SinDatos texto="Las etapas del contrato todavía no se han cargado desde el servidor." />
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={porEtapa} margin={{ top: 6, right: 10, left: -22, bottom: 0 }}>
-              <CartesianGrid stroke="var(--border)" vertical={false} />
-              <XAxis
-                dataKey="etapa"
-                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                axisLine={{ stroke: 'var(--border)' }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 100]}
-                unit="%"
-                tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                cursor={{ fill: 'var(--accent-soft)' }}
-                contentStyle={TOOLTIP_STYLE}
-                labelStyle={{ color: 'var(--text-primary)', fontWeight: 600 }}
-                formatter={(v, _n, item) => {
-                  const d = (item as { payload?: (typeof porEtapa)[number] } | undefined)?.payload
-                  return [`${String(v)}% — ${d?.hechos ?? 0}/${d?.total ?? 0} sub-pasos`, d?.nombre ?? 'Etapa']
-                }}
-              />
-              <Bar dataKey="pct" name="Avance" radius={[4, 4, 0, 0]} isAnimationActive={false} />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </Panel>
+      {/* Aqui vivian dos paneles mas: «Avance por etapa» y «Distribucion de
+          sub-pasos». Se quitaron porque no anadian informacion, la repetian:
+          el avance por etapa ya sale en la barra de recorrido de arriba Y en la
+          barra de cada etapa del acordeon, y la distribucion de sub-pasos es el
+          mismo avance global convertido en tarta.
 
-      <Panel
-        title="Distribución de sub-pasos"
-        desc="Cuántos puntos de control del contrato están cerrados y cuántos siguen abiertos."
-      >
-        {!todosSubPasos.length ? (
-          <SinDatos texto="Sin sub-pasos cargados para este contrato." />
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={distribucion}
-                dataKey="value"
-                nameKey="name"
-                innerRadius="56%"
-                outerRadius="82%"
-                paddingAngle={2}
-                stroke="var(--bg-card)"
-                strokeWidth={2}
-                isAnimationActive={false}
-              />
-              <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [`${String(v)} sub-paso(s)`, String(n)]} />
-              <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-secondary)' }} />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
-      </Panel>
-
+          Con ellos, el mismo porcentaje aparecia hasta tres veces en la misma
+          pantalla, cada vez con una forma distinta. Los dos que quedan son los
+          que dicen algo que ninguna barra de arriba dice. */}
       <Panel
         title="Tiempo frente a avance"
         desc="Porcentaje del plazo del contrato ya transcurrido comparado con el porcentaje de sub-pasos cerrados."
