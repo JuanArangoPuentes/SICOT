@@ -40,6 +40,17 @@ export const CLAVE_SERVIDOR = 'sicot.servidor'
  *
  * <p>Se lee en cada llamada y no una sola vez al cargar el módulo para que un
  * cambio de servidor tenga efecto sin reiniciar la aplicación.
+ *
+ * <h2>Dónde surte efecto de verdad</h2>
+ * En la <b>aplicación de escritorio</b>, siempre: su CSP permite hablar con
+ * cualquier servidor http/https, que es justo lo que necesita un instalador
+ * distribuido a Centros distintos.
+ *
+ * <p>En el <b>despliegue web</b> manda además la CSP que pone nginx
+ * ({@code CSP_CONNECT_SRC_EXTRA}): apuntar aquí a un origen que esa cabecera no
+ * autorice deja las llamadas bloqueadas por el navegador. No es una
+ * contradicción sino el reparto correcto — en la web el frontend y la API
+ * comparten origen (ADR-009) y no hay nada que configurar.
  */
 export function apiBase(): string {
   let guardado: string | null = null
