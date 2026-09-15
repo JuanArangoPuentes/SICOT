@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
 import { contrato, sesionSupervisor } from '@/test/dobles'
+import type { Step, SubStep } from '@/types/domain'
 
 /**
  * Pruebas de la pantalla que ve un supervisor todos los días.
@@ -138,6 +139,119 @@ describe('SupervisorPanel', () => {
 
     for (const seccion of [/contrato/i, /alertas/i, /documentos/i, /registros/i]) {
       expect(screen.getAllByText(seccion).length).toBeGreaterThan(0)
+    }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Barras y porcentajes
+  //
+  // El jefe del área pidió el panel más simple pero conservando «las barras y
+  // el porcentaje de los procesos». Lo que se simplificó fue la repetición: el
+  // mismo porcentaje llegaba a salir tres veces en la misma pantalla con tres
+  // formas distintas. Estas pruebas fijan que el dato siga estando y que siga
+  // saliendo UNA vez.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** Etapas del GCCON-P-010 con avance real: 1 y 2 cerradas, la 3 a medias. */
+  function etapasConAvance(): Step[] {
+    const sub = (id: string, completed: boolean): SubStep => ({
+      id,
+      label: `Sub-paso ${id}`,
+      responsible: 'Área requirente',
+      document: 'Ficha',
+      completed,
+    })
+    return [
+      {
+        id: 1,
+        title: 'INICIO — Estudios y Suscripción',
+        status: 'completed',
+        subSteps: [sub('1.1', true), sub('1.2', true)],
+      },
+      {
+        id: 2,
+        title: 'INICIO — Acta de Inicio (GCCON-F-018)',
+        status: 'completed',
+        subSteps: [sub('2.1', true), sub('2.2', true)],
+      },
+      {
+        id: 3,
+        title: 'INSPECCIÓN — Monitoreo y Ejecución',
+        status: 'active',
+        subSteps: [sub('3.1', true), sub('3.2', false)],
+      },
+      {
+        id: 4,
+        title: 'CIERRE — Informe Final y Archivo',
+        status: 'pending',
+        subSteps: [sub('4.1', false), sub('4.2', false)],
+      },
+    ]
+  }
+
+  it('la bandeja muestra la barra de avance con el porcentaje real', async () => {
+    // 5 de 8 sub-pasos cerrados = 63 %.
+    await montar({ contrato: contrato(), steps: etapasConAvance() })
+
+    const barra = await screen.findByRole('progressbar', { name: /avance del contrato/i })
+    expect(barra).toHaveAttribute('aria-valuenow', '63')
+    expect(screen.getByText(/5 de 8 sub-pasos cerrados/i)).toBeInTheDocument()
+  })
+
+  /**
+   * El GCCON-P-010 llama «INICIO» a sus dos primeros pasos. La barra se
+   * quedaba con lo anterior al guion largo, así que pintaba dos segmentos
+   * seguidos rotulados igual. En una barra cuyo único trabajo es responder
+   * «¿en cuál voy?», dos rótulos idénticos son el peor fallo posible.
+   */
+  it('en la barra, ningún segmento queda rotulado igual que otro', async () => {
+    await montar({ vista: 'contrato', contrato: contrato(), steps: etapasConAvance() })
+    await screen.findByText(/recorrido del contrato/i)
+
+    // Los segmentos de la barra son los únicos botones cuyo título termina en
+    // "% completado". Se consultan por ahí para no confundirlos con el resto de
+    // la pantalla, donde el nombre completo de la etapa aparece otras veces.
+    const segmentos = screen.getAllByRole('button').filter((b) => /% completado$/.test(b.getAttribute('title') ?? ''))
+
+    expect(segmentos).toHaveLength(4)
+    const rotulos = segmentos.map((b) =>
+      b.textContent
+        ?.replace(/[✓\d%]/g, '')
+        .trim()
+        .toLowerCase(),
+    )
+    expect(new Set(rotulos).size).toBe(rotulos.length)
+    // Y en concreto: las dos etapas que el GCCON-P-010 llama "INICIO".
+    expect(rotulos[0]).toContain('estudios y suscripción')
+    expect(rotulos[1]).toContain('acta de inicio')
+  })
+
+  /**
+   * «Avance global» salía dos veces seguidas con el mismo número: en la
+   * cabecera de la barra y otra vez como tarjeta justo debajo. Ver dos veces
+   * la misma cifra no la refuerza — hace dudar de si son dos cifras distintas.
+   */
+  it('el avance global aparece una sola vez en la vista de contrato', async () => {
+    await montar({ vista: 'contrato', contrato: contrato(), steps: etapasConAvance() })
+
+    await screen.findByText(/recorrido del contrato/i)
+    expect(screen.getAllByText(/avance global/i)).toHaveLength(1)
+  })
+
+  /**
+   * Simplificar no puede significar perder el dato. Las tres tarjetas que
+   * quedan dicen cada una algo que la barra de arriba no dice.
+   */
+  it('conserva los indicadores que no duplican la barra', async () => {
+    await montar({ vista: 'contrato', contrato: contrato(), steps: etapasConAvance() })
+
+    await screen.findByText(/recorrido del contrato/i)
+
+    // getAllBy y no getBy: "Vigencia" también es el nombre de un campo de la
+    // ficha del contrato, más abajo en la misma pantalla. Lo que se afirma es
+    // que el indicador sigue estando, no que el texto sea único.
+    for (const indicador of [/etapas cerradas/i, /sub-pasos por cerrar/i, /vigencia/i]) {
+      expect(screen.getAllByText(indicador).length).toBeGreaterThan(0)
     }
   })
 })

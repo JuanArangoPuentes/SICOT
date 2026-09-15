@@ -100,6 +100,7 @@ export default function Bandeja({
   nombre,
   contrato,
   steps,
+  avanceGlobal,
   items,
   errorAlertas,
   onIrAContrato,
@@ -108,6 +109,12 @@ export default function Bandeja({
   nombre: string
   contrato: ContratoResponse
   steps: Step[]
+  /**
+   * Avance global del contrato, ya calculado por el panel. Llega de fuera para
+   * que sea exactamente el mismo número que muestra la vista Contrato: dos
+   * cálculos del «mismo» porcentaje acaban divergiendo.
+   */
+  avanceGlobal: number
   items: ItemBandeja[]
   /** El servicio de alertas no respondió: no se puede afirmar que no haya ninguna. */
   errorAlertas: boolean
@@ -159,6 +166,72 @@ export default function Bandeja({
           {steps.length > 0 && (
             <div style={{ marginTop: 16 }}>
               <EtapaCompacta steps={steps} onAbrir={onIrAContrato} />
+              {/* La barra de avance vive también aquí, y no solo en la vista
+                  Contrato, porque esta es la pantalla de aterrizaje: es donde
+                  «¿cómo voy?» se responde sin hacer clic en nada. Es una sola
+                  barra con su porcentaje — el desglose por etapa sigue estando
+                  a un clic, en Contrato. */}
+              <div style={{ marginTop: 14, maxWidth: 420 }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'baseline',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    marginBottom: 6,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      letterSpacing: '0.09em',
+                      color: 'var(--text-muted)',
+                    }}
+                  >
+                    AVANCE DEL CONTRATO
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-display)',
+                      fontSize: 18,
+                      fontWeight: 700,
+                      color: 'var(--accent)',
+                      lineHeight: 1,
+                    }}
+                  >
+                    {avanceGlobal}
+                    <span style={{ fontSize: 12 }}>%</span>
+                  </span>
+                </div>
+                <div
+                  role="progressbar"
+                  aria-label="Avance del contrato"
+                  aria-valuenow={avanceGlobal}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  style={{
+                    height: 7,
+                    borderRadius: 4,
+                    background: 'var(--step-pending)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${avanceGlobal}%`,
+                      background: 'var(--accent)',
+                      borderRadius: 4,
+                      transition: 'width 0.3s',
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 5 }}>
+                  {steps.flatMap((s) => s.subSteps).filter((ss) => ss.completed).length} de{' '}
+                  {steps.flatMap((s) => s.subSteps).length} sub-pasos cerrados
+                </div>
+              </div>
             </div>
           )}
 
