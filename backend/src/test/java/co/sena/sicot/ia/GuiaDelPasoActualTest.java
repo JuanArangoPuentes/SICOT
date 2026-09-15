@@ -58,6 +58,28 @@ class GuiaDelPasoActualTest {
         assertThat(guia.puedeResponder("por donde empiezo")).isTrue();
     }
 
+    /**
+     * El caso que se escapó, medido contra el sistema real el 15 de septiembre
+     * de 2026: con el contrato en el paso 3, el copiloto respondió que faltaba
+     * cerrar el <b>paso 4</b> y mandó al supervisor a los sub-pasos 4.1 y 4.2.
+     *
+     * <p>No falló la plantilla: falló su puerta de entrada. La lista de señales
+     * traía «qué falta», y «qué ME falta» no contiene esa subcadena, así que la
+     * pregunta se fue al modelo — la ruta que esta clase existe para evitar.
+     *
+     * <p>Si alguien vuelve a recortar la lista de señales, esta prueba es la
+     * que debe ponerse roja.
+     */
+    @Test
+    @DisplayName("reconoce la pregunta aunque lleve pronombre: «qué ME falta»")
+    void reconoceLasVariantesConPronombre() {
+        assertThat(guia.puedeResponder("¿Qué me falta para cerrar el paso en el que estoy?")).isTrue();
+        assertThat(guia.puedeResponder("¿qué me falta?")).isTrue();
+        assertThat(guia.puedeResponder("¿Qué me toca ahora?")).isTrue();
+        assertThat(guia.puedeResponder("¿qué me queda pendiente en este paso?")).isTrue();
+        assertThat(guia.puedeResponder("¿qué falta para terminar este paso?")).isTrue();
+    }
+
     @Test
     @DisplayName("deja pasar al modelo lo que no es una pregunta de estado")
     void noSecuestraLasPreguntasAbiertas() {

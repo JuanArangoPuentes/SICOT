@@ -115,7 +115,12 @@ class CopilotoChatServiceTest {
 
     @Test
     void elEstadoRealDeLasEtapasYSubetapasViajaEnElPrompt() {
-        servicio.responder(1L, "¿qué me falta?", null);
+        // La pregunta tiene que ser ABIERTA para que llegue al modelo, que es
+        // lo que esta prueba mira. Antes decía «¿qué me falta?», y esa la
+        // atiende ahora GuiaDelPasoActual sin construir prompt alguno — el
+        // arreglo del 15 de septiembre de 2026, que impide que una pregunta por
+        // el paso actual acabe contestada por el modelo con la etapa cambiada.
+        servicio.responder(1L, "¿qué riesgos ve en este contrato?", null);
 
         assertThat(promptCapturado())
                 .contains("Paso 4 — Recepción")
