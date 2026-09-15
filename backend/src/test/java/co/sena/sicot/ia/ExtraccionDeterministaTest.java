@@ -115,4 +115,150 @@ class ExtraccionDeterministaTest {
         assertThat(extractor.extraer(null).idContrato()).isNull();
         assertThat(extractor.extraer("   ").idContrato()).isNull();
     }
+
+    // ── El documento como formulario ────────────────────────────────────────
+    //
+    // Gestión no carga el contrato: carga el acta de inicio y la notificación
+    // al supervisor. Los textos de abajo copian la disposición real de esos dos
+    // formatos —tabla de etiqueta y valor, no prosa— con datos inventados.
+    //
+    // Antes de que existieran estas pruebas, de un acta real solo salían el
+    // número de contrato y el valor. Proveedor, NIT, representante y fechas
+    // volvían vacíos aunque estuvieran impresos en el documento, y el usuario
+    // los tenía que teclear a mano creyendo que la lectura automática no servía.
+
+    private static final String ACTA_DE_INICIO = """
+            GCCON-F-018 V.04
+
+            PROCESO GESTION CONTRACTUAL
+            FORMATO ACTA DE INICIO
+
+            En Itagui- Antioquia el dia 30 de mayo de 2025, entre los suscritos
+            LAURA CAROLINA RESTREPO TORO, identificado con cedula de ciudadania
+            nro. xxxx, en calidad de supervisor y, de otra parte, CARLOS MARIO
+            REINA MEJIA, identificado con cedula de ciudadania nro. 98.587.121 de
+            Bello-Antioquia, en calidad de representante legal de EVENTOS
+            SUPERNOVA S.A.S., identificada con NIT. 900.478.852-5, hemos convenido
+            suscribir el acta de inicio del contrato de la referencia.
+
+            Numero y fecha del registro presupuestal 56725 del 17 de junio de 2025
+            Fecha de aprobacion de las garantias 17 de junio de 2025
+            Fecha de inicio 17 de junio de 2025
+            Fecha de terminacion 17 de diciembre de 2025
+
+            CONTRATO NRO. CO1.PCCNTR.7986334
+            TIPO DE CONTRATO SUMINISTRO
+            VALOR DEL CONTRATO DIEZ MILLONES DE PESOS ($10.000.000 COP)
+            PLAZO DEL CONTRATO  6 Meses
+            LUGAR DE EJECUCION CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA.
+            CONTRATISTA EVENTOS SUPERNOVA S.A.S.
+            CC o NIT 900.478.852-5
+            REPRESENTANTE LEGAL CARLOS MARIO REINA MEJIA
+            SUPERVISOR DESIGNADO LAURA CAROLINA RESTREPO TORO
+
+            Elaboro: Valentina Jimenez Giraldo
+            Contratista Abogada Apoyo Bienes y Servicios
+            """;
+
+    private static final String NOTIFICACION_AL_SUPERVISOR = """
+            Itagui, 15 de octubre de 2025
+
+            Senor
+            ALEX FERNANDO ZAPATA RIOS
+            Supervisor
+            Numero de contrato CO1.PCCNTR.8151794
+            ASUNTO: Recordatorio de obligaciones como supervisor(a) contractual
+
+            - Objeto: contratar el suministro de materiales para la formacion
+            - Valor: $ 39.552.042
+            - Fecha de inicio: 11/08/2025
+            - Fecha de terminacion: 15/11/2025
+            """;
+
+    @Test
+    @DisplayName("del acta de inicio saca los datos de la tabla, no solo los de la prosa")
+    void leeElActaDeInicioComoFormulario() {
+        ExtraccionContratoResponse r = extractor.extraer(ACTA_DE_INICIO);
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.7986334");
+        assertThat(r.proveedor()).isEqualTo("EVENTOS SUPERNOVA S.A.S.");
+        assertThat(r.nit()).isEqualTo("900.478.852-5");
+        assertThat(r.representanteLegal()).isEqualTo("CARLOS MARIO REINA MEJIA");
+        assertThat(r.valor()).isEqualTo("10000000");
+        assertThat(r.vigenciaInicio()).isEqualTo("2025-06-17");
+        assertThat(r.vigenciaFin()).isEqualTo("2025-12-17");
+        assertThat(r.registroPresupuestal()).isEqualTo("56725");
+    }
+
+    @Test
+    @DisplayName("el lugar no se corta en el punto de «NO.» de la dirección")
+    void noConfundeLaAbreviaturaDelNumeralConElFinDeLaFrase() {
+        // Devolvía «CALLE 63 NO»: el primer punto del texto es el de la
+        // abreviatura, no el que cierra la frase.
+        assertThat(extractor.extraer(ACTA_DE_INICIO).lugarEjecucion())
+                .isEqualTo("CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA");
+    }
+
+    @Test
+    @DisplayName("el proveedor no es el cargo de quien elaboró el acta")
+    void noTomaElCargoDeLaAbogadaComoProveedor() {
+        // El acta cierra con «Contratista Abogada Apoyo Bienes y Servicios».
+        // Leer la etiqueta sin distinguir mayúsculas daba eso como proveedor.
+        assertThat(extractor.extraer(ACTA_DE_INICIO).proveedor())
+                .doesNotContain("Abogada");
+    }
+
+    @Test
+    @DisplayName("el representante legal es la persona, no la empresa que va en la misma frase")
+    void noTomaLaEmpresaComoRepresentanteLegal() {
+        // El cuerpo del acta dice «representante legal de EVENTOS SUPERNOVA
+        // S.A.S.»: ahí lo que sigue es la empresa.
+        assertThat(extractor.extraer(ACTA_DE_INICIO).representanteLegal())
+                .doesNotContain("SUPERNOVA");
+    }
+
+    @Test
+    @DisplayName("de la notificación saca las fechas en dd/MM/yyyy")
+    void leeLasFechasNumericasDeLaNotificacion() {
+        ExtraccionContratoResponse r = extractor.extraer(NOTIFICACION_AL_SUPERVISOR);
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.8151794");
+        assertThat(r.valor()).isEqualTo("39552042");
+        assertThat(r.vigenciaInicio()).isEqualTo("2025-08-11");
+        assertThat(r.vigenciaFin()).isEqualTo("2025-11-15");
+    }
+
+    @Test
+    @DisplayName("la notificación no trae contratista, y eso vuelve vacío en vez de inventado")
+    void noSeInventaLoQueLaNotificacionNoTrae() {
+        ExtraccionContratoResponse r = extractor.extraer(NOTIFICACION_AL_SUPERVISOR);
+
+        assertThat(r.proveedor()).isNull();
+        assertThat(r.nit()).isNull();
+        assertThat(r.representanteLegal()).isNull();
+    }
+
+    @Test
+    @DisplayName("el respaldo por etiqueta no le quita el NIT del contratista a la prosa")
+    void laProsaSigueMandandoSobreLaEtiqueta() {
+        // El contrato en prosa está escrito para saltarse el NIT del SENA. Si
+        // la etiqueta ganara, ese cuidado se perdería en el primer documento
+        // que trajera las dos formas.
+        String mixto = CONTRATO + """
+
+                NIT 899.999.034-1
+                CONTRATISTA QUIEN NO ES
+                """;
+
+        assertThat(extractor.extraer(mixto).nit()).isEqualTo("901.455.876-3");
+        assertThat(extractor.extraer(mixto).proveedor())
+                .isEqualTo("MADERAS Y DISENOS DEL CARIBE S.A.S.");
+    }
+
+    @Test
+    @DisplayName("un registro presupuestal sin numeral ni cifra no se llena con la palabra siguiente")
+    void noTomaUnaPalabraCualquieraComoRegistroPresupuestal() {
+        assertThat(extractor.extraer("El registro presupuestal del contrato se anexa.")
+                .registroPresupuestal()).isNull();
+    }
 }
