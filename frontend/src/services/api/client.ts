@@ -4,21 +4,59 @@
 import type { ErrorResponse } from './types'
 
 /**
- * Origen del backend.
+ * Origen del backend fijado al compilar — el valor por defecto, no la última
+ * palabra: lo que manda en ejecución es {@link apiBase}.
  *
  * Vacío significa **mismo origen**, no "sin configurar": es lo que usa el
  * despliegue de producción, donde el proxy con TLS sirve la SPA y enruta /api al
- * backend bajo el mismo dominio (ADR-009). Con mismo origen desaparece además el
- * problema que arrastraba este proyecto — que Vite hornea esta URL en el build,
- * así que un frontend compilado con "localhost" no funciona desde ninguna otra
- * máquina.
+ * backend bajo el mismo dominio (ADR-009).
  *
  * Se compara contra `undefined` y no se usa `??` a secas para que una cadena
  * vacía sea una elección válida y no caiga al valor de desarrollo.
  */
 const origenConfigurado = import.meta.env.VITE_API_URL
-export const API_BASE =
+const ORIGEN_COMPILADO =
   origenConfigurado === undefined || origenConfigurado === null ? 'http://localhost:8080' : origenConfigurado
+
+/** Dónde se guarda la dirección del servidor elegida en esta máquina. */
+export const CLAVE_SERVIDOR = 'sicot.servidor'
+
+/**
+ * Origen efectivo del backend, resuelto en cada llamada.
+ *
+ * <h2>Por qué no basta con el valor de compilación</h2>
+ * Vite hornea `VITE_API_URL` dentro del paquete. Para el despliegue web da
+ * igual, porque cada despliegue construye el suyo y además usa mismo origen.
+ * Pero la aplicación de escritorio del supervisor se distribuye **compilada, a
+ * máquinas que no controlamos**: si la dirección viajara dentro del binario,
+ * el ejecutable que descarga un supervisor llevaría incrustada la dirección de
+ * un servidor concreto, y cambiar de servidor obligaría a recompilar y volver a
+ * publicar el instalador para todo el mundo.
+ *
+ * <p>Por eso la dirección guardada en la máquina gana sobre la compilada. El
+ * instalador queda así siendo <b>un único artefacto válido para cualquier
+ * despliegue</b>, y quien lo instala apunta al servidor de su Centro desde la
+ * pantalla de Configuración.
+ *
+ * <p>Se lee en cada llamada y no una sola vez al cargar el módulo para que un
+ * cambio de servidor tenga efecto sin reiniciar la aplicación.
+ */
+export function apiBase(): string {
+  let guardado: string | null = null
+  try {
+    guardado = localStorage.getItem(CLAVE_SERVIDOR)
+  } catch {
+    // Almacenamiento bloqueado (ventana privada, políticas del equipo): se
+    // sigue con el valor de compilación en vez de dejar la aplicación inútil.
+    guardado = null
+  }
+  if (guardado === null || guardado.trim() === '') {
+    return ORIGEN_COMPILADO
+  }
+  // Sin barra final: todas las rutas del cliente empiezan por "/" y una barra
+  // de más produce "//api/...", que algunos proxys no normalizan.
+  return guardado.trim().replace(/\/+$/, '')
+}
 
 export class ApiError extends Error {
   readonly status: number
@@ -104,7 +142,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     headers.set('Authorization', `Bearer ${authToken}`)
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
 
   if (res.status === 401 && esFalloDeSesion(path)) {
     unauthorizedHandler?.()
@@ -126,7 +164,7 @@ export async function apiFetchBlob(path: string, options: RequestInit = {}): Pro
   const headers = new Headers(options.headers)
   if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
   if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
 
   if (!res.ok) {

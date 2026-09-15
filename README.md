@@ -262,11 +262,39 @@ Cada publicación llevará:
 - Etiqueta de versión semántica (`v1.0.0`) y fecha.
 - Notas de cambios redactadas para el usuario final, no en lenguaje técnico.
 
-**Todavía no hay ninguna versión publicada**, y es deliberado: el contenido del instalador
-depende de una decisión pendiente (ver [MDL-66](https://linear.app/medialab-sena/issue/MDL-66)).
-Si el supervisor trabaja conectado al servidor del Centro, el instalador es una ventana ligera de
-unos pocos MB; si trabaja sin conexión, debe incluir el asistente de IA completo y pasa a varios
-GB, con requisitos de hardware distintos. Construirlo antes de resolver eso implicaría rehacerlo.
+### El instalador del Supervisor
+
+La duda que bloqueaba este trabajo —si el supervisor necesita trabajar sin conexión— **está
+resuelta** desde el 1 de septiembre por
+[ADR-001](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md), que adoptó la interpretación
+B: la instalación local es la misma aplicación web en una ventana propia, y exige conexión. El
+escenario de «varios GB con el asistente de IA dentro» que se temía **no aplica**: bajo esa
+interpretación el modelo vive en el host del despliegue —`docker-compose.yml` apunta a
+`host.docker.internal:11434`— y la máquina del supervisor solo corre la ventana.
+
+El empaquetado vive en [`frontend/src-tauri/`](./frontend/src-tauri), sobre el mismo frontend y sin
+una segunda base de código:
+
+```bash
+cd frontend
+npm run tauri:build     # genera el instalador de Windows (NSIS y MSI)
+npm run tauri:dev       # abre la ventana de escritorio contra el frontend en desarrollo
+```
+
+Requiere la cadena de herramientas de Rust (`rustup`) y las *Build Tools* de Visual Studio con el
+componente C++. WebView2 ya viene con Windows 11.
+
+**A qué servidor se conecta.** El instalador **no lleva la dirección del servidor dentro**. Si la
+llevara, el ejecutable que descarga un supervisor apuntaría para siempre a un servidor concreto y
+mover el servidor obligaría a recompilar y republicar el instalador para todo el mundo. En su
+lugar, la dirección se guarda en cada máquina y se cambia desde **Configuración → Servidor**; el
+valor de compilación queda solo como defecto. Así el instalador es un único artefacto válido para
+cualquier despliegue.
+
+**Lo que todavía no tiene.** El instalador no está firmado con un certificado de código, así que
+Windows muestra una advertencia de editor desconocido al instalarlo. Firmarlo exige un certificado
+de pago, lo que choca con la regla de que SICOT se mantenga en herramientas gratuitas; es una
+decisión que corresponde al SENA y hay que plantearla en la reunión institucional.
 
 ## Herramientas de desarrollo asistido (opcional)
 

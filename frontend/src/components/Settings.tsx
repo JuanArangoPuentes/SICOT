@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
+import { CLAVE_SERVIDOR, apiBase } from '@/services/api/client'
 import { AvatarIcon } from './icons'
 
-type Section = 'presets' | 'manual' | 'copiloto'
+type Section = 'presets' | 'manual' | 'copiloto' | 'servidor'
 
 export default function Settings({
   open,
@@ -56,6 +57,7 @@ export default function Settings({
             ['presets', 'Presets'],
             ['manual', 'Personalización manual'],
             ['copiloto', 'Mi Copiloto IA'],
+            ['servidor', 'Servidor'],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -227,6 +229,8 @@ export default function Settings({
         </div>
       )}
 
+      {section === 'servidor' && <SeccionServidor sectionTitle={sectionTitle} />}
+
       {section === 'copiloto' && (
         <div>
           {sectionTitle('GALERÍA DE AVATARES')}
@@ -375,5 +379,101 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
         />
       </button>
     </label>
+  )
+}
+
+/**
+ * Dirección del servidor del Centro.
+ *
+ * <h2>Por qué esta pantalla existe</h2>
+ * La aplicación web se compila con la dirección de su propio despliegue dentro,
+ * y para la web eso basta. Pero la <b>aplicación de escritorio del supervisor</b>
+ * se distribuye compilada, como instalador: si la dirección viajara incrustada,
+ * el ejecutable que descarga un supervisor apuntaría para siempre a un servidor
+ * concreto, y mover el servidor obligaría a recompilar y volver a publicar el
+ * instalador para todo el mundo.
+ *
+ * <p>Guardándola aquí, el instalador es <b>un único artefacto válido para
+ * cualquier despliegue</b> y cada máquina apunta al servidor que le corresponde.
+ * Vacío es una elección legítima: significa «el mismo origen desde el que se
+ * sirve la aplicación», que es como funciona el despliegue web con proxy.
+ */
+function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.ReactNode }) {
+  const [valor, setValor] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_SERVIDOR) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const [guardado, setGuardado] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const guardar = () => {
+    const limpio = valor.trim()
+    // Se valida antes de guardar: una dirección mal escrita deja la aplicación
+    // sin poder hablar con nada, y el síntoma —todo falla— no señala la causa.
+    if (limpio !== '' && !/^https?:\/\/[^\s/]+/i.test(limpio)) {
+      setError('Escriba una dirección completa, empezando por http:// o https://')
+      setGuardado(false)
+      return
+    }
+    try {
+      if (limpio === '') localStorage.removeItem(CLAVE_SERVIDOR)
+      else localStorage.setItem(CLAVE_SERVIDOR, limpio)
+      setError(null)
+      setGuardado(true)
+    } catch {
+      setError('No se pudo guardar en este equipo. Revise los permisos del navegador.')
+    }
+  }
+
+  return (
+    <div>
+      {sectionTitle('SERVIDOR DEL CENTRO')}
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 0 }}>
+        Dirección del servidor de SICOT al que se conecta esta instalación. Cámbiela solo si el área de sistemas se lo
+        indica.
+      </p>
+
+      <Field label="Dirección del servidor">
+        <input
+          id="sicot-servidor"
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          placeholder="http://192.168.1.50:8080"
+          value={valor}
+          onChange={(e) => {
+            setValor(e.target.value)
+            setGuardado(false)
+            setError(null)
+          }}
+        />
+      </Field>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+        <button className="btn-green" onClick={guardar} style={{ padding: '7px 16px', fontSize: 13 }}>
+          Guardar dirección
+        </button>
+        {guardado && (
+          <span style={{ fontSize: 12.5, color: 'var(--accent)' }}>
+            Guardada. Se usará en la próxima consulta al servidor.
+          </span>
+        )}
+        {error && <span style={{ fontSize: 12.5, color: 'var(--alert-critica)' }}>{error}</span>}
+      </div>
+
+      <div
+        className="surface"
+        style={{ marginTop: 18, padding: '11px 14px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}
+      >
+        Conectando ahora a{' '}
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-tech)' }}>
+          {apiBase() === '' ? 'el mismo origen de la aplicación' : apiBase()}
+        </span>
+        . Déjelo vacío para usar el mismo origen desde el que se sirve la aplicación.
+      </div>
+    </div>
   )
 }
