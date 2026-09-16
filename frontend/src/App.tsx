@@ -225,7 +225,13 @@ function AppInner() {
         <Routes>
           <Route
             path="/login"
-            element={session ? <Navigate to={rutaDeRol(session)} replace /> : <LoginScreen onLogin={handleLogin} />}
+            element={
+              session ? (
+                <Navigate to={rutaDeRol(session)} replace />
+              ) : (
+                <LoginScreen onLogin={handleLogin} onOpenSettings={() => setSettingsOpen(true)} />
+              )
+            }
           />
 
           <Route
