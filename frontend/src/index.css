@@ -1160,8 +1160,8 @@ input[type='radio'] {
     display: none;
   }
   .usermenu-avatar {
-    width: 40px !important;
-    height: 40px !important;
+    width: 44px !important;
+    height: 44px !important;
   }
 
   .app-content {
@@ -1188,6 +1188,18 @@ input[type='radio'] {
      ratón, una trampa con un dedo. */
   .btn-green,
   .btn-ghost {
+    min-height: 44px;
+  }
+
+  /* Y los de acción dentro de una fila —«Asignar firma», «Resetear clave»,
+     «Desactivar»— se quedaban en 24 px. Se suben desde el contenido y no uno a
+     uno porque son botones con estilo en línea repartidos por varios paneles:
+     la alternativa era tocar cinco archivos para decir lo mismo cinco veces.
+     Se excluye el recorrido de etapas, que no es una lista de acciones sino una
+     barra de progreso con su propia altura. */
+  .app-content button:not(.journey-seg),
+  .app-content input,
+  .app-content select {
     min-height: 44px;
   }
 
