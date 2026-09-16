@@ -200,6 +200,7 @@ export default function VistaDocumentos({
           nunca se ofrece firmar algo que no fue realmente redactado. */}
       <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
         <div
+          className="tabla-cabecera"
           style={{
             padding: '10px 16px',
             borderBottom: '1px solid var(--border)',
@@ -224,7 +225,7 @@ export default function VistaDocumentos({
           return (
             <div
               key={doc.subStepId}
-              className="data-grid-row"
+              className="data-grid-row tabla-fila"
               style={{
                 padding: '12px 16px',
                 borderBottom: '1px solid var(--border)',
@@ -235,7 +236,7 @@ export default function VistaDocumentos({
                 transition: 'background var(--t)',
               }}
             >
-              <div>
+              <div data-col="Documento">
                 <div
                   style={{
                     fontSize: 13,
@@ -256,6 +257,7 @@ export default function VistaDocumentos({
                 </div>
               </div>
               <span
+                data-col="Código"
                 style={{
                   fontFamily: 'var(--font-mono)',
                   fontSize: 11,
@@ -265,6 +267,7 @@ export default function VistaDocumentos({
                 {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
               </span>
               <span
+                data-col="Descripción"
                 style={{
                   fontSize: 11.5,
                   color: 'var(--text-secondary)',
@@ -274,6 +277,7 @@ export default function VistaDocumentos({
                 {doc.desc}
               </span>
               <span
+                data-col="Etapa"
                 style={{
                   fontSize: 11.5,
                   color: 'var(--text-muted)',
@@ -282,25 +286,31 @@ export default function VistaDocumentos({
               >
                 {ETAPA_LABEL[doc.step]}
               </span>
-              {!generado ? (
-                <Chip text="Sin generar aún" type="pending" />
-              ) : generado.estado === 'APROBADO' ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <Chip text="Firmado" type="signed" />
-                  <SelloIntegridad estado={integridad[generado.id] ?? 'CONSULTANDO'} />
-                </div>
-              ) : (
-                <button onClick={() => onIrASubPaso(doc.subStepId, doc.step)} style={BOTON}>
-                  Ir a firmar →
-                </button>
-              )}
+              {/* La celda de estado envuelve las tres ramas en un solo elemento
+                  para que en teléfono lleve su etiqueta como las demás: era
+                  justo la columna que quedaba recortada y sin ella la lista no
+                  decía en qué estado estaba ningún documento. */}
+              <span data-col="Estado">
+                {!generado ? (
+                  <Chip text="Sin generar aún" type="pending" />
+                ) : generado.estado === 'APROBADO' ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Chip text="Firmado" type="signed" />
+                    <SelloIntegridad estado={integridad[generado.id] ?? 'CONSULTANDO'} />
+                  </div>
+                ) : (
+                  <button onClick={() => onIrASubPaso(doc.subStepId, doc.step)} style={BOTON}>
+                    Ir a firmar →
+                  </button>
+                )}
+              </span>
             </div>
           )
         })}

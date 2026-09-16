@@ -413,6 +413,7 @@ export default function GestionPanel({
           </div>
           {/* Header row */}
           <div
+            className="tabla-cabecera"
             style={{
               display: 'grid',
               gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
@@ -449,6 +450,7 @@ export default function GestionPanel({
           {contratos.map((c) => (
             <div
               key={c.id}
+              className="tabla-fila"
               style={{
                 display: 'grid',
                 gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
@@ -463,9 +465,17 @@ export default function GestionPanel({
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-soft)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}>{c.id}</span>
-              <span style={{ color: 'var(--text-primary)', fontSize: 12 }}>{c.object}</span>
               <span
+                data-col="Contrato"
+                style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}
+              >
+                {c.id}
+              </span>
+              <span data-col="Objeto" style={{ color: 'var(--text-primary)', fontSize: 12 }}>
+                {c.object}
+              </span>
+              <span
+                data-col="Supervisor"
                 style={{
                   color: c.supervisor === '— Sin asignar —' ? 'var(--text-muted)' : 'var(--text-secondary)',
                   fontSize: 12,
@@ -474,11 +484,18 @@ export default function GestionPanel({
               >
                 {c.supervisor}
               </span>
-              <Chip text={c.statusLabel} type={c.statusType} />
-              <span style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
+              <span data-col="Estado">
+                <Chip text={c.statusLabel} type={c.statusType} />
+              </span>
+              <span
+                data-col="Valor"
+                style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}
+              >
                 {c.value}
               </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>{c.vigencia}</span>
+              <span data-col="Vigencia" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
+                {c.vigencia}
+              </span>
             </div>
           ))}
         </div>

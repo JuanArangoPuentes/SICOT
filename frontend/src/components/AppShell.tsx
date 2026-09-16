@@ -43,6 +43,33 @@ function leerColapsada(): boolean {
   }
 }
 
+/** El mismo umbral que usa el bloque de pantalla estrecha de `index.css`. */
+const CONSULTA_MOVIL = '(max-width: 767px)'
+
+/**
+ * En un teléfono la barra lateral se dibuja como fila inferior, y ahí el rótulo
+ * de cada entrada sí cabe debajo de su icono.
+ *
+ * Hace falta saberlo en JavaScript y no solo en CSS porque el rótulo y el
+ * contador no están ocultos: directamente **no se renderizan** cuando la barra
+ * está contraída. Esa preferencia es de escritorio —se guarda por máquina— y
+ * sin esto un supervisor que hubiera contraído el menú en su computador se
+ * encontraría en el teléfono una fila de iconos sin una sola palabra.
+ */
+function useEsMovil(): boolean {
+  const [esMovil, setEsMovil] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(CONSULTA_MOVIL).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(CONSULTA_MOVIL)
+    const alCambiar = (e: MediaQueryListEvent) => setEsMovil(e.matches)
+    mq.addEventListener('change', alCambiar)
+    setEsMovil(mq.matches)
+    return () => mq.removeEventListener('change', alCambiar)
+  }, [])
+  return esMovil
+}
+
 export default function AppShell({
   roleBadge,
   groups,
@@ -74,6 +101,10 @@ export default function AppShell({
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(leerColapsada)
+  const esMovil = useEsMovil()
+  // En la fila inferior del teléfono siempre se ven rótulo y contador, sea cual
+  // sea la preferencia de escritorio guardada en esta máquina.
+  const compacta = collapsed && !esMovil
 
   useEffect(() => {
     try {
@@ -87,10 +118,10 @@ export default function AppShell({
   return (
     <div className="app-shell">
       {/* ── Barra lateral ── */}
-      <nav className={`rail${collapsed ? ' collapsed' : ''}`} aria-label="Navegación principal">
+      <nav className={`rail${compacta ? ' collapsed' : ''}`} aria-label="Navegación principal">
         <div className="rail-brand">
           <SenaLogo size={30} />
-          {!collapsed && (
+          {!compacta && (
             <div className="rail-label" style={{ minWidth: 0 }}>
               <div
                 style={{
@@ -110,11 +141,11 @@ export default function AppShell({
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8 }}>
+        <div className="rail-scroll" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 8 }}>
           {groups.map((grupo, gi) => (
-            <div key={grupo.label ?? gi}>
-              {grupo.label && !collapsed && <div className="rail-section rail-label">{grupo.label}</div>}
-              {grupo.label && collapsed && <div style={{ height: 14 }} />}
+            <div className="rail-group" key={grupo.label ?? gi}>
+              {grupo.label && !compacta && <div className="rail-section rail-label">{grupo.label}</div>}
+              {grupo.label && compacta && <div style={{ height: 14 }} />}
               {grupo.items.map((item) => (
                 <button
                   key={item.id}
@@ -129,16 +160,16 @@ export default function AppShell({
                   aria-disabled={item.disabled || undefined}
                   title={item.title ?? item.label}
                   style={{
-                    ...(collapsed ? { justifyContent: 'center', padding: '10px 0' } : {}),
+                    ...(compacta ? { justifyContent: 'center', padding: '10px 0' } : {}),
                     ...(item.disabled ? { opacity: 0.45, cursor: 'not-allowed' } : {}),
                   }}
                 >
                   <span className="nav-icon">{item.icon}</span>
-                  {!collapsed && <span className="rail-label">{item.label}</span>}
-                  {!collapsed && item.count !== undefined && item.count > 0 && (
+                  {!compacta && <span className="rail-label">{item.label}</span>}
+                  {!compacta && item.count !== undefined && item.count > 0 && (
                     <span className={`nav-count ${item.countTone === 'alert' ? 'alert' : 'normal'}`}>{item.count}</span>
                   )}
-                  {collapsed && item.count !== undefined && item.count > 0 && (
+                  {compacta && item.count !== undefined && item.count > 0 && (
                     <span
                       style={{
                         position: 'absolute',
@@ -163,20 +194,24 @@ export default function AppShell({
             className="nav-item"
             onClick={onOpenSettings}
             title="Configuración"
-            style={collapsed ? { justifyContent: 'center', padding: '10px 0' } : undefined}
+            style={compacta ? { justifyContent: 'center', padding: '10px 0' } : undefined}
           >
             <span className="nav-icon">
               <IconSettings size={16} />
             </span>
-            {!collapsed && <span className="rail-label">Configuración</span>}
+            {!compacta && <span className="rail-label">Configuración</span>}
           </button>
+          {/* En un teléfono la barra no es una columna que se pueda contraer,
+              sino la fila inferior de navegación: el botón deja de tener
+              sentido y se oculta desde index.css. La preferencia guardada se
+              respeta igual cuando se vuelve a abrir en un escritorio. */}
           <button
             type="button"
-            className="nav-item"
+            className="nav-item rail-colapsar"
             onClick={() => setCollapsed((v) => !v)}
             title={collapsed ? 'Expandir el menú' : 'Contraer el menú'}
             aria-label={collapsed ? 'Expandir el menú' : 'Contraer el menú'}
-            style={collapsed ? { justifyContent: 'center', padding: '10px 0' } : undefined}
+            style={compacta ? { justifyContent: 'center', padding: '10px 0' } : undefined}
           >
             <span className="nav-icon">
               <IconChevron
@@ -184,7 +219,7 @@ export default function AppShell({
                 style={{ transform: collapsed ? 'none' : 'rotate(180deg)', transition: 'transform var(--t)' }}
               />
             </span>
-            {!collapsed && <span className="rail-label">Contraer menú</span>}
+            {!compacta && <span className="rail-label">Contraer menú</span>}
           </button>
         </div>
       </nav>
@@ -220,7 +255,7 @@ export default function AppShell({
           </div>
           <span className="role-badge">{roleBadge}</span>
           <div style={{ flex: 1 }} />
-          {actions}
+          <div className="app-header-acciones">{actions}</div>
           <UserMenu
             label={usuario.nombre}
             email={usuario.email}

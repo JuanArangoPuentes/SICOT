@@ -76,9 +76,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
   return (
     <div
+      className="login-split"
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        minHeight: '100dvh',
         background: s.formBg,
         fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
       }}

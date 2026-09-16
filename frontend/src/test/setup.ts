@@ -34,3 +34,27 @@ beforeEach(() => {
 if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = function scrollIntoView() {}
 }
+
+// jsdom tampoco implementa matchMedia, por el mismo motivo: no tiene una
+// ventana real cuyo ancho consultar. El armazón lo usa para saber si está en un
+// teléfono, porque el rótulo de cada entrada de navegación no se oculta con CSS
+// sino que no se renderiza, y esa decisión hay que tomarla en JavaScript.
+//
+// Se declara "no coincide": las pruebas de componente describen el
+// comportamiento de escritorio, que es el que todas ellas afirman. El
+// comportamiento en pantalla estrecha se comprueba en las pruebas de extremo a
+// extremo con un viewport de teléfono de verdad, que es donde tiene sentido —
+// una media query simulada no prueba que algo quepa en la pantalla.
+if (!window.matchMedia) {
+  window.matchMedia = (query: string): MediaQueryList =>
+    ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }) as MediaQueryList
+}

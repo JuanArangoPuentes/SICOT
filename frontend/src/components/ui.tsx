@@ -508,9 +508,14 @@ export function UserMenu({
   const emailColor = onDark ? 'rgba(255,255,255,0.78)' : 'var(--text-muted)'
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+    <div
+      ref={ref}
+      className="usermenu"
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}
+    >
       <button
         type="button"
+        className="usermenu-avatar"
         aria-expanded={open}
         aria-label={`Abrir menú de ${label}`}
         onClick={() => setOpen((v) => !v)}
@@ -534,8 +539,14 @@ export function UserMenu({
       >
         {label[0].toUpperCase()}
       </button>
+      {/* El nombre y el correo se ocultan en pantalla estrecha (ver index.css):
+          este bloque mide 181 px que no se encogen, y era lo que empujaba el
+          menú entero fuera del borde derecho en las once pantallas, dejando sin
+          forma de cerrar sesión desde un teléfono. No se pierde información:
+          nombre y correo vuelven a aparecer dentro del propio menú al abrirlo. */}
       <button
         type="button"
+        className="usermenu-texto"
         aria-expanded={open}
         aria-label={`Abrir menú de ${label}`}
         style={{
