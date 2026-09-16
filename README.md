@@ -296,6 +296,25 @@ Windows muestra una advertencia de editor desconocido al instalarlo. Firmarlo ex
 de pago, lo que choca con la regla de que SICOT se mantenga en herramientas gratuitas; es una
 decisión que corresponde al SENA y hay que plantearla en la reunión institucional.
 
+### SICOT en el teléfono
+
+La tercera forma de SICOT, sobre el mismo frontend y otra vez sin una segunda base de código
+([`ADR-012`](./docs/decisiones/ADR-012-aplicacion-movil.md)).
+
+**Qué funciona hoy:** la interfaz está adaptada a pantalla estrecha en los tres roles — la
+navegación pasa a la fila inferior, al alcance del pulgar, y las tablas se convierten en fichas
+con sus campos etiquetados en vez de recortar columnas. Eso sirve igual abriendo SICOT en el
+navegador del teléfono que dentro de la aplicación empaquetada. El proyecto de Android existe y
+vive en [`frontend/src-tauri/gen/android`](./frontend/src-tauri).
+
+**Qué no hay:** un APK firmado y publicado —es una decisión de cuenta institucional—, ni versión
+para iPhone —exige macOS con Xcode y un programa de pago—, ni funcionamiento sin conexión, que
+sigue fuera de alcance por [`ADR-001`](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md).
+
+Cómo compilarlo y qué cadena de herramientas exige está en
+[`frontend/README.md`](./frontend/README.md). El estado medido de la interfaz en un teléfono, con
+el antes y el después, en [la auditoría del 16 de septiembre](./docs/AUDITORIA_MOVIL_2026-09-16.md).
+
 ## Herramientas de desarrollo asistido (opcional)
 
 El repo no versiona la maquinaria de asistentes de IA — es regenerable y no todo el equipo usa

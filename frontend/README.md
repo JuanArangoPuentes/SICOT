@@ -35,7 +35,48 @@ colarse hasta producción.
 
 `npm run test:e2e` levanta Vite automáticamente, pero **necesita además el backend, PostgreSQL
 y las cuentas del perfil `dev` ya sembradas**. Por eso no corre en CI. Los specs están en
-`e2e/specs/`; hoy cubren solo autenticación.
+`e2e/specs/`.
+
+Hay **dos proyectos**, y la diferencia entre ellos no es el navegador sino el tamaño de la
+pantalla, que es justo lo que comprueban:
+
+| Proyecto | Qué corre | Cómo |
+|---|---|---|
+| `chromium` | Todo menos el armazón móvil | `npx playwright test --project=chromium` |
+| `movil` | Solo `e2e/specs/movil/`, con un teléfono emulado | `npx playwright test --project=movil` |
+
+El proyecto `movil` no es un duplicado: afirma que se puede iniciar sesión pulsando el botón
+real, que ninguna vista del Supervisor se desborda en horizontal y que se puede cerrar sesión.
+Las tres cosas estaban rotas antes del 16 de septiembre de 2026, y ninguna producía un error —
+la página cargaba igual, solo que había partes a las que no se llegaba.
+
+## La aplicación Android
+
+El mismo frontend, empaquetado con Tauri y sin una segunda base de código
+([`ADR-012`](../docs/decisiones/ADR-012-aplicacion-movil.md)). El proyecto de Android vive en
+`src-tauri/gen/android` y **se versiona**; el motivo está en `src-tauri/.gitignore`.
+
+Hace falta, además de la cadena de Rust:
+
+- **JDK 21** (no 25: Gradle todavía no lo admite).
+- **SDK de Android** con la plataforma 35, `build-tools;35.0.0`, `platform-tools` y
+  `ndk;27.2.12479018`.
+- Los destinos de Rust para Android: `aarch64-linux-android`, `armv7-linux-androideabi`,
+  `i686-linux-android`, `x86_64-linux-android`.
+
+Con `ANDROID_HOME`, `NDK_HOME` y `JAVA_HOME` apuntando a lo anterior:
+
+```bash
+npm run tauri android init                              # solo la primera vez
+npm run tauri android build -- --debug --apk --target aarch64
+```
+
+**Tráfico sin cifrar:** el andamiaje permite `http://` solo en la compilación de depuración.
+Una compilación de publicación contra un servidor sin TLS no podrá hablar con él, y fallará sin
+mensaje visible. Está explicado en ADR-012; depende de resolver antes
+[`ADR-009`](../docs/decisiones/ADR-009-terminacion-tls.md).
+
+**iOS queda fuera**: exige macOS con Xcode y un programa de desarrollador de pago.
 
 ## Cuentas de acceso (desarrollo)
 

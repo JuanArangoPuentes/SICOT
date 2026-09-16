@@ -214,3 +214,38 @@ descolocada y el usuario no sabe qué hizo.
 3. Las dos rejillas de columnas fijas (hallazgos 3 y 4).
 4. Las tarjetas de la vista de contrato y el Copiloto (hallazgo 5).
 5. La tipografía de los campos (hallazgo 7).
+
+---
+
+## Estado al cierre del mismo día
+
+Se atacó en ese orden y se volvió a medir con el mismo procedimiento, sobre el
+mismo entorno y los mismos datos. La comparación no es una impresión:
+
+| Medida | Antes | Después |
+| --- | ---: | ---: |
+| Pantallas con elementos recortados | 10 de 10 | **0 de 10** |
+| Elementos recortados en el registro de contratos | 41 | **0** |
+| Elementos recortados en documentos del supervisor | 19 | **0** |
+| Campos que provocan zoom al enfocarlos | 5 | **0** |
+| Objetivos táctiles bajo 44 px, por pantalla | entre 7 y 25 | **entre 0 y 9** |
+| ¿Se puede iniciar sesión desde un teléfono? | No | **Sí** |
+| ¿Se puede cerrar sesión desde un teléfono? | No | **Sí** |
+
+**Lo que queda pendiente, con su causa:**
+
+- **La barra de etapas** (hallazgo 5, parte táctil). Sus segmentos miden 38 px de
+  ancho porque son seis repartiéndose la pantalla. No se fuerzan a 44: es una
+  barra de progreso, no una lista de acciones, y estirarla rompería la lectura
+  de izquierda a derecha que representa. Necesita un rediseño propio para
+  teléfono, no un mínimo impuesto desde fuera.
+- **Modales y formularios de creación** — nuevo usuario, nueva firma, formato.
+  Siguen sin medirse: la auditoría se ciñó a las pantallas, y abrir cada modal
+  exige recorrer su flujo. No están aprobados, están sin mirar.
+- **La vista de documentos con volumen real.** Sigue habiendo un solo documento
+  cargado en la base.
+- **iOS.** Sin forma de comprobarlo con el equipo disponible.
+
+Lo que impide que esto se deshaga solo: las pruebas de extremo a extremo tienen
+desde hoy un segundo proyecto con viewport de teléfono, que afirma que se puede
+entrar, que ninguna vista del Supervisor se desborda y que se puede salir.
