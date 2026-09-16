@@ -19,3 +19,11 @@
 # clases generadas, `local.properties`, las claves de firma— ya lo excluyen los
 # .gitignore que el propio andamiaje deja dentro de `gen/android`, así que no
 # hace falta repetirlo aquí.
+
+# Sesiones del compilador de Kotlin dentro del proyecto de Android. Se cuelan si
+# se versiona mientras hay una compilacion en curso, y no significan nada fuera
+# de esa maquina y ese momento. La regla va aqui y no en el .gitignore que
+# genera la herramienta dentro de gen/android, porque aquel se reescribe cada
+# vez que se vuelve a ejecutar `tauri android init`.
+/gen/android/buildSrc/.kotlin/
+/gen/android/.kotlin/
