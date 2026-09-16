@@ -10,6 +10,30 @@
         android:label="@string/app_name"
         android:theme="@style/Theme.sicot"
         android:usesCleartextTraffic="${usesCleartextTraffic}">
+        <!--
+          Semgrep marca `android:exported="true"` como hallazgo bloqueante, y aquí
+          es un falso positivo por construcción: esta es la actividad de
+          lanzamiento, y `exported="true"` es lo que permite que el lanzador del
+          sistema abra la aplicación. Con targetSdk 36 Android EXIGE un valor
+          explícito en cualquier componente con intent-filter, y para un filtro
+          MAIN/LAUNCHER el único valor válido es `true` — puesto en `false`, la
+          aplicación no se puede abrir de ninguna manera.
+
+          Lo que la regla protege de verdad es un componente exportado con acceso
+          privilegiado al plano de control. Esta actividad solo hospeda el WebView:
+          no lee parámetros del intent, no declara enlaces profundos y no decide
+          nada sobre los datos — la autoridad sobre todo dato oficial sigue siendo
+          el backend, detrás de JWT.
+
+          Cuándo deja de ser un falso positivo: el día que se añada un enlace
+          profundo que acepte datos del intent. Entonces hay que quitar esta
+          supresión y revisar el hallazgo de verdad, en vez de heredarla.
+
+          Nota: esta línea es un ajuste a mano dentro de `gen/android`, así que
+          `tauri android init` la borraría al regenerar el proyecto. Es el motivo
+          por el que esa carpeta se versiona (ver `src-tauri/.gitignore`).
+        -->
+        <!-- nosemgrep: java.android.security.exported_activity.exported_activity -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:launchMode="singleTask"
