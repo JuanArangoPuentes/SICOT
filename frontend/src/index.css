@@ -1045,8 +1045,12 @@ input[type='radio'] {
     flex-direction: row;
     border-right: none;
     border-top: 1px solid var(--border-soft);
-    /* Teléfonos con barra de gestos en vez de botones físicos. */
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    /* Teléfonos con barra de gestos en vez de botones físicos. El `max` no
+       sobra: hay dispositivos y modos de navegación en los que el sistema
+       informa un inset de cero pero sigue dibujando la barra de gestos encima,
+       y entonces el rótulo de la última fila queda debajo de ella. Se vio así
+       en el emulador. */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
   }
   .rail-brand {
     display: none;
@@ -1097,7 +1101,7 @@ input[type='radio'] {
     -webkit-box-orient: vertical;
     overflow: hidden;
     width: 100%;
-    font-size: 9px;
+    font-size: 8.5px;
     line-height: 1.15;
     letter-spacing: 0;
     text-align: center;
@@ -1111,9 +1115,11 @@ input[type='radio'] {
     gap: 3px;
     width: auto !important;
     min-width: 58px;
-    min-height: 52px;
+    /* 58 y no 52: el rótulo ocupa dos líneas y con 52 la segunda se salía por
+       debajo del borde. */
+    min-height: 58px;
     margin: 0 !important;
-    padding: 6px 8px !important;
+    padding: 6px 4px !important;
     border-radius: 0;
   }
   /* La marca de la entrada activa pasa de un filo vertical a la izquierda a una
@@ -1204,6 +1210,19 @@ input[type='radio'] {
   .app-content input,
   .app-content select {
     min-height: 44px;
+  }
+
+  /* La fila de la bandeja pone icono, texto y acciones en una sola línea. El
+     bloque de acciones no se encoge, así que en un teléfono dejaba el detalle
+     de la alerta en una columna de unos 200 px, partida casi palabra por
+     palabra. Las acciones bajan a su propio renglón. */
+  .inbox-row {
+    flex-wrap: wrap;
+  }
+  .inbox-row > div:last-child {
+    width: 100%;
+    justify-content: flex-end;
+    margin-top: 6px;
   }
 
   /* ── De tabla a tarjetas ───────────────────────────────────────────────────
