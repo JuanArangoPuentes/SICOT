@@ -71,6 +71,35 @@ npm run tauri android init                              # solo la primera vez
 npm run tauri android build -- --debug --apk --target aarch64
 ```
 
+### En Windows, el segundo comando falla si no está activo el Modo Desarrollador
+
+El síntoma es confuso porque llega **después** de compilar todo:
+
+```
+failed to build Android app: Failed to create a symbolic link from
+"…\target\aarch64-linux-android\debug\libsicot_lib.so" to
+"…\gen/android\app/src/main/jniLibs/arm64-v8a\libsicot_lib.so"
+```
+
+No es un problema del proyecto: Windows solo permite crear enlaces simbólicos a
+un administrador o con el **Modo Desarrollador** activado. Activarlo en *Ajustes
+→ Sistema → Para programadores* hace que el comando funcione tal cual.
+
+Si no se puede activar —equipo administrado por la institución, por ejemplo—, la
+vuelta es hacer a mano lo que el enlace haría, y llamar a Gradle saltándose la
+tarea de Rust que ya se ejecutó:
+
+```bash
+cp src-tauri/target/aarch64-linux-android/debug/libsicot_lib.so \
+   src-tauri/gen/android/app/src/main/jniLibs/arm64-v8a/
+cd src-tauri/gen/android
+./gradlew assembleArm64Debug -x rustBuildArm64Debug
+```
+
+El APK queda en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/`.
+Pesa unos 130 MB porque la compilación de depuración no quita los símbolos; una
+compilación de publicación es un orden de magnitud más pequeña.
+
 **Tráfico sin cifrar:** el andamiaje permite `http://` solo en la compilación de depuración.
 Una compilación de publicación contra un servidor sin TLS no podrá hablar con él, y fallará sin
 mensaje visible. Está explicado en ADR-012; depende de resolver antes
