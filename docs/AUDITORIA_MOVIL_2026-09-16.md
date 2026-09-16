@@ -232,6 +232,23 @@ mismo entorno y los mismos datos. La comparación no es una impresión:
 | ¿Se puede iniciar sesión desde un teléfono? | No | **Sí** |
 | ¿Se puede cerrar sesión desde un teléfono? | No | **Sí** |
 
+### Lo que solo apareció al abrirlo en un teléfono de verdad
+
+Merece un apartado propio porque es la lección más aprovechable del día: el
+navegador con emulación de móvil **no sustituye** a ejecutar la aplicación. Dos
+defectos que ninguna de las medidas anteriores podía detectar salieron a la
+primera al instalar el APK en un emulador:
+
+1. **El titular de la pantalla de acceso se cortaba a media letra.** Ocupa cuatro
+   líneas de 36 px y la banda de identidad mide 120 px. En el navegador no se
+   veía porque la ventana era más alta y la banda tenía sitio.
+2. **La marca quedaba dibujada debajo del reloj y la batería.** La causa no
+   estaba en ninguna regla de estilo sino en la etiqueta `viewport` del
+   documento: sin `viewport-fit=cover`, `env(safe-area-inset-*)` devuelve cero y
+   todos los rellenos escritos para esquivar la barra de estado y la barra de
+   gestos no hacen absolutamente nada. Un navegador de escritorio no tiene
+   ninguna de las dos barras, así que la regla parecía correcta.
+
 **Lo que queda pendiente, con su causa:**
 
 - **La barra de etapas** (hallazgo 5, parte táctil). Sus segmentos miden 38 px de

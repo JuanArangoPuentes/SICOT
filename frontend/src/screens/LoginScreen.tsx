@@ -205,6 +205,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
           </div>
 
           <h1
+            className="identity-titulo"
             style={{
               fontFamily: "'Space Grotesk', system-ui, sans-serif",
               fontSize: 36,
