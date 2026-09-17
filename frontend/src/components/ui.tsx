@@ -122,6 +122,32 @@ export function StageJourney({
   onStageClick?: (key: string) => void
 }) {
   const [hoveredKey, setHoveredKey] = useState<string | null>(null)
+
+  // Desplazamiento automático a la etapa en curso.
+  //
+  // En un teléfono la barra no cabe entera: seis segmentos con su rótulo
+  // necesitan más ancho del que hay, así que pasa a desplazarse en horizontal
+  // (ver `.journey` en index.css). Eso resuelve el tamaño de los segmentos y
+  // crea un problema nuevo: al abrir la vista, lo que se ve es el principio del
+  // recorrido, y la pregunta que la barra existe para responder es «¿en cuál
+  // voy?». Un contrato en la etapa 5 abriría mostrando la 1 y la 2.
+  //
+  // Se usa `scrollLeft` sobre el contenedor y no `scrollIntoView` sobre el
+  // segmento porque este último desplaza también la página, y al entrar en la
+  // vista del contrato eso la abre a media altura, saltándose el título.
+  const barraRef = useRef<HTMLDivElement | null>(null)
+  const segmentoActualRef = useRef<HTMLButtonElement | null>(null)
+  useEffect(() => {
+    const barra = barraRef.current
+    const segmento = segmentoActualRef.current
+    if (!barra || !segmento) return
+    // Si no hay desplazamiento, no hay nada que centrar: en pantalla ancha la
+    // barra cabe entera y tocar `scrollLeft` no haría nada, pero comprobarlo
+    // evita depender de eso.
+    if (barra.scrollWidth <= barra.clientWidth + 1) return
+    const centrado = segmento.offsetLeft - (barra.clientWidth - segmento.clientWidth) / 2
+    barra.scrollTo({ left: Math.max(0, centrado), behavior: 'smooth' })
+  }, [currentKey])
   const total = stages.length
 
   const avance = overallPct ?? (total ? Math.round(stages.reduce((acc, s) => acc + s.pct, 0) / total) : 0)
@@ -205,7 +231,7 @@ export function StageJourney({
       </div>
 
       {/* Barra: una sección por etapa, de extremo a extremo */}
-      <div className="journey">
+      <div className="journey" ref={barraRef}>
         {stages.map((s, i) => {
           const color = STAGE_COLOR[s.state]
           const esActual = s.key === currentKey
@@ -214,6 +240,7 @@ export function StageJourney({
             <button
               key={s.key}
               type="button"
+              ref={esActual ? segmentoActualRef : undefined}
               className={`journey-seg${esActual ? ' actual' : ''}`}
               onClick={() => onStageClick?.(s.key)}
               onMouseEnter={() => setHoveredKey(s.key)}
