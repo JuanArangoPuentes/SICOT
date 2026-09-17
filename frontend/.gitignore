@@ -15,3 +15,10 @@ logs/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Guiones de auditoría de interfaz (`auditoria-*.mjs`). No se versionan a
+# propósito, igual que las capturas: lo que se conserva de una auditoría es la
+# tabla de hallazgos —docs/AUDITORIA_MOVIL_2026-09-16.md—, no la herramienta que
+# la produjo. Un guion versionado se queda desfasado respecto a la interfaz que
+# mide y da resultados falsos con toda la autoridad de estar en el repositorio.
+auditoria-*.mjs
