@@ -135,6 +135,41 @@ test.describe('armazón en pantalla estrecha', () => {
   })
 })
 
+test.describe('modales en pantalla estrecha', () => {
+  // La auditoría del 16 de septiembre dejó los modales anotados como pendientes
+  // y no como aprobados, porque medirlos exige recorrer el flujo que los abre.
+  // Medidos el 17: no se desbordan ni provocan zoom —las reglas de ancho y de
+  // tipografía sí les llegaban—, pero el botón de cerrar medía 13 px de ancho en
+  // los cinco. Esta prueba existe para que el recorrido no haya que repetirlo a
+  // mano cada vez que alguien añada un formulario.
+  test('el modal de crear usuario cabe y se puede cerrar con un dedo', async ({ page }) => {
+    await entrarComo(page, 'ADMINISTRADOR')
+    await page.goto('/admin/usuarios')
+    await page.locator('text=+ Nuevo usuario').first().click()
+
+    const dialogo = page.locator('[role="dialog"]')
+    await expect(dialogo).toBeVisible()
+
+    const desborde = await medirDesborde(page)
+    expect(
+      desborde.total,
+      `el modal desborda: ${desborde.peores.map((e) => `${e.etiqueta} (+${e.exceso} px)`).join(', ')}`,
+    ).toBe(0)
+
+    // El botón de cerrar es la única salida del diálogo en un teléfono: no hay
+    // tecla de escape a mano y pulsar el telón exige acertar fuera de una
+    // tarjeta que ocupa casi toda la pantalla.
+    const cerrar = dialogo.getByRole('button', { name: 'Cerrar ventana' })
+    const caja = await cerrar.boundingBox()
+    expect(caja, 'el botón de cerrar no tiene caja').not.toBeNull()
+    expect(caja!.width, 'el botón de cerrar es demasiado estrecho').toBeGreaterThanOrEqual(MINIMO_TACTIL)
+    expect(caja!.height, 'el botón de cerrar es demasiado bajo').toBeGreaterThanOrEqual(MINIMO_TACTIL)
+
+    await cerrar.click()
+    await expect(dialogo).toBeHidden()
+  })
+})
+
 for (const rol of Object.keys(PANTALLAS) as Rol[]) {
   test.describe(`armazón en pantalla estrecha · ${rol}`, () => {
     test('la navegación queda al alcance y ninguna vista se desborda', async ({ page }) => {

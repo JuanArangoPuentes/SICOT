@@ -394,7 +394,12 @@ export function Modal({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 200,
-        padding: 16,
+        // Zonas seguras: sin esto, en un teléfono con barra de gestos el borde
+        // inferior del diálogo —donde están Cancelar y Confirmar— queda debajo
+        // de la barra. Es el mismo defecto que se corrigió en el armazón el 16
+        // de septiembre, y este telón no lo heredó porque cuelga aparte, en una
+        // capa fija propia.
+        padding: `calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px))`,
       }}
     >
       <div
@@ -406,7 +411,15 @@ export function Modal({
         style={{
           width: '100%',
           maxWidth: width,
-          maxHeight: '90vh',
+          // dvh y no vh: en un navegador móvil `vh` mide la altura que habría
+          // sin la barra de direcciones, así que un diálogo al 90 % puede
+          // rebasar lo que de verdad se ve y dejar sus botones por debajo del
+          // borde. Hoy ningún diálogo llega al tope —el más alto mide 612 px de
+          // 720 disponibles—, así que esto no corrige un defecto observado sino
+          // que cierra la puerta por la que entraría el primer formulario largo
+          // que alguien añada. Es la misma unidad que el armazón ya tuvo que
+          // adoptar por esta razón (index.css, `.app-shell`).
+          maxHeight: '90dvh',
           display: 'flex',
           flexDirection: 'column',
           borderRadius: 16,
@@ -449,6 +462,24 @@ export function Modal({
                 cursor: 'pointer',
                 padding: 0,
                 lineHeight: 1,
+                // Medido en teléfono: 13 × 44 px. El alto lo daba la regla
+                // general de pantalla estrecha; el ancho se quedaba en lo que
+                // mide el glifo «×», porque el botón no tiene ni relleno ni
+                // fondo. Con un ratón se acierta igual; con un dedo es la
+                // diferencia entre cerrar la ventana y pulsar el título.
+                //
+                // Se fija el área en los dos ejes y en todos los tamaños, no
+                // solo en estrecho: un objetivo de 13 px tampoco es bueno en un
+                // escritorio, y como el botón es transparente, agrandar su zona
+                // sensible no cambia lo que se ve.
+                minWidth: 44,
+                minHeight: 44,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                // El área crece hacia fuera para no separar el «×» del borde
+                // del diálogo, que es donde el ojo lo busca.
+                margin: '-10px -12px -10px 0',
               }}
             >
               ×
