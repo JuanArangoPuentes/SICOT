@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
 import { CLAVE_SERVIDOR, apiBase } from '@/services/api/client'
+import { avisoTraficoSinCifrar } from '@/services/entorno'
 import { AvatarIcon } from './icons'
 
 type Section = 'presets' | 'manual' | 'copiloto' | 'servidor'
@@ -408,6 +409,7 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
   })
   const [guardado, setGuardado] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const avisoSinCifrar = avisoTraficoSinCifrar(valor)
 
   const guardar = () => {
     const limpio = valor.trim()
@@ -451,6 +453,30 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
           }}
         />
       </Field>
+
+      {/* Aviso del tráfico sin cifrar.
+          Aparece mientras se escribe y no al guardar, porque el objetivo es que
+          nadie llegue a guardar una dirección con la que la aplicación se va a
+          quedar muda. Es el pendiente que ADR-012 dejó escrito en voz alta: en
+          una compilación de publicación de Android las peticiones a http:// no
+          salen y no hay ningún error en pantalla que lo explique. */}
+      {avisoSinCifrar && (
+        <div
+          role="status"
+          style={{
+            marginTop: 12,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--alert-alta)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-secondary)',
+            fontSize: 12.5,
+            lineHeight: 1.6,
+          }}
+        >
+          {avisoSinCifrar}
+        </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
         <button className="btn-green" onClick={guardar} style={{ padding: '7px 16px', fontSize: 13 }}>

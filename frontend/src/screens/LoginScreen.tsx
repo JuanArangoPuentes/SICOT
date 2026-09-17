@@ -5,6 +5,7 @@ import { useState, type KeyboardEvent } from 'react'
 import { SenaLogo } from '@/components/ui'
 import { login } from '@/services/authService'
 import { ApiError, apiBase } from '@/services/api/client'
+import { avisoTraficoSinCifrar } from '@/services/entorno'
 import type { AuthResponse } from '@/services/api/types'
 
 // Colores del inicio de sesión — el panel de identidad usa la superficie más
@@ -533,6 +534,30 @@ export default function LoginScreen({
               >
                 {apiBase() || 'mismo origen'}
               </button>
+            </p>
+          )}
+
+          {/* Si la dirección ya guardada va a quedar bloqueada, se dice ANTES de
+              que alguien intente entrar. Sin esto, el síntoma que ve el usuario
+              es un inicio de sesión que no responde, y el diagnóstico natural
+              —«el servidor está caído»— es falso. Es la mitad del problema de
+              ADR-012 que se puede resolver sin saber todavía el nombre del
+              servidor del Centro; la otra mitad, la excepción de seguridad de
+              red, sigue esperando ese dato. */}
+          {avisoTraficoSinCifrar(apiBase()) && (
+            <p
+              role="status"
+              style={{
+                marginTop: 10,
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: `1px solid ${s.border}`,
+                fontSize: 11.5,
+                color: s.textSecondary,
+                lineHeight: 1.6,
+              }}
+            >
+              {avisoTraficoSinCifrar(apiBase())}
             </p>
           )}
 
