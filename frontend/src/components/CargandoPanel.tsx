@@ -18,7 +18,13 @@ export default function CargandoPanel() {
       role="status"
       aria-live="polite"
       style={{
-        minHeight: '100vh',
+        // dvh y no vh: en un navegador móvil `vh` mide la altura que habría sin
+        // la barra de direcciones. Era el último resto de la unidad que el
+        // armazón abandonó el 16 de septiembre, y se ve en el peor momento —es
+        // lo primero que aparece tras entrar, mientras se descarga el paquete
+        // del rol—, así que centrar el contenido sobre una altura equivocada
+        // deja el indicador descolocado justo en la primera pantalla.
+        minHeight: '100dvh',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',

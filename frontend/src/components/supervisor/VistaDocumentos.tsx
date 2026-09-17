@@ -340,7 +340,13 @@ export default function VistaDocumentos({
             return (
               <div
                 key={doc.id}
-                className="card"
+                // `fila-apilable`: en pantalla estrecha el bloque de acciones
+                // baja a su propio renglón. Sin esa clase, el nombre del
+                // documento —lo único que lo identifica— se quedaba con 86 px
+                // de 360, porque las acciones miden 164 px y no encogen. Se vio
+                // solo al poblar la base: con un único documento cargado, que
+                // es como se midió el 16 de septiembre, la tarjeta cabía.
+                className="card fila-apilable"
                 style={{
                   padding: '12px 16px',
                   marginBottom: 8,

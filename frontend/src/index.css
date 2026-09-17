@@ -1212,14 +1212,22 @@ input[type='radio'] {
     min-height: 44px;
   }
 
-  /* La fila de la bandeja pone icono, texto y acciones en una sola línea. El
-     bloque de acciones no se encoge, así que en un teléfono dejaba el detalle
-     de la alerta en una columna de unos 200 px, partida casi palabra por
-     palabra. Las acciones bajan a su propio renglón. */
-  .inbox-row {
+  /* Filas que ponen texto y acciones en una sola línea. El bloque de acciones
+     no se encoge, así que en un teléfono el texto queda en una columna estrecha
+     partida casi palabra por palabra. Las acciones bajan a su propio renglón.
+
+     Son dos sitios y con el mismo defecto, así que la regla es una sola:
+     `.inbox-row` es la fila de la bandeja, y `.fila-apilable` las tarjetas de
+     documentos del contrato, donde el nombre se quedaba con 86 px de 360 —eso
+     no se vio el 16 de septiembre porque la base tenía un único documento
+     cargado y la tarjeta cabía—. Si aparece un tercer caso, se le pone
+     `fila-apilable` y no una regla nueva. */
+  .inbox-row,
+  .fila-apilable {
     flex-wrap: wrap;
   }
-  .inbox-row > div:last-child {
+  .inbox-row > div:last-child,
+  .fila-apilable > div:last-child {
     width: 100%;
     justify-content: flex-end;
     margin-top: 6px;

@@ -6,7 +6,9 @@ import { defineConfig, devices } from '@playwright/test'
 // hay nada que mockear salvo lo que explícitamente se intercepte con
 // page.route() (los specs bajo e2e/specs/ai/, que no dependen de Ollama).
 export default defineConfig({
-  testDir: './e2e/specs',
+  // Toda la carpeta y no solo `specs/`, porque el proyecto de siembra vive en
+  // `setup/` y tiene que poder ejecutarse antes que las pruebas.
+  testDir: './e2e',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -36,14 +38,25 @@ export default defineConfig({
   // navegador sino el tamaño, que es justo lo que se está comprobando.
   projects: [
     {
+      // Crea los contratos sin los cuales la suite mediría pantallas vacías. El
+      // porqué está en e2e/setup/datos.setup.ts; el resumen es la regla que
+      // dejó escrita la auditoría del 16 de septiembre: una tabla sin filas
+      // cabe en cualquier ancho y no revela nada.
+      name: 'datos',
+      testMatch: /setup[\\/].*\.setup\.ts/,
+    },
+    {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
+      testMatch: /specs[\\/].*\.spec\.ts/,
       testIgnore: /specs[\\/]movil[\\/]/,
+      dependencies: ['datos'],
     },
     {
       name: 'movil',
       use: { ...devices['Pixel 7'] },
       testMatch: /specs[\\/]movil[\\/].*\.spec\.ts/,
+      dependencies: ['datos'],
     },
   ],
   // En el CI se sirve la aplicación YA COMPILADA; en una máquina de desarrollo,
