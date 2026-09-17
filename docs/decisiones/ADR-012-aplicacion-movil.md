@@ -1,6 +1,15 @@
 # ADR-012 — Qué es "la aplicación móvil" de SICOT
 
-**Estado:** Propuesta · **Fecha:** 16 de septiembre de 2026
+**Estado:** Aceptada · **Fecha:** 16 de septiembre de 2026 · **Aceptada:** 17 de septiembre de 2026
+
+> Nació como propuesta y pasó a aceptada al integrarse el trabajo que la
+> implementa: la interfaz adaptada, el proyecto de Android versionado y el APK
+> arrancando contra el backend real. Lo que sigue pendiente de la reunión
+> institucional no es la decisión, sino los tres puntos que este ADR dice
+> expresamente que **no** decide; igual que ADR-001, que está aceptado y
+> también arrastra supuestos sin confirmar. Dejarlo en «Propuesta» haría creer
+> a quien lo lea dentro de tres años que fue una idea que se barajó, y no la
+> decisión bajo la que está escrito el código que tiene delante.
 
 ## Contexto
 
