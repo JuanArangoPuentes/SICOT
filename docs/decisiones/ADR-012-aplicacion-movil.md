@@ -94,6 +94,24 @@ resuelve aquí —depende de [ADR-009](./ADR-009-terminacion-tls.md)— y no se 
 escribir por adelantado una excepción acotada porque nadie ha dado todavía el
 nombre del servidor del Centro. Inventarlo sería peor que dejarlo escrito.
 
+> **Comprobado el 17 de septiembre de 2026.** Este párrafo estaba escrito a
+> partir de cómo funciona Android, no de haberlo visto. Se compilaron las dos
+> variantes y se leyó su manifiesto con `aapt2 dump xmltree`: la de depuración
+> declara `android:usesCleartextTraffic=true` y la de publicación, `false`. La
+> advertencia era correcta y ya no es una inferencia.
+>
+> Lo que **sí** se pudo hacer sin saber el nombre del servidor: que el fallo deje
+> de ser mudo. La aplicación detecta que la dirección configurada empieza por
+> `http://` —cuando corre dentro del APK, no en el navegador ni en el escritorio,
+> donde `http://` funciona— y lo avisa en la pantalla de acceso y en
+> Configuración, antes de que nadie intente entrar. No desbloquea nada; evita que
+> el síntoma sea una aplicación que no responde.
+>
+> De paso quedaron medidos los dos tamaños, que hacían falta para poder hablar de
+> distribución: **132 MB** la de depuración y **12 MB** la de publicación. Esta
+> última sale **sin firmar** y por tanto no se puede instalar, que es exactamente
+> donde este ADR pone el límite.
+
 **Lo que queda prohibido.** Abrir una segunda base de código para móvil sin
 reemplazar antes este ADR. Y publicar en una tienda de aplicaciones sin una
 decisión previa sobre la cuenta institucional y su costo.
