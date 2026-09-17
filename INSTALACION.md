@@ -171,3 +171,33 @@ pago. Se continúa con *Más información → Ejecutar de todas formas*.
 Para compilarlo usted mismo, el empaquetado vive en `frontend/src-tauri/` y
 está documentado en [`README.md`](README.md); exige la cadena de Rust y las
 *Build Tools* de Visual Studio, que este paquete no necesita.
+
+## SICOT en el teléfono
+
+**Estado a día de hoy: la interfaz ya funciona en una pantalla de teléfono y el
+proyecto de Android existe y compila. No hay todavía un instalador publicado.**
+Conviene leer esa frase entera antes de prometerle nada a nadie.
+
+Lo que sí se puede hacer hoy:
+
+- **Abrir SICOT en el navegador del teléfono**, apuntando a la dirección del
+  servidor del Centro. Funciona: la aplicación se adapta a pantalla estrecha —la
+  navegación pasa abajo, al alcance del pulgar, y las tablas se convierten en
+  fichas con sus campos etiquetados en vez de recortarse—.
+- **Compilar un APK de depuración** desde el repositorio, para probarlo en un
+  teléfono propio. Exige la cadena de herramientas de Android (SDK, NDK y JDK
+  21), y está documentado en [`frontend/README.md`](frontend/README.md).
+
+Lo que **no** hay, y por qué:
+
+| Qué falta | Por qué |
+| --- | --- |
+| Un APK firmado y publicado | La firma de distribución es una decisión de cuenta institucional, no de código |
+| Versión para iPhone | Exige macOS con Xcode, que el equipo no tiene, y un programa de desarrollador de pago |
+| Funcionar sin conexión | Igual que el escritorio, exige red. Es una decisión tomada a conciencia, no una carencia |
+
+Y un aviso que ahorra un diagnóstico difícil: **Android bloquea el tráfico sin
+cifrar en las compilaciones de publicación**. Si el servidor del Centro se sirve
+por `http://` y no por `https://`, las peticiones de una aplicación publicada no
+saldrán, y no habrá ningún error en pantalla que lo explique. Está escrito con
+detalle en [`ADR-012`](docs/decisiones/ADR-012-aplicacion-movil.md).

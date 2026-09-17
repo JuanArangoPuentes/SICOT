@@ -108,7 +108,10 @@ export default function ContratoGraficas({
   ]
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}>
+    <div
+      className="rejilla-graficas"
+      style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 14 }}
+    >
       {/* Aqui vivian dos paneles mas: «Avance por etapa» y «Distribucion de
           sub-pasos». Se quitaron porque no anadian informacion, la repetian:
           el avance por etapa ya sale en la barra de recorrido de arriba Y en la

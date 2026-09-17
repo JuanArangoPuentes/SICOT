@@ -4,7 +4,7 @@
 import { useState, type KeyboardEvent } from 'react'
 import { SenaLogo } from '@/components/ui'
 import { login } from '@/services/authService'
-import { ApiError } from '@/services/api/client'
+import { ApiError, apiBase } from '@/services/api/client'
 import type { AuthResponse } from '@/services/api/types'
 
 // Colores del inicio de sesión — el panel de identidad usa la superficie más
@@ -30,7 +30,13 @@ const LOGIN_STYLE = {
   textMuted: 'var(--text-muted)',
 } as const
 
-export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse) => void }) {
+export default function LoginScreen({
+  onLogin,
+  onOpenSettings,
+}: {
+  onLogin: (auth: AuthResponse) => void
+  onOpenSettings?: () => void
+}) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -76,9 +82,10 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
 
   return (
     <div
+      className="login-split"
       style={{
         display: 'flex',
-        minHeight: '100vh',
+        minHeight: '100dvh',
         background: s.formBg,
         fontFamily: "'IBM Plex Sans', system-ui, sans-serif",
       }}
@@ -204,6 +211,7 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
           </div>
 
           <h1
+            className="identity-titulo"
             style={{
               fontFamily: "'Space Grotesk', system-ui, sans-serif",
               fontSize: 36,
@@ -496,6 +504,37 @@ export default function LoginScreen({ onLogin }: { onLogin: (auth: AuthResponse)
             ¿Olvidó su contraseña? Solicite una nueva al Administrador del sistema; se la enviará a su correo
             institucional.
           </p>
+
+          {/* Acceso al servidor desde el propio inicio de sesión.
+              Sin esto, una instalación recién hecha —de escritorio o de
+              Android— queda en un punto muerto: apunta a la dirección por
+              defecto de compilación, no puede alcanzar el servidor del Centro,
+              y la única pantalla donde se cambia la dirección estaba detrás de
+              un inicio de sesión que por eso mismo no puede completarse.
+              Se muestra la dirección vigente y no solo un enlace, porque cuando
+              algo falla lo primero que hay que saber es contra qué servidor se
+              estaba intentando entrar. */}
+          {onOpenSettings && (
+            <p style={{ marginTop: 14, textAlign: 'center', fontSize: 11.5, color: s.textMuted, lineHeight: 1.6 }}>
+              Servidor:{' '}
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11.5,
+                  color: s.accent,
+                  background: 'none',
+                  border: 'none',
+                  padding: '4px 2px',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                }}
+              >
+                {apiBase() || 'mismo origen'}
+              </button>
+            </p>
+          )}
 
           <div style={{ marginTop: 32, padding: '12px 0', borderTop: `1px solid ${s.border}`, textAlign: 'center' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: s.textMuted }}>
