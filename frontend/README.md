@@ -59,8 +59,12 @@ El mismo frontend, empaquetado con Tauri y sin una segunda base de código
 Hace falta, además de la cadena de Rust:
 
 - **JDK 21** (no 25: Gradle todavía no lo admite).
-- **SDK de Android** con la plataforma 35, `build-tools;35.0.0`, `platform-tools` y
-  `ndk;27.2.12479018`.
+- **SDK de Android** con la plataforma 36, `build-tools;36.0.0`, `platform-tools` y
+  `ndk;27.2.12479018`. Son las que declara el propio proyecto de Gradle
+  (`compileSdk` y `targetSdk` valen 36 en `gen/android/app/build.gradle.kts`);
+  aquí decía 35, que es la versión con la que se probó antes de fijar el
+  proyecto, y seguir esa instrucción al pie de la letra dejaba a Gradle pidiendo
+  una plataforma que no se había instalado.
 - Los destinos de Rust para Android: `aarch64-linux-android`, `armv7-linux-androideabi`,
   `i686-linux-android`, `x86_64-linux-android`.
 
@@ -99,6 +103,18 @@ cd src-tauri/gen/android
 El APK queda en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/`.
 Pesa unos 130 MB porque la compilación de depuración no quita los símbolos; una
 compilación de publicación es un orden de magnitud más pequeña.
+
+### Esto lo comprueba el CI desde el 17 de septiembre de 2026
+
+El flujo de trabajo `Android` compila el APK de depuración para `aarch64` y dice
+cuánto pesa. **Solo se ejecuta cuando cambia algo que puede romperlo**
+—`frontend/src-tauri/**`, las dependencias del frontend o el propio flujo—,
+porque compilar Rust en cruzado contra el NDK es caro y una compuerta lenta que
+además corre cuando no hace falta acaba quitándose.
+
+Vive en su propio fichero y no en `ci.yml` por un detalle de GitHub Actions que
+conviene saber antes de intentar moverlo: el filtro `paths` se aplica al flujo de
+trabajo entero, no a un job suelto.
 
 **Tráfico sin cifrar:** el andamiaje permite `http://` solo en la compilación de depuración.
 Una compilación de publicación contra un servidor sin TLS no podrá hablar con él, y fallará sin
