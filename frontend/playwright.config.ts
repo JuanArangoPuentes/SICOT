@@ -10,6 +10,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  // En el CI el runner comparte sus núcleos con el backend, PostgreSQL y el
+  // servidor web, los tres dentro de la misma máquina. Con el reparto por
+  // omisión los navegadores empiezan a caerse con `Protocol error … session
+  // closed`, que parece un fallo de la aplicación y es falta de recursos. Dos
+  // trabajadores es lo que cabe sin que se estorben.
+  workers: process.env.CI ? 2 : undefined,
   reporter: 'html',
   use: {
     baseURL: process.env.E2E_BASE_URL || 'http://localhost:8443',
@@ -40,10 +46,28 @@ export default defineConfig({
       testMatch: /specs[\\/]movil[\\/].*\.spec\.ts/,
     },
   ],
+  // En el CI se sirve la aplicación YA COMPILADA; en una máquina de desarrollo,
+  // el servidor de Vite.
+  //
+  // No es una manía de entorno: es la causa medida de que esta suite no se
+  // pudiera automatizar. El servidor de desarrollo transforma los módulos bajo
+  // demanda, así que la PRIMERA navegación compila el grafo entero de la
+  // aplicación. En este proyecto eso supera los 30 s, y el fallo aparece como
+  // `page.goto: Test timeout` en la primera prueba que toque — señalando a la
+  // aplicación cuando lo que estaba ocurriendo era una compilación.
+  //
+  // `vite preview` sirve ficheros estáticos ya construidos: no hay compilación
+  // bajo demanda y por tanto no hay ese escalón. De paso, la suite pasa a
+  // ejercitar el artefacto que de verdad se despliega en lugar del servidor de
+  // desarrollo, que es lo que debería haber hecho desde el principio.
+  //
+  // En local se conserva `npm run dev` porque ahí lo que importa es el ciclo de
+  // edición: recompilar entero en cada ejecución sería pagar minutos por una
+  // fidelidad que el CI ya cubre.
   webServer: {
-    command: 'npm run dev',
+    command: process.env.CI ? 'npm run preview' : 'npm run dev',
     url: process.env.E2E_BASE_URL || 'http://localhost:8443',
     reuseExistingServer: !process.env.CI,
-    timeout: 30_000,
+    timeout: process.env.CI ? 120_000 : 30_000,
   },
 })
