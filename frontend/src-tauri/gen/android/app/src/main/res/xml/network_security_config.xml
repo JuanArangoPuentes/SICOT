@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuración de seguridad de red de SICOT — compilación de PUBLICACIÓN.
+
+  POR QUÉ EXISTE. ADR-009 deja escrito que en un despliegue interno, sin dominio
+  público —el caso más probable en un Centro—, Caddy emite un certificado de su
+  propia autoridad local, y que «el navegador pide confiar en él una vez». Eso es
+  verdad para un navegador. Para una aplicación no: desde Android 7, una app con
+  targetSdk 24 o superior (SICOT declara 36) solo confía por omisión en las
+  autoridades del SISTEMA. Aunque el área de sistemas instale la raíz de Caddy en
+  el teléfono, el navegador la aceptaría y SICOT no, y la conexión fallaría sin
+  ningún mensaje. Con `http://` tampoco se puede, porque aquí debajo se prohíbe.
+  Es decir: sin este fichero, el APK no podía hablar con el servidor del Centro
+  por ningún camino.
+
+  QUÉ HACE. Confía en las autoridades del sistema y en las que el usuario haya
+  instalado. No menciona ningún dominio, y es a propósito: ADR-012 prohíbe
+  escribir una excepción para el servidor del Centro porque nadie ha dado su
+  nombre, e inventarlo sería peor que no escribirlo. Esta configuración no lo
+  necesita.
+
+  QUÉ CUESTA, dicho de frente: SICOT confía en cualquier autoridad que el dueño
+  del teléfono haya instalado a propósito. Es exactamente lo que ya hace el
+  navegador de ese mismo teléfono; instalar una autoridad en Android exige pasar
+  por Ajustes y tener bloqueo de pantalla, así que no ocurre por accidente; y la
+  alternativa —fijar una autoridad concreta— exige un certificado que nadie ha
+  dado. Cuándo revisarlo: el día que el SENA dé un dominio con certificado
+  público (la opción C de ADR-009); entonces `src="user"` sobra y debe quitarse.
+
+  Existe una variante para depuración en `src/debug/res/xml/` que además permite
+  `http://`, para trabajar contra un backend local. Android elige una u otra al
+  compilar; la de publicación nunca permite tráfico sin cifrar.
+
+  Nota: vive dentro de `gen/android`, que `tauri android init` regeneraría. Es
+  uno de los ajustes a mano por los que esa carpeta se versiona.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

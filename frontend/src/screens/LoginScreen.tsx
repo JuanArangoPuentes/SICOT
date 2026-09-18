@@ -5,7 +5,7 @@ import { useState, type KeyboardEvent } from 'react'
 import { SenaLogo } from '@/components/ui'
 import { login } from '@/services/authService'
 import { ApiError, apiBase } from '@/services/api/client'
-import { avisoTraficoSinCifrar } from '@/services/entorno'
+import { avisoTraficoSinCifrar, mensajeSinConexion } from '@/services/entorno'
 import type { AuthResponse } from '@/services/api/types'
 
 // Colores del inicio de sesión — el panel de identidad usa la superficie más
@@ -70,7 +70,7 @@ export default function LoginScreen({
             : e.message,
         )
       } else {
-        setError(e instanceof ApiError ? e.message : 'No se pudo conectar con el servidor.')
+        setError(e instanceof ApiError ? e.message : mensajeSinConexion(apiBase()))
       }
     } finally {
       setBusy(false)
