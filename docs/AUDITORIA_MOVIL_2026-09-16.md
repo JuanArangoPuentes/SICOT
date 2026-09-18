@@ -300,3 +300,70 @@ una medida, no de un arreglo:
    sembrada — porque con la base vacía habría estado midiendo pantallas sin
    filas, que es justo lo que la sección «Cómo se midió» de arriba descarta por
    inútil.
+
+---
+
+## Apéndice — 18 de septiembre de 2026: el recorrido funcional, dentro del APK
+
+Todo lo anterior contesta **¿cabe?** Este apéndice contesta la pregunta que
+decide si la aplicación sirve: **¿puede un supervisor hacer su trabajo entero
+desde el teléfono?** Se midieron tareas, no pantallas.
+
+### Cómo se midió
+
+- El APK real en el emulador `sicot_movil` (Android 15, WebView Chrome 124),
+  contra el backend real y la base poblada: 9 contratos, 20 documentos, firma
+  electrónica asignada al supervisor.
+- En la compilación de depuración, conduciendo el WebView de la propia
+  aplicación con la API de Android de Playwright (`_android`), que habla con él
+  por `adb`. `connectOverCDP` no sirve con un WebView de Android: se desconecta
+  al pedir los dominios de navegador.
+- En la compilación de publicación, que no admite depuración remota, con toques
+  reales sobre el árbol de accesibilidad (`uiautomator`), como un usuario.
+- El teclado virtual forzado (`show_ime_with_hard_keyboard`): el emulador tiene
+  teclado físico y sin esto el virtual no aparece, así que ninguna prueba de
+  teclado habría demostrado nada.
+
+### Resultado, tarea por tarea
+
+| Tarea | Resultado | Qué se hizo |
+| --- | --- | --- |
+| Configurar el servidor desde la propia aplicación | Funciona | — |
+| Entrar y ver la bandeja | Funciona | — |
+| **Descargar un acta firmada** | **Roto, y mudo**: el PDF llegaba del backend con 200 y se perdía | «Guardar como» del sistema. El archivo guardado tiene el mismo MD5 que el firmado |
+| **Exportar registros (CSV)** | **Roto, y mudo** | Mismo arreglo; 5 771 bytes con BOM y filas reales |
+| **Escribir al copiloto** | **Roto**: el teclado tapaba el campo, el botón de enviar y las sugerencias | La ventana se aparta del teclado (915 → 602 px de alto) |
+| **Preguntar al copiloto y salir de la aplicación mientras piensa** | **Roto**: Android 15 destruye las conexiones de SICOT a los ~17 s; la respuesta se perdía y el mensaje culpaba a Ollama | Mensaje verdadero y un reintento al volver. La generación de documentos NO se reintenta, para no duplicar un acta |
+| **Conectar por `https://` con el certificado local de Caddy** | **Roto**: la aplicación no confiaba en la raíz instalada por el usuario | Configuración de seguridad de red; visto fallar sin ella y entrar con ella |
+| Botón «atrás» del sistema | Funciona: navega el historial y en la raíz sale de la aplicación | — |
+| `confirm()` (eliminar un formato) | Funciona: diálogo nativo, y aceptar elimina de verdad | — |
+| Selector de archivos (cargar ficha) | Funciona: el archivo elegido vuelve a SICOT | — |
+| Cerrar sesión | Funciona | — |
+
+Cinco de doce tareas estaban rotas, y cuatro de esas cinco **sin ningún
+mensaje**. Ninguna se veía en un navegador.
+
+### Lo que confundió la medida, para que no confunda a la siguiente persona
+
+El primer intento se hizo con el emulador renderizando por software
+(`-gpu swiftshader_indirect`) mientras el modelo de IA ocupaba la CPU del
+anfitrión. Aparecieron ANR de SICOT y del sistema, y el botón «atrás» pareció no
+hacer nada. Logcat lo aclaró: fotogramas de 6,9 s bloqueados en `SwapBuffers`.
+Con `-gpu host` no hubo ni un ANR y «atrás» funcionó. **Un ANR en el emulador
+no es un defecto de la aplicación hasta que se repite con la GPU real.**
+
+### Lo que queda, con su causa
+
+- **La respuesta del copiloto se paga dos veces** si el supervisor sale de la
+  aplicación: la primera la genera el servidor sin nadie que la reciba. El
+  arreglo de fondo es que el servidor la guarde y la aplicación la recoja al
+  volver; toca el backend.
+- **Con el teclado abierto, la barra de navegación inferior sigue visible** y
+  ocupa unos 70 px del poco espacio que queda. Se usa, pero es mejorable.
+- **La sesión caducada al día siguiente no se probó dentro del APK**: exige
+  esperar ocho horas o reiniciar el backend con otra caducidad. El camino es el
+  mismo que en el navegador —un 401 devuelve al acceso—, pero no se vio en el
+  teléfono.
+- **Un teléfono de verdad.** Todo esto es un emulador. El 16 de septiembre el
+  emulador encontró lo que el navegador no veía; un teléfono puede encontrar lo
+  que el emulador no ve.
