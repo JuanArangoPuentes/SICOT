@@ -24,6 +24,32 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    // Firma de la compilación de publicación (ADR-013).
+    //
+    // La llave NUNCA está en el repositorio: se lee de variables de entorno que
+    // el flujo de publicación rellena desde los secretos de GitHub. Si faltan,
+    // la compilación de publicación sale sin firmar —como salía antes de este
+    // cambio— en vez de fallar, para que el job de CI que solo comprueba que el
+    // proyecto compila (android.yml, en depuración) no necesite ningún secreto.
+    //
+    // Por qué la custodia importa tanto como para escribirla en un ADR: Android
+    // exige que cada versión de una aplicación esté firmada con la MISMA llave
+    // que la anterior. Si la llave se pierde, ningún teléfono con SICOT instalado
+    // puede actualizarse sin desinstalar; si se filtra, cualquiera puede publicar
+    // una «actualización» que Android aceptaría como legítima.
+    val llaveDeFirma = System.getenv("SICOT_ANDROID_KEYSTORE")
+    signingConfigs {
+        if (llaveDeFirma != null) {
+            create("publicacion") {
+                storeFile = file(llaveDeFirma)
+                storePassword = System.getenv("SICOT_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("SICOT_ANDROID_KEY_ALIAS")
+                // PKCS12 no admite una contraseña de llave distinta de la del
+                // almacén, así que es la misma.
+                keyPassword = System.getenv("SICOT_ANDROID_KEYSTORE_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             manifestPlaceholders["usesCleartextTraffic"] = "true"
@@ -37,6 +63,9 @@ android {
             }
         }
         getByName("release") {
+            if (llaveDeFirma != null) {
+                signingConfig = signingConfigs.getByName("publicacion")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
