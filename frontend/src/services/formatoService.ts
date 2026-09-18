@@ -2,6 +2,7 @@
 // Administrador (GCCON-*, GIL-*, ESUCON, etc.). Carga y descarga real de
 // archivos contra el backend; sin datos simulados.
 
+import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
 import type { FormatoDocumentalResponse } from './api/types'
 
@@ -24,14 +25,10 @@ export function eliminarFormato(id: number): Promise<void> {
 // Descarga el archivo real vía fetch (con el token Bearer) y dispara el
 // guardado en el navegador — apiFetch no sirve aquí porque la respuesta es
 // binaria, no JSON.
-export async function descargarFormato(id: number, nombreArchivo: string): Promise<void> {
+//
+// El guardado lo hace `guardarArchivo`: en el APK de Android un enlace
+// `download` no hace nada (MDL-184).
+export async function descargarFormato(id: number, nombreArchivo: string): Promise<ResultadoGuardado> {
   const blob = await apiFetchBlob(`/api/formatos/${id}/archivo`)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombreArchivo
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  return guardarArchivo(blob, nombreArchivo)
 }

@@ -1,3 +1,4 @@
+import { guardarArchivo } from '@/services/guardarArchivo'
 import { useState } from 'react'
 import { Chip } from './ui'
 
@@ -58,15 +59,10 @@ export default function Registros({ extra }: { extra: Registro[] }) {
     const bom = String.fromCharCode(0xfeff)
     const salto = String.fromCharCode(13, 10)
     const csv = bom + [cabecera.map(escapar).join(';'), ...filas].join(salto)
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const enlace = document.createElement('a')
     const hoy = new Date().toISOString().slice(0, 10)
-    enlace.href = url
-    enlace.download = `sicot-registros-${hoy}.csv`
-    document.body.appendChild(enlace)
-    enlace.click()
-    document.body.removeChild(enlace)
-    URL.revokeObjectURL(url)
+    // `guardarArchivo` y no un enlace `download`: en el APK de Android el
+    // enlace no hacía nada, sin error ni aviso (MDL-184).
+    void guardarArchivo(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `sicot-registros-${hoy}.csv`)
   }
 
   const iconFor = (t: Registro['tipo']) =>

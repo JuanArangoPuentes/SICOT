@@ -2,6 +2,7 @@
 // (Ollama local, sin costo de licencia). Todas las llamadas pasan por el
 // backend; el frontend nunca habla con Ollama directamente.
 
+import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
 import type {
   ChatResponse,
@@ -57,20 +58,16 @@ export function verificarIntegridad(contratoId: number, documentoId: number): Pr
 // Descarga el archivo real (PDF generado por la IA o cargado manualmente)
 // vía fetch con token Bearer — apiFetch no sirve aquí porque la respuesta es
 // binaria, no JSON (mismo patrón que formatoService.descargarFormato).
+//
+// El guardado lo hace `guardarArchivo`, no un enlace `download`: en el APK de
+// Android ese enlace no hacía nada y el acta firmada se perdía (MDL-184).
 export async function descargarDocumento(
   contratoId: number,
   documentoId: number,
   nombreArchivo: string,
-): Promise<void> {
+): Promise<ResultadoGuardado> {
   const blob = await apiFetchBlob(`/api/contratos/${contratoId}/documentos/${documentoId}/archivo`)
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = nombreArchivo.toLowerCase().endsWith('.pdf') ? nombreArchivo : `${nombreArchivo}.pdf`
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  return guardarArchivo(blob, nombreArchivo.toLowerCase().endsWith('.pdf') ? nombreArchivo : `${nombreArchivo}.pdf`)
 }
 
 // Extracción de datos con IA (Gestión, antes de que el contrato exista) —

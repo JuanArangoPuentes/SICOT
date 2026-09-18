@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Configuración de seguridad de red de SICOT — compilación de DEPURACIÓN.
+
+  Igual que la de publicación (src/main/res/xml/network_security_config.xml,
+  donde está explicado el porqué de confiar en autoridades instaladas por el
+  usuario), con una sola diferencia: aquí se permite `http://`, para poder
+  trabajar contra un backend de desarrollo sin TLS — el del emulador se alcanza
+  por http://10.0.2.2:8080.
+
+  Hace falta un fichero aparte y no basta con `android:usesCleartextTraffic` en
+  el manifiesto: en cuanto una aplicación declara `networkSecurityConfig`,
+  Android ignora ese atributo y manda lo que diga este fichero. Sin esta variante,
+  la compilación de depuración habría perdido el `http://` sin avisar.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

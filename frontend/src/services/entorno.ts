@@ -60,3 +60,34 @@ export function avisoTraficoSinCifrar(direccion: string): string | null {
     'Pida al área de sistemas la dirección https:// del servidor del Centro.'
   )
 }
+
+/**
+ * Mensaje para cuando no se puede alcanzar el servidor al iniciar sesión.
+ *
+ * Antes era siempre «No se pudo conectar con el servidor.», sin más. Es verdad,
+ * pero no dice qué revisar, y en el APK de Android hay dos causas que solo
+ * existen ahí y que el usuario no puede adivinar:
+ *
+ * - `http://` en una compilación de publicación: Android no deja salir la
+ *   petición (ya lo avisa {@link avisoTraficoSinCifrar} antes de intentarlo).
+ * - `https://` con el certificado local de Caddy (ADR-009): la aplicación solo
+ *   confía en él si está instalado en el teléfono. Comprobado en el emulador el
+ *   18 de septiembre de 2026: sin instalar la raíz, el acceso falla con el
+ *   mismo mensaje genérico que un servidor caído.
+ *
+ * Desde el navegador del teléfono lo segundo no pasa por aquí —el navegador
+ * muestra su propia página de advertencia antes—, así que la pista del
+ * certificado se da solo dentro del APK.
+ */
+export function mensajeSinConexion(direccion: string): string {
+  const base = 'No se pudo conectar con el servidor.'
+  if (!enAplicacionEmpaquetada() || !enAndroid()) return base
+  if (direccion.trim().toLowerCase().startsWith('https://')) {
+    return (
+      `${base} Revise que la dirección sea la correcta. Si el servidor del Centro usa un certificado propio, ` +
+      'tiene que estar instalado en este teléfono: Ajustes → Seguridad → Cifrado y credenciales → Instalar un ' +
+      'certificado → Certificado de CA. El área de sistemas del Centro le dará el archivo.'
+    )
+  }
+  return `${base} Revise que la dirección del servidor sea la correcta.`
+}

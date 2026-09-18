@@ -174,39 +174,77 @@ está documentado en [`README.md`](README.md); exige la cadena de Rust y las
 
 ## SICOT en el teléfono
 
-**Estado a día de hoy: la interfaz ya funciona en una pantalla de teléfono y el
-proyecto de Android existe y compila. No hay todavía un instalador publicado.**
-Conviene leer esa frase entera antes de prometerle nada a nadie.
+**Estado desde la versión 0.4.0: hay una aplicación de Android instalable, firmada
+y publicada en esta misma página de versiones.** Se probó el trabajo completo del
+supervisor dentro de ella —entrar, bandeja, contrato, copiloto, descargar un acta
+firmada, exportar registros— en un emulador de Android 15. Lo que no se ha hecho
+todavía es probarla en un teléfono de verdad, y conviene decirlo así antes de
+prometerle nada a nadie.
 
-Lo que sí se puede hacer hoy:
+La otra forma sigue valiendo: **abrir SICOT en el navegador del teléfono**,
+apuntando a la dirección del servidor del Centro.
 
-- **Abrir SICOT en el navegador del teléfono**, apuntando a la dirección del
-  servidor del Centro. Funciona: la aplicación se adapta a pantalla estrecha —la
-  navegación pasa abajo, al alcance del pulgar, y las tablas se convierten en
-  fichas con sus campos etiquetados en vez de recortarse—.
-- **Compilar un APK de depuración** desde el repositorio, para probarlo en un
-  teléfono propio. Exige la cadena de herramientas de Android (SDK, NDK y JDK
-  21), y está documentado en [`frontend/README.md`](frontend/README.md).
+### Para el supervisor: instalarla
 
-Lo que **no** hay, y por qué:
+1. Descargue `SICOT_<versión>_android-arm64.apk` de la versión publicada.
+2. Ábralo. Android pedirá permiso para **instalar aplicaciones de fuentes
+   desconocidas** desde el navegador o el gestor de archivos: concédalo para esa
+   aplicación. Play Protect puede avisar de que no conoce la aplicación; es
+   esperable, porque no se publica en Google Play (ADR-013), y es el mismo tipo
+   de aviso que el de «editor desconocido» del instalador de escritorio.
+3. Al abrir SICOT, pulse la dirección que aparece junto a **Servidor:**, al pie
+   de la pantalla de acceso, y escriba la dirección `https://…` del servidor de
+   su Centro. Su área de sistemas se la dará.
+
+Las actualizaciones se instalan encima, sin desinstalar, y conservan la
+dirección del servidor. Eso funciona porque todas las versiones van firmadas con
+la misma llave; el porqué está en
+[`ADR-013`](docs/decisiones/ADR-013-firma-y-distribucion-del-apk.md).
+
+### Para el área de sistemas: el certificado del Centro
+
+Si el servidor se monta como describe ADR-009 **sin un dominio público** —el
+caso más probable en un Centro—, Caddy cifra con un certificado de su propia
+autoridad local. Un navegador pide confiar en él una vez. **La aplicación no:
+sin instalar esa autoridad en el teléfono, no podrá conectarse**, y lo dirá en
+la pantalla de acceso.
+
+1. Saque la raíz de Caddy del servidor:
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+     cp proxy:/data/caddy/pki/authorities/local/root.crt ./raiz-sicot.crt
+   ```
+2. Pásela al teléfono (cable, correo institucional, memoria USB).
+3. En el teléfono: **Ajustes → Seguridad y privacidad → Más ajustes de seguridad
+   → Cifrado y credenciales → Instalar un certificado → Certificado de CA**.
+   Android avisará de que «sus datos no serán privados» y pedirá el bloqueo de
+   pantalla: es el aviso estándar de cualquier certificado de organización. Elija
+   el archivo.
+4. Queda en *Credenciales de confianza → Usuario*.
+
+Solo hay que hacerlo una vez por teléfono. Si el Centro tiene un dominio con
+certificado público, nada de esto hace falta.
+
+### Lo que no hay, y por qué
 
 | Qué falta | Por qué |
 | --- | --- |
-| Un APK firmado y publicado | La firma de distribución es una decisión de cuenta institucional, no de código. La compilación de publicación ya se probó el 17 de septiembre de 2026 y pesa **12 MB** frente a los 132 MB de la de depuración, pero sale **sin firmar** y por eso no se puede instalar |
+| Publicación en Google Play | Exige una cuenta de pago a nombre de alguien: decisión institucional, prohibida por ADR-012 sin ella |
+| Teléfonos de 32 bits | Se publica para arm64, que cubre los teléfonos de los últimos años |
 | Versión para iPhone | Exige macOS con Xcode, que el equipo no tiene, y un programa de desarrollador de pago |
-| Funcionar sin conexión | Igual que el escritorio, exige red. Es una decisión tomada a conciencia, no una carencia |
+| Funcionar sin conexión | Igual que el escritorio, exige red. Es una decisión tomada a conciencia (ADR-001), no una carencia |
+| Seguir esperando al copiloto con la aplicación cerrada | Android corta las conexiones de las aplicaciones en segundo plano. Si el supervisor sale mientras el copiloto piensa, SICOT lo dice y vuelve a preguntar al volver |
 
-Y un aviso que ahorra un diagnóstico difícil: **Android bloquea el tráfico sin
-cifrar en las compilaciones de publicación**. Si el servidor del Centro se sirve
-por `http://` y no por `https://`, las peticiones de una aplicación publicada no
-saldrán. Está comprobado en el manifiesto de las dos compilaciones, no deducido.
+### Dos avisos que ahorran diagnósticos difíciles
 
-Desde el 17 de septiembre de 2026 **la aplicación lo dice antes de que ocurra**:
-si la dirección configurada empieza por `http://` y se está ejecutando dentro de
-la aplicación de Android, sale un aviso en la pantalla de acceso y en
-Configuración. Antes, el único síntoma era una aplicación que no respondía, y el
-diagnóstico natural —«el servidor está caído»— era falso.
+**`http://` no funciona en la aplicación.** Android bloquea el tráfico sin cifrar
+en las compilaciones de publicación. La aplicación lo avisa en cuanto se escribe
+una dirección `http://`, antes de intentar nada.
 
-Eso no desbloquea nada: para autorizar un servidor concreto sin TLS hace falta
-su nombre, que nadie ha dado todavía. El detalle está en
-[`ADR-012`](docs/decisiones/ADR-012-aplicacion-movil.md).
+**«No se pudo conectar con el servidor» con una dirección `https://`** casi
+siempre es el certificado del apartado anterior sin instalar. La propia pantalla
+de acceso lo indica.
+
+La lista de comprobación manual antes de publicar una versión —lo que las
+pruebas automáticas no pueden ver en un teléfono— está en
+[`docs/operacion/PRUEBA_MANUAL_APK.md`](docs/operacion/PRUEBA_MANUAL_APK.md).
