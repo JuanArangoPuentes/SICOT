@@ -1,6 +1,6 @@
 [package]
 name = "sicot"
-version = "0.3.0"
+version = "0.4.0"
 description = "SICOT — Supervision de contratos del Centro Tecnologico del Mobiliario (SENA)"
 authors = ["MediaLab — Centro Tecnologico del Mobiliario, SENA"]
 license = "MIT"
