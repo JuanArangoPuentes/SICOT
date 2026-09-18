@@ -1,6 +1,15 @@
 # ADR-012 — Qué es "la aplicación móvil" de SICOT
 
-**Estado:** Propuesta · **Fecha:** 16 de septiembre de 2026
+**Estado:** Aceptada · **Fecha:** 16 de septiembre de 2026 · **Aceptada:** 17 de septiembre de 2026
+
+> Nació como propuesta y pasó a aceptada al integrarse el trabajo que la
+> implementa: la interfaz adaptada, el proyecto de Android versionado y el APK
+> arrancando contra el backend real. Lo que sigue pendiente de la reunión
+> institucional no es la decisión, sino los tres puntos que este ADR dice
+> expresamente que **no** decide; igual que ADR-001, que está aceptado y
+> también arrastra supuestos sin confirmar. Dejarlo en «Propuesta» haría creer
+> a quien lo lea dentro de tres años que fue una idea que se barajó, y no la
+> decisión bajo la que está escrito el código que tiene delante.
 
 ## Contexto
 
@@ -84,6 +93,24 @@ fallaría en silencio**: las peticiones no salen y no hay error visible. Eso no 
 resuelve aquí —depende de [ADR-009](./ADR-009-terminacion-tls.md)— y no se puede
 escribir por adelantado una excepción acotada porque nadie ha dado todavía el
 nombre del servidor del Centro. Inventarlo sería peor que dejarlo escrito.
+
+> **Comprobado el 17 de septiembre de 2026.** Este párrafo estaba escrito a
+> partir de cómo funciona Android, no de haberlo visto. Se compilaron las dos
+> variantes y se leyó su manifiesto con `aapt2 dump xmltree`: la de depuración
+> declara `android:usesCleartextTraffic=true` y la de publicación, `false`. La
+> advertencia era correcta y ya no es una inferencia.
+>
+> Lo que **sí** se pudo hacer sin saber el nombre del servidor: que el fallo deje
+> de ser mudo. La aplicación detecta que la dirección configurada empieza por
+> `http://` —cuando corre dentro del APK, no en el navegador ni en el escritorio,
+> donde `http://` funciona— y lo avisa en la pantalla de acceso y en
+> Configuración, antes de que nadie intente entrar. No desbloquea nada; evita que
+> el síntoma sea una aplicación que no responde.
+>
+> De paso quedaron medidos los dos tamaños, que hacían falta para poder hablar de
+> distribución: **132 MB** la de depuración y **12 MB** la de publicación. Esta
+> última sale **sin firmar** y por tanto no se puede instalar, que es exactamente
+> donde este ADR pone el límite.
 
 **Lo que queda prohibido.** Abrir una segunda base de código para móvil sin
 reemplazar antes este ADR. Y publicar en una tienda de aplicaciones sin una

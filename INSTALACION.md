@@ -192,12 +192,21 @@ Lo que **no** hay, y por qué:
 
 | Qué falta | Por qué |
 | --- | --- |
-| Un APK firmado y publicado | La firma de distribución es una decisión de cuenta institucional, no de código |
+| Un APK firmado y publicado | La firma de distribución es una decisión de cuenta institucional, no de código. La compilación de publicación ya se probó el 17 de septiembre de 2026 y pesa **12 MB** frente a los 132 MB de la de depuración, pero sale **sin firmar** y por eso no se puede instalar |
 | Versión para iPhone | Exige macOS con Xcode, que el equipo no tiene, y un programa de desarrollador de pago |
 | Funcionar sin conexión | Igual que el escritorio, exige red. Es una decisión tomada a conciencia, no una carencia |
 
 Y un aviso que ahorra un diagnóstico difícil: **Android bloquea el tráfico sin
 cifrar en las compilaciones de publicación**. Si el servidor del Centro se sirve
 por `http://` y no por `https://`, las peticiones de una aplicación publicada no
-saldrán, y no habrá ningún error en pantalla que lo explique. Está escrito con
-detalle en [`ADR-012`](docs/decisiones/ADR-012-aplicacion-movil.md).
+saldrán. Está comprobado en el manifiesto de las dos compilaciones, no deducido.
+
+Desde el 17 de septiembre de 2026 **la aplicación lo dice antes de que ocurra**:
+si la dirección configurada empieza por `http://` y se está ejecutando dentro de
+la aplicación de Android, sale un aviso en la pantalla de acceso y en
+Configuración. Antes, el único síntoma era una aplicación que no respondía, y el
+diagnóstico natural —«el servidor está caído»— era falso.
+
+Eso no desbloquea nada: para autorizar un servidor concreto sin TLS hace falta
+su nombre, que nadie ha dado todavía. El detalle está en
+[`ADR-012`](docs/decisiones/ADR-012-aplicacion-movil.md).

@@ -59,8 +59,13 @@ El mismo frontend, empaquetado con Tauri y sin una segunda base de código
 Hace falta, además de la cadena de Rust:
 
 - **JDK 21** (no 25: Gradle todavía no lo admite).
-- **SDK de Android** con la plataforma 35, `build-tools;35.0.0`, `platform-tools` y
-  `ndk;27.2.12479018`.
+- **SDK de Android** con la **plataforma 36**, `build-tools;35.0.0` o superior,
+  `platform-tools` y `ndk;27.2.12479018`. La plataforma la fija el propio
+  proyecto de Gradle, que declara `compileSdk` y `targetSdk` = 36
+  (`gen/android/app/build.gradle.kts`); aquí ponía 35, y seguir esa instrucción
+  al pie de la letra dejaba a Gradle pidiendo una plataforma sin instalar. Las
+  `build-tools` van aparte: comprobado con 35.0.0 en una máquina de desarrollo y
+  con 36.0.0 en el CI, las dos compilan.
 - Los destinos de Rust para Android: `aarch64-linux-android`, `armv7-linux-androideabi`,
   `i686-linux-android`, `x86_64-linux-android`.
 
@@ -97,10 +102,44 @@ cd src-tauri/gen/android
 ```
 
 El APK queda en `src-tauri/gen/android/app/build/outputs/apk/arm64/debug/`.
-Pesa unos 130 MB porque la compilación de depuración no quita los símbolos; una
-compilación de publicación es un orden de magnitud más pequeña.
 
-**Tráfico sin cifrar:** el andamiaje permite `http://` solo en la compilación de depuración.
+### Cuánto pesa cada compilación, medido
+
+| Compilación | Tamaño | Instalable |
+| --- | ---: | --- |
+| Depuración (`--debug`) | **132 MB** | Sí |
+| Publicación | **12 MB** | **No: sale sin firmar** |
+
+Los dos números están medidos el 17 de septiembre de 2026 sobre `aarch64`, no
+estimados —aquí ponía «un orden de magnitud más pequeña», y resultó ser un
+factor de once—. La diferencia es que la compilación de depuración no quita los
+símbolos de la biblioteca de Rust.
+
+La de publicación se construye igual pero sin `--debug`:
+
+```bash
+npm run tauri android build -- --apk --target aarch64
+```
+
+y **no se puede instalar tal cual**: sale como `app-arm64-release-unsigned.apk`.
+Firmarla para distribuir es una decisión de cuenta institucional y no de código,
+y ADR-012 prohíbe expresamente publicar sin esa decisión previa.
+
+### Esto lo comprueba el CI desde el 17 de septiembre de 2026
+
+El flujo de trabajo `Android` compila el APK de depuración para `aarch64` y dice
+cuánto pesa. **Solo se ejecuta cuando cambia algo que puede romperlo**
+—`frontend/src-tauri/**`, las dependencias del frontend o el propio flujo—,
+porque compilar Rust en cruzado contra el NDK es caro y una compuerta lenta que
+además corre cuando no hace falta acaba quitándose.
+
+Vive en su propio fichero y no en `ci.yml` por un detalle de GitHub Actions que
+conviene saber antes de intentar moverlo: el filtro `paths` se aplica al flujo de
+trabajo entero, no a un job suelto.
+
+**Tráfico sin cifrar:** comprobado en el manifiesto de los dos APK con
+`aapt2 dump xmltree`, no deducido: la compilación de depuración declara
+`android:usesCleartextTraffic=true` y la de publicación, `false`.
 Una compilación de publicación contra un servidor sin TLS no podrá hablar con él, y fallará sin
 mensaje visible. Está explicado en ADR-012; depende de resolver antes
 [`ADR-009`](../docs/decisiones/ADR-009-terminacion-tls.md).

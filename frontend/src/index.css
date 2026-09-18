@@ -799,17 +799,63 @@ input[type='radio'] {
   overflow: hidden;
 }
 
-/* En pantalla estrecha, seis segmentos dejan menos de 40 px para cada rótulo, y
-   el nombre de la etapa se parte en trozos ilegibles: «ES Y.», «AC D.», «CI».
-   Un fragmento así no informa de nada y además parece un fallo de la pantalla.
-   Se ocultan los rótulos y quedan el número, la barra y el porcentaje, que sí
-   se leen a ese tamaño; el nombre completo de la etapa en curso sigue arriba,
-   en el título grande de la tarjeta, y el de cualquier otra sale al tocarla.
-   No se envuelven en varias filas a propósito: la barra representa un recorrido
-   de izquierda a derecha, y partirla en dos renglones rompe esa lectura. */
+/* ── La barra de etapas en un teléfono ───────────────────────────────────────
+   Repartir seis segmentos en 360 px deja 38 px para cada uno: por debajo del
+   mínimo cómodo para un dedo, y con el rótulo partido en trozos ilegibles
+   —«ES Y.», «AC D.», «CI»— que no informan de nada y parecen un fallo de la
+   pantalla.
+
+   La regla general de 44 px excluye estos segmentos con nombre y apellido
+   (`.app-content button:not(.journey-seg)`), y la exclusión es deliberada:
+   estirarlos a 44 px de alto no arregla el ancho, que es el problema, y
+   convertiría un indicador de progreso en una botonera. El 16 de septiembre se
+   optó por ocultar los rótulos y dejar número, riel y porcentaje; se lee, pero
+   deja al supervisor sin saber a qué etapa está a punto de saltar, en el único
+   sitio donde navega entre las etapas del proceso.
+
+   Lo que se hace en su lugar: cada segmento recibe el ancho que su rótulo
+   necesita y la barra se desplaza en horizontal, con anclaje por segmento. Se
+   eligió frente a las otras dos salidas que se barajaron porque es la única que
+   conserva lo que la barra significa. Una lista vertical enseña las seis etapas
+   a la vez pero deja de parecer un recorrido; un indicador compacto de «etapa
+   actual» cabe en una línea pero esconde el avance de las demás detrás de un
+   toque más. La barra representa un proceso que va de izquierda a derecha —el
+   GCCON-P-010— y desplazarla conserva esa lectura; apilarla o resumirla, no.
+
+   El coste, dicho de frente: hay etapas que no se ven sin desplazar. Se
+   compensa llevando la barra sola hasta la etapa en curso al abrir la vista
+   (ver StageJourney en components/ui.tsx), que es la pregunta que la barra
+   existe para responder.
+
+   Nota para quien mida desbordamientos: la prueba de armazón móvil excluye lo
+   que vive dentro de un contenedor que de verdad se desplaza en horizontal,
+   así que esta barra no cuenta como desborde. Es la excepción prevista, no un
+   descuido. */
 @media (max-width: 640px) {
+  .journey {
+    overflow-x: auto;
+    /* `proximity` y no `mandatory`: con anclaje obligatorio, un arrastre corto
+       para «asomarse» a la etapa siguiente rebota al segmento anterior, que se
+       siente como si la pantalla peleara con el dedo. */
+    scroll-snap-type: x proximity;
+    /* El resalte de la etapa en curso es un `box-shadow` de 3 px alrededor del
+       riel. `overflow-x: auto` hace que el navegador recorte también en
+       vertical, así que sin este respiro el resalte se corta justo en la etapa
+       que más importa ver. */
+    padding-bottom: 4px;
+    scroll-padding-left: 12px;
+  }
+  .journey-seg {
+    /* Ancho fijo en lugar de reparto: 132 px es lo que necesita el rótulo a dos
+       líneas para no partirse, y de paso deja el segmento muy por encima del
+       mínimo táctil en los dos ejes. */
+    flex: 0 0 132px;
+    scroll-snap-align: start;
+  }
+  /* Los rótulos vuelven: ahora hay sitio para ellos. */
   .journey-seg-label {
-    display: none;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 }
 
@@ -1212,14 +1258,22 @@ input[type='radio'] {
     min-height: 44px;
   }
 
-  /* La fila de la bandeja pone icono, texto y acciones en una sola línea. El
-     bloque de acciones no se encoge, así que en un teléfono dejaba el detalle
-     de la alerta en una columna de unos 200 px, partida casi palabra por
-     palabra. Las acciones bajan a su propio renglón. */
-  .inbox-row {
+  /* Filas que ponen texto y acciones en una sola línea. El bloque de acciones
+     no se encoge, así que en un teléfono el texto queda en una columna estrecha
+     partida casi palabra por palabra. Las acciones bajan a su propio renglón.
+
+     Son dos sitios y con el mismo defecto, así que la regla es una sola:
+     `.inbox-row` es la fila de la bandeja, y `.fila-apilable` las tarjetas de
+     documentos del contrato, donde el nombre se quedaba con 86 px de 360 —eso
+     no se vio el 16 de septiembre porque la base tenía un único documento
+     cargado y la tarjeta cabía—. Si aparece un tercer caso, se le pone
+     `fila-apilable` y no una regla nueva. */
+  .inbox-row,
+  .fila-apilable {
     flex-wrap: wrap;
   }
-  .inbox-row > div:last-child {
+  .inbox-row > div:last-child,
+  .fila-apilable > div:last-child {
     width: 100%;
     justify-content: flex-end;
     margin-top: 6px;

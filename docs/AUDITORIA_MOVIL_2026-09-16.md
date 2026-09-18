@@ -266,3 +266,37 @@ primera al instalar el APK en un emulador:
 Lo que impide que esto se deshaga solo: las pruebas de extremo a extremo tienen
 desde hoy un segundo proyecto con viewport de teléfono, que afirma que se puede
 entrar, que ninguna vista del Supervisor se desborda y que se puede salir.
+
+---
+
+## Apéndice — 17 de septiembre de 2026: qué se cerró de esta lista
+
+Se retoman aquí los pendientes de arriba, porque una lista de pendientes que
+nadie vuelve a tocar deja de ser un pendiente y pasa a ser una carencia.
+
+| Pendiente del 16 | Estado |
+| --- | --- |
+| La barra de etapas | **Resuelto.** Cada segmento pasa de 38 px de ancho a 132 × 69, con su rótulo legible, y la barra se desplaza en horizontal con anclaje. Se llega a la etapa en curso sola al abrir la vista |
+| Modales y formularios de creación | **Medidos los cinco.** No se desbordaban ni provocaban zoom; el defecto real era el botón de cerrar, de 13 × 44 px en todos |
+| La vista de documentos con volumen real | **Medida con 9 documentos.** Aparecieron 6 elementos fuera del ancho: el nombre del documento se quedaba con 86 px de 360. Corregido, 250 px |
+| iOS | Sigue sin forma de comprobarse con el equipo disponible |
+
+### Dos correcciones a lo que este documento afirmaba
+
+Conviene dejarlas escritas porque las dos son del tipo que hace desconfiar de
+una medida, no de un arreglo:
+
+1. **La compuerta que este documento anunciaba no protegía lo que decía.**
+   Medía `document.documentElement.scrollWidth` contra `innerWidth`, y el
+   hallazgo 0 de este mismo documento dice que el armazón recorta con
+   `overflow: hidden` y que el ancho desplazable era exactamente el visible en
+   las once pantallas. O sea: esa comprobación habría pasado en verde sobre la
+   aplicación rota que venía a proteger. Se descubrió deshaciendo a propósito la
+   conversión de tabla a tarjetas y viendo que no se enteraba. Ahora mide la caja
+   de cada elemento contra el ancho de la ventana, que es lo que se midió aquí.
+
+2. **Y no se ejecutaba en ningún sitio.** La suite de Playwright estaba fuera del
+   CI. Desde el 17 corre en cada PR, con los tres roles y contra una base
+   sembrada — porque con la base vacía habría estado midiendo pantallas sin
+   filas, que es justo lo que la sección «Cómo se midió» de arriba descarta por
+   inútil.
