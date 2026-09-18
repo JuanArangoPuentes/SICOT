@@ -66,6 +66,7 @@ import {
   preguntarCopiloto,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
+import { esperarPrimerPlano, vigilarSegundoPlano } from '@/services/segundoPlano'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
@@ -441,6 +442,7 @@ export default function SupervisorPanel({
         return
       }
       setProcesandoFirma(subStepId)
+      const vigia = vigilarSegundoPlano()
       try {
         const generado = await generarDocumento(contrato.id, { tipo: doc.tipo, subetapaId: sub?.apiId ?? null })
         await firmarDocumento(contrato.id, generado.id)
@@ -450,10 +452,30 @@ export default function SupervisorPanel({
           .catch(() => {})
       } catch (e) {
         setProcesandoFirma(null)
-        const mensaje =
-          e instanceof ApiError ? e.message : 'No se pudo generar o firmar el documento con el Copiloto IA.'
+        // Aquí NO se reintenta, a diferencia del chat del copiloto. Si la
+        // conexión se cortó al pasar SICOT a segundo plano, el servidor puede
+        // haber generado el documento igualmente —así pasó al medirlo—, y
+        // repetir la petición crearía un segundo documento oficial del mismo
+        // paso. Lo honesto es decir qué pasó y mandar a comprobarlo.
+        const cortadoPorSegundoPlano = !(e instanceof ApiError) && vigia.seOculto()
+        const mensaje = cortadoPorSegundoPlano
+          ? 'la conexión se cortó porque SICOT pasó a segundo plano, y el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. Es posible que el documento se haya generado igualmente: revise Documentos antes de volver a intentarlo, para no crear uno repetido.'
+          : e instanceof ApiError
+            ? e.message
+            : 'No se pudo generar o firmar el documento con el Copiloto IA.'
         setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude completar la firma: ${mensaje}` }])
+        if (cortadoPorSegundoPlano) {
+          // Al volver, la lista de documentos se refresca sola, para que si el
+          // documento llegó a generarse aparezca sin tener que buscarlo.
+          void esperarPrimerPlano().then(() =>
+            getDocumentosContrato(contrato.id)
+              .then(setDocsContrato)
+              .catch(() => {}),
+          )
+        }
         return
+      } finally {
+        vigia.terminar()
       }
       setProcesandoFirma(null)
     }
@@ -588,19 +610,40 @@ export default function SupervisorPanel({
   // Pregunta real al Copiloto IA (Ollama, vía CopilotoChatService en el
   // backend) — anclada a los datos reales del contrato y al estado real de
   // sus etapas. Ya no hay coincidencia de palabras clave local.
-  const preguntarAlCopiloto = async (texto: string) => {
-    if (!contrato || pensando) return
+  const preguntarAlCopiloto = async (texto: string, esReintento = false) => {
+    if (!contrato || (pensando && !esReintento)) return
     setPensando(true)
+    const vigia = vigilarSegundoPlano()
     try {
       const { respuesta } = await preguntarCopiloto(contrato.id, texto, chatMsgs)
       setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta }])
     } catch (e) {
+      // Si la conexión se cortó porque SICOT pasó a segundo plano, el motivo no
+      // es Ollama y decirlo sería mentir: en el APK de Android el sistema
+      // destruye las conexiones de la aplicación a los pocos segundos de salir
+      // de ella, y una pregunta al copiloto sobre CPU dura minutos (ver
+      // services/segundoPlano.ts). Una pregunta no cambia nada en el servidor,
+      // así que se puede repetir sin consecuencias: se vuelve a pedir una sola
+      // vez, en cuanto el supervisor vuelve a la aplicación.
+      if (!(e instanceof ApiError) && vigia.seOculto() && !esReintento) {
+        setChatMsgs((prev) => [
+          ...prev,
+          {
+            role: 'ai',
+            text: 'La respuesta se cortó porque SICOT pasó a segundo plano: el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. La vuelvo a pedir ahora; mantenga SICOT abierto hasta que responda.',
+          },
+        ])
+        vigia.terminar()
+        await esperarPrimerPlano()
+        return preguntarAlCopiloto(texto, true)
+      }
       const mensaje =
         e instanceof ApiError
           ? e.message
           : 'No se pudo conectar con el Copiloto IA (Ollama). Verifique que esté disponible e inténtelo de nuevo.'
       setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude responder: ${mensaje}` }])
     } finally {
+      vigia.terminar()
       setPensando(false)
     }
   }
