@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/mobile-schema.json",
+  "identifier": "movil",
+  "description": "Guardar archivos en Android con el diálogo del sistema (MDL-184). Solo Android: en escritorio el WebView descarga por sí mismo y no necesita estos permisos. Se concede lo mínimo: abrir el «Guardar como» y escribir un archivo; la ruta la autoriza el propio diálogo al elegirla el usuario, y ninguna otra queda escribible.",
+  "windows": ["main"],
+  "platforms": ["android"],
+  "permissions": ["dialog:allow-save", "fs:allow-write-file"]
+}

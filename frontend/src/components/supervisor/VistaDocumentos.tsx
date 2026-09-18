@@ -97,6 +97,11 @@ export default function VistaDocumentos({
 }) {
   const [integridad, setIntegridad] = useState<Record<number, EstadoIntegridad | 'CONSULTANDO'>>({})
   const [errorDescarga, setErrorDescarga] = useState<string | null>(null)
+  // Confirmación de guardado. Solo se usa en el APK de Android: allí el
+  // «Guardar como» del sistema se cierra y vuelve a la aplicación sin ninguna
+  // otra señal de que el archivo quedó escrito. En el navegador no hace falta,
+  // porque el propio gestor de descargas lo muestra.
+  const [avisoDescarga, setAvisoDescarga] = useState<string | null>(null)
 
   // Se consulta solo lo firmado: verificar recalcula el hash del archivo
   // completo en el servidor, y hacerlo sobre documentos sin firma no
@@ -147,10 +152,15 @@ export default function VistaDocumentos({
 
   const descargar = (doc: DocumentoResponse) => {
     setErrorDescarga(null)
-    descargarDocumento(contrato.id, doc.id, doc.nombre).catch((err) => {
-      console.error('No se pudo descargar el documento:', err)
-      setErrorDescarga(`No se pudo descargar "${doc.nombre}". Intente de nuevo en un momento.`)
-    })
+    setAvisoDescarga(null)
+    descargarDocumento(contrato.id, doc.id, doc.nombre)
+      .then((resultado) => {
+        if (resultado === 'guardado') setAvisoDescarga(`«${doc.nombre}» quedó guardado en el teléfono.`)
+      })
+      .catch((err) => {
+        console.error('No se pudo descargar el documento:', err)
+        setErrorDescarga(`No se pudo descargar "${doc.nombre}". Intente de nuevo en un momento.`)
+      })
   }
 
   return (
@@ -191,6 +201,22 @@ export default function VistaDocumentos({
           }}
         >
           {errorDescarga}
+        </div>
+      )}
+
+      {avisoDescarga && (
+        <div
+          role="status"
+          className="card"
+          style={{
+            padding: '12px 15px',
+            marginBottom: 14,
+            borderColor: 'var(--accent)',
+            fontSize: 12.5,
+            color: 'var(--text-primary)',
+          }}
+        >
+          {avisoDescarga}
         </div>
       )}
 
