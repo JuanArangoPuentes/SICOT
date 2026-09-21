@@ -142,6 +142,55 @@ class DocumentosDeAsignacionIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(jsonPath("$[1].formatoCodigo").doesNotExist());
     }
 
+    /**
+     * Cargar un documento deja rastro en el registro del contrato, con su autor.
+     *
+     * <p>Hasta el 21-09-2026 no lo dejaba: /api/registros no mostraba ninguna
+     * carga, y el resumen periódico del motor, que ya sabía contar
+     * {@code DOCUMENTO_CARGADO}, nunca recibía uno. Esta prueba es la que
+     * habría fallado.
+     */
+    @Test
+    void cadaCargaQuedaEnElRegistroDelContratoConQuienLaHizo() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = crearContrato(gestion);
+
+        subirDocumento(gestion, contratoId, null, "Notificación supervisor.pdf");
+
+        mockMvc.perform(get("/api/contratos/{id}/registros", contratoId)
+                        .header("Authorization", "Bearer " + gestion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.accion == 'DOCUMENTO_CARGADO')].descripcion")
+                        .value(org.hamcrest.Matchers.contains(
+                                "Documento «Notificación supervisor.pdf» cargado.")))
+                .andExpect(jsonPath("$[?(@.accion == 'DOCUMENTO_CARGADO')].usuarioNombre")
+                        .value(org.hamcrest.Matchers.contains("Unidad de Gestión Contractual")))
+                .andExpect(jsonPath("$[?(@.accion == 'DOCUMENTO_CARGADO')].origen")
+                        .value(org.hamcrest.Matchers.contains("USUARIO")));
+    }
+
+    /**
+     * Una carga rechazada no deja registro: el rastro va en la misma
+     * transacción que el documento, y un registro de algo que no ocurrió sería
+     * justo el tipo de dato inventado que el proyecto no admite.
+     */
+    @Test
+    void unaCargaRechazadaNoDejaRegistro() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = crearContrato(gestion);
+
+        mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoId)
+                        .file(new MockMultipartFile("archivo", "acta.pdf", "application/pdf", PDF))
+                        .param("formatoId", "9999")
+                        .header("Authorization", "Bearer " + gestion))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/contratos/{id}/registros", contratoId)
+                        .header("Authorization", "Bearer " + gestion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.accion == 'DOCUMENTO_CARGADO')]").isEmpty());
+    }
+
     @Test
     void unFormatoQueNoEstaEnElCatalogoSeRechazaConUnErrorClaro() throws Exception {
         String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
