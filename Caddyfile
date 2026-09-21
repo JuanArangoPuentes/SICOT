@@ -27,6 +27,22 @@
 # Caddy evalúa los bloques por especificidad, no por orden de escritura, pero
 # se listan así para que se lea igual que se resuelve: /api y /actuator y
 # /swagger van al backend; todo lo demás, a la SPA.
+#
+# LA IP DEL CLIENTE, Y POR QUÉ NO HAY `trusted_proxies`
+# -----------------------------------------------------
+# En el perfil prod el backend lee X-Forwarded-For para saber qué equipo intenta
+# entrar (server.forward-headers-strategy=native): sin eso, el límite de intentos
+# fallidos por origen veía a todo el Centro como una sola IP, la de este proxy.
+#
+# Eso es seguro solo porque Caddy NO reenvía la cabecera que trae el cliente: la
+# sustituye por la IP real de quien se conecta. Comprobado el 21-09-2026 con
+# caddy 2.11.4: un cliente que envió «X-Forwarded-For: 198.51.100.7» llegó al
+# backend con su propia dirección.
+#
+# Ese comportamiento cambia si se declara `trusted_proxies`. Si un día se pone
+# otro balanceador delante, se declara SOLO la IP de ese balanceador. Declarar la
+# red del Centro (10.0.0.0/8, 192.168.0.0/16…) permitiría a cualquier equipo
+# elegir su propio origen escribiendo la cabecera, y escapar así del bloqueo.
 # ═══════════════════════════════════════════════════════════════════════════
 
 {$SICOT_DOMINIO:localhost} {
