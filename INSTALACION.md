@@ -65,6 +65,7 @@ no puede dejar como están:
 | `SICOT_DOMINIO` | El dominio real del servidor |
 | `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` | La dirección real, **nunca** `localhost` |
 | `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | La primera cuenta de administrador |
+| `RESPALDO_DIRECTORIO` | La carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
 
 Lo de `VITE_API_URL` merece un aviso, porque es el error que más tiempo cuesta
 diagnosticar: el frontend se compila con esa dirección **incrustada dentro**. Si
@@ -97,10 +98,16 @@ crontab -e
 # 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos
 ```
 
-Defina también `RESPALDO_DIRECTORIO` en el `.env`, apuntando a esa misma carpeta.
-Con eso el backend vigila la antigüedad del último respaldo y avisa en el log
-cuando supera las 24 horas comprometidas. Sin esa variable no vigila nada, y el
-compromiso de recuperación queda siendo una intención.
+La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
+El backend la ve en solo lectura y, al arrancar y una vez al día, avisa en el log
+si el respaldo más reciente supera las 24 horas comprometidas, o si no hay
+ninguno. Hasta que el cron haga el primero, ese aviso de «no hay NINGÚN
+respaldo» es correcto: describe exactamente lo que está pasando.
+
+Por eso `RESPALDO_DIRECTORIO` es obligatoria y el despliegue de producción no
+arranca sin ella. Antes era opcional y, además, Compose no se la pasaba al
+backend: aunque se definiera, el sistema avisaba de que faltaba y no vigilaba
+nada. El compromiso de recuperación quedaba siendo una intención.
 
 El detalle de restauración está en
 [`docs/operacion/BACKUP_Y_RESTAURACION.md`](docs/operacion/BACKUP_Y_RESTAURACION.md).

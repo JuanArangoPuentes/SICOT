@@ -402,9 +402,22 @@ jobs:
           # despliegue no sabría para qué nombre pedir certificado. Aquí solo se
           # valida la estructura del archivo, así que basta un nombre de relleno.
           SICOT_DOMINIO: sicot.ci.invalid
+          # La carpeta de respaldos es obligatoria en producción (ADR-002). La
+          # ruta no tiene que existir en el runner: `config` no monta nada.
+          RESPALDO_DIRECTORIO: /srv/sicot/respaldos
         run: |
           docker compose -f docker-compose.yml config > /dev/null
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config > /dev/null
+          # Que el backend de producción reciba la carpeta de respaldos. Esta
+          # comprobación existe porque ya falló una vez sin que nadie lo notara:
+          # INSTALACION.md pedía RESPALDO_DIRECTORIO y Compose no se la pasaba
+          # al contenedor, así que la vigilancia del RPO nunca llegó a
+          # encenderse en un despliegue con Docker.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json \
+            | jq -e '.services.backend
+                     | .environment.RESPALDO_DIRECTORIO == "/respaldos"
+                       and any(.volumes[]; .target == "/respaldos" and .read_only == true)' > /dev/null \
+            || { echo "::error::El backend de producción no recibe la carpeta de respaldos: la vigilancia del RPO (ADR-002) quedaría apagada."; exit 1; }
 
   e2e:
     name: Extremo a extremo (Playwright · escritorio y teléfono)

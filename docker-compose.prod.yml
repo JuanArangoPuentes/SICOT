@@ -40,6 +40,11 @@
 #      perfil "dev" usando este archivo. Con "dev" activo se sembrarían las
 #      cuentas de prueba (cuyas contraseñas están publicadas en el README) y
 #      Swagger quedaría público.
+#
+# Respaldo (ADR-002): RESPALDO_DIRECTORIO también es obligatoria aquí. Es la
+# carpeta del servidor donde escribe scripts/respaldo-sicot.sh; se monta en
+# solo lectura para que el backend vigile la antigüedad del último respaldo.
+# Ver el servicio backend más abajo.
 # ═══════════════════════════════════════════════════════════════════════════
 
 services:
@@ -68,6 +73,41 @@ services:
       # Una vez creada la cuenta, ambas variables pueden retirarse del .env.
       SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:?Defina SICOT_ADMIN_EMAIL en el .env — es la cuenta de administrador con la que se entra por primera vez}
       SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:?Defina SICOT_ADMIN_PASSWORD en el .env con al menos 12 caracteres — genérela con `openssl rand -base64 24` y cámbiela desde la aplicación tras el primer ingreso}
+      # Vigilancia del respaldo (ADR-002, VigilanciaDelRespaldo). LITERAL y no
+      # interpolada, a propósito: dentro del contenedor el backend busca SIEMPRE
+      # en /respaldos, que es donde el montaje de abajo pone la carpeta del
+      # servidor. La variable RESPALDO_DIRECTORIO del .env es la ruta en el
+      # SERVIDOR y solo se usa como origen de ese montaje.
+      #
+      # Antes ninguna de las dos cosas existía. INSTALACION.md pedía definir
+      # RESPALDO_DIRECTORIO en el .env, pero Compose no la pasaba al contenedor
+      # (el .env solo alimenta las ${…} de este archivo), así que el backend
+      # arrancaba avisando «falta RESPALDO_DIRECTORIO» a quien sí la había
+      # definido, y la métrica sicot.respaldo.antiguedad.horas se quedaba en -1
+      # para siempre. Y pasar solo la variable no habría bastado: el backend
+      # habría buscado una ruta del servidor dentro del contenedor, donde no
+      # existe, y avisado de que no había NINGÚN respaldo.
+      RESPALDO_DIRECTORIO: /respaldos
+      RESPALDO_RPO_HORAS: ${RESPALDO_RPO_HORAS:-24}
+    volumes:
+      # La carpeta donde escribe scripts/respaldo-sicot.sh, en solo lectura: el
+      # backend solo mira la fecha del respaldo más reciente, nunca escribe ni
+      # borra ahí.
+      #
+      # Obligatoria, como DB_PASSWORD y JWT_SECRET (ADR-011). INSTALACION.md
+      # dice que el respaldo «no es opcional», y un despliegue sin carpeta de
+      # respaldos es exactamente el que ADR-002 no puede cumplir sin que nadie
+      # lo note.
+      #
+      # Sintaxis larga a propósito: con ella Docker se niega a arrancar si la
+      # carpeta no existe. La corta la crearía vacía y como root, y el script de
+      # respaldo, que corre con el usuario del cron, fallaría al escribir en
+      # ella; el backend avisaría cada día de que no hay respaldo sin que nada
+      # apuntara a la causa.
+      - type: bind
+        source: ${RESPALDO_DIRECTORIO:?Defina RESPALDO_DIRECTORIO en el .env con la carpeta del servidor donde escribe scripts/respaldo-sicot.sh (créela antes de arrancar) — sin ella no se puede vigilar el RPO de ADR-002}
+        target: /respaldos
+        read_only: true
     # Deja de publicar el 8080 al host: el único camino hacia la API pasa por el
     # proxy con TLS. Con el puerto publicado seguiría existiendo un acceso sin
     # cifrar a los mismos datos, que es exactamente lo que ADR-009 prohíbe.
