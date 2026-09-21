@@ -45,13 +45,19 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request,
                                               HttpServletRequest peticion) {
-        // getRemoteAddr y NO la cabecera X-Forwarded-For: esa cabecera la pone
-        // el cliente y es trivial de falsear, así que confiar en ella
-        // convertiría el límite por IP en decorativo (basta variarla en cada
-        // intento). Si algún día el backend queda detrás de un proxy inverso,
-        // la forma correcta de recuperar la IP real es
-        // `server.forward-headers-strategy=framework` en application.properties,
-        // que hace que Spring procese esas cabeceras solo donde corresponde.
+        // getRemoteAddr y NO la cabecera X-Forwarded-For leída a mano: esa
+        // cabecera la puede poner el cliente, y confiar en ella convertiría el
+        // límite por IP en decorativo (basta variarla en cada intento).
+        //
+        // Detrás de Caddy (ADR-009) getRemoteAddr sería siempre la IP del
+        // proxy, y el límite por origen se volvería uno solo para todo el
+        // Centro. En el perfil prod no lo es: application-prod.properties activa
+        // `server.forward-headers-strategy=native`, y la válvula de Tomcat
+        // reescribe getRemoteAddr con la IP del cliente SOLO cuando la conexión
+        // viene del proxy. Este código no cambia; cambia lo que devuelve.
+        //
+        // Aquí decía antes que la opción correcta era `framework`. No lo es:
+        // esa estrategia cree la cabecera venga de quien venga.
         return ResponseEntity.ok(authService.login(request, peticion.getRemoteAddr()));
     }
 }
