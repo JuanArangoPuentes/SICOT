@@ -323,7 +323,8 @@ entorno equivalentes. Las que más se tocan:
 | `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
 | `AUTOMATIZACION_RESUMEN_DIAS` | `7` | Periodo que abarca el resumen y ritmo con el que se emite |
 | `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
-| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO |
+| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO. En `docker-compose.prod.yml` es **obligatoria** y es la ruta del servidor: se monta en solo lectura y dentro del contenedor el backend siempre mira `/respaldos` |
+| `RESPALDO_RPO_HORAS` | `24` | Antigüedad máxima aceptada del último respaldo (ADR-002) |
 
 ## 10. Cronograma del contrato
 
@@ -351,6 +352,14 @@ más reciente en `RESPALDO_DIRECTORIO`, avisa en el log si supera el RPO y publi
 `sicot.respaldo.antiguedad.horas` en `/actuator/prometheus` (`-1` = no se pudo
 determinar). Sin la variable configurada, el arranque avisa de que el compromiso
 de ADR-002 está sin verificar.
+
+**En el despliegue con Docker** la variable del `.env` no llega sola al backend:
+el `.env` solo rellena las `${…}` del archivo de Compose. Durante un tiempo eso
+dejó la vigilancia apagada en producción aunque la guía se siguiera al pie de la
+letra. Ahora `docker-compose.prod.yml` exige `RESPALDO_DIRECTORIO`, monta esa
+carpeta del servidor en `/respaldos` y fija la variable del contenedor a esa
+ruta. El paso «Validar los archivos de Compose» del CI comprueba que siga siendo
+así.
 
 ## 12. Pendiente (fases siguientes)
 
