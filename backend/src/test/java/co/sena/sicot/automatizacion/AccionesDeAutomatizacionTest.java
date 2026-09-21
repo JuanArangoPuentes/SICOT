@@ -254,6 +254,70 @@ class AccionesDeAutomatizacionTest {
                 .doesNotContain("%");
     }
 
+    /**
+     * Un documento que el supervisor pidió al copiloto es actividad del
+     * expediente y se cuenta como tal. Hasta el 21-09-2026 la generación no
+     * dejaba registro, así que el resumen no tenía cómo saberlo.
+     */
+    @Test
+    void unDocumentoGeneradoConElCopilotoSeCuentaEnElResumen() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado con el copiloto."),
+                        registro("DOCUMENTO_CARGADO", "Documento «soporte.pdf» cargado.")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("se generó un documento con el copiloto")
+                .contains("se cargó un documento");
+    }
+
+    /**
+     * Si ninguno de los movimientos del periodo es de los que el resumen narra
+     * —un contrato al que solo se le corrigió el objeto, por ejemplo—, no hay
+     * resumen. Antes se componía igual y el supervisor recibía un texto que
+     * acababa en «durante el periodo .»: una frase vacía con apariencia de
+     * resumen.
+     */
+    @Test
+    void unPeriodoSinNadaQueNarrarNoProduceUnaFraseVacia() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("CONTRATO_ACTUALIZADO", "Se actualizó el objeto del contrato.")));
+
+        ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        assertThat(resultado.ejecutada()).isFalse();
+        assertThat(resultado.motivoDeDescarte()).contains("nada que resumir");
+        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
+    }
+
+    /**
+     * La excepción a la regla anterior: una alteración de integridad se avisa
+     * aunque sea lo único que pasó. Descartar ese resumen por «nada que contar»
+     * callaría justo lo que exige que alguien actúe.
+     */
+    @Test
+    void unaAlteracionDeIntegridadSeAvisaAunqueNoHayaNadaMasQueContar() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("INTEGRIDAD_COMPROMETIDA", "La huella del acta no coincide.")));
+
+        ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        assertThat(resultado.ejecutada()).isTrue();
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("durante el periodo no se registró avance ni movimiento de documentos.")
+                .contains("huella de integridad")
+                .doesNotContain("periodo .");
+    }
+
     /** Un periodo sin actividad no produce resumen: seria un renglon vacio. */
     @Test
     void sinMovimientosEnElPeriodoNoProduceResumen() {
