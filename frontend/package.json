@@ -22,7 +22,7 @@
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "^2.7.3",
     "@tauri-apps/plugin-fs": "^2.5.2",
-    "react": "^19.0.0",
+    "react": "^19.3.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.18.3",
     "recharts": "^3.10.1"
