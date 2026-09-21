@@ -95,6 +95,15 @@ updates:
       # poder revisar una por una lo que llega al usuario.
       herramientas-de-desarrollo:
         dependency-type: development
+      # La única excepción a «las de producción van sueltas». react y react-dom
+      # tienen que tener EXACTAMENTE la misma versión: React lo comprueba al
+      # arrancar y aborta con «Incompatible React versions». Sueltas, cada
+      # lunes llegaban dos PRs, y el de react nacía roto por construcción: el
+      # 21-09-2026 el #79 subía react a 19.3.0 dejando react-dom en 19.2.8, y
+      # vitest abortaba las diez suites. Un PR que falla siempre enseña a
+      # ignorar el CI, que es peor que no tener el PR.
+      react:
+        patterns: ["react", "react-dom"]
 
   - package-ecosystem: npm
     directory: /mcp
