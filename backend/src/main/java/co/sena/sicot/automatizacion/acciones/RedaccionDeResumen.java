@@ -125,7 +125,18 @@ public class RedaccionDeResumen implements AccionDeTarea {
                     "Sin movimientos en los últimos " + datos.diasDelPeriodo() + " días; no hay nada que resumir.");
         }
 
-        String texto = componer(foto.get(), movimientos, datos.diasDelPeriodo());
+        Optional<String> compuesto = componer(foto.get(), movimientos, datos.diasDelPeriodo());
+        if (compuesto.isEmpty()) {
+            // Hubo movimientos, pero ninguno de los que este resumen narra (por
+            // ejemplo, solo se corrigió el objeto del contrato). Antes se componía
+            // igual y el supervisor recibía un texto que acababa en «durante el
+            // periodo .»: una frase vacía con forma de resumen.
+            return ResultadoDeAccion.descartada(
+                    "Los movimientos de los últimos " + datos.diasDelPeriodo()
+                            + " días no cambian el avance, los documentos ni el estado del contrato; "
+                            + "no hay nada que resumir.");
+        }
+        String texto = compuesto.get();
         // RECORDATORIO y no IA. La alerta se marcaba como IA cuando el texto lo
         // escribía el modelo; mantener esa etiqueta ahora sería afirmar en la
         // base de datos algo que dejó de ser cierto, y engañaría a cualquiera
@@ -139,8 +150,10 @@ public class RedaccionDeResumen implements AccionDeTarea {
      * Arma el texto con plantillas. Cada dato que aparece aquí sale de una
      * consulta, no de una inferencia: es la propiedad que hacía falta y que la
      * redacción por modelo no podía ofrecer.
+     *
+     * @return vacío si ningún movimiento es de los que el resumen narra
      */
-    private String componer(FotoDelContrato contrato, List<Registro> movimientos, int dias) {
+    private Optional<String> componer(FotoDelContrato contrato, List<Registro> movimientos, int dias) {
         List<String> frases = new ArrayList<>();
 
         // LinkedHashSet: si una subetapa se completó, se revirtió y se volvió a
@@ -148,6 +161,7 @@ public class RedaccionDeResumen implements AccionDeTarea {
         // orden en que ocurrió.
         Set<String> completadas = new LinkedHashSet<>();
         int revertidas = 0;
+        int generados = 0;
         int firmados = 0;
         int cargados = 0;
         String ultimoEstado = null;
@@ -168,6 +182,7 @@ public class RedaccionDeResumen implements AccionDeTarea {
                     }
                 }
                 case "SUBETAPA_REVERTIDA" -> revertidas++;
+                case "DOCUMENTO_GENERADO" -> generados++;
                 case "DOCUMENTO_FIRMADO" -> firmados++;
                 case "DOCUMENTO_CARGADO" -> cargados++;
                 case "ESTADO_CAMBIADO" -> ultimoEstado = descripcion;
@@ -184,6 +199,11 @@ public class RedaccionDeResumen implements AccionDeTarea {
         if (revertidas > 0) {
             frases.add(revertidas == 1 ? "se revirtió una subetapa" : "se revirtieron " + revertidas + " subetapas");
         }
+        if (generados > 0) {
+            frases.add(generados == 1
+                    ? "se generó un documento con el copiloto"
+                    : "se generaron " + generados + " documentos con el copiloto");
+        }
         if (firmados > 0) {
             frases.add(firmados == 1 ? "se firmó un documento" : "se firmaron " + firmados + " documentos");
         }
@@ -195,6 +215,17 @@ public class RedaccionDeResumen implements AccionDeTarea {
             // «Estado del contrato: BORRADOR → ACTIVO.»
             frases.add(ultimoEstado.replace("Estado del contrato:", "el contrato pasó de")
                     .replace("→", "a").replace(".", "").trim());
+        }
+
+        if (frases.isEmpty()) {
+            if (!integridad) {
+                return Optional.empty();
+            }
+            // Una alteración de integridad se avisa aunque no haya nada más que
+            // contar: es lo único de este resumen que exige que alguien actúe.
+            // Y lo que se dice del periodo es cierto — ninguna de las categorías
+            // de arriba tuvo movimiento.
+            frases.add("no se registró avance ni movimiento de documentos");
         }
 
         StringBuilder texto = new StringBuilder()
@@ -225,7 +256,7 @@ public class RedaccionDeResumen implements AccionDeTarea {
                     + "no coincide; revíselo en la pestaña de documentos.");
         }
 
-        return texto.toString();
+        return Optional.of(texto.toString());
     }
 
     /** «1.1, 1.2 y 1.3» — con «y» antes del último, como se escribe en español. */

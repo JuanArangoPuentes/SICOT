@@ -112,6 +112,19 @@ public class DocumentoService {
         }
 
         Documento guardado = documentoRepository.save(documento);
+
+        // En la misma transacción que el documento: si la carga se deshace, su
+        // rastro también. Hasta el 21-09-2026 cargar un documento no dejaba
+        // ninguno: /api/registros no mostraba cargas, y el resumen periódico
+        // del motor (RedaccionDeResumen), que ya contaba DOCUMENTO_CARGADO,
+        // nunca podía contar nada — un periodo en el que solo se cargaron
+        // documentos se descartaba por «sin movimientos».
+        registroService.registrar(contrato, "DOCUMENTO_CARGADO",
+                "Documento «" + nombreLimpio + "» cargado"
+                        + (guardado.getSubetapa() != null
+                                ? " en la subetapa " + guardado.getSubetapa().getCodigo()
+                                : "")
+                        + ".");
         return DocumentoMapper.toResponse(guardado);
     }
 
