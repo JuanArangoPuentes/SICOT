@@ -1,5 +1,6 @@
 package co.sena.sicot.config;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,7 +69,12 @@ public class VigilanciaDeAlmacenamiento {
         // recolección. Prometheus puede raspar cada quince segundos, y un
         // pg_total_relation_size por cada raspado sería instrumentación que
         // cuesta más que lo que observa.
-        registry.gauge("sicot.almacenamiento.documentos.bytes", tamanoDocumentos, AtomicLong::get);
+        // `strongReference(true)` por el mismo motivo que en VigilanciaDelRespaldo:
+        // `registry.gauge(...)` sostiene el objeto con una referencia débil, y una
+        // recolección de basura dejaría la métrica en NaN sin que nada lo avise.
+        Gauge.builder("sicot.almacenamiento.documentos.bytes", tamanoDocumentos, AtomicLong::get)
+                .strongReference(true)
+                .register(registry);
     }
 
     /** Primera medición al arrancar, para que el aviso aparezca en el log de despliegue. */

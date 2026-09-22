@@ -102,6 +102,27 @@ class VigilanciaDelRespaldoTest {
         assertThat(valorDe(registro)).isEqualTo(2);
     }
 
+    /**
+     * El fallo que el CI cobró el 22 de septiembre: {@code registry.gauge(...)}
+     * sostiene con una referencia DÉBIL el objeto que alimenta la métrica. Si el
+     * recolector de basura pasa entre la medición y la lectura, el gauge pasa a
+     * valer NaN — y {@code (long) NaN} es 0, que se lee como «el respaldo es de
+     * hace un momento», justo lo contrario de una alarma. Aquí se fuerza esa
+     * recolección para que el fallo no dependa de cuándo decida pasar.
+     */
+    @Test
+    void laMetricaSobreviveAUnaRecoleccionDeBasura(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot.dump", Duration.ofHours(6));
+
+        MeterRegistry registro = new SimpleMeterRegistry();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+
+        System.gc();
+        System.gc();
+
+        assertThat(valorDe(registro)).isEqualTo(6);
+    }
+
     /** Se comprueba también al arrancar, que es cuando alguien mira el log. */
     @Test
     void tambienComprueaAlArrancar(@TempDir Path directorio) throws IOException {
