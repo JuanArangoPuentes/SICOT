@@ -28,9 +28,7 @@ describe('EvidenciaFotografica', () => {
   })
 
   it('ofrece tomar la foto con la cámara y elegir una ya tomada', () => {
-    render(
-      <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.2" onCargada={() => {}} />,
-    )
+    render(<EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.2" onCargada={() => {}} />)
 
     expect(screen.getByRole('button', { name: /Tomar foto de la entrega/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Elegir una foto/i })).toBeTruthy()

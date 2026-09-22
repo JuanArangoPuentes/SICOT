@@ -161,16 +161,15 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         <span style={{ fontSize: 11.5, color: 'var(--danger, #c0392b)' }}>{estado.mensaje}</span>
       )}
 
-      {!subetapaApiId &&
-        estado.fase !== 'vacio' && (
-          // Se dice antes de cargar, no después: la foto se guardaría igual, pero
-          // colgando del contrato y no de la subetapa, y quien la busque en el
-          // paso no la encontraría.
-          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-            Esta subetapa todavía no existe en el servidor, así que la foto quedará en el contrato sin asociarse al paso{' '}
-            {codigoSubetapa}.
-          </span>
-        )}
+      {!subetapaApiId && estado.fase !== 'vacio' && (
+        // Se dice antes de cargar, no después: la foto se guardaría igual, pero
+        // colgando del contrato y no de la subetapa, y quien la busque en el
+        // paso no la encontraría.
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+          Esta subetapa todavía no existe en el servidor, así que la foto quedará en el contrato sin asociarse al paso{' '}
+          {codigoSubetapa}.
+        </span>
+      )}
     </div>
   )
 }
