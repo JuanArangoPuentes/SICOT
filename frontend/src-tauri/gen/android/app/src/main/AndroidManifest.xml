@@ -2,6 +2,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!--
+      La cámara es para la evidencia de la entrega en bodega (subetapa 3.2). El
+      WebView de Tauri ya sabe abrirla cuando el campo de archivo pide capturar,
+      pero solo si el permiso está declarado aquí: sin esta línea cae al selector
+      de archivos sin decir por qué. El permiso se pide en el momento de tomar la
+      foto, no al instalar.
+
+      `required="false"` porque un equipo sin cámara —una tableta de escritorio en
+      la oficina del Centro— tiene que poder instalar la aplicación igual: el
+      supervisor puede cargar la foto desde la galería, y el resto del trabajo no
+      depende de la cámara.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

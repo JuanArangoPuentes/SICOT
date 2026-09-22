@@ -45,7 +45,8 @@ import {
   IconInbox,
   IconPlay,
 } from '@/components/icons'
-import { AI_GENERATED_DOCS, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
+import { AI_GENERATED_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
+import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
   AuthResponse,
@@ -1263,6 +1264,19 @@ export default function SupervisorPanel({
                                   </button>
                                 )}
                               </div>
+                              {SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(ss.id) && contrato && (
+                                <EvidenciaFotografica
+                                  contratoId={contrato.id}
+                                  subetapaApiId={ss.apiId}
+                                  codigoSubetapa={ss.id}
+                                  onCargada={() => {
+                                    void onRefreshRegistros()
+                                    getDocumentosContrato(contrato.id)
+                                      .then(setDocsContrato)
+                                      .catch(() => {})
+                                  }}
+                                />
+                              )}
                             </div>
                           )
                         })}

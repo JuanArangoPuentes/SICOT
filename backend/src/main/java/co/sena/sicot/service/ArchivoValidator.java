@@ -40,8 +40,27 @@ public class ArchivoValidator {
     private static final Map<String, TipoDocumento> EXTENSIONES_PERMITIDAS = Map.of(
             "pdf", TipoDocumento.PDF,
             "docx", TipoDocumento.DOCX,
-            "xlsx", TipoDocumento.XLSX
+            "xlsx", TipoDocumento.XLSX,
+            "jpg", TipoDocumento.IMAGEN,
+            "jpeg", TipoDocumento.IMAGEN,
+            "png", TipoDocumento.IMAGEN
     );
+
+    /**
+     * Lo que acepta el catálogo de formatos oficiales y la extracción de datos:
+     * documentos de ofimática. Una foto no es un formato documental ni tiene
+     * texto que extraer, así que ahí sigue sin entrar.
+     */
+    public static final Set<TipoDocumento> OFIMATICOS =
+            Set.of(TipoDocumento.PDF, TipoDocumento.DOCX, TipoDocumento.XLSX);
+
+    /**
+     * Lo que puede entrar al expediente de un contrato. Incluye la foto porque
+     * la evidencia de la entrega en bodega (subetapa 3.2) llega desde la cámara
+     * del teléfono, y hasta hoy el expediente la rechazaba.
+     */
+    public static final Set<TipoDocumento> EVIDENCIAS_DEL_EXPEDIENTE =
+            Set.of(TipoDocumento.PDF, TipoDocumento.DOCX, TipoDocumento.XLSX, TipoDocumento.IMAGEN);
 
     /**
      * MIME canónico de cada tipo aceptado. Es el ÚNICO valor que se guarda en
@@ -62,7 +81,12 @@ public class ArchivoValidator {
     private static final Map<TipoDocumento, Set<String>> MIME_REALES_PERMITIDOS = Map.of(
             TipoDocumento.PDF, Set.of("application/pdf"),
             TipoDocumento.DOCX, Set.of("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
-            TipoDocumento.XLSX, Set.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            TipoDocumento.XLSX, Set.of("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            // Solo JPEG y PNG: son lo que produce la cámara de Android y lo que
+            // cualquier visor abre. Formatos como HEIC o WebP se dejan fuera
+            // mientras nada los necesite, porque cada formato aceptado es un
+            // decodificador más que tiene que leer un archivo de fuera.
+            TipoDocumento.IMAGEN, Set.of("image/jpeg", "image/png")
     );
 
     private final Tika tika = new Tika();
@@ -73,17 +97,45 @@ public class ArchivoValidator {
         }
     }
 
-    public TipoDocumento tipoDeArchivo(MultipartFile archivo) {
-        String extension = extensionDe(archivo.getOriginalFilename());
-        TipoDocumento tipo = EXTENSIONES_PERMITIDAS.get(extension);
-        if (tipo == null) {
-            throw new BusinessException("Formato de archivo no permitido. Solo se aceptan PDF, DOCX o XLSX.");
-        }
-        validarContenidoReal(archivo, tipo);
-        return tipo;
+    /**
+     * Qué resultó ser el archivo: su tipo y el MIME con el que se guardará y se
+     * devolverá al descargarlo.
+     *
+     * <p>Los dos valores viajan juntos porque para una imagen no basta el tipo:
+     * JPG y PNG son el mismo {@link TipoDocumento#IMAGEN}, y devolver un MIME
+     * canónico único haría que un PNG se descargara diciendo que es JPEG.
+     */
+    public record ArchivoAceptado(TipoDocumento tipo, String contentType) {
     }
 
-    private void validarContenidoReal(MultipartFile archivo, TipoDocumento tipoDeclarado) {
+    /**
+     * Acepta el archivo solo si es de uno de los tipos {@code permitidos}. Cada
+     * uso declara los suyos: el expediente de un contrato admite fotos
+     * ({@link #EVIDENCIAS_DEL_EXPEDIENTE}), el catálogo de formatos oficiales no
+     * ({@link #OFIMATICOS}).
+     */
+    public ArchivoAceptado aceptar(MultipartFile archivo, Set<TipoDocumento> permitidos) {
+        String extension = extensionDe(archivo.getOriginalFilename());
+        TipoDocumento tipo = EXTENSIONES_PERMITIDAS.get(extension);
+        if (tipo == null || !permitidos.contains(tipo)) {
+            throw new BusinessException("Formato de archivo no permitido. Solo se aceptan "
+                    + descripcionDe(permitidos) + ".");
+        }
+        String mimeReal = validarContenidoReal(archivo, tipo);
+        return new ArchivoAceptado(tipo, tipo == TipoDocumento.IMAGEN ? mimeReal : contentTypeDe(tipo));
+    }
+
+    public TipoDocumento tipoDeArchivo(MultipartFile archivo) {
+        return aceptar(archivo, OFIMATICOS).tipo();
+    }
+
+    private String descripcionDe(Set<TipoDocumento> permitidos) {
+        return permitidos.contains(TipoDocumento.IMAGEN)
+                ? "PDF, DOCX, XLSX o fotos JPG y PNG"
+                : "PDF, DOCX o XLSX";
+    }
+
+    private String validarContenidoReal(MultipartFile archivo, TipoDocumento tipoDeclarado) {
         String mimeReal;
         try (InputStream contenido = archivo.getInputStream()) {
             mimeReal = tika.detect(contenido, archivo.getOriginalFilename());
@@ -96,6 +148,7 @@ public class ArchivoValidator {
                     "El contenido del archivo no coincide con su extensión. Verifique que el archivo "
                             + "no esté corrupto o haya sido renombrado a un formato distinto.");
         }
+        return mimeReal;
     }
 
     /**

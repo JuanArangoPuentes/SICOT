@@ -1,5 +1,6 @@
 package co.sena.sicot.config;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,7 +83,16 @@ public class VigilanciaDelRespaldo {
         this.directorio = (directorio == null || directorio.isBlank()) ? null : Path.of(directorio);
         this.rpo = Duration.ofHours(rpoHoras);
 
-        registry.gauge("sicot.respaldo.antiguedad.horas", antiguedadEnHoras, AtomicLong::get);
+        // `strongReference(true)` porque `registry.gauge(...)` guarda una referencia
+        // DÉBIL al objeto que alimenta la métrica: si nadie más lo sostiene, una
+        // recolección de basura deja el gauge en NaN y la antigüedad del respaldo
+        // desaparece sin que nada lo avise. Aquí el bean es un singleton y en la
+        // práctica vive siempre, pero la métrica no debería depender de quién
+        // sostiene el objeto — y el CI ya lo cobró una vez, con una prueba que
+        // fallaba solo cuando el recolector pasaba en el momento justo.
+        Gauge.builder("sicot.respaldo.antiguedad.horas", antiguedadEnHoras, AtomicLong::get)
+                .strongReference(true)
+                .register(registry);
     }
 
     /**
