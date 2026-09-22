@@ -184,7 +184,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 ```
 co.sena.sicot
 ├── automatizacion/ → motor de automatizaciones (ADR-008): reglas, cola persistente,
-│                  ejecutor con reintentos y carril de IA. Ver §9.
+│                  ejecutor con reintentos. Determinista de punta a punta. Ver §9.
 ├── config/      → OpenAPI, DataInitializer (usuarios de desarrollo)
 ├── controller/  → REST + Swagger
 ├── dto/         → request/response (validación con Bean Validation)
@@ -276,7 +276,17 @@ prueba; toda tarea es idempotente por clave.
 | `cronograma-atrasado` | calendario | Brecha ≥ 30 puntos entre plazo consumido y avance |
 | `supervisor-asignado` | evento | Alerta + correo al supervisor recién asignado |
 | `integridad-comprometida` | evento | Documento firmado cuyo contenido ya no coincide con su huella |
-| `resumen-semanal-ia` | calendario | Resumen del periodo redactado por el modelo (**apagada por defecto**) |
+| `resumen-semanal` | calendario | Resumen del periodo, compuesto con los datos registrados |
+
+> **El motor no usa el modelo de IA.** La regla `resumen-semanal` se llamó
+> `resumen-semanal-ia` y su texto lo escribía Ollama; nacía apagada por eso. Se
+> midió el 10 de septiembre de 2026 y ninguno de los tres tamaños de modelo
+> probados sostenía los hechos sin alterarlos — las cifras están en la sección
+> «Revisión» de [ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
+> Ahora el resumen se compone con plantillas, y el motor completo funciona en un
+> equipo sin Ollama instalado. El modelo local sigue en SICOT para el chat del
+> copiloto y la extracción de datos de un PDF (§ correspondiente), donde su
+> trabajo no es repetir cifras.
 
 ### Operarlo
 
@@ -311,9 +321,10 @@ entorno equivalentes. Las que más se tocan:
 | `AUTOMATIZACION_HABILITADA` | `true` | Apaga el motor entero sin afectar al resto |
 | `AUTOMATIZACION_DIAS_AVISO` | `30,15,7` | Umbrales de aviso previo al vencimiento |
 | `AUTOMATIZACION_TRABAJADORES` | `2` | Hilos propios del motor (no los de Tomcat) |
-| `AUTOMATIZACION_IA_HABILITADA` | `false` | Enciende el resumen semanal con IA |
+| `AUTOMATIZACION_RESUMEN_DIAS` | `7` | Periodo que abarca el resumen y ritmo con el que se emite |
 | `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
-| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO |
+| `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO. En `docker-compose.prod.yml` es **obligatoria** y es la ruta del servidor: se monta en solo lectura y dentro del contenedor el backend siempre mira `/respaldos` |
+| `RESPALDO_RPO_HORAS` | `24` | Antigüedad máxima aceptada del último respaldo (ADR-002) |
 
 ## 10. Cronograma del contrato
 
@@ -341,6 +352,14 @@ más reciente en `RESPALDO_DIRECTORIO`, avisa en el log si supera el RPO y publi
 `sicot.respaldo.antiguedad.horas` en `/actuator/prometheus` (`-1` = no se pudo
 determinar). Sin la variable configurada, el arranque avisa de que el compromiso
 de ADR-002 está sin verificar.
+
+**En el despliegue con Docker** la variable del `.env` no llega sola al backend:
+el `.env` solo rellena las `${…}` del archivo de Compose. Durante un tiempo eso
+dejó la vigilancia apagada en producción aunque la guía se siguiera al pie de la
+letra. Ahora `docker-compose.prod.yml` exige `RESPALDO_DIRECTORIO`, monta esa
+carpeta del servidor en `/respaldos` y fija la variable del contenedor a esa
+ruta. El paso «Validar los archivos de Compose» del CI comprueba que siga siendo
+así.
 
 ## 12. Pendiente (fases siguientes)
 

@@ -1,11 +1,17 @@
 import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
+import { CLAVE_SERVIDOR, apiBase } from '@/services/api/client'
+import { avisoTraficoSinCifrar } from '@/services/entorno'
 import { AvatarIcon } from './icons'
 
-type Section = 'presets' | 'manual' | 'copiloto'
+type Section = 'presets' | 'manual' | 'copiloto' | 'servidor'
 
-export default function Settings({ open, onClose, initialSection = 'presets' }: {
+export default function Settings({
+  open,
+  onClose,
+  initialSection = 'presets',
+}: {
   open: boolean
   onClose: () => void
   initialSection?: Section
@@ -20,38 +26,78 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
   const colorField = (label: string, key: keyof Prefs) => (
     <Field label={label}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input type="color" value={prefs[key] as string} onChange={e => patch({ [key]: e.target.value } as Partial<Prefs>)} style={{ width: 52 }} />
-        <input type="text" value={prefs[key] as string} onChange={e => patch({ [key]: e.target.value } as Partial<Prefs>)}
-          style={{ flex: 1, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+        <input
+          type="color"
+          value={prefs[key] as string}
+          onChange={(e) => patch({ [key]: e.target.value } as Partial<Prefs>)}
+          style={{ width: 52 }}
+        />
+        <input
+          type="text"
+          value={prefs[key] as string}
+          onChange={(e) => patch({ [key]: e.target.value } as Partial<Prefs>)}
+          style={{ flex: 1, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 12 }}
+        />
       </div>
     </Field>
   )
 
   const sectionTitle = (t: string) => (
-    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--accent)', margin: '18px 0 10px' }}>{t}</div>
+    <div
+      style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--accent)', margin: '18px 0 10px' }}
+    >
+      {t}
+    </div>
   )
 
   return (
     <Modal title="Configuración" onClose={onClose} width={620}>
       <div style={{ display: 'flex', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-        {([['presets', 'Presets'], ['manual', 'Personalización manual'], ['copiloto', 'Mi Copiloto IA']] as const).map(([id, label]) => (
-          <button key={id} onClick={() => setSection(id)}
+        {(
+          [
+            ['presets', 'Presets'],
+            ['manual', 'Personalización manual'],
+            ['copiloto', 'Mi Copiloto IA'],
+            ['servidor', 'Servidor'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setSection(id)}
             className={section === id ? 'btn-green' : 'btn-ghost'}
-            style={{ padding: '6px 12px', fontSize: 12 }}>{label}</button>
+            style={{ padding: '6px 12px', fontSize: 12 }}
+          >
+            {label}
+          </button>
         ))}
       </div>
 
       {section === 'presets' && (
         <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
-          {(Object.keys(PRESETS) as PresetId[]).map(id => (
-            <button key={id} onClick={() => applyPreset(id)}
+          {(Object.keys(PRESETS) as PresetId[]).map((id) => (
+            <button
+              key={id}
+              onClick={() => applyPreset(id)}
               style={{
-                textAlign: 'left', background: prefs.preset === id ? 'var(--accent-soft)' : 'transparent',
+                textAlign: 'left',
+                background: prefs.preset === id ? 'var(--accent-soft)' : 'transparent',
                 border: `1px solid ${prefs.preset === id ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 10, padding: '12px 14px', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: 'var(--font-ui)',
-              }}>
+                borderRadius: 10,
+                padding: '12px 14px',
+                cursor: 'pointer',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ width: 12, height: 12, borderRadius: 3, background: PRESETS[id].patch.colorPrimary ?? 'var(--accent)' }} />
+                <span
+                  style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: 3,
+                    background: PRESETS[id].patch.colorPrimary ?? 'var(--accent)',
+                  }}
+                />
                 <strong style={{ fontSize: 13 }}>{PRESETS[id].label}</strong>
                 {prefs.preset === id && <span style={{ fontSize: 10, color: 'var(--accent)' }}>ACTIVO</span>}
               </div>
@@ -83,18 +129,40 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 
           {sectionTitle('2. TIPOGRAFÍA')}
           <Field label="Fuente principal">
-            <select value={prefs.fontFamily} onChange={e => patch({ fontFamily: e.target.value })}>
-              {FONT_OPTIONS.map(f => <option key={f} value={f}>{f}</option>)}
+            <select value={prefs.fontFamily} onChange={(e) => patch({ fontFamily: e.target.value })}>
+              {FONT_OPTIONS.map((f) => (
+                <option key={f} value={f}>
+                  {f}
+                </option>
+              ))}
             </select>
           </Field>
           <Field label={`Tamaño base — ${prefs.fontSize}px`}>
-            <input type="range" min={12} max={18} value={prefs.fontSize} onChange={e => patch({ fontSize: Number(e.target.value) })} />
+            <input
+              type="range"
+              min={12}
+              max={18}
+              value={prefs.fontSize}
+              onChange={(e) => patch({ fontSize: Number(e.target.value) })}
+            />
           </Field>
           <Field label="Peso de fuente">
             <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)' }}>
-              {([[400, 'Normal'], [600, 'Semibold'], [700, 'Bold']] as const).map(([w, l]) => (
+              {(
+                [
+                  [400, 'Normal'],
+                  [600, 'Semibold'],
+                  [700, 'Bold'],
+                ] as const
+              ).map(([w, l]) => (
                 <label key={w} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="radio" name="fw" checked={prefs.fontWeight === w} onChange={() => patch({ fontWeight: w })} />{l}
+                  <input
+                    type="radio"
+                    name="fw"
+                    checked={prefs.fontWeight === w}
+                    onChange={() => patch({ fontWeight: w })}
+                  />
+                  {l}
                 </label>
               ))}
             </div>
@@ -102,25 +170,50 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 
           {sectionTitle('3. ANIMACIONES')}
           <Field label={`Velocidad de transiciones — ${prefs.transitionMs}ms`}>
-            <input type="range" min={0} max={400} step={10} value={prefs.transitionMs} onChange={e => patch({ transitionMs: Number(e.target.value) })} />
+            <input
+              type="range"
+              min={0}
+              max={400}
+              step={10}
+              value={prefs.transitionMs}
+              onChange={(e) => patch({ transitionMs: Number(e.target.value) })}
+            />
           </Field>
-          <Toggle label="Parpadeo en alertas" value={prefs.blinkAlerts} onChange={v => patch({ blinkAlerts: v })} />
-          <Toggle label="Efectos hover" value={prefs.hoverEffects} onChange={v => patch({ hoverEffects: v })} />
+          <Toggle label="Parpadeo en alertas" value={prefs.blinkAlerts} onChange={(v) => patch({ blinkAlerts: v })} />
+          <Toggle label="Efectos hover" value={prefs.hoverEffects} onChange={(v) => patch({ hoverEffects: v })} />
 
           {sectionTitle('4. NOTIFICACIONES')}
           <Field label={`Duración de alertas — ${prefs.alertDurationS}s`}>
-            <input type="range" min={3} max={10} value={prefs.alertDurationS} onChange={e => patch({ alertDurationS: Number(e.target.value) })} />
+            <input
+              type="range"
+              min={3}
+              max={10}
+              value={prefs.alertDurationS}
+              onChange={(e) => patch({ alertDurationS: Number(e.target.value) })}
+            />
           </Field>
           <Field label="Posición">
             <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {([['top-right', 'Arriba derecha'], ['top-center', 'Arriba centro'], ['bottom-right', 'Abajo derecha']] as const).map(([p, l]) => (
+              {(
+                [
+                  ['top-right', 'Arriba derecha'],
+                  ['top-center', 'Arriba centro'],
+                  ['bottom-right', 'Abajo derecha'],
+                ] as const
+              ).map(([p, l]) => (
                 <label key={p} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="radio" name="pos" checked={prefs.alertPosition === p} onChange={() => patch({ alertPosition: p })} />{l}
+                  <input
+                    type="radio"
+                    name="pos"
+                    checked={prefs.alertPosition === p}
+                    onChange={() => patch({ alertPosition: p })}
+                  />
+                  {l}
                 </label>
               ))}
             </div>
           </Field>
-          <Toggle label="Sonido de notificación" value={prefs.sound} onChange={v => patch({ sound: v })} />
+          <Toggle label="Sonido de notificación" value={prefs.sound} onChange={(v) => patch({ sound: v })} />
 
           {/* Las preferencias se guardan solas en cuanto cambian (ver prefs.tsx),
               así que no hay un botón "Guardar": tenerlo sugeriría que sin pulsarlo
@@ -130,28 +223,48 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
             <span style={{ flex: 2, fontSize: 12, color: 'var(--text-muted)' }}>
               Los cambios se guardan automáticamente en este equipo.
             </span>
-            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={reset}>↶ Resetear</button>
+            <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={reset}>
+              ↶ Resetear
+            </button>
           </div>
         </div>
       )}
+
+      {section === 'servidor' && <SeccionServidor sectionTitle={sectionTitle} />}
 
       {section === 'copiloto' && (
         <div>
           {sectionTitle('GALERÍA DE AVATARES')}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-            {AVATARS.map(a => (
-              <button key={a.id} onClick={() => patch({ avatarId: a.id })}
+            {AVATARS.map((a) => (
+              <button
+                key={a.id}
+                onClick={() => patch({ avatarId: a.id })}
                 style={{
                   background: prefs.avatarId === a.id ? 'var(--accent-soft)' : 'transparent',
                   border: `1px solid ${prefs.avatarId === a.id ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 10, padding: '14px 10px', cursor: 'pointer', textAlign: 'center',
-                  color: 'var(--text-primary)', fontFamily: 'var(--font-ui)',
-                }}>
-                <div style={{
-                  width: 44, height: 44, margin: '0 auto', borderRadius: '50%', color: 'var(--accent)',
-                  background: 'var(--bg-card)', border: '1.5px solid var(--accent-line)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
+                  borderRadius: 10,
+                  padding: '14px 10px',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
+                <div
+                  style={{
+                    width: 44,
+                    height: 44,
+                    margin: '0 auto',
+                    borderRadius: '50%',
+                    color: 'var(--accent)',
+                    background: 'var(--bg-card)',
+                    border: '1.5px solid var(--accent-line)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
                   <AvatarIcon id={a.id} size={22} />
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 600, marginTop: 8 }}>{a.label}</div>
@@ -162,14 +275,30 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 
           {sectionTitle('IDENTIDAD')}
           <Field label="Nombre del asistente">
-            <input type="text" value={prefs.avatarName} onChange={e => patch({ avatarName: e.target.value })}
-              style={{ width: '100%', padding: '9px 10px' }} />
+            <input
+              type="text"
+              value={prefs.avatarName}
+              onChange={(e) => patch({ avatarName: e.target.value })}
+              style={{ width: '100%', padding: '9px 10px' }}
+            />
           </Field>
           <Field label="Tono de comunicación">
             <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {([['formal', 'Formal y directo'], ['amable', 'Amable y detallado'], ['tecnico', 'Conciso y técnico']] as const).map(([t, l]) => (
+              {(
+                [
+                  ['formal', 'Formal y directo'],
+                  ['amable', 'Amable y detallado'],
+                  ['tecnico', 'Conciso y técnico'],
+                ] as const
+              ).map(([t, l]) => (
                 <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input type="radio" name="tono" checked={prefs.avatarTone === t} onChange={() => patch({ avatarTone: t })} />{l}
+                  <input
+                    type="radio"
+                    name="tono"
+                    checked={prefs.avatarTone === t}
+                    onChange={() => patch({ avatarTone: t })}
+                  />
+                  {l}
                 </label>
               ))}
             </div>
@@ -177,17 +306,27 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 
           {sectionTitle('MODO DE PRESENCIA')}
           <div style={{ display: 'grid', gap: 8 }}>
-            {([
-              ['ghost', 'Ghost', 'Oculto. Solo aparece en el panel Copiloto o durante un tutorial.'],
-              ['follower', 'Follower', 'Avatar flotante en la esquina inferior derecha; clic para abrir el chat.'],
-              ['guide', 'Guide', 'Tutorial asistido: el avatar se posiciona junto a cada elemento y lo explica.'],
-            ] as const).map(([m, label, desc]) => (
-              <button key={m} onClick={() => patch({ avatarMode: m })}
+            {(
+              [
+                ['ghost', 'Ghost', 'Oculto. Solo aparece en el panel Copiloto o durante un tutorial.'],
+                ['follower', 'Follower', 'Avatar flotante en la esquina inferior derecha; clic para abrir el chat.'],
+                ['guide', 'Guide', 'Tutorial asistido: el avatar se posiciona junto a cada elemento y lo explica.'],
+              ] as const
+            ).map(([m, label, desc]) => (
+              <button
+                key={m}
+                onClick={() => patch({ avatarMode: m })}
                 style={{
-                  textAlign: 'left', background: prefs.avatarMode === m ? 'var(--accent-soft)' : 'transparent',
+                  textAlign: 'left',
+                  background: prefs.avatarMode === m ? 'var(--accent-soft)' : 'transparent',
                   border: `1px solid ${prefs.avatarMode === m ? 'var(--accent)' : 'var(--border)'}`,
-                  borderRadius: 10, padding: '10px 12px', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: 'var(--font-ui)',
-                }}>
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)',
+                  fontFamily: 'var(--font-ui)',
+                }}
+              >
                 <strong style={{ fontSize: 13 }}>{label}</strong>
                 <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>{desc}</div>
               </button>
@@ -201,18 +340,166 @@ export default function Settings({ open, onClose, initialSection = 'presets' }: 
 
 function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '8px 0',
+        fontSize: 13,
+        color: 'var(--text-secondary)',
+        cursor: 'pointer',
+      }}
+    >
       {label}
-      <button type="button" onClick={() => onChange(!value)}
+      <button
+        type="button"
+        onClick={() => onChange(!value)}
         style={{
-          width: 40, height: 22, borderRadius: 999, border: '1px solid var(--border)', cursor: 'pointer',
-          background: value ? 'var(--accent)' : 'var(--bg-input)', position: 'relative', transition: 'background var(--t)',
-        }}>
-        <span style={{
-          position: 'absolute', top: 2, left: value ? 20 : 2, width: 16, height: 16, borderRadius: '50%',
-          background: value ? 'var(--on-accent)' : 'var(--text-muted)', transition: 'left var(--t)',
-        }} />
+          width: 40,
+          height: 22,
+          borderRadius: 999,
+          border: '1px solid var(--border)',
+          cursor: 'pointer',
+          background: value ? 'var(--accent)' : 'var(--bg-input)',
+          position: 'relative',
+          transition: 'background var(--t)',
+        }}
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: 2,
+            left: value ? 20 : 2,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: value ? 'var(--on-accent)' : 'var(--text-muted)',
+            transition: 'left var(--t)',
+          }}
+        />
       </button>
     </label>
+  )
+}
+
+/**
+ * Dirección del servidor del Centro.
+ *
+ * <h2>Por qué esta pantalla existe</h2>
+ * La aplicación web se compila con la dirección de su propio despliegue dentro,
+ * y para la web eso basta. Pero la <b>aplicación de escritorio del supervisor</b>
+ * se distribuye compilada, como instalador: si la dirección viajara incrustada,
+ * el ejecutable que descarga un supervisor apuntaría para siempre a un servidor
+ * concreto, y mover el servidor obligaría a recompilar y volver a publicar el
+ * instalador para todo el mundo.
+ *
+ * <p>Guardándola aquí, el instalador es <b>un único artefacto válido para
+ * cualquier despliegue</b> y cada máquina apunta al servidor que le corresponde.
+ * Vacío es una elección legítima: significa «el mismo origen desde el que se
+ * sirve la aplicación», que es como funciona el despliegue web con proxy.
+ */
+function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.ReactNode }) {
+  const [valor, setValor] = useState(() => {
+    try {
+      return localStorage.getItem(CLAVE_SERVIDOR) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  const [guardado, setGuardado] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const avisoSinCifrar = avisoTraficoSinCifrar(valor)
+
+  const guardar = () => {
+    const limpio = valor.trim()
+    // Se valida antes de guardar: una dirección mal escrita deja la aplicación
+    // sin poder hablar con nada, y el síntoma —todo falla— no señala la causa.
+    if (limpio !== '' && !/^https?:\/\/[^\s/]+/i.test(limpio)) {
+      setError('Escriba una dirección completa, empezando por http:// o https://')
+      setGuardado(false)
+      return
+    }
+    try {
+      if (limpio === '') localStorage.removeItem(CLAVE_SERVIDOR)
+      else localStorage.setItem(CLAVE_SERVIDOR, limpio)
+      setError(null)
+      setGuardado(true)
+    } catch {
+      setError('No se pudo guardar en este equipo. Revise los permisos del navegador.')
+    }
+  }
+
+  return (
+    <div>
+      {sectionTitle('SERVIDOR DEL CENTRO')}
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 0 }}>
+        Dirección del servidor de SICOT al que se conecta esta instalación. Cámbiela solo si el área de sistemas se lo
+        indica.
+      </p>
+
+      <Field label="Dirección del servidor">
+        <input
+          id="sicot-servidor"
+          type="url"
+          inputMode="url"
+          spellCheck={false}
+          placeholder="http://192.168.1.50:8080"
+          value={valor}
+          onChange={(e) => {
+            setValor(e.target.value)
+            setGuardado(false)
+            setError(null)
+          }}
+        />
+      </Field>
+
+      {/* Aviso del tráfico sin cifrar.
+          Aparece mientras se escribe y no al guardar, porque el objetivo es que
+          nadie llegue a guardar una dirección con la que la aplicación se va a
+          quedar muda. Es el pendiente que ADR-012 dejó escrito en voz alta: en
+          una compilación de publicación de Android las peticiones a http:// no
+          salen y no hay ningún error en pantalla que lo explique. */}
+      {avisoSinCifrar && (
+        <div
+          role="status"
+          style={{
+            marginTop: 12,
+            padding: '10px 14px',
+            borderRadius: 10,
+            border: '1px solid var(--alert-alta)',
+            background: 'var(--bg-elevated)',
+            color: 'var(--text-secondary)',
+            fontSize: 12.5,
+            lineHeight: 1.6,
+          }}
+        >
+          {avisoSinCifrar}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 12 }}>
+        <button className="btn-green" onClick={guardar} style={{ padding: '7px 16px', fontSize: 13 }}>
+          Guardar dirección
+        </button>
+        {guardado && (
+          <span style={{ fontSize: 12.5, color: 'var(--accent)' }}>
+            Guardada. Se usará en la próxima consulta al servidor.
+          </span>
+        )}
+        {error && <span style={{ fontSize: 12.5, color: 'var(--alert-critica)' }}>{error}</span>}
+      </div>
+
+      <div
+        className="surface"
+        style={{ marginTop: 18, padding: '11px 14px', fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6 }}
+      >
+        Conectando ahora a{' '}
+        <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-tech)' }}>
+          {apiBase() === '' ? 'el mismo origen de la aplicación' : apiBase()}
+        </span>
+        . Déjelo vacío para usar el mismo origen desde el que se sirve la aplicación.
+      </div>
+    </div>
   )
 }

@@ -240,6 +240,23 @@ código, y por eso están en la base y no en Java:
 cuenta dejaba las acciones de esa persona atribuidas al «Sistema» — en el
 registro que existe precisamente para saber quién hizo qué.
 
+`V16` retoca esta misma tabla cuando el resumen periódico dejó de pasar por el
+modelo de IA (ver la sección «Revisión» de
+[ADR-008](../decisiones/ADR-008-motor-de-automatizaciones.md)). Cambia tres
+valores de texto —`tipo`, `regla` y `clave_idempotencia`— y rehace el `CHECK` de
+`tipo`, y conviene saber por qué migra **las filas que ya existían** y no solo la
+restricción:
+
+- El `tipo` se persiste como texto sujeto a un `CHECK`. Una tarea encolada con el
+  nombre anterior dejaría de mapear contra el enum de Java y fallaría al leerse,
+  que es un fallo silencioso hasta que alguien mira la cola.
+- La `clave_idempotencia` lleva dentro el código de la regla, que también cambió.
+  Sin migrarla, la primera evaluación tras el despliegue volvería a encolar el
+  resumen de un periodo ya resumido: la clave nueva no chocaría con la vieja y el
+  `UNIQUE` no la pararía.
+- El `CHECK` se suelta **antes** de tocar las filas. Con la restricción vigente,
+  el `UPDATE` a un valor que todavía no está en su lista sería rechazado.
+
 ## Concurrencia: `lock_version`
 
 Siete tablas tienen una columna `lock_version` que gestiona Hibernate
@@ -288,6 +305,7 @@ comportamiento correcto.
 | `V13__huella_de_integridad_en_la_firma.sql` | `firma_hash_sha256` y `firmado_por_id` en `documentos` |
 | `V14__formato_institucional_del_documento.sql` | `formato_id` en `documentos`: qué formato del catálogo representa cada archivo |
 | `V15__motor_de_automatizaciones.sql` | Tabla `tareas_automatizadas` (la cola de ADR-008) y `registros.origen` |
+| `V16__resumen_semanal_sin_modelo.sql` | Renombra el tipo de tarea, la regla y la clave de idempotencia del resumen periódico, y rehace su `CHECK`: el motor deja de usar el modelo de IA |
 
 El salto de `V1` a `V9` es intencional: las `V1`–`V8` originales se consolidaron
 en la `V1` actual y la `V9` se conservó porque ya estaba aplicada en bases

@@ -24,7 +24,15 @@ export interface UserRow {
   telefonoApi: string | null
 }
 
-export interface FirmaRow { id: string; usuarioId: string; usuario: string; correo: string; firmaId: string; fecha: string; activa: boolean }
+export interface FirmaRow {
+  id: string
+  usuarioId: string
+  usuario: string
+  correo: string
+  firmaId: string
+  fecha: string
+  activa: boolean
+}
 
 // Actividad de los últimos 30 días — sin endpoint de estadísticas agregadas
 // todavía; se deja vacío a propósito (estado honesto) en vez de inventar

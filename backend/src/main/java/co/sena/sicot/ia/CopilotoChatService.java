@@ -7,10 +7,19 @@ import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.EtapaService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.concurrent.DelegatingSecurityContextExecutorService;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -75,10 +84,166 @@ public class CopilotoChatService {
     private final EtapaService etapaService;
     private final OllamaClient ollamaClient;
 
-    public CopilotoChatService(ContratoService contratoService, EtapaService etapaService, OllamaClient ollamaClient) {
+    private final GuiaDelPasoActual guiaDelPasoActual;
+
+    /**
+     * Un solo hilo, propio y con nombre, para el precalentado.
+     *
+     * <p>Propio y no el de Tomcat porque precalentar es trabajo de fondo que no
+     * debe competir con las peticiones que sí espera alguien. Uno solo porque
+     * Ollama atiende el modelo casi en serie: lanzar varios precalentados a la
+     * vez no los acelera, solo hace esperar a más gente.
+     *
+     * <p><b>Va envuelto en {@link DelegatingSecurityContextExecutorService} y eso
+     * no es un adorno.</b> El contexto de seguridad vive en un {@code ThreadLocal},
+     * así que en un hilo suelto {@code SecurityUtils.currentUsuario()} devuelve
+     * {@code null} — y {@code verificarAccesoAlContrato} está escrito para dejar
+     * pasar cuando no hay usuario (lo normal en tareas del sistema, como el motor
+     * de automatizaciones). El precalentado habría funcionado, sí, pero
+     * <b>saltándose la comprobación de que quien abre el contrato tiene derecho a
+     * verlo</b>. Hoy no filtra nada porque la respuesta se descarta; sería un
+     * agujero el día que alguien decida devolverla. Propagando el contexto, el
+     * hilo de fondo corre como el usuario real y la comprobación se aplica igual
+     * que en cualquier otra petición.
+     */
+    private final ExecutorService precalentador = new DelegatingSecurityContextExecutorService(
+            Executors.newSingleThreadExecutor(r -> {
+                Thread t = new Thread(r, "copiloto-precalentado");
+                t.setDaemon(true);
+                return t;
+            }));
+
+    /**
+     * Precalentados en vuelo, por contrato, para que la pregunta del supervisor
+     * los espere en vez de competir con ellos.
+     *
+     * <h2>El fallo que esto corrige</h2>
+     * Medido contra el stack real el 14 de septiembre de 2026, con el supervisor
+     * abriendo el contrato y preguntando a continuación:
+     *
+     * <pre>
+     *   03:26:57  arranca el precalentado (al abrir el contrato)
+     *   03:27:13  arranca la pregunta — 16 s después, con el precalentado vivo
+     *   03:30:57  el precalentado se pasa del tiempo límite (240 s)
+     *   03:31:13  la pregunta se pasa del tiempo límite → 503 al supervisor
+     * </pre>
+     *
+     * <p>Ollama corre el modelo en CPU: dos inferencias a la vez no van a medias
+     * de velocidad cada una, se estorban, y ninguna de las dos llegó a tiempo.
+     * Por separado, cada una tarda entre 50 s y 160 s.
+     *
+     * <p>Esperar parece lo contrario de lo que se quiere —el supervisor espera
+     * más— pero es justo al revés: el precalentado está construyendo <b>el mismo
+     * prefijo de prompt</b> que necesita la pregunta, así que al terminar deja la
+     * caché poblada y la pregunta se responde en segundos. Antes se esperaban
+     * 240 s para recibir un error; ahora se esperan ~200 s para recibir la
+     * respuesta.
+     *
+     * <p>El mapa se limpia solo: cada tarea se borra a sí misma al terminar, con
+     * {@code remove(id, tarea)} para no borrar por error un precalentado
+     * posterior del mismo contrato.
+     */
+    private final ConcurrentHashMap<Long, CompletableFuture<Void>> precalentadosEnVuelo =
+            new ConcurrentHashMap<>();
+
+    /**
+     * Cuánto se espera como mucho a un precalentado en vuelo. Es el mismo tiempo
+     * límite que tiene la llamada a Ollama, porque el precalentado no puede
+     * durar más que eso: pasado ese punto, o terminó o ya reventó por su cuenta.
+     */
+    private final int esperaPrecalentadoSegundos;
+
+    public CopilotoChatService(ContratoService contratoService, EtapaService etapaService,
+                               OllamaClient ollamaClient, GuiaDelPasoActual guiaDelPasoActual,
+                               @Value("${sicot.ia.timeout-seconds}") int esperaPrecalentadoSegundos) {
         this.contratoService = contratoService;
         this.etapaService = etapaService;
         this.ollamaClient = ollamaClient;
+        this.guiaDelPasoActual = guiaDelPasoActual;
+        this.esperaPrecalentadoSegundos = esperaPrecalentadoSegundos;
+    }
+
+    /**
+     * Deja el contexto de este contrato caliente en Ollama, sin que nadie espere.
+     *
+     * <h2>Por qué esto existe</h2>
+     * Medido el 14 de septiembre de 2026: la <b>primera</b> pregunta sobre un
+     * contrato tardó 158 s con el modelo por defecto, de los cuales <b>119,6 s
+     * fueron solo leer el prompt</b> (1545 tokens) y 36 s escribir la respuesta.
+     * La <b>segunda</b> pregunta sobre el mismo contrato tardó 0,8 s en leer el
+     * prompt: Ollama reutiliza el prefijo que ya tiene cacheado.
+     *
+     * <p>Es decir, el coste alto se paga una sola vez por contrato — y hoy lo
+     * paga el supervisor, mirando una pantalla parada. Llamando a esto cuando
+     * abre el contrato, ese minuto y medio transcurre mientras lee la ficha, y
+     * su primera pregunta real llega ya con la caché poblada.
+     *
+     * <p>No devuelve nada y no falla hacia fuera: si Ollama no está disponible,
+     * se anota en el log y ya. Un precalentado que falla no debe romper la
+     * apertura de un contrato — el copiloto seguirá funcionando (lento) igual.
+     */
+    public void precalentar(Long contratoId) {
+        // computeIfAbsent, y no submit a secas: abrir dos veces la ficha del
+        // mismo contrato encolaba dos precalentados idénticos, y el segundo solo
+        // servía para hacer esperar al primero.
+        precalentadosEnVuelo.computeIfAbsent(contratoId, id -> {
+            CompletableFuture<Void> tarea = CompletableFuture.runAsync(() -> {
+                try {
+                    long inicio = System.currentTimeMillis();
+                    // Se manda un saludo a propósito: construye el MISMO prefijo de
+                    // prompt (datos del contrato + estado de las etapas) que usará
+                    // la pregunta real, que es lo que Ollama cachea, y genera una
+                    // respuesta corta que se tira.
+                    //
+                    // Sin esperar a nadie (false): el precalentado ES el trabajo
+                    // que los demás esperan. Si se esperara a sí mismo, se
+                    // bloquearía para siempre.
+                    responder(id, "hola", List.of(), false);
+                    log.info("Contexto del contrato {} precalentado en {} ms.",
+                            id, System.currentTimeMillis() - inicio);
+                } catch (RuntimeException e) {
+                    log.info("No se pudo precalentar el contexto del contrato {}: {}. "
+                            + "El copiloto seguirá funcionando, solo que la primera pregunta será lenta.",
+                            id, e.getMessage());
+                }
+            }, precalentador);
+            // remove(id, tarea) y no remove(id): si mientras esta terminaba ya se
+            // registró otro precalentado del mismo contrato, borrar por clave se
+            // llevaría por delante al nuevo y nadie lo esperaría.
+            tarea.whenComplete((sinValor, fallo) -> precalentadosEnVuelo.remove(id, tarea));
+            return tarea;
+        });
+    }
+
+    /**
+     * Espera a que termine el precalentado de este contrato, si hay uno en
+     * vuelo. Ver {@link #precalentadosEnVuelo} para el porqué.
+     *
+     * <p>Nunca propaga un fallo: que el precalentado reventara no es motivo para
+     * no intentar responder la pregunta. En el peor caso se vuelve al
+     * comportamiento anterior —lento— en vez de a un error.
+     */
+    private void esperarPrecalentado(Long contratoId) {
+        CompletableFuture<Void> enVuelo = precalentadosEnVuelo.get(contratoId);
+        if (enVuelo == null || enVuelo.isDone()) {
+            return;
+        }
+        log.info("Pregunta del contrato {}: hay un precalentado en curso, se espera a que "
+                + "termine en vez de abrir una segunda inferencia que compita con él.", contratoId);
+        long inicio = System.currentTimeMillis();
+        try {
+            enVuelo.get(esperaPrecalentadoSegundos, TimeUnit.SECONDS);
+            log.info("Precalentado del contrato {} terminado tras {} ms de espera; "
+                    + "la pregunta sigue con la caché ya poblada.",
+                    contratoId, System.currentTimeMillis() - inicio);
+        } catch (TimeoutException e) {
+            log.warn("El precalentado del contrato {} no terminó en {} s. Se responde igual, "
+                    + "aunque sea lento.", contratoId, esperaPrecalentadoSegundos);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            log.info("El precalentado del contrato {} falló; se responde sin él.", contratoId);
+        }
     }
 
     // Cuántos turnos previos como máximo se incluyen en el prompt — suficiente
@@ -92,7 +257,7 @@ public class CopilotoChatService {
     private static final int MAX_CARACTERES_ENTRADA = 8000;
 
     // Sin @Transactional a propósito: ollamaClient.generar() más abajo puede
-    // tardar hasta sicot.ia.timeout-seconds (900s por defecto). Si este método
+    // tardar hasta sicot.ia.timeout-seconds (240s por defecto). Si este método
     // mantuviera una transacción abierta durante esa llamada, retendría una
     // conexión del pool de Hikari (10 por defecto) todo ese tiempo — con solo
     // un puñado de preguntas al Copiloto simultáneas se agotaría el pool
@@ -103,10 +268,39 @@ public class CopilotoChatService {
     // transacción corta — solo que ninguna queda abierta durante la llamada a
     // Ollama.
     public String responder(Long contratoId, String pregunta, List<ChatTurno> historial) {
+        return responder(contratoId, pregunta, historial, true);
+    }
+
+    /**
+     * @param esperarAlPrecalentado {@code true} para una pregunta real del
+     *     supervisor, que debe esperar al precalentado en vuelo de ese contrato
+     *     en vez de competir con él; {@code false} solo para el precalentado
+     *     mismo, que es a quien los demás esperan.
+     */
+    private String responder(Long contratoId, String pregunta, List<ChatTurno> historial,
+                             boolean esperarAlPrecalentado) {
         // ContratoService.buscar ya exige que, si quien llama es SUPERVISOR, sea
         // el supervisor asignado a este contrato (ver SecurityUtils.verificarAccesoAlContrato).
         Contrato contrato = contratoService.buscar(contratoId);
         List<EtapaResponse> etapas = etapaService.listarPorContrato(contratoId);
+
+        // ATAJO SIN MODELO. «¿En qué paso voy?» tiene una respuesta que el
+        // sistema ya conoce, y pedírsela al modelo salía mal por partida doble:
+        // tardaba ~150 s y los modelos que caben en un portátil corriente
+        // indicaban la etapa equivocada (ver GuiaDelPasoActual para las
+        // mediciones del 14 de septiembre de 2026). Aquí se compone exacta, en
+        // microsegundos, y sin Ollama de por medio.
+        //
+        // Si la pregunta no encaja en el atajo, sigue su camino normal: esto
+        // solo atiende las preguntas cuya respuesta completa es el estado del
+        // contrato, nunca las abiertas.
+        if (guiaDelPasoActual.puedeResponder(pregunta)) {
+            var respuestaDirecta = guiaDelPasoActual.responder(etapas);
+            if (respuestaDirecta.isPresent()) {
+                log.info("Pregunta de contrato {} resuelta sin modelo por GuiaDelPasoActual.", contratoId);
+                return respuestaDirecta.get();
+            }
+        }
 
         String datosContrato = """
                 Contrato Nro.: %s
@@ -190,6 +384,13 @@ public class CopilotoChatService {
                         EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato),
                         estadoEtapas, historialTexto,
                         EntradaNoConfiable.bloque("PREGUNTA DEL SUPERVISOR", recortar(pregunta, MAX_CARACTERES_ENTRADA)));
+
+        // Justo aquí, y no al entrar al método: el atajo de GuiaDelPasoActual de
+        // más arriba no usa Ollama, así que «¿en qué paso voy?» se sigue
+        // respondiendo en milisegundos aunque haya un precalentado en curso.
+        if (esperarAlPrecalentado) {
+            esperarPrecalentado(contratoId);
+        }
 
         log.info("Copiloto: respondiendo pregunta del contrato {} con Ollama...", contrato.getNumeroContrato());
         long inicio = System.currentTimeMillis();

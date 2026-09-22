@@ -11,6 +11,7 @@ import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.service.ContratoService;
+import co.sena.sicot.service.RegistroService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -59,13 +61,17 @@ class GeneracionDocumentoServiceTest {
     @Mock
     private OllamaClient ollamaClient;
 
+    @Mock
+    private RegistroService registroService;
+
     private GeneracionDocumentoService servicio;
     private Contrato contrato;
 
     @BeforeEach
     void construirElServicio() {
         servicio = new GeneracionDocumentoService(
-                contratoService, subetapaRepository, documentoRepository, ollamaClient, new SimplePdfWriter());
+                contratoService, subetapaRepository, documentoRepository, ollamaClient, new SimplePdfWriter(),
+                registroService);
 
         Usuario supervisor = new Usuario();
         supervisor.setId(2L);
@@ -191,6 +197,43 @@ class GeneracionDocumentoServiceTest {
         servicio.generar(1L, 27L, "ACTA_INICIO");
 
         assertThat(documentoGuardado().getSubetapa()).isSameAs(subetapa);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lo que se genera queda en el registro del contrato
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Hasta el 21-09-2026 generar un documento no dejaba rastro: el expediente
+     * mostraba el acta firmada, pero no cuándo ni en qué subetapa se había
+     * pedido al copiloto.
+     */
+    @Test
+    void generarUnDocumentoDejaRastroEnElRegistroDelContrato() {
+        Subetapa subetapa = new Subetapa();
+        subetapa.setId(27L);
+        subetapa.setCodigo("2.7");
+        given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
+
+        servicio.generar(1L, 27L, "ACTA_INICIO");
+
+        ArgumentCaptor<String> descripcion = ArgumentCaptor.forClass(String.class);
+        verify(registroService).registrar(eq(contrato), eq("DOCUMENTO_GENERADO"), descripcion.capture());
+        assertThat(descripcion.getValue())
+                .isEqualTo("Acta de Inicio (GCCON-F-018) generado con el copiloto en la subetapa 2.7; "
+                        + "queda pendiente de firma.");
+    }
+
+    /** Si el modelo no responde, no hay documento y tampoco registro de uno. */
+    @Test
+    void siElModeloFallaNoQuedaRegistroDeUnDocumentoQueNoExiste() {
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("Ollama no responde."));
+
+        assertThatThrownBy(() -> servicio.generar(1L, null, "ACTA_INICIO"))
+                .isInstanceOf(IaNoDisponibleException.class);
+
+        verify(registroService, never()).registrar(any(), anyString(), anyString());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

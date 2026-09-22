@@ -9,6 +9,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -37,6 +38,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OllamaClientTest {
 
     private static final String MODELO = "qwen2.5:7b";
+    private static final String KEEP_ALIVE = "30m";
 
     private HttpServer servidor;
     private final List<String> peticionesRecibidas = new CopyOnWriteArrayList<>();
@@ -73,7 +75,7 @@ class OllamaClientTest {
     }
 
     private OllamaClient cliente() {
-        return new OllamaClient(urlDelFalso(), MODELO, 5, new LimitadorDeUsoIa(2, 100));
+        return new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -110,6 +112,20 @@ class OllamaClientTest {
         assertThat(peticion.get("prompt").asText()).isEqualTo("hola");
     }
 
+    @Test
+    @DisplayName("el keep_alive viaja con guion bajo — en camelCase Ollama lo ignora en silencio")
+    void mandaElKeepAliveConElNombreQueOllamaEntiende() throws Exception {
+        // Esta prueba vigila un fallo que no deja rastro: un "keepAlive" en
+        // camelCase se serializa sin error, Ollama lo descarta sin quejarse y el
+        // modelo se descarga igual a los 5 minutos, tirando el precalentado. No
+        // habría forma de notarlo salvo cronometrando preguntas a mano.
+        cliente().generar("hola", false);
+
+        JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
+        assertThat(peticion.has("keepAlive")).isFalse();
+        assertThat(peticion.get("keep_alive").asText()).isEqualTo(KEEP_ALIVE);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Fallo honesto: nunca se fabrica una respuesta para disimular
     // ─────────────────────────────────────────────────────────────────────────
@@ -139,7 +155,7 @@ class OllamaClientTest {
         servidor.stop(0);
 
         OllamaClient sinServidor = new OllamaClient(
-                "http://127.0.0.1:" + puertoQueQuedaLibre, MODELO, 2, new LimitadorDeUsoIa(2, 100));
+                "http://127.0.0.1:" + puertoQueQuedaLibre, MODELO, 2, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100));
 
         assertThatThrownBy(() -> sinServidor.generar("hola", false))
                 .isInstanceOf(IaNoDisponibleException.class);
@@ -176,7 +192,7 @@ class OllamaClientTest {
     @Test
     void elLimiteDeFrecuenciaCortaAntesDeGastarUnaLlamadaAOllama() {
         autenticarComo(7L);
-        OllamaClient cliente = new OllamaClient(urlDelFalso(), MODELO, 5, new LimitadorDeUsoIa(2, 1));
+        OllamaClient cliente = new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 1));
 
         cliente.generar("primera", false);
 
@@ -190,7 +206,7 @@ class OllamaClientTest {
 
     @Test
     void cadaLlamadaReponeSuCupoDeConcurrencia() {
-        OllamaClient cliente = new OllamaClient(urlDelFalso(), MODELO, 1, new LimitadorDeUsoIa(1, 100));
+        OllamaClient cliente = new OllamaClient(urlDelFalso(), MODELO, 1, KEEP_ALIVE, new LimitadorDeUsoIa(1, 100));
 
         List<String> respuestas = new ArrayList<>();
         for (int i = 0; i < 5; i++) {

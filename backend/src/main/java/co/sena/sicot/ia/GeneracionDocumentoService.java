@@ -12,6 +12,7 @@ import co.sena.sicot.mapper.DocumentoMapper;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.service.ContratoService;
+import co.sena.sicot.service.RegistroService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -37,15 +38,17 @@ public class GeneracionDocumentoService {
     private final DocumentoRepository documentoRepository;
     private final OllamaClient ollamaClient;
     private final SimplePdfWriter pdfWriter;
+    private final RegistroService registroService;
 
     public GeneracionDocumentoService(ContratoService contratoService, SubetapaRepository subetapaRepository,
                                        DocumentoRepository documentoRepository, OllamaClient ollamaClient,
-                                       SimplePdfWriter pdfWriter) {
+                                       SimplePdfWriter pdfWriter, RegistroService registroService) {
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
         this.documentoRepository = documentoRepository;
         this.ollamaClient = ollamaClient;
         this.pdfWriter = pdfWriter;
+        this.registroService = registroService;
     }
 
     // Sin @Transactional a propósito — mismo motivo que CopilotoChatService.responder:
@@ -132,6 +135,17 @@ public class GeneracionDocumentoService {
         documento.setGeneradoPorIa(true);
 
         Documento guardado = documentoRepository.save(documento);
+
+        // Hasta el 21-09-2026 generar un documento no dejaba rastro en
+        // /api/registros: el expediente mostraba el acta firmada, pero no cuándo
+        // ni quién la había pedido al copiloto. Va en su propia transacción
+        // corta (este método no tiene una, ver arriba), justo después de
+        // guardar: si fallara, quedaría el documento sin su registro, que es
+        // el mismo estado en que estaban todos hasta hoy — no uno peor.
+        registroService.registrar(contrato, "DOCUMENTO_GENERADO",
+                plantilla.nombre() + " (" + plantilla.codigo() + ") generado con el copiloto"
+                        + (subetapa != null ? " en la subetapa " + subetapa.getCodigo() : "")
+                        + "; queda pendiente de firma.");
         return DocumentoMapper.toResponse(guardado);
     }
 }

@@ -72,6 +72,19 @@ uno local.
 directamente al exterior una vez exista el proxy. Sería un camino paralelo sin
 cifrar hacia los mismos datos, y ese camino nadie lo vigila.
 
+**Lo que esta decisión no previó (21-09-2026).** Con el proxy delante, el backend
+dejó de ver la IP de los clientes: `getRemoteAddr()` devolvía siempre la del
+contenedor de Caddy. El límite de 20 intentos fallidos por origen de
+`LoginAttemptService` pasó a ser uno solo para todo el Centro, así que veinte
+contraseñas erradas desde un equipo cualquiera bloqueaban el acceso de todos
+durante quince minutos. Se vio en vivo, con este mismo Caddyfile, antes de
+corregirlo. La corrección es `server.forward-headers-strategy=native` en el
+perfil `prod`: la válvula de Tomcat toma la IP de `X-Forwarded-For` solo cuando
+la conexión viene de una dirección interna, que es donde vive el proxy. Eso es
+seguro porque Caddy sustituye el `X-Forwarded-For` que traiga el cliente por su
+IP real. Por eso el Caddyfile advierte que en `trusted_proxies` no debe
+declararse nunca la red del Centro.
+
 ## Cuándo revisar
 
 - Cuando el SENA confirme si su infraestructura ya termina TLS. Eso activa la

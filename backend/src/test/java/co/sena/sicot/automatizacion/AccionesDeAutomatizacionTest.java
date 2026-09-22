@@ -1,14 +1,12 @@
 package co.sena.sicot.automatizacion;
 
 import co.sena.sicot.automatizacion.acciones.EnvioDeCorreo;
-import co.sena.sicot.automatizacion.acciones.RedaccionDeResumenIa;
+import co.sena.sicot.automatizacion.acciones.RedaccionDeResumen;
 import co.sena.sicot.entity.Registro;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.entity.enums.PrioridadAlerta;
 import co.sena.sicot.entity.enums.TipoAlerta;
 import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
-import co.sena.sicot.ia.IaNoDisponibleException;
-import co.sena.sicot.ia.OllamaClient;
 import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.service.AlertaService;
 import co.sena.sicot.service.EmailService;
@@ -45,7 +43,7 @@ import static org.mockito.Mockito.when;
  * La auditoría del 8 de septiembre midió el paquete
  * {@code automatizacion.acciones} al 35 % de cobertura, el punto más bajo del
  * proyecto. Las reglas —que solo deciden— estaban bien probadas; las acciones
- * —que envían correos y llaman al modelo— apenas.
+ * —que envían correos y componen textos— apenas.
  *
  * <p>Es justo al revés de lo que conviene: una regla equivocada produce una
  * alerta de más, y una acción equivocada manda un correo a la persona
@@ -61,9 +59,6 @@ class AccionesDeAutomatizacionTest {
     private EmailService emailService;
 
     @Mock
-    private OllamaClient ollamaClient;
-
-    @Mock
     private LectorDeContratos lectorDeContratos;
 
     @Mock
@@ -73,13 +68,13 @@ class AccionesDeAutomatizacionTest {
     private AlertaService alertaService;
 
     private EnvioDeCorreo envioDeCorreo;
-    private RedaccionDeResumenIa redaccionDeResumen;
+    private RedaccionDeResumen redaccionDeResumen;
 
     @BeforeEach
     void prepararAcciones() {
         envioDeCorreo = new EnvioDeCorreo(emailService, payloadJson);
-        redaccionDeResumen = new RedaccionDeResumenIa(
-                ollamaClient, lectorDeContratos, registroRepository, alertaService, payloadJson);
+        redaccionDeResumen = new RedaccionDeResumen(
+                lectorDeContratos, registroRepository, alertaService, payloadJson);
     }
 
     // ── EnvioDeCorreo ──────────────────────────────────────────────────────
@@ -127,56 +122,205 @@ class AccionesDeAutomatizacionTest {
                 .hasMessageContaining("Connection refused");
     }
 
-    // ── RedaccionDeResumenIa ───────────────────────────────────────────────
+    // -- RedaccionDeResumen -------------------------------------------------
 
+    /**
+     * <h2>Por qué estas pruebas afirman el texto exacto</h2>
+     * Antes no podían. El resumen lo escribía el modelo local, así que lo único
+     * comprobable era que el prompt pidiera las cosas correctas — no que la
+     * salida las respetara. Y no las respetaba: ver el encabezado de
+     * {@code V16__resumen_semanal_sin_modelo.sql}. Con el texto compuesto por
+     * plantillas, lo que llega a la bandeja del supervisor es exactamente lo que
+     * se afirma aquí, y una regresión rompe una prueba en lugar de aparecer
+     * meses después en un contrato real.
+     */
     @Test
-    void redactaElResumenYLoDejaComoAlertaDeTipoIa() {
+    void componeElResumenYLoDejaComoRecordatorioEnLaBandeja() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
         when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
-                .thenReturn(List.of(registro("SUBETAPA_AVANZADA", "Subetapa 2.3 avanzó a COMPLETADA.")));
-        when(ollamaClient.generar(anyString(), eq(false)))
-                .thenReturn("Durante la última semana se cerró la subetapa 2.3 del contrato.");
+                .thenReturn(List.of(registro("SUBETAPA_AVANZADA",
+                        "Subetapa 2.3 (Acta) avanzó de EN_CURSO a COMPLETADA.")));
 
         ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
 
         assertThat(resultado.ejecutada()).isTrue();
-        verify(alertaService).crearDelSistema(eq(7L), eq(TipoAlerta.IA), eq(PrioridadAlerta.BAJA), anyString());
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(eq(7L), eq(TipoAlerta.RECORDATORIO), eq(PrioridadAlerta.BAJA), texto.capture());
+        assertThat(texto.getValue())
+                .contains("CT-2026-001")
+                .contains("se completó la subetapa 2.3")
+                .contains("13 de 27 subetapas (48%)");
     }
 
     /**
-     * El prompt lleva los hechos ya resueltos y prohíbe explícitamente añadir
-     * nada. No es una precaución teórica: un modelo al que se le pide «resume el
-     * estado de este contrato» rellena con recomendaciones procedimentales
-     * plausibles y falsas, y en contratación pública una recomendación falsa con
-     * aspecto oficial es peor que no decir nada.
+     * Las cifras salen de la consulta, no de una interpretación. Es la propiedad
+     * que la redacción por modelo no podía dar: en las mediciones del 10 de
+     * septiembre el modelo escribió «12 subetapas (44%)» donde el propio prompt
+     * decía 11 y 41%.
      */
     @Test
-    void elPromptLlevaLosHechosResueltosYProhibeInventar() {
+    void elAvanceQueSeAfirmaEsElQueDiceLaBase() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
         when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
                 .thenReturn(List.of(registro("DOCUMENTO_FIRMADO", "Acta de Inicio firmada.")));
-        when(ollamaClient.generar(anyString(), eq(false))).thenReturn("Resumen.");
 
         redaccionDeResumen.ejecutar(tareaDeResumen());
 
-        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
-        verify(ollamaClient).generar(prompt.capture(), eq(false));
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("se firmó un documento")
+                .contains("13 de 27 subetapas (48%)")
+                .as("no aparece ninguna otra cifra de avance")
+                .doesNotContain("12 de 27")
+                .doesNotContain("14 de 27");
+    }
 
-        assertThat(prompt.getValue())
-                .contains("No agregues hechos")
-                .contains("No des recomendaciones")
-                .as("los hechos entran ya calculados, el modelo solo redacta")
-                .contains("CT-2026-001")
-                .contains("13 de 27 subetapas completadas");
+    /** Varias subetapas se enumeran en español, con «y» antes de la última. */
+    @Test
+    void enumeraVariasSubetapasComoSeEscribeEnEspanol() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(
+                        registro("SUBETAPA_AVANZADA", "Subetapa 1.3 (Estudios) avanzó de PENDIENTE a COMPLETADA."),
+                        registro("SUBETAPA_AVANZADA", "Subetapa 1.2 (Unidad) avanzó de PENDIENTE a COMPLETADA."),
+                        registro("SUBETAPA_AVANZADA", "Subetapa 1.1 (Necesidad) avanzó de EN_CURSO a COMPLETADA.")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue()).contains("se completaron las subetapas 1.1, 1.2 y 1.3");
     }
 
     /**
-     * Un periodo sin actividad no produce resumen. Generarlo sería gastar un
-     * cupo del modelo en una frase vacía y ocupar un renglón de la bandeja del
-     * supervisor con nada.
+     * Cada {@code SUBETAPA_AVANZADA} genera además un {@code ETAPA_ACTUALIZADA}
+     * con el porcentaje recalculado. Contarlo aparte duplicaría cada avance — y
+     * es lo que, al entrar sin filtrar en el prompt, hizo que el modelo volcara
+     * los códigos internos de auditoría al texto que lee el supervisor.
      */
     @Test
-    void sinMovimientosEnElPeriodoNoGastaElModelo() {
+    void losMovimientosDerivadosNoSeCuentanComoHechosPropios() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(
+                        registro("ETAPA_ACTUALIZADA", "Etapa 1 (INICIO) ahora está en EN_CURSO al 17%."),
+                        registro("SUBETAPA_AVANZADA", "Subetapa 1.1 (Necesidad) avanzó de EN_CURSO a COMPLETADA.")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("se completó la subetapa 1.1")
+                .as("los códigos internos de auditoría no llegan nunca al supervisor")
+                .doesNotContain("ETAPA_ACTUALIZADA")
+                .doesNotContain("SUBETAPA_AVANZADA");
+    }
+
+    /**
+     * Un periodo cuya única actividad es derivada no produce resumen: no hubo
+     * ningún hecho propio que contar.
+     */
+    @Test
+    void unPeriodoSoloConMovimientosDerivadosNoProduceResumen() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("ETAPA_ACTUALIZADA", "Etapa 1 ahora está en EN_CURSO al 17%.")));
+
+        ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        assertThat(resultado.ejecutada()).isFalse();
+        assertThat(resultado.motivoDeDescarte()).contains("Sin movimientos");
+        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
+    }
+
+    /**
+     * Sin subetapas sembradas no se afirma un porcentaje. Decir «0%» sugeriría
+     * que no se ha avanzado, cuando lo cierto es que no hay con qué medirlo.
+     */
+    @Test
+    void sinSubetapasSembradasNoAfirmaUnPorcentaje() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contratoSinSubetapas()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("DOCUMENTO_CARGADO", "Acta cargada.")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("no tiene subetapas registradas")
+                .doesNotContain("%");
+    }
+
+    /**
+     * Un documento que el supervisor pidió al copiloto es actividad del
+     * expediente y se cuenta como tal. Hasta el 21-09-2026 la generación no
+     * dejaba registro, así que el resumen no tenía cómo saberlo.
+     */
+    @Test
+    void unDocumentoGeneradoConElCopilotoSeCuentaEnElResumen() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado con el copiloto."),
+                        registro("DOCUMENTO_CARGADO", "Documento «soporte.pdf» cargado.")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("se generó un documento con el copiloto")
+                .contains("se cargó un documento");
+    }
+
+    /**
+     * Si ninguno de los movimientos del periodo es de los que el resumen narra
+     * —un contrato al que solo se le corrigió el objeto, por ejemplo—, no hay
+     * resumen. Antes se componía igual y el supervisor recibía un texto que
+     * acababa en «durante el periodo .»: una frase vacía con apariencia de
+     * resumen.
+     */
+    @Test
+    void unPeriodoSinNadaQueNarrarNoProduceUnaFraseVacia() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("CONTRATO_ACTUALIZADO", "Se actualizó el objeto del contrato.")));
+
+        ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        assertThat(resultado.ejecutada()).isFalse();
+        assertThat(resultado.motivoDeDescarte()).contains("nada que resumir");
+        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
+    }
+
+    /**
+     * La excepción a la regla anterior: una alteración de integridad se avisa
+     * aunque sea lo único que pasó. Descartar ese resumen por «nada que contar»
+     * callaría justo lo que exige que alguien actúe.
+     */
+    @Test
+    void unaAlteracionDeIntegridadSeAvisaAunqueNoHayaNadaMasQueContar() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("INTEGRIDAD_COMPROMETIDA", "La huella del acta no coincide.")));
+
+        ResultadoDeAccion resultado = redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        assertThat(resultado.ejecutada()).isTrue();
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("durante el periodo no se registró avance ni movimiento de documentos.")
+                .contains("huella de integridad")
+                .doesNotContain("periodo .");
+    }
+
+    /** Un periodo sin actividad no produce resumen: seria un renglon vacio. */
+    @Test
+    void sinMovimientosEnElPeriodoNoProduceResumen() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
         when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
                 .thenReturn(List.of());
@@ -185,10 +329,10 @@ class AccionesDeAutomatizacionTest {
 
         assertThat(resultado.ejecutada()).isFalse();
         assertThat(resultado.motivoDeDescarte()).contains("Sin movimientos");
-        verify(ollamaClient, never()).generar(anyString(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
     }
 
-    /** Solo se consideran los movimientos dentro del periodo, no todo el histórico. */
+    /** Solo se consideran los movimientos dentro del periodo, no todo el historico. */
     @Test
     void ignoraLosMovimientosAnterioresAlPeriodo() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
@@ -211,23 +355,6 @@ class AccionesDeAutomatizacionTest {
         assertThat(resultado.motivoDeDescarte()).contains("ya no existe");
     }
 
-    /**
-     * Si Ollama está caído, la excepción se propaga y el ejecutor reintenta. Un
-     * modelo apagado es la situación transitoria por excelencia.
-     */
-    @Test
-    void siElModeloNoRespondeSePropagaParaQueSeReintente() {
-        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
-        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
-                .thenReturn(List.of(registro("SUBETAPA_AVANZADA", "Avance.")));
-        when(ollamaClient.generar(anyString(), eq(false)))
-                .thenThrow(new IaNoDisponibleException("Ollama no disponible."));
-
-        assertThatThrownBy(() -> redaccionDeResumen.ejecutar(tareaDeResumen()))
-                .isInstanceOf(IaNoDisponibleException.class);
-        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
-    }
-
     // ── Utilidades ─────────────────────────────────────────────────────────
 
     private TareaEnEjecucion tareaDeCorreo() {
@@ -237,14 +364,20 @@ class AccionesDeAutomatizacionTest {
     }
 
     private TareaEnEjecucion tareaDeResumen() {
-        return new TareaEnEjecucion(2L, "resumen-semanal-ia", TipoTareaAutomatizada.REDACTAR_RESUMEN_IA, 7L,
-                payloadJson.escribir(new PayloadDeTarea.RedactarResumenIa(7)));
+        return new TareaEnEjecucion(2L, "resumen-semanal", TipoTareaAutomatizada.REDACTAR_RESUMEN, 7L,
+                payloadJson.escribir(new PayloadDeTarea.RedactarResumen(7)));
     }
 
     private FotoDelContrato contrato() {
         return new FotoDelContrato(7L, "CT-2026-001", "Suministro de mobiliario",
                 LocalDate.now().minusDays(50), LocalDate.now().plusDays(50),
                 EstadoContrato.ACTIVO, "Ana Gómez", "ana@soy.sena.edu.co", 27, 13, 3, 6);
+    }
+
+    private FotoDelContrato contratoSinSubetapas() {
+        return new FotoDelContrato(7L, "CT-2026-002", "Contrato recien creado",
+                LocalDate.now().minusDays(5), LocalDate.now().plusDays(100),
+                EstadoContrato.ACTIVO, "Ana Gomez", "ana@soy.sena.edu.co", 0, 0, 0, 0);
     }
 
     private Registro registro(String accion, String descripcion) {

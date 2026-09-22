@@ -94,3 +94,85 @@ Respuesta correcta, en español y con vocabulario del dominio — que es
 precisamente lo que un modelo afinado para generar código no garantiza. La
 decisión de este ADR queda verificada de punta a punta: modelo descargado,
 registrado en Ollama, y produciendo salida útil para el copiloto.
+
+---
+
+## Revisión — 14 de septiembre de 2026: el modelo se queda, pero con menos trabajo
+
+Esta revisión **no cambia la decisión de este ADR**: `qwen2.5:7b` sigue siendo el
+modelo del copiloto. Lo que cambia es cuánto se le pide.
+
+### Lo que se midió
+
+El copiloto llevaba tiempo sin que nadie comprobara si respondía **a tiempo**. Se
+midió contra el stack real, y el resultado fue que no:
+
+| Llamada | Antes |
+| --- | --- |
+| `POST /api/ia/extraer-contrato` | **HTTP 503 a los 181 s** |
+| `POST /api/contratos/{id}/copiloto/chat` | **HTTP 503 a los 180 s** |
+
+Las dos se pasaban del límite de `sicot.ia.timeout-seconds`. La función que
+justifica el proyecto entero —la asistencia por IA— no funcionaba.
+
+La reacción natural era bajar de modelo, y se probó. Sobre un contrato que estaba
+en la **etapa 1**, a la pregunta «¿qué tengo que hacer en el paso en el que
+está?»:
+
+| Modelo | Tiempo | Etapa que indicó |
+| --- | --- | --- |
+| `qwen2.5:1.5b` | 45,4 s | etapa 4 — **falso** |
+| `qwen2.5:3b` | 90,7 s | etapa 4 — **falso** |
+| `qwen2.5:7b` | 158,4 s | etapa 1 — correcto |
+
+Los dos modelos pequeños copiaron el «paso 4» de un ejemplo de estilo incluido en
+el propio prompt, que les advertía expresamente de no copiar sus datos. Al
+recortar ese ejemplo, el de 3B dejó de decir «4» y pasó a decir «2»: seguía
+siendo falso. **No era un problema de redacción del prompt, era de capacidad.**
+
+### La decisión
+
+No bajar de modelo. Bajar el trabajo.
+
+Se comprobó dónde se iba el tiempo y resultó que no estaba en escribir la
+respuesta sino en **leer el prompt**: 119,6 s de los 158 s, con 1545 tokens. Y se
+comprobó que lo que se le estaba pidiendo al modelo era, en buena parte, repetir
+datos que el sistema ya tenía. De ahí dos piezas nuevas:
+
+- `ExtraccionDeterminista` saca los nueve campos con forma fija de un contrato
+  estatal —número, NIT, valor, fechas, registro presupuestal— en **un
+  milisegundo y sin modelo**. Eran justo los que fallaban: el de 3B no encontraba
+  el valor del contrato y el de 7B pegaba la cédula al nombre del representante.
+- `GuiaDelPasoActual` responde «¿en qué paso voy?» con el estado real de las
+  etapas, **en microsegundos y correcto por construcción**. Al modelo le quedan
+  las preguntas abiertas, que es donde sí aporta.
+
+Es la misma conclusión a la que llegó ADR-008 con el resumen periódico, aplicada
+ahora a las otras dos funciones de IA: **no pedirle al modelo que sostenga hechos
+que el código ya tiene calculados.**
+
+### El resultado, medido igual que el problema
+
+| Llamada | Antes | Después |
+| --- | --- | --- |
+| «¿En qué paso voy?» | 503 a los 180 s | **200 en 0,43 s** |
+| Extracción de contrato | 503 a los 181 s | **200 en 146 s, 11 de 11 campos** |
+
+Los once campos incluyen los dos que el modelo devolvía mal por su cuenta.
+
+### Qué haría falta para bajar a 3B
+
+Con el trabajo ya reducido, `qwen2.5:3b` **sí** resuelve lo que le queda de la
+extracción: acertó el objeto y el tipo de contrato en 78 s. Eso, sumado a los
+nueve campos deterministas, da 11 de 11 con un modelo que cabe en cualquier
+portátil.
+
+Aun así el modelo por defecto **no se baja todavía**, y conviene decir por qué:
+sólo se midió la extracción. Las preguntas abiertas del copiloto —«¿de dónde saco
+la póliza?»— con 3B no se han evaluado, y son la parte donde el modelo es
+insustituible. Bajar el valor por defecto afectaría a las dos.
+
+El paso pendiente, si se quiere cerrar esto, es un conjunto de preguntas abiertas
+reales de supervisión con su respuesta esperada, y medir 3B contra él. Mientras
+eso no exista, bajar el modelo sería cambiar un problema medido por una
+suposición.

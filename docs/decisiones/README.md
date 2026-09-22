@@ -59,3 +59,5 @@ parte del valor.
 | [009](./ADR-009-terminacion-tls.md) | Dónde termina TLS y por qué hoy no hay HTTPS | Aceptada |
 | [010](./ADR-010-versionado-de-la-api.md) | Versionado de la API y política de compatibilidad | Aceptada |
 | [011](./ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md) | Arranque fail closed y qué escáner es compuerta en el CI | Aceptada |
+| [012](./ADR-012-aplicacion-movil.md) | Qué es "la aplicación móvil" de SICOT | Aceptada |
+| [013](./ADR-013-firma-y-distribucion-del-apk.md) | Cómo se firma y se reparte la aplicación de Android | Aceptada |
