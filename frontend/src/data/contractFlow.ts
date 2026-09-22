@@ -12,6 +12,13 @@ import type { Step } from '@/types/domain'
 // firma el Ordenador del gasto, no el supervisor — no se incluye aquí.
 export const AI_GENERATED_DOCS = new Set(['2.7', '3.4', '4.3', '5.3', '6.3'])
 
+// Sub-pasos donde el supervisor aporta fotos de la entrega en el Centro: la
+// verificación física en bodega (3.1) y la evidencia fotográfica que el propio
+// flujo pide (3.2). En los demás sub-pasos no se ofrece la cámara, porque
+// ofrecerla en todos invita a llenar el expediente de fotos sueltas que nadie
+// va a mirar.
+export const SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA = new Set(['3.1', '3.2'])
+
 // GCCON-P-010 — Etapas de supervisión de contratos
 export const STEPS_INITIAL: Step[] = [
   {
