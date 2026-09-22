@@ -8,7 +8,6 @@ import co.sena.sicot.entity.FirmaElectronica;
 import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.entity.Subetapa;
 import co.sena.sicot.entity.enums.EstadoDocumento;
-import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.DocumentoMapper;
@@ -89,7 +88,10 @@ public class DocumentoService {
             throw new BusinessException("Debe seleccionar un archivo para cargar.");
         }
         archivoValidator.validarTamanio(archivo);
-        TipoDocumento tipo = archivoValidator.tipoDeArchivo(archivo);
+        // El expediente admite fotos además de los documentos de ofimática: la
+        // evidencia de la entrega en bodega llega desde la cámara del teléfono.
+        ArchivoValidator.ArchivoAceptado aceptado =
+                archivoValidator.aceptar(archivo, ArchivoValidator.EVIDENCIAS_DEL_EXPEDIENTE);
 
         Documento documento = new Documento();
         documento.setContrato(contrato);
@@ -100,8 +102,8 @@ public class DocumentoService {
             documento.setFormato(buscarFormatoDelCatalogo(formatoId));
         }
         documento.setNombre(nombreLimpio);
-        documento.setTipo(tipo);
-        documento.setContentType(archivoValidator.contentTypeDe(tipo));
+        documento.setTipo(aceptado.tipo());
+        documento.setContentType(aceptado.contentType());
         documento.setTamanioBytes(archivo.getSize());
         documento.setEstado(EstadoDocumento.PENDIENTE);
         documento.setSubidoPor(SecurityUtils.currentUsuario());
