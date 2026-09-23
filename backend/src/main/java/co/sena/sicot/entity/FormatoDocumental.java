@@ -47,8 +47,11 @@ public class FormatoDocumental {
     @Column(name = "content_type", nullable = false, length = 100)
     private String contentType;
 
+    // columnDefinition: solo para el esquema H2 de las pruebas, que sin él
+    // declara BINARY VARYING(255). En PostgreSQL la columna ya es bytea. Ver
+    // la explicación completa en Documento.contenido.
     @JdbcTypeCode(SqlTypes.VARBINARY)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "bytea")
     private byte[] contenido;
 
     @Column(name = "tamanio_bytes", nullable = false)

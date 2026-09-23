@@ -82,6 +82,9 @@ export function documento(parcial: Partial<DocumentoResponse> = {}): DocumentoRe
     firmadoPorNombre: null,
     subidoPorNombre: 'Unidad de Gestión Contractual',
     fechaSubida: '2026-03-05T10:00:00Z',
+    capturaFecha: null,
+    capturaLatitud: null,
+    capturaLongitud: null,
     ...parcial,
   }
 }

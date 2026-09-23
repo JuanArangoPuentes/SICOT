@@ -7,11 +7,14 @@
 //
 // La foto se envía tal como sale de la cámara. Reducirla aquí borraría la fecha
 // y la ubicación que el teléfono escribe dentro del archivo, y son justo los
-// datos que convierten una foto en evidencia de cuándo y dónde se recibió.
+// datos que convierten una foto en evidencia de cuándo y dónde se recibió. El
+// backend los lee al cargarla (MDL-205) y aquí se muestra lo que encontró.
 
 import { useRef, useState } from 'react'
 import { subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
+import { describirCaptura } from '@/services/format'
+import type { DocumentoResponse } from '@/services/api/types'
 
 interface Props {
   contratoId: number
@@ -23,12 +26,15 @@ interface Props {
   onCargada: () => void
 }
 
+/** De qué botón salió la foto: importa para explicar una ubicación ausente. */
+type Origen = 'camara' | 'galeria'
+
 type Estado =
   | { fase: 'vacio' }
-  | { fase: 'elegida'; archivo: File; vistaPrevia: string }
-  | { fase: 'cargando'; archivo: File; vistaPrevia: string }
-  | { fase: 'cargada'; nombre: string }
-  | { fase: 'error'; mensaje: string; archivo: File; vistaPrevia: string }
+  | { fase: 'elegida'; archivo: File; vistaPrevia: string; origen: Origen }
+  | { fase: 'cargando'; archivo: File; vistaPrevia: string; origen: Origen }
+  | { fase: 'cargada'; documento: DocumentoResponse; origen: Origen }
+  | { fase: 'error'; mensaje: string; archivo: File; vistaPrevia: string; origen: Origen }
 
 const TAMANIO_MAXIMO_BYTES = 20 * 1024 * 1024
 
@@ -39,7 +45,7 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   const campoCamara = useRef<HTMLInputElement>(null)
   const campoGaleria = useRef<HTMLInputElement>(null)
 
-  const elegir = (archivo: File | undefined) => {
+  const elegir = (archivo: File | undefined, origen: Origen) => {
     if (!archivo) return
     if (archivo.size > TAMANIO_MAXIMO_BYTES) {
       setEstado({
@@ -47,23 +53,24 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         mensaje: `La foto pesa ${(archivo.size / 1024 / 1024).toFixed(1)} MB y el máximo son 20 MB.`,
         archivo,
         vistaPrevia: URL.createObjectURL(archivo),
+        origen,
       })
       return
     }
-    setEstado({ fase: 'elegida', archivo, vistaPrevia: URL.createObjectURL(archivo) })
+    setEstado({ fase: 'elegida', archivo, vistaPrevia: URL.createObjectURL(archivo), origen })
   }
 
   const cargar = async () => {
     if (estado.fase !== 'elegida' && estado.fase !== 'error') return
-    const { archivo, vistaPrevia } = estado
-    setEstado({ fase: 'cargando', archivo, vistaPrevia })
+    const { archivo, vistaPrevia, origen } = estado
+    setEstado({ fase: 'cargando', archivo, vistaPrevia, origen })
     try {
       const doc = await subirDocumento(contratoId, archivo, {
         nombre: `Evidencia fotográfica ${codigoSubetapa} — ${archivo.name}`,
         subetapaId: subetapaApiId ?? undefined,
       })
       URL.revokeObjectURL(vistaPrevia)
-      setEstado({ fase: 'cargada', nombre: doc.nombre })
+      setEstado({ fase: 'cargada', documento: doc, origen })
       onCargada()
     } catch (e) {
       setEstado({
@@ -71,6 +78,7 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         mensaje: e instanceof ApiError ? e.message : 'No se pudo cargar la foto.',
         archivo,
         vistaPrevia,
+        origen,
       })
     }
   }
@@ -83,9 +91,23 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   }
 
   if (estado.fase === 'cargada') {
+    const { documento, origen } = estado
+    const captura = describirCaptura(documento)
+    const sinUbicacion = documento.capturaLatitud == null || documento.capturaLongitud == null
     return (
       <div style={{ fontSize: 11.5, color: 'var(--accent)', paddingLeft: 26 }}>
-        Evidencia cargada: {estado.nombre}.{' '}
+        Evidencia cargada: {documento.nombre}.{' '}
+        {captura && <span style={{ color: 'var(--text-secondary)' }}>{captura}. </span>}
+        {sinUbicacion && origen === 'galeria' && (
+          // Android le quita la ubicación a una foto elegida de la galería
+          // cuando la app no tiene permiso de ubicación de medios, y el selector
+          // de fotos de Android 13 en adelante la quita siempre. La cámara, en
+          // cambio, entrega el archivo que acaba de escribir.
+          <span style={{ color: 'var(--text-muted)' }}>
+            Al elegirla de la galería, Android puede haberle quitado la ubicación: para conservarla, use «Tomar foto de
+            la entrega».{' '}
+          </span>
+        )}
         <button
           onClick={descartar}
           style={{
@@ -111,14 +133,14 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         type="file"
         accept="image/jpeg,image/png"
         capture="environment"
-        onChange={(e) => elegir(e.target.files?.[0])}
+        onChange={(e) => elegir(e.target.files?.[0], 'camara')}
         style={{ display: 'none' }}
       />
       <input
         ref={campoGaleria}
         type="file"
         accept="image/jpeg,image/png"
-        onChange={(e) => elegir(e.target.files?.[0])}
+        onChange={(e) => elegir(e.target.files?.[0], 'galeria')}
         style={{ display: 'none' }}
       />
 

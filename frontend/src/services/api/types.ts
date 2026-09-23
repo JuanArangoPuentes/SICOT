@@ -196,6 +196,11 @@ export interface DocumentoResponse {
   firmadoPorNombre: string | null
   subidoPorNombre: string | null
   fechaSubida: string
+  /** Cuándo se tomó la foto, según su EXIF. null si no es una foto o no trae el dato. */
+  capturaFecha: string | null
+  /** Dónde se tomó la foto, según su GPS. Las dos o ninguna; null si no trae el dato. */
+  capturaLatitud: number | null
+  capturaLongitud: number | null
 }
 
 /**
