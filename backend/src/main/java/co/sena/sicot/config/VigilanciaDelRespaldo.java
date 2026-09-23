@@ -109,7 +109,7 @@ public class VigilanciaDelRespaldo {
      * promete ADR-002, con margen de sobra para que un volcado lento haya
      * terminado, y antes de las 06:00 en que corren las automatizaciones.
      */
-    @Scheduled(cron = "0 0 4 * * *")
+    @Scheduled(cron = "0 0 4 * * *", zone = ZonaHoraria.PROPIEDAD)
     public void comprobarCadaDia() {
         comprobar();
     }

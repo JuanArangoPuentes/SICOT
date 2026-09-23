@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -59,6 +60,7 @@ public class AutomatizacionController {
     private final MotorDeAutomatizacion motor;
     private final List<ReglaDeEvento> reglasDeEvento;
     private final List<ReglaDeCalendario> reglasDeCalendario;
+    private final Clock reloj;
 
     @Value("${sicot.automatizacion.habilitado:true}")
     private boolean habilitado;
@@ -66,11 +68,13 @@ public class AutomatizacionController {
     public AutomatizacionController(AlmacenDeTareas almacen,
                                     MotorDeAutomatizacion motor,
                                     List<ReglaDeEvento> reglasDeEvento,
-                                    List<ReglaDeCalendario> reglasDeCalendario) {
+                                    List<ReglaDeCalendario> reglasDeCalendario,
+                                    Clock reloj) {
         this.almacen = almacen;
         this.motor = motor;
         this.reglasDeEvento = reglasDeEvento;
         this.reglasDeCalendario = reglasDeCalendario;
+        this.reloj = reloj;
     }
 
     @Operation(summary = "Estado de salud del motor y conteo de la cola por estado")
@@ -135,7 +139,9 @@ public class AutomatizacionController {
     })
     @PostMapping("/evaluar")
     public ResponseEntity<Map<String, Integer>> evaluar() {
-        int encoladas = motor.evaluarCalendario(LocalDate.now());
+        // El mismo «hoy» que la evaluación programada de las 06:00; si no,
+        // una evaluación manual a las 20:00 encolaría los avisos de mañana.
+        int encoladas = motor.evaluarCalendario(LocalDate.now(reloj));
         return ResponseEntity.ok(Map.of("tareasEncoladas", encoladas));
     }
 }

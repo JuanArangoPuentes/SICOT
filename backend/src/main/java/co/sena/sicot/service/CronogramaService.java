@@ -6,6 +6,7 @@ import co.sena.sicot.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 
 /**
@@ -27,10 +28,12 @@ public class CronogramaService {
 
     private final LectorDeContratos lectorDeContratos;
     private final ContratoService contratoService;
+    private final Clock reloj;
 
-    public CronogramaService(LectorDeContratos lectorDeContratos, ContratoService contratoService) {
+    public CronogramaService(LectorDeContratos lectorDeContratos, ContratoService contratoService, Clock reloj) {
         this.lectorDeContratos = lectorDeContratos;
         this.contratoService = contratoService;
+        this.reloj = reloj;
     }
 
     @Transactional(readOnly = true)
@@ -41,6 +44,8 @@ public class CronogramaService {
 
         FotoDelContrato foto = lectorDeContratos.porId(contratoId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Contrato", contratoId));
-        return foto.cronograma(LocalDate.now());
+        // «Hoy» en la zona del Centro, no en la de la JVM (UTC en el
+        // contenedor): ver ZonaHoraria.
+        return foto.cronograma(LocalDate.now(reloj));
     }
 }
