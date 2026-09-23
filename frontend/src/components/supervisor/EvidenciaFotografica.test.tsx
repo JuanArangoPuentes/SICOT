@@ -56,14 +56,19 @@ describe('EvidenciaFotografica', () => {
     await waitFor(() => expect(onCargada).toHaveBeenCalled())
   })
 
-  it('el campo de la cámara pide la cámara trasera y solo acepta JPG y PNG', () => {
+  // `image/*` es lo que hace que la app de Android abra la cámara: wry solo la
+  // abre si esa cadena está literalmente entre los tipos aceptados. Con
+  // `image/jpeg,image/png` abría el selector de la galería (emulador de Android
+  // 14, 23-09-2026). El tipo real lo valida el backend por los bytes.
+  it('el campo de la cámara pide la cámara trasera con el tipo que la app de Android sabe abrir', () => {
     const { container } = render(
       <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.1" onCargada={() => {}} />,
     )
 
-    const campoCamara = container.querySelectorAll('input[type="file"]')[0]
+    const [campoCamara, campoGaleria] = container.querySelectorAll('input[type="file"]')
     expect(campoCamara.getAttribute('capture')).toBe('environment')
-    expect(campoCamara.getAttribute('accept')).toBe('image/jpeg,image/png')
+    expect(campoCamara.getAttribute('accept')).toBe('image/*')
+    expect(campoGaleria.getAttribute('accept')).toBe('image/jpeg,image/png')
   })
 
   it('dice qué pasó cuando el servidor rechaza la foto, sin dar por cargada la evidencia', async () => {
@@ -130,5 +135,18 @@ describe('EvidenciaFotografica', () => {
 
     expect(screen.getByText(/Tomada el 23\/09\/2026 a las 14:03; no trae ubicación/)).toBeTruthy()
     expect(screen.getByText(/Android puede haberle quitado la ubicación/)).toBeTruthy()
+  })
+
+  // En la app de Android, negar el permiso de cámara cierra el selector sin foto
+  // y sin ningún mensaje. El navegador lo anuncia con el evento `cancel`.
+  it('si la cámara se cierra sin foto, lo dice y ofrece una salida', () => {
+    const { container } = render(
+      <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.2" onCargada={() => {}} />,
+    )
+
+    fireEvent(container.querySelectorAll('input[type="file"]')[0], new Event('cancel'))
+
+    expect(screen.getByText(/No se tomó ninguna foto/)).toBeTruthy()
+    expect(screen.getByText(/Aplicaciones › SICOT › Permisos/)).toBeTruthy()
   })
 })

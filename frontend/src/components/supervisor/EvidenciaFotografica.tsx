@@ -10,7 +10,7 @@
 // datos que convierten una foto en evidencia de cuándo y dónde se recibió. El
 // backend los lee al cargarla (MDL-205) y aquí se muestra lo que encontró.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
 import { describirCaptura } from '@/services/format'
@@ -44,9 +44,24 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   // directamente la cámara trasera; el otro deja elegir una foto ya tomada.
   const campoCamara = useRef<HTMLInputElement>(null)
   const campoGaleria = useRef<HTMLInputElement>(null)
+  // La cámara se cerró sin devolver foto. En la app de Android eso incluye que
+  // se haya negado el permiso de cámara: wry responde «ninguna foto» y nada más,
+  // así que sin este aviso el botón parecería no hacer nada.
+  const [camaraSinFoto, setCamaraSinFoto] = useState(false)
+
+  useEffect(() => {
+    const campo = campoCamara.current
+    if (!campo) return
+    // El evento `cancel` de un <input type="file"> no pasa por el sistema de
+    // eventos de React, así que se escucha directamente.
+    const alCancelar = () => setCamaraSinFoto(true)
+    campo.addEventListener('cancel', alCancelar)
+    return () => campo.removeEventListener('cancel', alCancelar)
+  }, [])
 
   const elegir = (archivo: File | undefined, origen: Origen) => {
     if (!archivo) return
+    setCamaraSinFoto(false)
     if (archivo.size > TAMANIO_MAXIMO_BYTES) {
       setEstado({
         fase: 'error',
@@ -128,10 +143,19 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
 
   return (
     <div style={{ paddingLeft: 26, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/*
+        `image/*` y no `image/jpeg,image/png`, a propósito. En la app de Android,
+        wry solo abre la cámara si la lista de tipos contiene literalmente
+        `image/*` (RustWebChromeClient.onShowFileChooser). Con los dos tipos
+        concretos abría el selector de fotos de la galería, y el botón «Tomar
+        foto» no tomaba ninguna: se descubrió el 23-09-2026 al probarlo en un
+        emulador de Android 14. La cámara entrega JPEG, y el backend valida el
+        tipo real por sus bytes, así que no se admite nada que antes se rechazara.
+      */}
       <input
         ref={campoCamara}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/*"
         capture="environment"
         onChange={(e) => elegir(e.target.files?.[0], 'camara')}
         style={{ display: 'none' }}
@@ -177,6 +201,13 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
             </span>
           </div>
         </>
+      )}
+
+      {estado.fase === 'vacio' && camaraSinFoto && (
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+          No se tomó ninguna foto. Si la aplicación no tiene permiso para usar la cámara, actívelo en los ajustes del
+          teléfono (Aplicaciones › SICOT › Permisos), o use «Elegir una foto».
+        </span>
       )}
 
       {estado.fase === 'error' && (
