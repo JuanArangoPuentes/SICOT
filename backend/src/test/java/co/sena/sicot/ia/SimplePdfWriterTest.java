@@ -6,6 +6,9 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.IntStream;
 
@@ -27,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
  */
 class SimplePdfWriterTest {
 
-    private final SimplePdfWriter escritor = new SimplePdfWriter();
+    private final SimplePdfWriter escritor = new SimplePdfWriter(Clock.systemDefaultZone());
 
     private String textoDe(byte[] pdf) throws IOException {
         try (PDDocument documento = Loader.loadPDF(pdf)) {
@@ -192,5 +195,20 @@ class SimplePdfWriterTest {
 
         String texto = textoDe(pdf);
         assertThat(texto).contains("Muñoz").contains("ejecución").contains("antigüedad");
+    }
+
+    /**
+     * 19:30 del 23 de septiembre en Bogotá son las 00:30 del 24 en UTC, que es
+     * la zona de la JVM dentro del contenedor. Antes de leer el reloj del
+     * Centro, un documento redactado a esa hora salía fechado al día siguiente
+     * (MDL-214).
+     */
+    @Test
+    void laFechaDelPieEsLaDelCentroAunqueEnUtcYaSeaManana() throws Exception {
+        Clock nocheEnBogota = Clock.fixed(Instant.parse("2026-09-24T00:30:00Z"), ZoneId.of("America/Bogota"));
+
+        byte[] pdf = new SimplePdfWriter(nocheEnBogota).generar("Acta", List.of("Cuerpo del documento."));
+
+        assertThat(textoDe(pdf)).contains("23 de septiembre de 2026").doesNotContain("24 de septiembre");
     }
 }
