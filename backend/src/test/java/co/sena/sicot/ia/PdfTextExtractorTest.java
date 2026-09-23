@@ -4,6 +4,7 @@ import co.sena.sicot.exception.BusinessException;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PdfTextExtractorTest {
 
     private final PdfTextExtractor extractor = new PdfTextExtractor();
-    private final SimplePdfWriter escritor = new SimplePdfWriter();
+    private final SimplePdfWriter escritor = new SimplePdfWriter(Clock.systemDefaultZone());
 
     @Test
     void extraeElTextoDeUnPdfRealGeneradoPorElPropioSistema() {

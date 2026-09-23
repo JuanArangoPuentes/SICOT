@@ -1,11 +1,13 @@
 package co.sena.sicot.automatizacion;
 
+import co.sena.sicot.config.ZonaHoraria;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDate;
 
 /**
@@ -39,15 +41,18 @@ public class PlanificadorDeAutomatizaciones {
     private final EjecutorDeTareas ejecutor;
     private final AlmacenDeTareas almacen;
     private final AutomatizacionProperties propiedades;
+    private final Clock reloj;
 
     public PlanificadorDeAutomatizaciones(MotorDeAutomatizacion motor,
                                           EjecutorDeTareas ejecutor,
                                           AlmacenDeTareas almacen,
-                                          AutomatizacionProperties propiedades) {
+                                          AutomatizacionProperties propiedades,
+                                          Clock reloj) {
         this.motor = motor;
         this.ejecutor = ejecutor;
         this.almacen = almacen;
         this.propiedades = propiedades;
+        this.reloj = reloj;
         log.info("Automatizaciones activas: sondeo cada {}, {} trabajador(es), hasta {} intento(s) por tarea.",
                 propiedades.sondeo(), propiedades.trabajadores(), propiedades.maximoDeIntentos());
     }
@@ -75,10 +80,10 @@ public class PlanificadorDeAutomatizaciones {
      * {@code VigilanciaDeAlmacenamiento}, para no solapar las dos tareas
      * pesadas de la noche.
      */
-    @Scheduled(cron = "0 0 6 * * *")
+    @Scheduled(cron = "0 0 6 * * *", zone = ZonaHoraria.PROPIEDAD)
     public void evaluarCalendario() {
         try {
-            motor.evaluarCalendario(LocalDate.now());
+            motor.evaluarCalendario(LocalDate.now(reloj));
         } catch (Exception e) {
             log.error("Fallo inesperado evaluando las reglas de calendario. "
                     + "Se reintentará mañana; la cola no se ve afectada.", e);
@@ -93,7 +98,7 @@ public class PlanificadorDeAutomatizaciones {
      * escribir en ella, y el respaldo de las 02:00 todavía conserva lo que se
      * borra aquí durante los días de retención que fija ADR-002.
      */
-    @Scheduled(cron = "0 0 5 * * *")
+    @Scheduled(cron = "0 0 5 * * *", zone = ZonaHoraria.PROPIEDAD)
     public void purgarLaCola() {
         try {
             almacen.purgarResueltas();

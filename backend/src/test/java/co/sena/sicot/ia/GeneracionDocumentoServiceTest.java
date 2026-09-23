@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Optional;
 
@@ -70,7 +71,7 @@ class GeneracionDocumentoServiceTest {
     @BeforeEach
     void construirElServicio() {
         servicio = new GeneracionDocumentoService(
-                contratoService, subetapaRepository, documentoRepository, ollamaClient, new SimplePdfWriter(),
+                contratoService, subetapaRepository, documentoRepository, ollamaClient, new SimplePdfWriter(Clock.systemDefaultZone()),
                 registroService);
 
         Usuario supervisor = new Usuario();

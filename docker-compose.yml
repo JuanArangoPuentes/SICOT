@@ -81,6 +81,12 @@ services:
       # que sí puede pedir "dev" en voz alta; docker-compose.prod.yml fija "prod"
       # de forma literal.
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      # Zona horaria del Centro: decide qué día es «hoy» y a qué hora corren las
+      # tareas programadas. El contenedor corre en UTC y así se queda; el backend
+      # lee la fecha con esta zona (ZonaHoraria.java). Se pasa aquí para que el
+      # .env pueda cambiarla: application.properties la lee del entorno, pero
+      # Compose solo entrega las variables que se nombran.
+      SICOT_ZONA_HORARIA: ${SICOT_ZONA_HORARIA:-America/Bogota}
       DB_URL: jdbc:postgresql://db:5432/sicot
       DB_USERNAME: sicot
       DB_PASSWORD: ${DB_PASSWORD:-sicot_dev_password}
