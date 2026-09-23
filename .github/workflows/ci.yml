@@ -302,11 +302,61 @@ jobs:
           java-version: '25'
           cache: maven
 
+      # La base de la NVD se guarda entre ejecuciones. Sin esto, cada run bajaba
+      # los ~400.000 registros enteros: el análisis tardaba 14 s y el job entre
+      # 38 y 65 minutos, así que el informe llegaba después de fusionar el PR que
+      # auditaba (MDL-212). Con la copia del día anterior solo baja lo nuevo.
+      #
+      # Vive fuera de ~/.m2 a propósito: dentro, la caché de Maven de setup-java
+      # podría arrastrar la base entera la vez que este job guardara primero, y
+      # engordar la caché que usan todos los demás jobs.
+      #
+      # La clave cambia una vez al día: la primera ejecución de cada día guarda
+      # su copia y las demás la reutilizan. Con una clave por run se guardaría
+      # una copia completa en cada push y se desalojarían las cachés útiles de
+      # Maven, npm y Rust, porque el repositorio tiene un tope de 10 GB.
+      - name: Fecha de la copia de la NVD
+        id: fecha
+        run: echo "hoy=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Restaurar la base de la NVD
+        id: restaurar-nvd
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/dependency-check-data
+          key: nvd-dependency-check-${{ steps.fecha.outputs.hoy }}
+          restore-keys: nvd-dependency-check-
+
+      # La actualización va separada del análisis para saber si terminó bien.
+      # Solo una actualización completa se guarda en la caché: una cortada a
+      # medias (la NVD se cae y limita por IP) dejaría una base incompleta que
+      # los runs siguientes darían por buena.
+      - name: Actualizar la base de la NVD
+        id: actualizar-nvd
+        working-directory: backend
+        continue-on-error: true
+        run: >-
+          ./mvnw -B -ntp org.owasp:dependency-check-maven:12.1.0:update-only
+          -DdataDirectory=${{ runner.temp }}/dependency-check-data
+
+      - name: Guardar la base de la NVD
+        if: >-
+          steps.actualizar-nvd.outcome == 'success' &&
+          steps.restaurar-nvd.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/dependency-check-data
+          key: nvd-dependency-check-${{ steps.fecha.outputs.hoy }}
+
+      # No vuelve a descargar: la base recién actualizada vale 4 horas
+      # (nvdValidForHours). Si la actualización falló, lo intenta de nuevo aquí,
+      # como hacía antes de existir la caché.
       - name: Auditar dependencias del backend (OWASP Dependency-Check)
         working-directory: backend
         continue-on-error: true
         run: >-
           ./mvnw -B -ntp org.owasp:dependency-check-maven:12.1.0:check
+          -DdataDirectory=${{ runner.temp }}/dependency-check-data
           -DfailBuildOnCVSS=8
           -DassemblyAnalyzerEnabled=false
 
