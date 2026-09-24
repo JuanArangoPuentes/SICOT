@@ -134,7 +134,16 @@ function Etapas({ c }: { c: ContratoSeguimiento }) {
 
 function DetalleContrato({ c }: { c: ContratoSeguimiento }) {
   return (
-    <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 12, display: 'grid', gap: 14 }}>
+    <div
+      style={{
+        marginTop: 12,
+        borderTop: '1px solid var(--border)',
+        paddingTop: 12,
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr)',
+        gap: 14,
+      }}
+    >
       <div>
         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 6 }}>Pasos y subetapas</div>
         {c.etapas.length === 0 && (
@@ -147,7 +156,16 @@ function DetalleContrato({ c }: { c: ContratoSeguimiento }) {
             <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
               Paso {e.numero} — {e.nombre} · {e.porcentaje}%
             </div>
-            <ul style={{ listStyle: 'none', margin: '4px 0 0', padding: 0, display: 'grid', gap: 2 }}>
+            <ul
+              style={{
+                listStyle: 'none',
+                margin: '4px 0 0',
+                padding: 0,
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr)',
+                gap: 2,
+              }}
+            >
               {e.subEtapas.map((s) => (
                 <li key={s.id} style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'baseline' }}>
                   <span
@@ -185,7 +203,16 @@ function DetalleContrato({ c }: { c: ContratoSeguimiento }) {
         {c.documentos.length === 0 && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Todavía no hay documentos en el expediente.</div>
         )}
-        <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 4 }}>
+        <ul
+          style={{
+            listStyle: 'none',
+            margin: 0,
+            padding: 0,
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr)',
+            gap: 4,
+          }}
+        >
           {c.documentos.map((d) => (
             <li key={d.id} style={{ fontSize: 12, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
               <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{d.nombre}</span>
@@ -244,7 +271,16 @@ function TarjetaContrato({ c }: { c: ContratoSeguimiento }) {
         <Etapas c={c} />
       </div>
 
-      <div style={{ fontSize: 12, marginTop: 10, display: 'grid', gap: 3 }}>
+      <div
+        style={{
+          fontSize: 12,
+          marginTop: 10,
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          gap: 3,
+          overflowWrap: 'anywhere',
+        }}
+      >
         <div>
           <span style={{ color: 'var(--text-muted)' }}>Va en: </span>
           {c.etapaActual != null ? (
@@ -351,7 +387,7 @@ function TarjetaSupervisor({ s }: { s: SupervisorSeguimiento }) {
       {s.contratos.length === 0 ? (
         <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No tiene contratos abiertos asignados.</div>
       ) : (
-        <div style={{ display: 'grid', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
           {s.contratos.map((c) => (
             <TarjetaContrato key={c.id} c={c} />
           ))}
@@ -446,7 +482,7 @@ export default function SeguimientoSupervisores({
   }, [datos, filtro])
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <input
           type="search"
@@ -495,7 +531,7 @@ export default function SeguimientoSupervisores({
           >
             <IconAlertTriangle size={16} /> Contratos abiertos sin supervisor ({datos.contratosSinSupervisor.length})
           </div>
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
             {datos.contratosSinSupervisor.map((c) => (
               <TarjetaContrato key={c.id} c={c} />
             ))}
