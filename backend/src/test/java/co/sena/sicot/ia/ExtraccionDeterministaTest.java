@@ -90,11 +90,77 @@ class ExtraccionDeterministaTest {
     }
 
     @Test
-    @DisplayName("deja objeto y tipoContrato al modelo, no los inventa")
-    void noTocaLosCamposQueSonTrabajoDelModelo() {
-        ExtraccionContratoResponse r = extractor.extraer(CONTRATO);
+    @DisplayName("sin rótulo de objeto ni de tipo, los deja al modelo en vez de adivinarlos")
+    void sinRotuloNoAdivinaObjetoNiTipo() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "Contrato CO1.PCCNTR.1 entre las partes, por valor de $1.000.000 pesos.");
         assertThat(r.objeto()).isNull();
         assertThat(r.tipoContrato()).isNull();
+    }
+
+    // ── Formatos de la prueba integral del 24-09-2026 ───────────────────────
+
+    @Test
+    @DisplayName("notificación con viñetas «Etiqueta: valor»")
+    void leeLaNotificacionConVinetas() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                Número de contrato CO1.PCCNTR.9100003
+                •  Objeto: 05-9-2026-009120 contratar el suministro de insumos de tapicería, espumas y telas para los
+                programas de formación en diseño de mobiliario - Lote 3
+                •  Contratista: TAPICERÍAS Y ESPUMAS DE ANTIOQUIA S.A.S., NIT 900.112.233-4
+                •  Representante legal: LUIS FERNANDO ARANGO ZULUAGA
+                •  Valor: $ 54.780.300
+                •  Fecha de inicio: 22/09/2026
+                •  Registro presupuestal: 81502 del 18/09/2026""");
+
+        assertThat(r.objeto()).isEqualTo("05-9-2026-009120 contratar el suministro de insumos de tapicería, espumas y"
+                + " telas para los programas de formación en diseño de mobiliario - Lote 3");
+        assertThat(r.proveedor()).isEqualTo("TAPICERÍAS Y ESPUMAS DE ANTIOQUIA S.A.S.");
+        assertThat(r.nit()).isEqualTo("900.112.233-4");
+        assertThat(r.representanteLegal()).isEqualTo("LUIS FERNANDO ARANGO ZULUAGA");
+        assertThat(r.registroPresupuestal()).isEqualTo("81502");
+        assertThat(r.valor()).isEqualTo("54780300");
+    }
+
+    @Test
+    @DisplayName("acta redactada en prosa")
+    void leeElActaEnProsa() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                ACTA DE INICIO DEL CONTRATO DE PRESTACIÓN DE SERVICIOS No. CO1.PCCNTR.9100002
+                se reunieron JORGE ANDRÉS BETANCUR RÚA, en su calidad de supervisor, y el señor HERNÁN
+                DARÍO CASTAÑO VÉLEZ, representante legal de MANTENIMIENTOS TÉCNICOS DEL VALLE LTDA, con NIT
+                800.765.432-1, con el fin de dar inicio a la ejecución del contrato cuyo objeto es: PRESTAR EL SERVICIO
+                DE MANTENIMIENTO PREVENTIVO A LA MAQUINARIA.
+                El valor total es de ($86.000.000), amparado en el certificado de registro presupuestal número 80311.
+                El lugar de ejecución son las instalaciones del Centro en la Calle 63 No. 58B-03,
+                Itagüí.""");
+
+        assertThat(r.proveedor()).isEqualTo("MANTENIMIENTOS TÉCNICOS DEL VALLE LTDA");
+        assertThat(r.nit()).isEqualTo("800.765.432-1");
+        assertThat(r.representanteLegal()).isEqualTo("HERNÁN DARÍO CASTAÑO VÉLEZ");
+        assertThat(r.objeto()).isEqualTo("PRESTAR EL SERVICIO DE MANTENIMIENTO PREVENTIVO A LA MAQUINARIA");
+        assertThat(r.registroPresupuestal()).isEqualTo("80311");
+        assertThat(r.lugarEjecucion()).isEqualTo("las instalaciones del Centro en la Calle 63 No. 58B-03, Itagüí");
+        assertThat(r.tipoContrato()).isEqualTo("Servicios");
+    }
+
+    @Test
+    @DisplayName("un objeto de tabla en varias líneas no se corta con saltos de línea de Windows")
+    void elObjetoDeVariasLineasSaleEnteroAunqueLasLineasTerminenEnCRLF() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "TIPO DE CONTRATO COMPRAVENTA\r\nOBJETO \r\n5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER\r\n"
+                        + "DE TOLDOS PARA EVENTOS \r\nAL APRENDIZ \r\nVALOR DEL CONTRATO ($10.000.000 COP)\r\n");
+
+        assertThat(r.objeto()).isEqualTo("5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS PARA EVENTOS AL APRENDIZ");
+        assertThat(r.tipoContrato()).isEqualTo("Compraventa");
+    }
+
+    @Test
+    @DisplayName("«Contratista» sin dos puntos no es el proveedor: es el cargo de quien elaboró")
+    void elCargoDeQuienElaboroNoPasaPorProveedor() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "Elaboró: Valentina Jiménez\nContratista Abogada Apoyo Bienes y Servicios\n");
+        assertThat(r.proveedor()).isNull();
     }
 
     @Test

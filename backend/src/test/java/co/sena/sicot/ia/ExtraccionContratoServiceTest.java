@@ -70,11 +70,13 @@ class ExtraccionContratoServiceTest {
         // y es la que ahora resuelve los campos con forma fija.
         servicio = new ExtraccionContratoService(
                 pdfTextExtractor, ollamaClient, new ObjectMapper(), archivoValidator,
-                new ExtraccionDeterminista());
+                new ExtraccionDeterminista(), new DocxTextExtractor());
         // El presupuesto es un @Value: en una prueba unitaria no hay contexto de
         // Spring que lo rellene y quedaría en 0, cortando tras el primer archivo.
         ReflectionTestUtils.setField(servicio, "presupuestoSegundos", 900L);
-        given(pdfTextExtractor.extraerTexto(any())).willReturn("texto legible del documento");
+        // El número de contrato sale del documento, no del modelo: desde el
+        // 24-09-2026 del modelo solo se aceptan el objeto y el tipo.
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("texto legible del documento CO1.PCCNTR.7986334");
     }
 
     private MultipartFile pdf(String nombre) {
@@ -151,16 +153,13 @@ class ExtraccionContratoServiceTest {
      */
     @Test
     void elPrimerValorNoNuloGanaYUnNuloPosteriorNoLoPisa() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Manual. Contrato CO1.PCCNTR.7986334 para el Suministro de materiales del lote.",
+                "CONTRATO NRO. CO1.PCCNTR.OTRONUMERO\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n"
+                        + "CC o NIT 900123456-7\nVALOR DEL CONTRATO ($10.000.000 COP)");
         given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
-                """
-                {"idContrato":"CO1.PCCNTR.7986334","objeto":"Suministro de materiales","proveedor":null,
-                 "nit":null,"representanteLegal":null,"valor":null,"vigenciaInicio":null,
-                 "vigenciaFin":null,"lugarEjecucion":null,"registroPresupuestal":null,"tipoContrato":null}""",
-                """
-                {"idContrato":"OTRO-NUMERO-QUE-NO-DEBE-GANAR","objeto":null,
-                 "proveedor":"EVENTOS SUPERNOVA S.A.S.","nit":"900123456-7","representanteLegal":null,
-                 "valor":"10000000","vigenciaInicio":null,"vigenciaFin":null,"lugarEjecucion":null,
-                 "registroPresupuestal":null,"tipoContrato":null}""");
+                "{\"objeto\":\"Suministro de materiales\",\"tipoContrato\":null}",
+                NADA);
 
         ExtraccionContratoResponse resultado = servicio.extraer(List.of(pdf("manual.pdf"), pdf("acta.pdf")));
 
@@ -208,14 +207,82 @@ class ExtraccionContratoServiceTest {
         verify(ollamaClient).generar(anyString(), anyBoolean());
     }
 
+    /**
+     * Prueba integral del 24-09-2026: un PDF escaneado devolvía 200 con todos
+     * los campos vacíos, y Gestión veía un formulario en blanco sin saber por
+     * qué. Ahora se dice.
+     */
     @Test
-    void unPdfEscaneadoSinTextoLegibleSeOmiteEnVezDePreguntarleAlModeloPorNada() {
+    void unPdfEscaneadoSinTextoLegibleSeExplicaEnVezDeDevolverUnFormularioVacio() {
         given(pdfTextExtractor.extraerTexto(any())).willReturn("   ");
 
-        ExtraccionContratoResponse resultado = servicio.extraer(List.of(pdf("escaneado.pdf")));
-
-        assertThat(resultado.idContrato()).isNull();
+        assertThatThrownBy(() -> servicio.extraer(List.of(pdf("escaneado.pdf"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("escaneado.pdf")
+                .hasMessageContaining("escaneado es una imagen");
         verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+    }
+
+    @Test
+    void siUnoDeLosArchivosSeLeeLosIlegiblesNoTumbanLaExtraccion() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("   ", "texto legible CO1.PCCNTR.7986334");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(NADA);
+
+        assertThat(servicio.extraer(List.of(pdf("escaneado.pdf"), pdf("acta.pdf"))).idContrato())
+                .isEqualTo("CO1.PCCNTR.7986334");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lo que propone el modelo se revisa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void siElDocumentoRotulaElObjetoYElTipoNoSeLlamaAlModelo() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("""
+                CONTRATO NRO. CO1.PCCNTR.7986334
+                TIPO DE CONTRATO SUMINISTRO
+                OBJETO
+                5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS
+                VALOR DEL CONTRATO DIEZ MILLONES DE PESOS ($10.000.000 COP)""");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("acta.pdf")));
+
+        assertThat(r.objeto()).isEqualTo("5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS");
+        assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
+        verifyNoInteractions(ollamaClient);
+    }
+
+    /** El caso real: el modelo cambió «CONTRATAR» por «CONTRAER». */
+    @Test
+    void unObjetoQueElModeloReescribioSeDescarta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Acta CO1.PCCNTR.7986334 para contratar el servicio de alquiler de toldos y carpas");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":\"contraer el servicio de alquiler de toldos y carpas\",\"tipoContrato\":\"Servicios\"}");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("acta.pdf")));
+
+        assertThat(r.objeto()).isNull();
+        assertThat(r.tipoContrato()).isEqualTo("Servicios");
+    }
+
+    @Test
+    void unObjetoCopiadoConOtrasMayusculasYEspaciosSeAcepta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Acta CO1.PCCNTR.7986334 para contratar el servicio de\nalquiler de toldos y carpas");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":\"CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS Y CARPAS\",\"tipoContrato\":null}");
+
+        assertThat(servicio.extraer(List.of(pdf("acta.pdf"))).objeto())
+                .isEqualTo("CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS Y CARPAS");
+    }
+
+    @Test
+    void unTipoFueraDeLasOpcionesDelFormularioSeDescarta() {
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":null,\"tipoContrato\":\"Consultoría especializada\"}");
+
+        assertThat(servicio.extraer(List.of(pdf("acta.pdf"))).tipoContrato()).isNull();
     }
 
     @Test

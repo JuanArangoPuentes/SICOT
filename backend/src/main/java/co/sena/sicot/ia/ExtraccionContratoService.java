@@ -56,14 +56,22 @@ public class ExtraccionContratoService {
 
     private final ExtraccionDeterminista extraccionDeterminista;
 
+    private final DocxTextExtractor docxTextExtractor;
+
+    /** Tipos del formulario de Gestión. Lo que el modelo proponga fuera de ellos se descarta. */
+    static final List<String> TIPOS = List.of("Suministro de Bienes", "Compraventa", "Servicios", "Obras",
+            "Arrendamiento");
+
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
                                       ObjectMapper objectMapper, ArchivoValidator archivoValidator,
-                                      ExtraccionDeterminista extraccionDeterminista) {
+                                      ExtraccionDeterminista extraccionDeterminista,
+                                      DocxTextExtractor docxTextExtractor) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
         this.archivoValidator = archivoValidator;
         this.extraccionDeterminista = extraccionDeterminista;
+        this.docxTextExtractor = docxTextExtractor;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -90,6 +98,7 @@ public class ExtraccionContratoService {
 
         long limite = System.nanoTime() + Duration.ofSeconds(presupuestoSegundos).toNanos();
         int procesados = 0;
+        List<String> sinTexto = new java.util.ArrayList<>();
 
         ExtraccionContratoResponse resultado = new ExtraccionContratoResponse(
                 null, null, null, null, null, null, null, null, null, null, null);
@@ -105,8 +114,21 @@ public class ExtraccionContratoService {
                 break;
             }
             ExtraccionContratoResponse deEsteArchivo = extraerDeUnArchivo(archivo);
-            resultado = combinar(resultado, deEsteArchivo);
+            if (deEsteArchivo == null) {
+                sinTexto.add(archivo.getOriginalFilename());
+            } else {
+                resultado = combinar(resultado, deEsteArchivo);
+            }
             procesados++;
+        }
+        // Si no se pudo leer ningún archivo, un formulario vacío sin
+        // explicación era lo que veía Gestión (prueba del 24-09-2026 con un PDF
+        // escaneado: 200 con todos los campos en null). Se dice por qué.
+        if (!sinTexto.isEmpty() && sinTexto.size() == procesados) {
+            throw new BusinessException("No se pudo leer texto en " + String.join(", ", sinTexto)
+                    + ". SICOT lee PDF con texto y documentos de Word (.docx); un PDF escaneado es una imagen"
+                    + " y todavía no se reconoce su texto. Diligencie los datos a mano o cargue el documento"
+                    + " original.");
         }
         return resultado;
     }
@@ -114,9 +136,11 @@ public class ExtraccionContratoService {
     private ExtraccionContratoResponse extraerDeUnArchivo(MultipartFile archivo) {
         String nombreOriginal = archivo.getOriginalFilename();
         String nombreArchivo = nombreOriginal == null ? "" : nombreOriginal.toLowerCase();
-        if (!nombreArchivo.endsWith(".pdf")) {
-            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", nombreOriginal);
-            return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
+        boolean esPdf = nombreArchivo.endsWith(".pdf");
+        boolean esDocx = nombreArchivo.endsWith(".docx");
+        if (!esPdf && !esDocx) {
+            log.info("Se omite '{}' del análisis: la lectura automática admite PDF y DOCX.", nombreOriginal);
+            return null;
         }
 
         byte[] contenido;
@@ -126,10 +150,10 @@ public class ExtraccionContratoService {
             throw new UncheckedIOException("No se pudo leer el archivo cargado: " + archivo.getOriginalFilename(), e);
         }
 
-        String texto = pdfTextExtractor.extraerTexto(contenido);
+        String texto = esPdf ? pdfTextExtractor.extraerTexto(contenido) : docxTextExtractor.extraerTexto(contenido);
         if (texto == null || texto.isBlank()) {
             log.info("'{}' no tiene texto legible (¿imagen escaneada sin OCR?); se omite del análisis.", archivo.getOriginalFilename());
-            return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
+            return null;
         }
         // Los documentos reales con datos de contrato (Acta de Inicio, notificación) rara
         // vez superan 3000 caracteres. Los manuales/formatos en blanco son mucho más largos
@@ -146,9 +170,15 @@ public class ExtraccionContratoService {
         // Ver ExtraccionDeterminista para las cifras completas.
         ExtraccionContratoResponse deterministica = extraccionDeterminista.extraer(texto);
 
-        // Al modelo solo le quedan el objeto (prosa) y el tipo (clasificación).
-        // El prompt encoge en consecuencia, que es lo que hace el trabajo
-        // abordable por un modelo pequeño — el objetivo de fondo del proyecto.
+        // Si el documento rotulaba el objeto y el tipo, ya no queda nada que
+        // preguntarle al modelo: la extracción termina en milisegundos en vez
+        // de minutos, que en un equipo sin GPU es la diferencia entre usarla o
+        // no (ver feedback de ADR-008: bastar con una IA pequeña).
+        if (extraccionDeterminista.estaCompleta(deterministica)) {
+            log.info("'{}': todos los campos salieron del documento sin usar el modelo.", archivo.getOriginalFilename());
+            return deterministica;
+        }
+
         String prompt = """
                 Eres un asistente que extrae datos de documentos de contratación pública colombiana (SENA).
                 Del siguiente texto, extrae ÚNICAMENTE los datos que aparezcan explícitamente. Si un dato no
@@ -157,9 +187,9 @@ public class ExtraccionContratoService {
                 es correcto, no inventes datos para llenarlos).
 
                 Responde solo con un objeto JSON con exactamente estas dos claves:
-                objeto (el objeto contractual: qué se contrata, en una o dos frases tomadas del documento),
-                tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras", "Arrendamiento" — la
-                que mejor describa el objeto; si no es clara, usa null).
+                objeto (el objeto contractual copiado LITERALMENTE del documento, sin cambiar ninguna palabra),
+                tipoContrato (una de: "Suministro de Bienes", "Compraventa", "Servicios", "Obras",
+                "Arrendamiento" — la que mejor describa el objeto; si no es clara, usa null).
 
                 No incluyas ninguna otra clave. Los demás datos del contrato —número, NIT, valor, fechas,
                 registro presupuestal— ya se extrajeron por otro medio y no se te están pidiendo.
@@ -175,25 +205,51 @@ public class ExtraccionContratoService {
         long inicio = System.currentTimeMillis();
         String respuestaCruda = ollamaClient.generar(prompt, true);
         log.info("Extracción de '{}' completada en {} ms", archivo.getOriginalFilename(), System.currentTimeMillis() - inicio);
+        ExtraccionContratoResponse delModelo;
         try {
-            // El determinista manda: si sacó un campo, ese valor gana. combinar()
-            // toma el primero no nulo, y va primero porque una cifra copiada por
-            // una expresión regular es más de fiar que la misma cifra redactada
-            // por el modelo — que es exactamente lo que la medición mostró.
-            return combinar(deterministica, objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class));
+            delModelo = objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
         } catch (IOException e) {
             // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
             // PDF (incluido un intento de inyección) y no tiene por qué quedar
             // completa en el log del servidor.
             String muestra = respuestaCruda.length() > 300 ? respuestaCruda.substring(0, 300) + "…" : respuestaCruda;
             log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), muestra);
-            // Un documento con formato inesperado no debe tumbar el análisis de los demás.
-            // Antes aquí se devolvía todo vacío; ahora se devuelve lo que sacó el
-            // extractor determinista, que no dependía del modelo y sigue siendo
-            // correcto. Que el modelo se atragante con el objeto no es motivo
-            // para tirar el número de contrato, el NIT y el valor.
+            // Un documento con formato inesperado no debe tumbar el análisis de
+            // los demás: se devuelve lo que sacó el extractor determinista.
             return deterministica;
         }
+        // Lo que devuelve el modelo se revisa antes de usarlo. El objeto tiene
+        // que estar escrito en el documento: si el modelo lo reescribió, se
+        // descarta y la persona lo copia. El tipo tiene que ser una de las
+        // opciones del formulario.
+        String objeto = delModelo.objeto();
+        if (objeto != null && !apareceEnElTexto(objeto, texto)) {
+            log.warn("El objeto que propuso el modelo para '{}' no está escrito en el documento; se descarta.",
+                    archivo.getOriginalFilename());
+            objeto = null;
+        }
+        // List.of(...).contains(null) lanza NullPointerException: se comprueba antes.
+        String tipo = delModelo.tipoContrato() != null && TIPOS.contains(delModelo.tipoContrato())
+                ? delModelo.tipoContrato() : null;
+        // El determinista manda: si sacó un campo, ese valor gana.
+        return combinar(deterministica, new ExtraccionContratoResponse(null, objeto, null, null, null, null,
+                null, null, null, null, tipo));
+    }
+
+    /**
+     * ¿El texto propuesto está escrito en el documento? Se compara sin tildes,
+     * mayúsculas, puntuación ni saltos de línea, para no descartar una copia
+     * fiel por un espacio de más. Un cambio de palabra («CONTRAER» por
+     * «CONTRATAR») sí la descarta.
+     */
+    static boolean apareceEnElTexto(String propuesto, String texto) {
+        String p = soloLetrasYDigitos(propuesto);
+        return !p.isBlank() && soloLetrasYDigitos(texto).contains(p);
+    }
+
+    private static String soloLetrasYDigitos(String s) {
+        String sinTildes = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sinTildes.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
     }
 
     private ExtraccionContratoResponse combinar(ExtraccionContratoResponse base, ExtraccionContratoResponse nuevo) {

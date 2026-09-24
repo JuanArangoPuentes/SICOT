@@ -24,7 +24,10 @@ import { formatCOP, formatFecha } from '@/services/format'
 
 // Tipos de contrato seleccionables. Se persisten en el campo `tipoContrato`
 // del contrato; son una etiqueta descriptiva, no cambian el flujo.
-const CONTRACT_TYPES = ['Suministro de Bienes', 'Servicios', 'Obras', 'Arrendamiento'] as const
+// «Compraventa» se añadió el 24-09-2026: un acta que decía COMPRAVENTA
+// quedaba registrada como «Suministro de Bienes» por no tener dónde caer. La
+// misma lista vive en ExtraccionContratoService.TIPOS del backend.
+const CONTRACT_TYPES = ['Suministro de Bienes', 'Compraventa', 'Servicios', 'Obras', 'Arrendamiento'] as const
 
 // Las 6 etapas reales del procedimiento GCCON-P-010, espejo de
 // `GcconP010Plantilla` en el backend.
@@ -211,7 +214,10 @@ export default function GestionPanel({
       setVigencia(inicio && fin ? `${inicio} – ${fin}` : '')
       setLugarEjecucion(resultado.lugarEjecucion ?? '')
       setRegistroPresupuestal(resultado.registroPresupuestal ?? '')
-      if (resultado.tipoContrato && Object.keys(CONTRACT_TYPES).includes(resultado.tipoContrato)) {
+      // Antes se comparaba con Object.keys(CONTRACT_TYPES), que en un arreglo
+      // son los índices ('0', '1'…): el tipo extraído nunca se aplicaba y el
+      // formulario se quedaba siempre en «Suministro de Bienes».
+      if (resultado.tipoContrato && (CONTRACT_TYPES as readonly string[]).includes(resultado.tipoContrato)) {
         setTipo(resultado.tipoContrato)
       }
       setUploadState('detect')
@@ -514,7 +520,7 @@ export default function GestionPanel({
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".pdf"
+                accept=".pdf,.docx"
                 multiple
                 style={{ display: 'none' }}
                 onChange={(e) => {
@@ -541,14 +547,14 @@ export default function GestionPanel({
                   Haga clic para seleccionar uno o varios documentos
                   <br />
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    PDF — max 20 MB cada uno, hasta 6 archivos
+                    PDF o Word (.docx) — max 20 MB cada uno, hasta 6 archivos
                   </span>
                 </p>
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
-                El Copiloto IA (Ollama local) lee los PDF que cargue y combina lo que encuentre en todos para proponer
-                los datos del contrato — usted los revisa, corrige y confirma antes de crear el contrato. Los archivos
-                quedan adjuntos al contrato de todas formas, se analicen o no.
+                SICOT lee los documentos que cargue y combina lo que encuentre en todos para proponer los datos del
+                contrato — usted los revisa, corrige y confirma antes de crear el contrato. Los archivos quedan adjuntos
+                al contrato de todas formas, se analicen o no.
               </p>
               <p style={{ color: 'var(--accent)', fontSize: 11, marginTop: 8, textAlign: 'center', fontWeight: 600 }}>
                 Recomendado: cargue solo el Acta de Inicio y/o la notificación del supervisor — son los que realmente
@@ -557,8 +563,9 @@ export default function GestionPanel({
                 encontrar nada útil.
               </p>
               <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8, textAlign: 'center' }}>
-                El análisis toma 1 a 4 minutos por documento en esta máquina (se procesan uno por uno). La lectura de
-                DOCX estará disponible en una fase posterior; por ahora cargue en PDF.
+                Si el documento rotula sus datos (como el Acta de Inicio GCCON-F-018), la lectura es inmediata; si no,
+                el Copiloto IA completa el objeto y el tipo, y puede tardar unos minutos. Un PDF escaneado (una imagen)
+                todavía no se puede leer: diligencie esos datos a mano.
               </p>
             </div>
           )}
