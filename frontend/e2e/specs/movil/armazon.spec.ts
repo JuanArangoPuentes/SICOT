@@ -25,7 +25,7 @@ const PANTALLAS: Record<Rol, readonly string[]> = {
     '/supervisor/registros',
   ],
   GESTION: ['/gestion'],
-  ADMINISTRADOR: ['/admin/dashboard', '/admin/documentos', '/admin/usuarios', '/admin/firmas'],
+  ADMINISTRADOR: ['/admin/dashboard', '/admin/seguimiento', '/admin/documentos', '/admin/usuarios', '/admin/firmas'],
 }
 
 /**
