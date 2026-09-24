@@ -26,6 +26,9 @@ vi.mock('@/services/formatoService', () => ({
   eliminarFormato: vi.fn(),
   descargarFormato: vi.fn(),
 }))
+vi.mock('@/services/seguimientoService', () => ({
+  getSeguimiento: vi.fn(),
+}))
 vi.mock('@/services/firmaService', () => ({
   getFirmas: vi.fn(),
   crearFirma: vi.fn(),
@@ -56,6 +59,11 @@ describe('AdminPanel', () => {
     vi.mocked((await import('@/services/usuarioService')).getUsuarios).mockResolvedValue([])
     vi.mocked((await import('@/services/formatoService')).getFormatos).mockResolvedValue([])
     vi.mocked((await import('@/services/firmaService')).getFirmas).mockResolvedValue([])
+    vi.mocked((await import('@/services/seguimientoService')).getSeguimiento).mockResolvedValue({
+      supervisores: [],
+      contratosSinSupervisor: [],
+      generadoEn: '2026-09-24T20:00:00Z',
+    })
   })
 
   it('muestra la vista de usuarios cuando la URL la selecciona', async () => {

@@ -87,7 +87,7 @@ const rutaDeRol = (u: AuthResponse): string => {
 }
 
 const VISTAS_SUPERVISOR: Tab[] = ['bandeja', 'contrato', 'alertas', 'documentos', 'registros']
-const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'documentos', 'usuarios', 'firmas']
+const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'seguimiento', 'documentos', 'usuarios', 'firmas']
 
 /** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
 function vistaValida<T extends string>(valor: string | undefined, permitidas: T[], porDefecto: T): T {

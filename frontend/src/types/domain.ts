@@ -9,7 +9,7 @@
 /** Vistas del panel del Supervisor — una por entrada de la barra lateral. */
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 
-export type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
+export type AdminTab = 'dashboard' | 'seguimiento' | 'documentos' | 'usuarios' | 'firmas'
 export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {

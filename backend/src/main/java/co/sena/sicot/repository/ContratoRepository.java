@@ -1,11 +1,14 @@
 package co.sena.sicot.repository;
 
+import co.sena.sicot.dto.seguimiento.ConteoPorId;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -64,4 +67,25 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
     List<Contrato> findBySupervisorIdAndEstadoOrderByFechaCreacionDesc(Long supervisorId,
                                                                       EstadoContrato estado,
                                                                       Pageable limite);
+
+    /**
+     * Contratos abiertos para el seguimiento del Administrador, sin tope.
+     *
+     * <p>Mismo razonamiento que {@link #findByEstado}: un tope aquí haría
+     * desaparecer del seguimiento a un supervisor entero sin ningún aviso. Lo
+     * que acota el tamaño es que solo entran los estados abiertos; los
+     * terminados, que son los que se acumulan con los años, solo se cuentan
+     * ({@link #contarFinalizadosPorSupervisor}).
+     */
+    @EntityGraph(attributePaths = "supervisor")
+    List<Contrato> findByEstadoInOrderByFechaCreacionDesc(Collection<EstadoContrato> estados);
+
+    @Query("""
+            SELECT new co.sena.sicot.dto.seguimiento.ConteoPorId(c.supervisor.id, COUNT(c))
+              FROM Contrato c
+             WHERE c.supervisor IS NOT NULL
+               AND c.estado = co.sena.sicot.entity.enums.EstadoContrato.FINALIZADO
+             GROUP BY c.supervisor.id
+            """)
+    List<ConteoPorId> contarFinalizadosPorSupervisor();
 }
