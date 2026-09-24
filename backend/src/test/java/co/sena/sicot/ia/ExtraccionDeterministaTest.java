@@ -327,4 +327,23 @@ class ExtraccionDeterministaTest {
         assertThat(extractor.extraer("El registro presupuestal del contrato se anexa.")
                 .registroPresupuestal()).isNull();
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+            "contratar el suministro de materiales para la formación | Suministro de Bienes",
+            "ADQUISICIÓN POR COMPRAVENTA DE EQUIPOS | Compraventa",
+            "arrendamiento de un bien inmueble | Arrendamiento",
+            "adecuación de la obra civil del ambiente | Obras",
+            "PRESTAR EL SERVICIO DE MANTENIMIENTO PREVENTIVO | Servicios",
+    })
+    @DisplayName("el tipo se deduce de las palabras del objeto")
+    void tipoPorObjeto(String objeto, String tipo) {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(objeto)).isEqualTo(tipo);
+    }
+
+    @Test
+    @DisplayName("sin una palabra inequívoca, el tipo queda para el modelo")
+    void tipoPorObjetoSinPistas() {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto("adquisición de herramienta manual")).isNull();
+    }
 }

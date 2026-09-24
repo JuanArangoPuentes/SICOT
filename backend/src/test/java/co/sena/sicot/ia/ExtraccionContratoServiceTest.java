@@ -421,4 +421,40 @@ class ExtraccionContratoServiceTest {
         assertThat(servicio.extraer(List.of(pdf("uno.pdf"))).idContrato())
                 .isEqualTo("CO1.PCCNTR.7986334");
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // La IA complementa: si falla, no se pierde lo leído del documento
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Prueba integral del 24-09-2026: la notificación real 8151794 devolvió 503
+     * a los 243 s porque el modelo se cortó por tiempo, y con él se perdieron
+     * el número, el valor y las fechas que el código ya había leído.
+     */
+    @Test
+    void siElModeloNoRespondeSeDevuelveLoLeidoDelDocumento() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Número de contrato CO1.PCCNTR.8151794\n• Valor: $ 39.552.042\n• Fecha de inicio: 11/08/2025");
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("La IA tardó más de 240 segundos."));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf")));
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.8151794");
+        assertThat(r.valor()).isEqualTo("39552042");
+        assertThat(r.vigenciaInicio()).isEqualTo("2025-08-11");
+    }
+
+    @Test
+    void conElObjetoEscritoElTipoSaleDeSusPalabrasSinLlamarAlModelo() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("""
+                Numero de contrato CO1.PCCNTR.8151794
+                • Objeto: 05-9-2025-007544 contratar el suministro de materiales para la formación
+                • Valor: $ 39.552.042""");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf")));
+
+        assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
+        verifyNoInteractions(ollamaClient);
+    }
 }

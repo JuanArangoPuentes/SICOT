@@ -410,6 +410,26 @@ public class ExtraccionDeterminista {
         return null;
     }
 
+    /**
+     * El tipo a partir de las palabras del objeto, cuando son inequívocas.
+     * {@code null} si el objeto no trae ninguna de ellas: entonces lo propone
+     * el modelo. Es una propuesta, igual que la del modelo: el formulario la
+     * muestra y Gestión la confirma o la cambia.
+     */
+    public static String tipoPorObjeto(String objeto) {
+        if (objeto == null) {
+            return null;
+        }
+        String o = java.text.Normalizer.normalize(objeto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+        if (o.contains("suministro")) return "Suministro de Bienes";
+        if (o.contains("compraventa")) return "Compraventa";
+        if (o.contains("arrendamiento")) return "Arrendamiento";
+        if (o.matches(".*\\b(obra|obras|construccion|adecuacion)\\b.*")) return "Obras";
+        if (o.matches(".*\\b(servicio|servicios|mantenimiento|prestacion)\\b.*")) return "Servicios";
+        return null;
+    }
+
     /** True si ya no queda nada útil que preguntarle al modelo. */
     public boolean estaCompleta(ExtraccionContratoResponse r) {
         return r.objeto() != null && !r.objeto().isBlank()

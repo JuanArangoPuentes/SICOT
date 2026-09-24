@@ -174,6 +174,14 @@ public class ExtraccionContratoService {
         // preguntarle al modelo: la extracción termina en milisegundos en vez
         // de minutos, que en un equipo sin GPU es la diferencia entre usarla o
         // no (ver feedback de ADR-008: bastar con una IA pequeña).
+        // El tipo se deduce de las palabras del propio objeto cuando las hay
+        // («…contratar el suministro de…»). Llamar al modelo solo para proponer
+        // un valor de una lista desplegable costaba de uno a cuatro minutos en
+        // esta máquina, y el 24-09-2026 una notificación real se cortó por
+        // tiempo esperando justo eso.
+        if (deterministica.objeto() != null && deterministica.tipoContrato() == null) {
+            deterministica = conTipo(deterministica, ExtraccionDeterminista.tipoPorObjeto(deterministica.objeto()));
+        }
         if (extraccionDeterminista.estaCompleta(deterministica)) {
             log.info("'{}': todos los campos salieron del documento sin usar el modelo.", archivo.getOriginalFilename());
             return deterministica;
@@ -203,7 +211,18 @@ public class ExtraccionContratoService {
         log.info("Extrayendo datos de '{}' ({} bytes, {} caracteres de texto) con Ollama...",
                 archivo.getOriginalFilename(), contenido.length, textoRecortado.length());
         long inicio = System.currentTimeMillis();
-        String respuestaCruda = ollamaClient.generar(prompt, true);
+        String respuestaCruda;
+        try {
+            respuestaCruda = ollamaClient.generar(prompt, true);
+        } catch (IaNoDisponibleException e) {
+            // Lo que el código ya leyó del documento no depende del modelo: si
+            // el modelo no responde, se devuelve eso en vez de perderlo todo.
+            // Antes un corte por tiempo tiraba el número, el valor y las fechas
+            // que ya estaban leídos, y Gestión recibía un 503.
+            log.warn("El modelo no respondió para '{}'; se devuelve lo leído del documento: {}",
+                    archivo.getOriginalFilename(), e.getMessage());
+            return deterministica;
+        }
         log.info("Extracción de '{}' completada en {} ms", archivo.getOriginalFilename(), System.currentTimeMillis() - inicio);
         ExtraccionContratoResponse delModelo;
         try {
@@ -250,6 +269,12 @@ public class ExtraccionContratoService {
     private static String soloLetrasYDigitos(String s) {
         String sinTildes = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
         return sinTildes.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
+    }
+
+    private static ExtraccionContratoResponse conTipo(ExtraccionContratoResponse r, String tipo) {
+        return new ExtraccionContratoResponse(r.idContrato(), r.objeto(), r.proveedor(), r.nit(),
+                r.representanteLegal(), r.valor(), r.vigenciaInicio(), r.vigenciaFin(), r.lugarEjecucion(),
+                r.registroPresupuestal(), tipo);
     }
 
     private ExtraccionContratoResponse combinar(ExtraccionContratoResponse base, ExtraccionContratoResponse nuevo) {
