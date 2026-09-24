@@ -61,6 +61,46 @@ class LectorDeCapturaTest {
         assertThat(lector.leer(foto).fecha()).isEqualTo(Instant.parse("2026-09-23T14:03:00Z"));
     }
 
+    /**
+     * El valor exacto que escribe la cámara del emulador de Android 14: hora 24.
+     * La lectura tolerante de la librería lo convertía en el 1 de enero de 2026;
+     * una fecha que no se puede leer entera cuenta como ausente.
+     */
+    @Test
+    void unaFechaInvalidaNoSeConvierteEnOtraFecha() {
+        byte[] foto = FotoConExif.nueva().tomadaEl("2026:09:24 24:34:39").jpeg();
+
+        LectorDeCaptura.Captura captura = lector.leer(foto);
+
+        assertThat(captura.fecha()).isNull();
+        assertThat(lector.describir(captura)).isEqualTo("La foto no trae fecha de captura ni ubicación.");
+    }
+
+    /**
+     * La foto tal como la entregó la cámara del emulador de Android 14 a la app,
+     * el 23-09-2026, por el mismo camino que usará un teléfono: el botón «Tomar
+     * foto de la entrega», el intent de captura de wry y la carga al expediente.
+     * Su EXIF trae {@code DateTimeOriginal = 2026:09:24 24:34:39} y ningún dato de
+     * GPS. Es un archivo real de una cámara, no uno fabricado para la prueba.
+     */
+    @Test
+    void laFotoRealDeLaCamaraDelEmuladorNoTraeFechaValidaNiUbicacion() throws Exception {
+        byte[] foto;
+        try (var entrada = getClass().getResourceAsStream("/fotos/camara-emulador-android14.jpg")) {
+            foto = entrada.readAllBytes();
+        }
+
+        assertThat(lector.leer(foto)).isEqualTo(LectorDeCaptura.Captura.SIN_DATOS);
+    }
+
+    /** Un desfase mal escrito no invalida la fecha: se lee en la zona del Centro. */
+    @Test
+    void unDesfaseIlegibleCaeEnLaZonaDelCentro() {
+        byte[] foto = FotoConExif.nueva().tomadaEl("2026:09:23 14:03:00").conDesfase("-5h").jpeg();
+
+        assertThat(lector.leer(foto).fecha()).isEqualTo(Instant.parse("2026-09-23T19:03:00Z"));
+    }
+
     @Test
     void unaFotoSinExifNoInventaNiFechaNiLugar() {
         LectorDeCaptura.Captura captura = lector.leer(FotoConExif.jpegSinExif());

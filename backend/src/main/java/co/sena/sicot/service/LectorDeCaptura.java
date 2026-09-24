@@ -13,12 +13,14 @@ import org.springframework.stereotype.Component;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.Clock;
+import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
-import java.util.Date;
+import java.time.format.ResolverStyle;
 import java.util.Locale;
-import java.util.TimeZone;
 
 /**
  * Lee de una foto cuándo y dónde se tomó, a partir de su EXIF (MDL-205).
@@ -42,6 +44,15 @@ import java.util.TimeZone;
  *       allí.</li>
  * </ul>
  *
+ * <h2>Una fecha mal escrita cuenta como ausente</h2>
+ * La fecha se lee con el formato del estándar ({@code 2026:09:23 14:03:00}) y
+ * de forma estricta. La lectura de la librería es tolerante, y con un valor
+ * inválido rellena lo que falta: la cámara del emulador de Android escribe
+ * {@code 2026:09:24 24:34:39} (hora 24), y la librería lo convertía en el 1 de
+ * enero de 2026 a medianoche. Registrar eso como fecha de captura sería
+ * inventarla, así que una fecha que no se puede leer entera se trata como si no
+ * viniera. Se descubrió el 23-09-2026 al recorrer la cámara en el emulador.
+ *
  * <h2>La hora sin desfase</h2>
  * El EXIF guarda la hora local del teléfono. Los teléfonos recientes añaden
  * {@code OffsetTimeOriginal} (p. ej. {@code -05:00}), y si está, manda ese. Si
@@ -57,6 +68,10 @@ public class LectorDeCaptura {
 
     private static final DateTimeFormatter FECHA_Y_HORA =
             DateTimeFormatter.ofPattern("d/MM/yyyy 'a las' HH:mm", Locale.of("es", "CO"));
+
+    /** El formato de DateTimeOriginal en el estándar EXIF, leído sin tolerancias. */
+    private static final DateTimeFormatter FECHA_EXIF =
+            DateTimeFormatter.ofPattern("uuuu:MM:dd HH:mm:ss").withResolverStyle(ResolverStyle.STRICT);
 
     private final ZoneId zonaDelCentro;
 
@@ -122,14 +137,30 @@ public class LectorDeCaptura {
 
     private Instant fechaDe(Metadata metadatos) {
         for (ExifSubIFDDirectory exif : metadatos.getDirectoriesOfType(ExifSubIFDDirectory.class)) {
-            // getDateOriginal usa OffsetTimeOriginal si la foto lo trae, y la
-            // zona que se le pasa solo si no.
-            Date fecha = exif.getDateOriginal(TimeZone.getTimeZone(zonaDelCentro));
-            if (fecha != null) {
-                return fecha.toInstant();
+            String fecha = exif.getString(ExifSubIFDDirectory.TAG_DATETIME_ORIGINAL);
+            if (fecha == null) {
+                continue;
+            }
+            try {
+                LocalDateTime local = LocalDateTime.parse(fecha.trim(), FECHA_EXIF);
+                return local.atZone(zonaDe(exif.getString(ExifSubIFDDirectory.TAG_TIME_ZONE_ORIGINAL))).toInstant();
+            } catch (DateTimeException e) {
+                log.debug("La foto trae una fecha de captura ilegible ({}); se trata como ausente.", fecha);
             }
         }
         return null;
+    }
+
+    /** El desfase que escribió el teléfono ({@code -05:00}) o, si no lo hay o es ilegible, la zona del Centro. */
+    private ZoneId zonaDe(String desfase) {
+        if (desfase != null) {
+            try {
+                return ZoneOffset.of(desfase.trim());
+            } catch (DateTimeException e) {
+                log.debug("Desfase horario ilegible en la foto ({}); se usa la zona del Centro.", desfase);
+            }
+        }
+        return zonaDelCentro;
     }
 
     private static GeoLocation ubicacionDe(Metadata metadatos) {
