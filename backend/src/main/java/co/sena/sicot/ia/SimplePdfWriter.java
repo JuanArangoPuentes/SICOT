@@ -186,14 +186,45 @@ public class SimplePdfWriter {
             y -= 2;
         }
 
+        /**
+         * Texto corrido. Solo el tramo «[dato pendiente…]» va en ámbar, aunque el
+         * ajuste de línea lo parta en dos: pintar la línea entera marcaba como
+         * pendiente texto que sí es correcto.
+         */
         void parrafo(String texto) throws IOException {
+            // «[dato» y no «[dato pendiente»: el ajuste de línea puede dejar
+            // «[dato» al final de una línea y «pendiente…]» en la siguiente.
+            boolean dentro = false;
             for (String l : envolver(texto, normal, 10.5f, ANCHO_UTIL)) {
                 asegurarEspacio(14);
-                boolean pendiente = l.contains("[dato pendiente");
-                linea(normal, 10.5f, l, MARGEN, y, pendiente ? AMBAR_PENDIENTE : NEGRO_TEXTO);
+                float x = MARGEN;
+                int i = 0;
+                while (i < l.length()) {
+                    int fin;
+                    if (dentro) {
+                        int cierre = l.indexOf(']', i);
+                        fin = cierre < 0 ? l.length() : cierre + 1;
+                        x = tramo(l.substring(i, fin), x, AMBAR_PENDIENTE);
+                        dentro = cierre < 0;
+                    } else {
+                        int apertura = l.indexOf("[dato", i);
+                        fin = apertura < 0 ? l.length() : apertura;
+                        x = tramo(l.substring(i, fin), x, NEGRO_TEXTO);
+                        dentro = apertura >= 0;
+                    }
+                    i = fin;
+                }
                 y -= 14;
             }
             y -= 7;
+        }
+
+        private float tramo(String texto, float x, Color color) throws IOException {
+            if (texto.isEmpty()) {
+                return x;
+            }
+            linea(normal, 10.5f, texto, x, y, color);
+            return x + normal.getStringWidth(sanitizarParaFuente(texto)) / 1000 * 10.5f;
         }
 
         void ficha(List<BloqueDocumento.Campo> campos) throws IOException {

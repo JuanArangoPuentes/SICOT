@@ -98,6 +98,15 @@ public class GeneracionDocumentoService {
                             "La subetapa indicada no existe o no pertenece a este contrato."));
         }
 
+        // Un documento firmado es oficial: no se reemplaza generando otro
+        // encima. Sin esta comprobación, un doble clic o un reintento dejaba un
+        // segundo borrador que la bandeja mostraba como «documento sin firmar».
+        if (subetapa != null && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+                contrato.getId(), subetapa.getId(), plantilla.nombre())) {
+            throw new BusinessException("Ya hay un «" + plantilla.nombre() + "» firmado en la subetapa "
+                    + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
+        }
+
         Observaciones obs = observaciones(plantilla, contrato, notas);
         LocalDate hoy = LocalDate.now(reloj);
         List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto());

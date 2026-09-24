@@ -66,4 +66,13 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
             ORDER BY d.fechaSubida DESC
             """)
     List<DocumentoResponse> listarPorContrato(@Param("contratoId") Long contratoId);
+
+    /**
+     * ¿Hay ya un documento firmado de este formato en la subetapa? Lo usa la
+     * generación para no crear un segundo «Acta de Inicio» después de firmada
+     * la primera: el borrador sobrante quedaba como tarea pendiente en la
+     * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+            Long contratoId, Long subetapaId, String prefijoNombre);
 }

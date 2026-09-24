@@ -249,6 +249,31 @@ class GeneracionDocumentoServiceTest {
         assertThat(documentoGuardado().getSubetapa()).isSameAs(subetapa);
     }
 
+    @Test
+    void noSeGeneraOtroDocumentoSiYaHayUnoFirmadoEnLaSubetapa() {
+        Subetapa subetapa = new Subetapa();
+        subetapa.setId(27L);
+        subetapa.setCodigo("3.4");
+        given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
+        given(documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+                1L, 27L, "Informe de Supervisión")).willReturn(true);
+
+        assertThatThrownBy(() -> servicio.generar(1L, 27L, "INFORME_SUPERVISION"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Ya hay un «Informe de Supervisión» firmado en la subetapa 3.4");
+        verify(documentoRepository, never()).save(any());
+    }
+
+    /** El ámbar marca solo el tramo pendiente, aunque el ajuste de línea lo parta. */
+    @Test
+    void losPendientesDeUnParrafoLargoSiguenEnElPdf() {
+        servicio.generar(1L, null, "CERTIFICACION_CUMPLIMIENTO");
+
+        assertThat(textoDelPdf().replaceAll("\\s+", " "))
+                .contains("[dato pendiente: número y fecha de la factura]")
+                .contains("[dato pendiente: saldo por ejecutar]");
+    }
+
     // ── Registro y borrador ─────────────────────────────────────────────────
 
     @Test
