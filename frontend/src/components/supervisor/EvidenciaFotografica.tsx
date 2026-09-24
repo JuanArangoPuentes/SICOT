@@ -179,6 +179,8 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         </div>
       ) : (
         <>
+          {/* Una URL blob:. Las dos CSP (nginx.conf.template y tauri.conf.json)
+              tienen que admitir blob: en img-src; sin eso la vista previa sale rota. */}
           <img
             src={estado.vistaPrevia}
             alt={`Vista previa de la evidencia de la subetapa ${codigoSubetapa}`}
