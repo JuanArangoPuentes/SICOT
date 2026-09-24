@@ -72,9 +72,9 @@ public class DocumentoController {
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Sin rol GESTION/ADMINISTRADOR o sin acceso al contrato",
+            @ApiResponse(responseCode = "403", description = "Sin rol SUPERVISOR/GESTION/ADMINISTRADOR",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Contrato no encontrado",
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado, o no es el asignado a este supervisor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "415", description = "Tipo de contenido no soportado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
@@ -82,7 +82,9 @@ public class DocumentoController {
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
     })
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
+    // SUPERVISOR incluido: carga la evidencia fotográfica de la entrega. Solo en
+    // su propio contrato, que es lo que comprueba el servicio (ver SecurityConfig).
+    @PreAuthorize("hasAnyRole('SUPERVISOR', 'GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<DocumentoResponse> subir(
             @PathVariable Long contratoId,
             @RequestParam(value = "subetapaId", required = false)
