@@ -244,6 +244,12 @@ export interface ExtraccionContratoResponse {
 export interface GenerarDocumentoRequest {
   tipo: string
   subetapaId: number | null
+  /**
+   * Lo que el supervisor escribió sobre lo que hizo en el paso. El backend lo
+   * usa para el apartado de observaciones del documento; sin notas, ese
+   * apartado queda marcado como pendiente en vez de inventarse.
+   */
+  notas?: string | null
 }
 
 export interface ChatResponse {

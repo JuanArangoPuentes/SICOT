@@ -49,6 +49,8 @@ public class OllamaClient {
 
     private final LimitadorDeUsoIa limitador;
 
+    private final int timeoutSeconds;
+
     /**
      * Cliente construido <b>una sola vez</b>.
      *
@@ -75,6 +77,7 @@ public class OllamaClient {
         this.modelo = modelo;
         this.keepAlive = keepAlive;
         this.limitador = limitador;
+        this.timeoutSeconds = timeoutSeconds;
 
         SimpleClientHttpRequestFactory fabrica = new SimpleClientHttpRequestFactory();
         fabrica.setConnectTimeout(Duration.ofSeconds(10));
@@ -112,6 +115,19 @@ public class OllamaClient {
         } catch (IaNoDisponibleException e) {
             throw e;
         } catch (Exception e) {
+            if (esTiempoAgotado(e)) {
+                // Distinto de «no disponible»: el modelo SÍ respondía, solo que
+                // más despacio que el límite. Decir «el servicio no está
+                // disponible» mandaba al supervisor a avisar a sistemas por un
+                // equipo ocupado, y lo animaba a reintentar enseguida, que es
+                // justo lo que lo vuelve a saturar (prueba integral del
+                // 24-09-2026: el Informe de Supervisión se cortó a los 240 s).
+                log.warn("Ollama no respondió en {} s con el modelo '{}'", timeoutSeconds, modelo);
+                throw new IaNoDisponibleException(
+                        "La IA tardó más de " + timeoutSeconds + " segundos en responder y la petición se "
+                                + "canceló. Suele pasar cuando el equipo está ocupado con otras tareas; "
+                                + "intente de nuevo en unos minutos.", e);
+            }
             // El detalle técnico (URL interna, modelo configurado) va SOLO al log
             // del servidor: GlobalExceptionHandler propaga el mensaje de esta
             // excepción al cliente, y esa URL es topología interna que no le
@@ -122,6 +138,15 @@ public class OllamaClient {
                     "El servicio de IA no está disponible en este momento. "
                             + "Intente de nuevo en unos minutos; si el problema persiste, avise al área de sistemas.", e);
         }
+    }
+
+    private static boolean esTiempoAgotado(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -21,6 +21,10 @@ export type RevisionPaso = {
   stepId: number
   subStepId: string
   listaParaConfirmar: boolean
+  /** Lo que el supervisor describió del paso: va como notas al documento. */
+  descripcion?: string
+  /** Nombre del documento que se genera y firma al confirmar, si el sub-paso lo lleva. */
+  documento?: string
 }
 
 export default function PanelCopiloto({
@@ -253,7 +257,11 @@ export default function PanelCopiloto({
             }}
           >
             <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
-              Confirmar Paso {revisionPaso.stepId} como completado
+              {/* Si el sub-paso lleva documento, confirmar también lo firma: el
+                  botón lo dice, para que nadie firme un acta sin saberlo. */}
+              {revisionPaso.documento
+                ? `Confirmar Paso ${revisionPaso.stepId} y firmar ${revisionPaso.documento}`
+                : `Confirmar Paso ${revisionPaso.stepId} como completado`}
             </button>
             <button className="btn-ghost" onClick={onCancelarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
               Cancelar, quiero revisar algo antes

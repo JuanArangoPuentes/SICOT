@@ -25,7 +25,7 @@ import ContratoInfo from '@/components/supervisor/ContratoInfo'
 import ContratoGraficas from '@/components/supervisor/ContratoGraficas'
 import VistaDocumentos from '@/components/supervisor/VistaDocumentos'
 import VistaAlertas from '@/components/supervisor/VistaAlertas'
-import PanelCopiloto from '@/components/supervisor/PanelCopiloto'
+import PanelCopiloto, { type RevisionPaso } from '@/components/supervisor/PanelCopiloto'
 import {
   CargandoContratoState,
   EmptyContractState,
@@ -299,11 +299,7 @@ export default function SupervisorPanel({
   // el último sub-paso pendiente de la etapa activa. listaParaConfirmar pasa
   // a true solo después de que el Copiloto ya revisó la descripción del
   // supervisor (o falló al intentarlo) — antes de eso no se puede confirmar.
-  const [revisionPaso, setRevisionPaso] = useState<{
-    stepId: number
-    subStepId: string
-    listaParaConfirmar: boolean
-  } | null>(null)
+  const [revisionPaso, setRevisionPaso] = useState<RevisionPaso | null>(null)
   // Firma electrónica real de la cuenta — si el Administrador no la asignó
   // aún, se muestra honestamente en vez de dejar que el intento de firmar falle.
   const [tieneFirma, setTieneFirma] = useState<boolean | null>(null)
@@ -427,7 +423,7 @@ export default function SupervisorPanel({
   // marcar completado en el backend). Separado de handleActionSubStep para
   // que el botón "Confirmar Paso" (después de la revisión de IA) pueda
   // invocarlo directamente, sin volver a pasar por la compuerta de revisión.
-  const ejecutarAccionSubPaso = async (stepId: number, subStepId: string) => {
+  const ejecutarAccionSubPaso = async (stepId: number, subStepId: string, notas?: string) => {
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
       const doc = FORMAL_DOCS.find((d) => d.subStepId === subStepId)
@@ -445,8 +441,23 @@ export default function SupervisorPanel({
       setProcesandoFirma(subStepId)
       const vigia = vigilarSegundoPlano()
       try {
-        const generado = await generarDocumento(contrato.id, { tipo: doc.tipo, subetapaId: sub?.apiId ?? null })
+        const generado = await generarDocumento(contrato.id, {
+          tipo: doc.tipo,
+          subetapaId: sub?.apiId ?? null,
+          notas: notas ?? null,
+        })
         await firmarDocumento(contrato.id, generado.id)
+        // El documento lleva los datos exactos del contrato, pero SICOT no
+        // conoce todo (facturas, pólizas, pagos): lo que falta queda marcado en
+        // el PDF como «dato pendiente». Se dice aquí para que el supervisor lo
+        // revise en Documentos.
+        setChatMsgs((prev) => [
+          ...prev,
+          {
+            role: 'ai',
+            text: `Generé y firmé «${doc.name}» con los datos del contrato${notas ? ' y sus observaciones' : ''}. Los datos que SICOT no tiene (por ejemplo facturas, pólizas o pagos) quedan marcados en el documento como «dato pendiente»: revíselo en Documentos.`,
+          },
+        ])
         await onRefreshRegistros()
         getDocumentosContrato(contrato.id)
           .then(setDocsContrato)
@@ -556,7 +567,10 @@ export default function SupervisorPanel({
     const orden = step?.subSteps.map((ss) => ss.id) ?? []
     const esUltimoSubPaso = orden.length > 0 && orden.indexOf(subStepId) === orden.length - 1
     if (esUltimoSubPaso && step) {
-      setRevisionPaso({ stepId, subStepId, listaParaConfirmar: false })
+      const documento = AI_GENERATED_DOCS.has(subStepId)
+        ? FORMAL_DOCS.find((d) => d.subStepId === subStepId)?.name
+        : undefined
+      setRevisionPaso({ stepId, subStepId, listaParaConfirmar: false, documento })
       const resumenSubPasos = step.subSteps.map((ss) => `- ${ss.id} ${ss.label}`).join('\n')
       setChatMsgs((prev) => [
         ...prev,
@@ -604,7 +618,7 @@ export default function SupervisorPanel({
       ])
     } finally {
       setPensando(false)
-      setRevisionPaso((prev) => (prev ? { ...prev, listaParaConfirmar: true } : prev))
+      setRevisionPaso((prev) => (prev ? { ...prev, listaParaConfirmar: true, descripcion } : prev))
     }
   }
 
@@ -1320,7 +1334,7 @@ export default function SupervisorPanel({
               onConfirmarRevision={() => {
                 const r = revisionPaso
                 setRevisionPaso(null)
-                if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId)
+                if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion)
               }}
               onCancelarRevision={() => setRevisionPaso(null)}
             />

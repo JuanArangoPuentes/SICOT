@@ -402,7 +402,7 @@ export default function VistaDocumentos({
                   >
                     {doc.formatoCodigo ? `${doc.formatoCodigo} · ` : ''}
                     {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}
-                    {doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
+                    {doc.generadoPorIa ? ' · Generado por SICOT' : ''}
                     {doc.firmadoPorNombre ? ` · Firmado por ${doc.firmadoPorNombre}` : ''}
                   </div>
                   {doc.tipo === 'IMAGEN' && (
