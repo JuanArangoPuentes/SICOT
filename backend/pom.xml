@@ -208,6 +208,17 @@
             <version>3.3.2</version>
         </dependency>
 
+        <!-- Fecha de captura y ubicación GPS de las fotos de evidencia (EXIF).
+             tika-core solo detecta el tipo; leer el EXIF con Tika exigiría su
+             módulo de imágenes, que por dentro usa esta misma librería y trae
+             además otros analizadores que SICOT no necesita. Directa pesa
+             ~750 KB, con xmpcore como única dependencia; ambas Apache 2.0. -->
+        <dependency>
+            <groupId>com.drewnoakes</groupId>
+            <artifactId>metadata-extractor</artifactId>
+            <version>2.21.0</version>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

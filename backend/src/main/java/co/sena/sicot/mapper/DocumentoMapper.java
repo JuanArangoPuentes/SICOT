@@ -36,6 +36,9 @@ public final class DocumentoMapper {
                 d.getFirmaHashSha256(),
                 d.getFirmadoPor() != null ? d.getFirmadoPor().getNombre() : null,
                 d.getSubidoPor() != null ? d.getSubidoPor().getNombre() : null,
-                d.getFechaSubida());
+                d.getFechaSubida(),
+                d.getCapturaFecha(),
+                d.getCapturaLatitud(),
+                d.getCapturaLongitud());
     }
 }

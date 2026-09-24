@@ -20,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -46,6 +47,15 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
 
     @Autowired
     private MockMvc mockMvc;
+
+    /**
+     * El reloj del Centro, el mismo que usa el backend para decidir qué día es
+     * «hoy» (ZonaHoraria). Con LocalDate.now() de la JVM, la prueba fallaba
+     * entre las 19:00 y las 24:00 de Bogotá en el CI, que corre en UTC: la
+     * prueba ya estaba en mañana y el backend todavía en hoy (MDL-214).
+     */
+    @Autowired
+    private Clock reloj;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -87,7 +97,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
         // Tres reglas de calendario se pronuncian sobre este contrato: los
         // umbrales de 30 y 15 días (el de 7 aún no se cruzó) y el atraso de
         // cronograma — lleva 80 de 90 días de plazo con cero subetapas cerradas.
-        int encoladas = motor.evaluarCalendario(LocalDate.now());
+        int encoladas = motor.evaluarCalendario(LocalDate.now(reloj));
         assertThat(encoladas).isEqualTo(3);
 
         assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS))
@@ -113,9 +123,9 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     void evaluarElCalendarioVariasVecesNoDuplicaNingunaAlerta() throws Exception {
         long contratoId = contratoActivoQueVenceEn(10);
 
-        motor.evaluarCalendario(LocalDate.now());
-        int segundaPasada = motor.evaluarCalendario(LocalDate.now());
-        int terceraPasada = motor.evaluarCalendario(LocalDate.now());
+        motor.evaluarCalendario(LocalDate.now(reloj));
+        int segundaPasada = motor.evaluarCalendario(LocalDate.now(reloj));
+        int terceraPasada = motor.evaluarCalendario(LocalDate.now(reloj));
 
         assertThat(segundaPasada).isZero();
         assertThat(terceraPasada).isZero();
@@ -133,7 +143,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     void asignarSupervisorEncolaElAvisoAlSupervisor() throws Exception {
         String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
         long supervisorId = idDe("supervisor@soy.sena.edu.co", "Supervisor123*");
-        long contratoId = crearContrato(gestion, "CO1.PCCNTR.EVENTO", LocalDate.now().plusMonths(6));
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.EVENTO", LocalDate.now(reloj).plusMonths(6));
 
         mockMvc.perform(patch("/api/contratos/{id}/supervisor", contratoId)
                         .header("Authorization", "Bearer " + gestion)
@@ -242,7 +252,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
 
     private long contratoActivoQueVenceEn(int dias) throws Exception {
         String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
-        long contratoId = crearContrato(gestion, "CO1.PCCNTR.VENCE", LocalDate.now().plusDays(dias));
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.VENCE", LocalDate.now(reloj).plusDays(dias));
         mockMvc.perform(patch("/api/contratos/{id}/estado", contratoId)
                         .header("Authorization", "Bearer " + gestion)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -256,7 +266,7 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
                 {"numeroContrato":"%s","objeto":"Suministro de mobiliario para el CTMA",
                  "valor":25000000,"fechaInicio":"%s","fechaFin":"%s"}
                 """.formatted(numero,
-                DateTimeFormatter.ISO_LOCAL_DATE.format(LocalDate.now().minusDays(80)),
+                DateTimeFormatter.ISO_LOCAL_DATE.format(LocalDate.now(reloj).minusDays(80)),
                 DateTimeFormatter.ISO_LOCAL_DATE.format(fin));
 
         String respuesta = mockMvc.perform(post("/api/contratos")

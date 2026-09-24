@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EvidenciaFotografica from './EvidenciaFotografica'
+import { documento } from '@/test/dobles'
 
 /**
  * Lo que se comprueba aquí es lo que hace evidencia a una evidencia: que la
@@ -55,14 +56,19 @@ describe('EvidenciaFotografica', () => {
     await waitFor(() => expect(onCargada).toHaveBeenCalled())
   })
 
-  it('el campo de la cámara pide la cámara trasera y solo acepta JPG y PNG', () => {
+  // `image/*` es lo que hace que la app de Android abra la cámara: wry solo la
+  // abre si esa cadena está literalmente entre los tipos aceptados. Con
+  // `image/jpeg,image/png` abría el selector de la galería (emulador de Android
+  // 14, 23-09-2026). El tipo real lo valida el backend por los bytes.
+  it('el campo de la cámara pide la cámara trasera con el tipo que la app de Android sabe abrir', () => {
     const { container } = render(
       <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.1" onCargada={() => {}} />,
     )
 
-    const campoCamara = container.querySelectorAll('input[type="file"]')[0]
+    const [campoCamara, campoGaleria] = container.querySelectorAll('input[type="file"]')
     expect(campoCamara.getAttribute('capture')).toBe('environment')
-    expect(campoCamara.getAttribute('accept')).toBe('image/jpeg,image/png')
+    expect(campoCamara.getAttribute('accept')).toBe('image/*')
+    expect(campoGaleria.getAttribute('accept')).toBe('image/jpeg,image/png')
   })
 
   it('dice qué pasó cuando el servidor rechaza la foto, sin dar por cargada la evidencia', async () => {
@@ -90,5 +96,57 @@ describe('EvidenciaFotografica', () => {
 
     expect(screen.getByText(/el máximo son 20 MB/i)).toBeTruthy()
     expect(subirDocumento).not.toHaveBeenCalled()
+  })
+
+  // Lo que el backend leyó del EXIF al cargarla (MDL-205). Las fechas se escriben
+  // en UTC y se muestran en la hora del Centro: 19:03 UTC son las 14:03 de Bogotá.
+  async function cargarDesde(campo: 0 | 1, respuesta: Parameters<typeof documento>[0]) {
+    vi.mocked(subirDocumento).mockResolvedValue(
+      documento({ tipo: 'IMAGEN', nombre: 'Evidencia fotográfica 3.2 — entrega.jpg', ...respuesta }),
+    )
+    const { container } = render(
+      <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.2" onCargada={() => {}} />,
+    )
+    fireEvent.change(container.querySelectorAll('input[type="file"]')[campo], { target: { files: [fotoDePrueba()] } })
+    fireEvent.click(screen.getByRole('button', { name: /Cargar evidencia/i }))
+    await screen.findByText(/Evidencia cargada/i)
+  }
+
+  it('después de cargarla dice cuándo y dónde se tomó la foto', async () => {
+    await cargarDesde(0, {
+      capturaFecha: '2026-09-23T19:03:00Z',
+      capturaLatitud: 6.17194,
+      capturaLongitud: -75.61139,
+    })
+
+    expect(screen.getByText(/Tomada el 23\/09\/2026 a las 14:03 en 6\.17194, -75\.61139/)).toBeTruthy()
+  })
+
+  it('si la foto no trae los datos lo dice, en vez de callarlo', async () => {
+    await cargarDesde(0, {})
+
+    expect(screen.getByText(/La foto no trae fecha ni ubicación/)).toBeTruthy()
+    // Salió de la cámara: la galería no tiene nada que ver con que falte.
+    expect(screen.queryByText(/Android puede haberle quitado la ubicación/)).toBeNull()
+  })
+
+  it('a una foto de la galería sin ubicación le explica por qué y cómo conservarla', async () => {
+    await cargarDesde(1, { capturaFecha: '2026-09-23T19:03:00Z' })
+
+    expect(screen.getByText(/Tomada el 23\/09\/2026 a las 14:03; no trae ubicación/)).toBeTruthy()
+    expect(screen.getByText(/Android puede haberle quitado la ubicación/)).toBeTruthy()
+  })
+
+  // En la app de Android, negar el permiso de cámara cierra el selector sin foto
+  // y sin ningún mensaje. El navegador lo anuncia con el evento `cancel`.
+  it('si la cámara se cierra sin foto, lo dice y ofrece una salida', () => {
+    const { container } = render(
+      <EvidenciaFotografica contratoId={1} subetapaApiId={77} codigoSubetapa="3.2" onCargada={() => {}} />,
+    )
+
+    fireEvent(container.querySelectorAll('input[type="file"]')[0], new Event('cancel'))
+
+    expect(screen.getByText(/No se tomó ninguna foto/)).toBeTruthy()
+    expect(screen.getByText(/Aplicaciones › SICOT › Permisos/)).toBeTruthy()
   })
 })

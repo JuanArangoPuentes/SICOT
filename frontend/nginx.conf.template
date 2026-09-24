@@ -105,7 +105,15 @@ server {
     # que el valor de la variable empezara por un espacio, un detalle invisible
     # que cualquiera limpiaría sin darse cuenta, dejando 'self'http://… pegado
     # y la directiva rota.
-    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' ${CSP_CONNECT_SRC_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    #
+    # img-src admite blob: para la vista previa de la foto de evidencia antes de
+    # cargarla (EvidenciaFotografica): el navegador la muestra desde una URL de
+    # objeto creada a partir del archivo que el propio usuario eligió. Sin blob:
+    # la vista previa salía rota, en la web y en la app. Una URL blob: solo la
+    # puede crear un script que ya corre en esta página, así que no abre ninguna
+    # puerta que 'self' no hubiera abierto antes. La CSP de la app de escritorio
+    # y de Android (tauri.conf.json) lleva el mismo cambio.
+    set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${CSP_CONNECT_SRC_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 
     location / {
         # SICOT no usa router de navegador (la pantalla se controla por estado en

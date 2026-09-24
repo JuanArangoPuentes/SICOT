@@ -78,8 +78,18 @@ public class Documento {
      * usan una proyección JPQL que no menciona esta columna, así que los bytes
      * no salen de PostgreSQL. La entidad completa solo se carga en la descarga
      * y en la firma, que son operaciones de un documento a la vez.
+     *
+     * <p>El {@code columnDefinition} no cambia nada en PostgreSQL, donde la
+     * columna ya es {@code bytea} (la crea Flyway). Existe para el esquema H2
+     * que Hibernate genera en las pruebas: sin él, H2 declaraba
+     * {@code BINARY VARYING(255)} y rechazaba cualquier archivo de más de 255
+     * bytes, así que ninguna prueba de integración había cargado nunca una foto
+     * real, solo PDF falsos de pocas letras. Un {@code length} grande no sirve:
+     * Hibernate pasa entonces a {@code BLOB}, que H2 en modo PostgreSQL no
+     * acepta.
      */
     @JdbcTypeCode(SqlTypes.VARBINARY)
+    @Column(columnDefinition = "bytea")
     private byte[] contenido;
 
     @Column(name = "tamanio_bytes")
@@ -127,6 +137,21 @@ public class Documento {
     @UpdateTimestamp
     @Column(name = "fecha_actualizacion", nullable = false)
     private Instant fechaActualizacion;
+
+    /**
+     * Cuándo se tomó la foto, leído de su EXIF al cargarla. {@code null} si no
+     * es una foto o no trae el dato: nunca se completa con la fecha de carga
+     * (V17).
+     */
+    @Column(name = "captura_fecha")
+    private Instant capturaFecha;
+
+    /** Dónde se tomó la foto, leído de su GPS. Las dos o ninguna (V17). */
+    @Column(name = "captura_latitud")
+    private Double capturaLatitud;
+
+    @Column(name = "captura_longitud")
+    private Double capturaLongitud;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -181,4 +206,13 @@ public class Documento {
 
     public Instant getFechaSubida() { return fechaSubida; }
     public Instant getFechaActualizacion() { return fechaActualizacion; }
+
+    public Instant getCapturaFecha() { return capturaFecha; }
+    public void setCapturaFecha(Instant capturaFecha) { this.capturaFecha = capturaFecha; }
+
+    public Double getCapturaLatitud() { return capturaLatitud; }
+    public void setCapturaLatitud(Double capturaLatitud) { this.capturaLatitud = capturaLatitud; }
+
+    public Double getCapturaLongitud() { return capturaLongitud; }
+    public void setCapturaLongitud(Double capturaLongitud) { this.capturaLongitud = capturaLongitud; }
 }

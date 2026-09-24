@@ -8,6 +8,7 @@ import co.sena.sicot.entity.FirmaElectronica;
 import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.entity.Subetapa;
 import co.sena.sicot.entity.enums.EstadoDocumento;
+import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.DocumentoMapper;
@@ -39,11 +40,13 @@ public class DocumentoService {
     private final FormatoDocumentalRepository formatoDocumentalRepository;
     private final RegistroService registroService;
     private final ArchivoValidator archivoValidator;
+    private final LectorDeCaptura lectorDeCaptura;
 
     public DocumentoService(DocumentoRepository documentoRepository, ContratoService contratoService,
                              SubetapaRepository subetapaRepository, FirmaElectronicaRepository firmaElectronicaRepository,
                              FormatoDocumentalRepository formatoDocumentalRepository,
-                             RegistroService registroService, ArchivoValidator archivoValidator) {
+                             RegistroService registroService, ArchivoValidator archivoValidator,
+                             LectorDeCaptura lectorDeCaptura) {
         this.documentoRepository = documentoRepository;
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
@@ -51,6 +54,7 @@ public class DocumentoService {
         this.formatoDocumentalRepository = formatoDocumentalRepository;
         this.registroService = registroService;
         this.archivoValidator = archivoValidator;
+        this.lectorDeCaptura = lectorDeCaptura;
     }
 
     /**
@@ -113,6 +117,19 @@ public class DocumentoService {
             throw new UncheckedIOException("No se pudo leer el archivo cargado.", e);
         }
 
+        // Una foto trae dentro cuándo y dónde se tomó, y es lo que la hace
+        // servir de evidencia de la entrega (subetapa 3.2). Se lee de los mismos
+        // bytes que se guardan, no de una copia: lo que queda en el expediente
+        // y lo que se afirma de él salen del mismo archivo.
+        String sobreLaCaptura = "";
+        if (aceptado.tipo() == TipoDocumento.IMAGEN) {
+            LectorDeCaptura.Captura captura = lectorDeCaptura.leer(documento.getContenido());
+            documento.setCapturaFecha(captura.fecha());
+            documento.setCapturaLatitud(captura.latitud());
+            documento.setCapturaLongitud(captura.longitud());
+            sobreLaCaptura = " " + lectorDeCaptura.describir(captura);
+        }
+
         Documento guardado = documentoRepository.save(documento);
 
         // En la misma transacción que el documento: si la carga se deshace, su
@@ -126,7 +143,7 @@ public class DocumentoService {
                         + (guardado.getSubetapa() != null
                                 ? " en la subetapa " + guardado.getSubetapa().getCodigo()
                                 : "")
-                        + ".");
+                        + "." + sobreLaCaptura);
         return DocumentoMapper.toResponse(guardado);
     }
 

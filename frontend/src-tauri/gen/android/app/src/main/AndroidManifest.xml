@@ -17,6 +17,23 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!--
+      Sin esto el permiso de arriba no alcanza. Desde Android 11 (targetSdk 30) una
+      app solo ve las actividades de otras apps que declara aquí, y wry comprueba
+      que haya una cámara con `resolveActivity(ACTION_IMAGE_CAPTURE)` antes de
+      abrirla. Sin la consulta declarada la respuesta es siempre «no hay», aunque
+      el teléfono tenga cámara, y wry cae en silencio al selector de fotos, que
+      además le quita la ubicación a la foto. Se descubrió el 23-09-2026 en un
+      emulador de Android 14: con el permiso concedido, «Tomar foto» seguía
+      abriendo la galería, y el log decía «Media capture intent could not be
+      launched».
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 

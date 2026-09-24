@@ -130,3 +130,16 @@ jobs:
           set -eu
           find frontend/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -print0 \
             | xargs -0 -r ls -lh
+
+      # El APK se guardaba en el runner y se tiraba. Para probar un cambio en un
+      # teléfono o en un emulador había que compilarlo a mano, y esta máquina de
+      # desarrollo no tiene el NDK: el 22 de septiembre la cámara quedó sin probar
+      # en un dispositivo justo por eso. Siete días bastan para probar el PR; lo
+      # que se distribuye sale firmado de publicar-apk.yml, no de aquí.
+      - name: Publicar el APK de depuración
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: sicot-debug-aarch64
+          path: frontend/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          retention-days: 7
+          if-no-files-found: error
