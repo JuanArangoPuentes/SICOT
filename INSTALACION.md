@@ -99,6 +99,11 @@ crontab -e
 ```
 
 La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
+El cron se lee en la hora del servidor, y el backend comprueba el respaldo a
+las 04:00 de la zona del Centro (`SICOT_ZONA_HORARIA`, `America/Bogota` si no
+se define). Las dos tienen que coincidir. Si `timedatectl` dice que el
+servidor está en UTC, el respaldo de «las 2» corre a las 21:00 de Bogotá, y la
+vigilancia mira una copia de siete horas en vez de una de dos.
 El backend la ve en solo lectura y, al arrancar y una vez al día, avisa en el log
 si el respaldo más reciente supera las 24 horas comprometidas, o si no hay
 ninguno. Hasta que el cron haga el primero, ese aviso de «no hay NINGÚN

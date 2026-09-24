@@ -325,6 +325,7 @@ entorno equivalentes. Las que más se tocan:
 | `AUTOMATIZACION_RETENCION` | `P30D` | Cuánto se conservan las tareas ya resueltas |
 | `RESPALDO_DIRECTORIO` | *(vacío)* | Dónde escribe `respaldo-sicot.sh`; sin esto no hay vigilancia del RPO. En `docker-compose.prod.yml` es **obligatoria** y es la ruta del servidor: se monta en solo lectura y dentro del contenedor el backend siempre mira `/respaldos` |
 | `RESPALDO_RPO_HORAS` | `24` | Antigüedad máxima aceptada del último respaldo (ADR-002) |
+| `SICOT_ZONA_HORARIA` | `America/Bogota` | Zona en la que se decide qué día es «hoy» (semáforo, calendario del motor, fecha de los PDF) y a qué hora corren las tareas programadas. El contenedor sigue en UTC; ver [`config/ZonaHoraria.java`](./src/main/java/co/sena/sicot/config/ZonaHoraria.java). Tiene que coincidir con la hora del servidor donde corre el cron del respaldo |
 
 ## 10. Cronograma del contrato
 

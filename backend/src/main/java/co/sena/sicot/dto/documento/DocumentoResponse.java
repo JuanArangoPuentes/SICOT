@@ -36,6 +36,11 @@ public record DocumentoResponse(
         /** Nombre de quien firmó. {@code null} si no está firmado. */
         String firmadoPorNombre,
         String subidoPorNombre,
-        Instant fechaSubida
+        Instant fechaSubida,
+        /** Cuándo se tomó la foto, según su EXIF. {@code null} si no es una foto o no lo trae. */
+        Instant capturaFecha,
+        /** Dónde se tomó la foto, según su GPS. Las dos o ninguna; {@code null} si no lo trae. */
+        Double capturaLatitud,
+        Double capturaLongitud
 ) {
 }

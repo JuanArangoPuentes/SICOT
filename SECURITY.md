@@ -71,7 +71,52 @@ nadie notará la diferencia. Si añade una excepción, escriba al lado por qué 
 aplica — en `.gitleaks.toml` se permite por contenido y nunca por ruta, y en
 Semgrep se silencia por regla y en su línea, nunca por archivo.
 
-Para reproducirlos en local hace falta sólo Docker:
+## Alertas de Dependabot descartadas
+
+Una alerta se descarta solo cuando se comprobó que no alcanza a nada de lo que
+SICOT distribuye, y el motivo queda aquí con la condición que obliga a
+reabrirla. Una alerta abierta sin acción posible enseña a ignorar las demás.
+
+### Alerta 11 — `glib` 0.18.5 (GHSA-wrw7-89jp-8q8g), descartada el 23 de septiembre de 2026
+
+**Qué dice.** Los iteradores de `glib::VariantStrIter` son inseguros en
+`glib` < 0.20.0. Gravedad media.
+
+**Por qué no se corrige.** `glib` entra solo por GTK, que Tauri usa para la
+ventana en Linux. Ninguna versión de Tauri 2 permite subirlo: la última
+comprobada (2.11.6) y sus piezas (`tao` 0.37, `wry` 0.57, `muda` 0.20,
+`tray-icon` 0.25) piden `gtk` ^0.18, y `webkit2gtk` 2.0.2 pide `glib` ^0.18.
+Forzar la 0.20 con un `[patch]` de Cargo rompería la compilación para Linux.
+Dependabot, mientras tanto, intentaba cada día un arreglo que no existe y
+dejaba un run rojo sobre `master`.
+
+**Por qué no afecta a SICOT.**
+
+- `glib` no entra en ninguno de los dos artefactos que se publican: el
+  instalador de Windows (`.exe` y `.msi`) y el APK de Android.
+  `cargo tree -i glib` no encuentra nada para `x86_64-pc-windows-msvc` ni para
+  `aarch64-linux-android`; solo aparece para `x86_64-unknown-linux-gnu`.
+- Ningún flujo del CI ni ninguna versión publicada trae una compilación para
+  Linux.
+- El código propio de la app (`frontend/src-tauri/src`) no usa `glib`.
+
+**Cuándo hay que reabrirla.**
+
+- Si SICOT empieza a distribuir una versión de escritorio para Linux.
+- O si Tauri pasa a GTK 0.20 o posterior. En ese caso se sube Tauri y la
+  alerta se cierra por corrección, que es lo que debió pasar desde el
+  principio.
+
+Para comprobarlo de nuevo, desde `frontend/src-tauri`:
+
+```bash
+cargo tree --target x86_64-pc-windows-msvc -i glib   # debe decir «nothing to print»
+cargo tree --target aarch64-linux-android -i glib    # debe decir «nothing to print»
+```
+
+## Reproducir las compuertas en local
+
+Gitleaks y Trivy se reproducen en local con sólo Docker:
 
 ```bash
 docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1 git /repo --redact

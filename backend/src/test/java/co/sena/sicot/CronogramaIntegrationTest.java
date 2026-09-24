@@ -11,6 +11,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
@@ -42,6 +43,15 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
     @Autowired
     private MockMvc mockMvc;
 
+    /**
+     * El reloj del Centro, el mismo que usa el backend para decidir qué día es
+     * «hoy» (ZonaHoraria). Con LocalDate.now() de la JVM, la prueba fallaba
+     * entre las 19:00 y las 24:00 de Bogotá en el CI, que corre en UTC: la
+     * prueba ya estaba en mañana y el backend todavía en hoy (MDL-214).
+     */
+    @Autowired
+    private Clock reloj;
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -56,7 +66,7 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
 
     @Test
     void unContratoMuyAtrasadoSeReportaEnRojoConSuBrecha() throws Exception {
-        long contratoId = contratoActivo(LocalDate.now().minusDays(80), LocalDate.now().plusDays(10));
+        long contratoId = contratoActivo(LocalDate.now(reloj).minusDays(80), LocalDate.now(reloj).plusDays(10));
 
         mockMvc.perform(get("/api/contratos/{id}/cronograma", contratoId)
                         .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
@@ -77,7 +87,7 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
      */
     @Test
     void laPantallaYLaAlertaDicenLoMismoSobreElMismoContrato() throws Exception {
-        long contratoId = contratoActivo(LocalDate.now().minusDays(80), LocalDate.now().plusDays(10));
+        long contratoId = contratoActivo(LocalDate.now(reloj).minusDays(80), LocalDate.now(reloj).plusDays(10));
         String token = login("gestion@soy.sena.edu.co", "Gestion123*");
 
         String respuesta = mockMvc.perform(get("/api/contratos/{id}/cronograma", contratoId)
@@ -86,7 +96,7 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
                 .andReturn().getResponse().getContentAsString();
         String mensajeDeLaPantalla = objectMapper.readTree(respuesta).get("mensaje").asText();
 
-        motor.evaluarCalendario(LocalDate.now());
+        motor.evaluarCalendario(LocalDate.now(reloj));
         ejecutor.procesarPendientes();
 
         String mensajeDeLaAlerta = alertaRepository
@@ -135,7 +145,7 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
      */
     @Test
     void unSupervisorSinElContratoAsignadoNoVeSuCronograma() throws Exception {
-        long contratoId = contratoActivo(LocalDate.now().minusDays(10), LocalDate.now().plusDays(80));
+        long contratoId = contratoActivo(LocalDate.now(reloj).minusDays(10), LocalDate.now(reloj).plusDays(80));
 
         mockMvc.perform(get("/api/contratos/{id}/cronograma", contratoId)
                         .header("Authorization", "Bearer " + login("supervisor@soy.sena.edu.co", "Supervisor123*")))

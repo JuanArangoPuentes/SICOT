@@ -12,6 +12,7 @@ import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -45,6 +46,12 @@ public class SimplePdfWriter {
 
     private static final DateTimeFormatter FECHA_LARGA =
             DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", Locale.of("es", "CO"));
+
+    private final Clock reloj;
+
+    public SimplePdfWriter(Clock reloj) {
+        this.reloj = reloj;
+    }
 
     public byte[] generar(String titulo, List<String> parrafos) {
         return generar(titulo, null, null, null, null, parrafos);
@@ -147,7 +154,7 @@ public class SimplePdfWriter {
         stream.showText("CENTRO TECNOLOGICO DEL MOBILIARIO . SENA");
         stream.endText();
 
-        String derecha = "Generado por el Copiloto IA - " + LocalDate.now().format(FECHA_LARGA);
+        String derecha = "Generado por el Copiloto IA - " + LocalDate.now(reloj).format(FECHA_LARGA);
         float anchoDerecha = fuenteTexto.getStringWidth(derecha) / 1000 * 8.5f;
         stream.beginText();
         stream.setNonStrokingColor(new Color(255, 255, 255, 210));

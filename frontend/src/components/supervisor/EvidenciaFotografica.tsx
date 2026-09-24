@@ -7,11 +7,14 @@
 //
 // La foto se envía tal como sale de la cámara. Reducirla aquí borraría la fecha
 // y la ubicación que el teléfono escribe dentro del archivo, y son justo los
-// datos que convierten una foto en evidencia de cuándo y dónde se recibió.
+// datos que convierten una foto en evidencia de cuándo y dónde se recibió. El
+// backend los lee al cargarla (MDL-205) y aquí se muestra lo que encontró.
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
+import { describirCaptura } from '@/services/format'
+import type { DocumentoResponse } from '@/services/api/types'
 
 interface Props {
   contratoId: number
@@ -23,12 +26,15 @@ interface Props {
   onCargada: () => void
 }
 
+/** De qué botón salió la foto: importa para explicar una ubicación ausente. */
+type Origen = 'camara' | 'galeria'
+
 type Estado =
   | { fase: 'vacio' }
-  | { fase: 'elegida'; archivo: File; vistaPrevia: string }
-  | { fase: 'cargando'; archivo: File; vistaPrevia: string }
-  | { fase: 'cargada'; nombre: string }
-  | { fase: 'error'; mensaje: string; archivo: File; vistaPrevia: string }
+  | { fase: 'elegida'; archivo: File; vistaPrevia: string; origen: Origen }
+  | { fase: 'cargando'; archivo: File; vistaPrevia: string; origen: Origen }
+  | { fase: 'cargada'; documento: DocumentoResponse; origen: Origen }
+  | { fase: 'error'; mensaje: string; archivo: File; vistaPrevia: string; origen: Origen }
 
 const TAMANIO_MAXIMO_BYTES = 20 * 1024 * 1024
 
@@ -38,32 +44,48 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   // directamente la cámara trasera; el otro deja elegir una foto ya tomada.
   const campoCamara = useRef<HTMLInputElement>(null)
   const campoGaleria = useRef<HTMLInputElement>(null)
+  // La cámara se cerró sin devolver foto. En la app de Android eso incluye que
+  // se haya negado el permiso de cámara: wry responde «ninguna foto» y nada más,
+  // así que sin este aviso el botón parecería no hacer nada.
+  const [camaraSinFoto, setCamaraSinFoto] = useState(false)
 
-  const elegir = (archivo: File | undefined) => {
+  useEffect(() => {
+    const campo = campoCamara.current
+    if (!campo) return
+    // El evento `cancel` de un <input type="file"> no pasa por el sistema de
+    // eventos de React, así que se escucha directamente.
+    const alCancelar = () => setCamaraSinFoto(true)
+    campo.addEventListener('cancel', alCancelar)
+    return () => campo.removeEventListener('cancel', alCancelar)
+  }, [])
+
+  const elegir = (archivo: File | undefined, origen: Origen) => {
     if (!archivo) return
+    setCamaraSinFoto(false)
     if (archivo.size > TAMANIO_MAXIMO_BYTES) {
       setEstado({
         fase: 'error',
         mensaje: `La foto pesa ${(archivo.size / 1024 / 1024).toFixed(1)} MB y el máximo son 20 MB.`,
         archivo,
         vistaPrevia: URL.createObjectURL(archivo),
+        origen,
       })
       return
     }
-    setEstado({ fase: 'elegida', archivo, vistaPrevia: URL.createObjectURL(archivo) })
+    setEstado({ fase: 'elegida', archivo, vistaPrevia: URL.createObjectURL(archivo), origen })
   }
 
   const cargar = async () => {
     if (estado.fase !== 'elegida' && estado.fase !== 'error') return
-    const { archivo, vistaPrevia } = estado
-    setEstado({ fase: 'cargando', archivo, vistaPrevia })
+    const { archivo, vistaPrevia, origen } = estado
+    setEstado({ fase: 'cargando', archivo, vistaPrevia, origen })
     try {
       const doc = await subirDocumento(contratoId, archivo, {
         nombre: `Evidencia fotográfica ${codigoSubetapa} — ${archivo.name}`,
         subetapaId: subetapaApiId ?? undefined,
       })
       URL.revokeObjectURL(vistaPrevia)
-      setEstado({ fase: 'cargada', nombre: doc.nombre })
+      setEstado({ fase: 'cargada', documento: doc, origen })
       onCargada()
     } catch (e) {
       setEstado({
@@ -71,6 +93,7 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         mensaje: e instanceof ApiError ? e.message : 'No se pudo cargar la foto.',
         archivo,
         vistaPrevia,
+        origen,
       })
     }
   }
@@ -83,9 +106,23 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   }
 
   if (estado.fase === 'cargada') {
+    const { documento, origen } = estado
+    const captura = describirCaptura(documento)
+    const sinUbicacion = documento.capturaLatitud == null || documento.capturaLongitud == null
     return (
       <div style={{ fontSize: 11.5, color: 'var(--accent)', paddingLeft: 26 }}>
-        Evidencia cargada: {estado.nombre}.{' '}
+        Evidencia cargada: {documento.nombre}.{' '}
+        {captura && <span style={{ color: 'var(--text-secondary)' }}>{captura}. </span>}
+        {sinUbicacion && origen === 'galeria' && (
+          // Android le quita la ubicación a una foto elegida de la galería
+          // cuando la app no tiene permiso de ubicación de medios, y el selector
+          // de fotos de Android 13 en adelante la quita siempre. La cámara, en
+          // cambio, entrega el archivo que acaba de escribir.
+          <span style={{ color: 'var(--text-muted)' }}>
+            Al elegirla de la galería, Android puede haberle quitado la ubicación: para conservarla, use «Tomar foto de
+            la entrega».{' '}
+          </span>
+        )}
         <button
           onClick={descartar}
           style={{
@@ -106,19 +143,28 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
 
   return (
     <div style={{ paddingLeft: 26, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {/*
+        `image/*` y no `image/jpeg,image/png`, a propósito. En la app de Android,
+        wry solo abre la cámara si la lista de tipos contiene literalmente
+        `image/*` (RustWebChromeClient.onShowFileChooser). Con los dos tipos
+        concretos abría el selector de fotos de la galería, y el botón «Tomar
+        foto» no tomaba ninguna: se descubrió el 23-09-2026 al probarlo en un
+        emulador de Android 14. La cámara entrega JPEG, y el backend valida el
+        tipo real por sus bytes, así que no se admite nada que antes se rechazara.
+      */}
       <input
         ref={campoCamara}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/*"
         capture="environment"
-        onChange={(e) => elegir(e.target.files?.[0])}
+        onChange={(e) => elegir(e.target.files?.[0], 'camara')}
         style={{ display: 'none' }}
       />
       <input
         ref={campoGaleria}
         type="file"
         accept="image/jpeg,image/png"
-        onChange={(e) => elegir(e.target.files?.[0])}
+        onChange={(e) => elegir(e.target.files?.[0], 'galeria')}
         style={{ display: 'none' }}
       />
 
@@ -133,6 +179,8 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
         </div>
       ) : (
         <>
+          {/* Una URL blob:. Las dos CSP (nginx.conf.template y tauri.conf.json)
+              tienen que admitir blob: en img-src; sin eso la vista previa sale rota. */}
           <img
             src={estado.vistaPrevia}
             alt={`Vista previa de la evidencia de la subetapa ${codigoSubetapa}`}
@@ -155,6 +203,13 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
             </span>
           </div>
         </>
+      )}
+
+      {estado.fase === 'vacio' && camaraSinFoto && (
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+          No se tomó ninguna foto. Si la aplicación no tiene permiso para usar la cámara, actívelo en los ajustes del
+          teléfono (Aplicaciones › SICOT › Permisos), o use «Elegir una foto».
+        </span>
       )}
 
       {estado.fase === 'error' && (

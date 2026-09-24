@@ -175,6 +175,17 @@ a elegir cualquier entrada del catálogo con tal de poder guardar. Va con
 llevarse por delante los documentos reales de un contrato; se pierde la etiqueta,
 no el archivo.
 
+`captura_fecha`, `captura_latitud` y `captura_longitud` (`V17`) dicen **cuándo y
+dónde se tomó una foto de evidencia**, leídos de su EXIF al cargarla
+(`LectorDeCaptura`). La subetapa 3.2 pide evidencia fotográfica
+georreferenciada, y la foto se guarda tal como sale de la cámara justamente para
+no perder esos datos. Son `NULL` cuando la foto no los trae, y así se quedan:
+nunca se rellenan con la fecha de carga ni con una ubicación aproximada, porque
+un dato de evidencia inventado es peor que uno ausente. La restricción
+`ck_documentos_captura_ubicacion` exige las dos coordenadas o ninguna, y dentro
+de rango. Si el EXIF no trae desfase horario, la hora se interpreta en la zona
+del Centro (`sicot.zona-horaria`).
+
 ### `firmas_electronicas`
 
 La firma electrónica asignada a una cuenta. Dos reglas, ambas en la base:

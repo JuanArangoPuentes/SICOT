@@ -13,6 +13,7 @@ import co.sena.sicot.repository.AlertaRepository;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
+import co.sena.sicot.service.FotoConExif;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -325,6 +328,42 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * Desde el 23-09-2026 el SUPERVISOR puede cargar documentos: la evidencia de
+     * la entrega en bodega la toma él con el teléfono (MDL-205). Abrir la regla
+     * de rol no puede abrir los contratos ajenos: el servicio responde como si
+     * el contrato no existiera, y no queda ningún documento cargado.
+     */
+    @Test
+    void supervisorNoPuedeCargarUnDocumentoEnElContratoDeOtro() throws Exception {
+        long documentosAntes = documentoRepository.count();
+
+        mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoAId)
+                        .file(new MockMultipartFile("archivo", "intrusa.jpg", "image/jpeg", FotoConExif.jpegSinExif()))
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound());
+
+        assertThat(documentoRepository.count()).isEqualTo(documentosAntes);
+    }
+
+    /**
+     * La otra puerta: cargar en el contrato propio pero colgando el archivo de
+     * una subetapa del contrato ajeno. La pertenencia de la subetapa se comprueba
+     * en la misma consulta que la busca.
+     */
+    @Test
+    void supervisorNoPuedeColgarSuCargaDeUnaSubetapaDeOtroContrato() throws Exception {
+        long documentosAntes = documentoRepository.count();
+
+        mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoBId)
+                        .file(new MockMultipartFile("archivo", "entrega.jpg", "image/jpeg", FotoConExif.jpegSinExif()))
+                        .param("subetapaId", String.valueOf(subAId))
+                        .header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isBadRequest());
+
+        assertThat(documentoRepository.count()).isEqualTo(documentosAntes);
+    }
+
     // ----------------------------------------------------------------------
     // 3. Firmas electrónicas — nadie ve la firma de otro.
     // ----------------------------------------------------------------------
@@ -366,6 +405,24 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
     // ----------------------------------------------------------------------
     // 4. Los roles legítimos NO quedan estrangulados.
     // ----------------------------------------------------------------------
+
+    /**
+     * La evidencia de la entrega la carga el supervisor en su propio contrato.
+     * Hasta el 23-09-2026 la regla de rol lo dejaba fuera: la cámara de la app
+     * terminaba en «No tiene permisos para realizar esta operación», y ninguna
+     * prueba lo había visto porque todas cargaban como GESTION.
+     */
+    @Test
+    void supervisorSiPuedeCargarLaEvidenciaEnSuPropioContrato() throws Exception {
+        mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoAId)
+                        .file(new MockMultipartFile("archivo", "entrega.jpg", "image/jpeg", FotoConExif.jpegSinExif()))
+                        .param("subetapaId", String.valueOf(subAId))
+                        .header("Authorization", "Bearer " + tokenA))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.tipo").value("IMAGEN"))
+                .andExpect(jsonPath("$.subetapaId").value(subAId))
+                .andExpect(jsonPath("$.subidoPorNombre").value("Supervisor A Aislamiento"));
+    }
 
     @Test
     void gestionSiPuedeObtenerCualquierContrato() throws Exception {

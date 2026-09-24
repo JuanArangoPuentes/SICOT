@@ -88,7 +88,7 @@ public class VigilanciaDeAlmacenamiento {
      * {@code scripts/respaldo-sicot.sh}, para que el aviso caiga junto a las
      * señales de la noche y no en mitad de la jornada.
      */
-    @Scheduled(cron = "0 0 3 * * *")
+    @Scheduled(cron = "0 0 3 * * *", zone = ZonaHoraria.PROPIEDAD)
     public void medirCadaDia() {
         medirYAvisar();
     }

@@ -52,7 +52,10 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
                 d.firmaHashSha256,
                 f.nombre,
                 u.nombre,
-                d.fechaSubida)
+                d.fechaSubida,
+                d.capturaFecha,
+                d.capturaLatitud,
+                d.capturaLongitud)
             FROM Documento d
             JOIN d.contrato c
             LEFT JOIN d.subetapa s

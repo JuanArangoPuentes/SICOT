@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { Chip, SectionHeader } from '@/components/ui'
 import { FORMAL_DOCS } from '@/data/contractFlow'
 import { descargarDocumento, verificarIntegridad } from '@/services/documentoService'
-import { formatFecha } from '@/services/format'
+import { describirCaptura, formatFecha } from '@/services/format'
 import type { ContratoResponse, DocumentoResponse, EstadoIntegridad } from '@/services/api/types'
 
 const ETAPA_LABEL: Record<number, string> = {
@@ -405,6 +405,14 @@ export default function VistaDocumentos({
                     {doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
                     {doc.firmadoPorNombre ? ` · Firmado por ${doc.firmadoPorNombre}` : ''}
                   </div>
+                  {doc.tipo === 'IMAGEN' && (
+                    // La fecha de la línea de arriba es la de CARGA. En una foto de
+                    // evidencia la que importa es la de captura, y se muestra
+                    // aparte para que no se confundan.
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      {describirCaptura(doc)}
+                    </div>
+                  )}
                 </div>
                 <div
                   style={{

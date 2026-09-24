@@ -104,8 +104,14 @@ public class SecurityConfig {
                             .hasAnyRole("GESTION", "ADMINISTRADOR");
                     auth.requestMatchers(HttpMethod.PATCH, "/api/contratos/*/estado")
                             .hasAnyRole("GESTION", "ADMINISTRADOR");
+                    // El SUPERVISOR también carga: la evidencia de la entrega en
+                    // bodega (subetapas 3.1 y 3.2) la toma él con el teléfono.
+                    // Hasta el 23-09-2026 esta regla lo dejaba fuera y la cámara
+                    // de la app terminaba en un 403. Qué contrato puede tocar lo
+                    // decide DocumentoService.subir (ContratoService.buscar →
+                    // verificarAccesoAlContrato): solo el que tiene asignado.
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/documentos")
-                            .hasAnyRole("GESTION", "ADMINISTRADOR");
+                            .hasAnyRole("SUPERVISOR", "GESTION", "ADMINISTRADOR");
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/documentos/generar")
                             .hasAnyRole("SUPERVISOR", "ADMINISTRADOR");
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/documentos/*/firmar")

@@ -37,7 +37,7 @@
 | 16 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
 | 17 | SubetapaController | PATCH | /api/subetapas/{id}/estado | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `SubetapaResponse` |
 | 18 | DocumentoController | GET | /api/contratos/{contratoId}/documentos | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `List<DocumentoResponse>` |
-| 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso | **201** | `DocumentoResponse` |
+| 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso (el SUPERVISOR, solo en su contrato) | **201** | `DocumentoResponse` |
 | 20 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
 | 20b | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
 | 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
