@@ -337,3 +337,66 @@ export interface ErrorResponse {
   path: string
   fieldErrors: Record<string, string> | null
 }
+
+// ─── Seguimiento de supervisores (Administrador) ─────────────────────────────
+//
+// GET /api/seguimiento/supervisores. El backend lo resuelve en un puñado de
+// consultas agrupadas; armarlo aquí con los endpoints por contrato serían seis
+// peticiones por contrato abierto cada vez que se abre la pestaña.
+
+export interface DocumentoResumen {
+  id: number
+  contratoId: number
+  /** Código de la subetapa («2.7»), o null si el documento se cargó sin subetapa. */
+  subetapaCodigo: string | null
+  nombre: string
+  estado: EstadoDocumento
+  generadoPorIa: boolean
+  firmado: boolean
+  fechaSubida: string
+  fechaFirma: string | null
+}
+
+export interface UltimaActividad {
+  contratoId: number
+  fecha: string
+  accion: string
+  descripcion: string | null
+}
+
+export interface ContratoSeguimiento {
+  id: number
+  numeroContrato: string
+  objeto: string
+  contratista: string | null
+  estado: EstadoContrato
+  valor: number
+  fechaInicio: string | null
+  fechaFin: string | null
+  cronograma: CronogramaResponse | null
+  subetapasCompletadas: number
+  subetapasTotales: number
+  etapaActual: number | null
+  etapaActualNombre: string | null
+  subetapaEnCurso: SubetapaResponse | null
+  etapas: EtapaResponse[]
+  documentos: DocumentoResumen[]
+  alertasSinLeer: number
+  ultimaActividad: UltimaActividad | null
+}
+
+export interface SupervisorSeguimiento {
+  id: number
+  nombre: string
+  email: string
+  activo: boolean
+  firmaVigente: boolean
+  contratosFinalizados: number
+  contratos: ContratoSeguimiento[]
+}
+
+export interface SeguimientoResponse {
+  supervisores: SupervisorSeguimiento[]
+  contratosSinSupervisor: ContratoSeguimiento[]
+  generadoEn: string
+}

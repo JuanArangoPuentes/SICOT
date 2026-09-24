@@ -1,11 +1,13 @@
 package co.sena.sicot.repository;
 
 import co.sena.sicot.dto.documento.DocumentoResponse;
+import co.sena.sicot.dto.seguimiento.DocumentoResumen;
 import co.sena.sicot.entity.Documento;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface DocumentoRepository extends JpaRepository<Documento, Long> {
@@ -75,4 +77,31 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      */
     boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /**
+     * Resumen de los documentos de varios contratos, sin contenido binario.
+     *
+     * <p>Mismo cuidado que {@link #listarPorContrato}: una proyección que no
+     * nombra {@code contenido}, y {@code LEFT JOIN} a la subetapa porque un
+     * documento cargado sin subetapa también es del expediente y tiene que
+     * contarse.
+     */
+    @Query("""
+            SELECT new co.sena.sicot.dto.seguimiento.DocumentoResumen(
+                d.id,
+                c.id,
+                s.codigo,
+                d.nombre,
+                d.estado,
+                d.generadoPorIa,
+                CASE WHEN d.firmaId IS NOT NULL THEN true ELSE false END,
+                d.fechaSubida,
+                d.fechaFirma)
+            FROM Documento d
+            JOIN d.contrato c
+            LEFT JOIN d.subetapa s
+            WHERE c.id IN :contratoIds
+            ORDER BY d.fechaSubida DESC
+            """)
+    List<DocumentoResumen> resumenPorContratos(@Param("contratoIds") Collection<Long> contratoIds);
 }

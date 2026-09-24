@@ -63,6 +63,21 @@ public class LectorDeContratos {
                 .map(contrato -> conConteos(List.of(contrato)).getFirst());
     }
 
+    /**
+     * Fotos de un conjunto de contratos ya cargado, con las mismas dos
+     * consultas agrupadas.
+     *
+     * <p>Es público para el seguimiento de supervisores del Administrador: ese
+     * panel pinta el semáforo de cada contrato y tiene que ser el mismo que ve
+     * el supervisor y el que evalúa el motor. Si armara su propia lectura,
+     * volvería a haber dos caminos hacia el mismo dato, que es justo lo que
+     * {@code CronogramaService} ya tuvo que corregir una vez.
+     */
+    @Transactional(readOnly = true)
+    public List<FotoDelContrato> de(List<Contrato> contratos) {
+        return contratos.isEmpty() ? List.of() : conConteos(contratos);
+    }
+
     private List<FotoDelContrato> conConteos(List<Contrato> contratos) {
         List<Long> ids = contratos.stream().map(Contrato::getId).toList();
         Map<Long, ConteoDeSubetapas> conteos = subetapaRepository.contarPorContrato(ids).stream()
