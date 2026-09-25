@@ -235,12 +235,19 @@ describe('hallazgos de la revisión del 24-09-2026', () => {
 
   it('el buscador también encuentra los contratos sin supervisor', () => {
     const d = datos(contrato())
-    d.contratosSinSupervisor = [contrato({ id: 55, numeroContrato: 'CO1.PCCNTR.HUERFANO' })]
+    d.contratosSinSupervisor = [
+      contrato({ id: 55, numeroContrato: 'CO1.PCCNTR.HUERFANO' }),
+      contrato({ id: 56, numeroContrato: 'CO1.PCCNTR.OTRO-SIN-SUPERVISOR' }),
+    ]
     render(<SeguimientoSupervisores datos={d} error="" cargando={false} onActualizar={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText('Buscar supervisor, correo o contrato'), { target: { value: 'huerfano' } })
 
     expect(screen.getByText('CO1.PCCNTR.HUERFANO')).toBeInTheDocument()
+    // Antes del arreglo la lista sin supervisor no se filtraba y, a la vez,
+    // salía «Ningún supervisor coincide» aunque había un resultado.
+    expect(screen.queryByText('CO1.PCCNTR.OTRO-SIN-SUPERVISOR')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Ningún supervisor coincide/)).not.toBeInTheDocument()
     expect(screen.queryByText('Paola Mejía')).not.toBeInTheDocument()
   })
 })

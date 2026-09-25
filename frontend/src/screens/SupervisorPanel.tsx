@@ -71,11 +71,6 @@ import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
 
-// Pregunta que se envía al Copiloto real para guiar cada sub-paso del
-// tutorial — reemplaza el texto estático que antes vivía en TUTORIAL. Al
-// pasar por Ollama con los datos reales del contrato, la respuesta es
-// específica a ESTE contrato (contratista, valor, fechas reales), no un
-// texto genérico repetido igual para cualquier contrato.
 // Chips de preguntas frecuentes — el label es corto para el botón, la
 // pregunta real que se envía al Copiloto va completa para que la respuesta
 // de Ollama sea específica y no un genérico "¿en qué te ayudo?".

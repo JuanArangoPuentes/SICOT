@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { guiaDelSubPaso } from './guiaSubPaso'
 import type { Step, SubStep } from '@/types/domain'
 
-const paso = (id: number, title: string): Step => ({ id, title, status: 'active', subSteps: [] }) as unknown as Step
+const paso = (id: number, title: string, subSteps: Partial<SubStep>[] = []): Step =>
+  ({ id, title, status: 'active', subSteps }) as unknown as Step
 const sub = (over: Partial<SubStep>): SubStep => ({
   id: '1.1',
   label: 'Sub-paso',
@@ -33,6 +34,24 @@ describe('guiaDelSubPaso', () => {
   it('si el responsable es otro, lo dice y no manda al supervisor a hacerlo', () => {
     const t = guiaDelSubPaso(paso(1, 'INICIO'), sub({ id: '1.4', label: 'CDP', responsible: 'Unidad de Contratación' }))
     expect(t).toContain('este sub-paso lo realiza Unidad de Contratación')
+  })
+
+  it('en 6.3, que no cierra el paso, no promete pedir observaciones', () => {
+    const cierre = paso(6, 'CIERRE', [{ id: '6.3' }, { id: '6.4' }])
+    const t = guiaDelSubPaso(cierre, sub({ id: '6.3', label: 'Firma del Informe Final' }))
+    expect(t).not.toContain('le pediré que me cuente')
+    expect(t).toContain('sin observaciones')
+  })
+
+  it('en el último sub-paso del paso sí promete pedir observaciones', () => {
+    const t = guiaDelSubPaso(paso(2, 'INICIO', [{ id: '2.6' }, { id: '2.7' }]), sub({ id: '2.7', label: 'Acta' }))
+    expect(t).toContain('le pediré que me cuente')
+  })
+
+  it('en la evidencia fotográfica dice que hay que cargarla antes de cerrar el sub-paso', () => {
+    const t = guiaDelSubPaso(paso(3, 'INSPECCIÓN'), sub({ id: '3.2', label: 'Evidencia' }))
+    expect(t).toContain('Elegir una foto')
+    expect(t).toContain('«Cargar evidencia»')
   })
 
   it('la certificación sin código oficial no inventa uno', () => {
