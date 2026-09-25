@@ -220,7 +220,7 @@ export default function VistaDocumentos({
         </div>
       )}
 
-      {/* Documentos formales — Copiloto genera, supervisor firma.
+      {/* Documentos formales — SICOT los arma, el supervisor firma.
           El estado viene de docsContrato (datos reales), no de los pasos locales:
           si el documento no existe todavía en el backend, se marca "Sin generar",
           nunca se ofrece firmar algo que no fue realmente redactado. */}

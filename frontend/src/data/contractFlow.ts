@@ -6,7 +6,7 @@
 
 import type { Step } from '@/types/domain'
 
-// Sub-steps where the Copiloto generates the document; supervisor only signs.
+// Sub-pasos cuyo documento formal arma SICOT con los datos del contrato; el supervisor lo revisa y lo firma.
 // Corregido contra fuentes reales (Datos SICOT, ver memoria de proyecto
 // project_sicot_gccon_p010_grounded): el Oficio de Pago GRF-F-089 ("SCM") lo
 // firma el Ordenador del gasto, no el supervisor — no se incluye aquí.
@@ -292,7 +292,7 @@ export const TUTORIAL: Record<string, string> = {
 // anclada a los datos reales del contrato y al estado real de sus etapas.
 // Ver services/documentoService.ts#preguntarCopiloto.
 
-// Formal documents the Copiloto generates — tracked for the Documentos tab
+// Documentos formales que arma SICOT — se siguen en la pestaña Documentos
 // (GCCON-P-010 / GCCON-M-002). Claves de generación (`tipo`) coinciden con
 // PlantillaDocumentoIA.CATALOGO en el backend.
 export const FORMAL_DOCS = [
