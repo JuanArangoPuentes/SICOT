@@ -78,6 +78,17 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
+    /** El borrador sin firmar más reciente de un formato en una subetapa. */
+    java.util.Optional<Documento> findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+            Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /**
+     * ¿Hay otro documento firmado con el mismo nombre en la subetapa? Lo usa
+     * la firma para no dejar dos actas firmadas del mismo paso.
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
+            Long contratoId, Long subetapaId, String nombre, Long id);
+
     /**
      * Resumen de los documentos de varios contratos, sin contenido binario.
      *

@@ -368,6 +368,19 @@ public class SimplePdfWriter {
         StringBuilder sb = new StringBuilder(texto.length());
         for (int i = 0; i < texto.length(); i++) {
             char c = texto.charAt(i);
+            // La Helvetica WinAnsi no tiene los caracteres de control (TAB, CR,
+            // DEL, C1): PDFBox lanza IllegalArgumentException, que no es la
+            // IOException que se atrapa, y el supervisor recibía un 500. Bastaba
+            // pegar en las notas una fila copiada de Excel (revisión del
+            // 24-09-2026). El salto de línea se conserva: lo usa el ajuste.
+            if (c == '\n') {
+                sb.append(c);
+                continue;
+            }
+            if (c < 0x20 || (c >= 0x7F && c <= 0x9F)) {
+                sb.append(' ');
+                continue;
+            }
             if (c <= 0xFF) {
                 sb.append(c);
                 continue;
@@ -391,7 +404,7 @@ public class SimplePdfWriter {
         List<String> lineas = new ArrayList<>();
         for (String parrafoOriginal : sanitizarParaFuente(texto).split("\n")) {
             StringBuilder actual = new StringBuilder();
-            for (String palabra : parrafoOriginal.split(" ")) {
+            for (String palabra : partirPalabrasLargas(parrafoOriginal.split(" "), fuente, tamanio, anchoUtil)) {
                 String candidata = actual.isEmpty() ? palabra : actual + " " + palabra;
                 if (fuente.getStringWidth(candidata) / 1000 * tamanio > anchoUtil && !actual.isEmpty()) {
                     lineas.add(actual.toString());
@@ -403,5 +416,35 @@ public class SimplePdfWriter {
             lineas.add(actual.toString());
         }
         return lineas;
+    }
+
+    /**
+     * Una palabra que no cabe sola en la línea (un enlace de SECOP, un código
+     * largo) se parte en trozos que sí caben. Sin esto se dibujaba entera desde
+     * el margen y la cola quedaba fuera de la hoja del documento firmado.
+     */
+    private static List<String> partirPalabrasLargas(String[] palabras, PDType1Font fuente, float tamanio,
+                                                     float anchoUtil) throws IOException {
+        List<String> r = new ArrayList<>(palabras.length);
+        for (String palabra : palabras) {
+            if (fuente.getStringWidth(palabra) / 1000 * tamanio <= anchoUtil) {
+                r.add(palabra);
+                continue;
+            }
+            StringBuilder trozo = new StringBuilder();
+            for (int i = 0; i < palabra.length(); i++) {
+                trozo.append(palabra.charAt(i));
+                if (fuente.getStringWidth(trozo.toString()) / 1000 * tamanio > anchoUtil && trozo.length() > 1) {
+                    trozo.setLength(trozo.length() - 1);
+                    r.add(trozo.toString());
+                    trozo.setLength(0);
+                    trozo.append(palabra.charAt(i));
+                }
+            }
+            if (!trozo.isEmpty()) {
+                r.add(trozo.toString());
+            }
+        }
+        return r;
     }
 }

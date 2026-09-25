@@ -107,6 +107,22 @@ public class GeneracionDocumentoService {
                     + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
         }
 
+        // Un borrador de este formato sin firmar en la misma subetapa es el
+        // intento anterior que no llegó a firmarse (en el teléfono, la conexión
+        // se corta si SICOT pasa a segundo plano mientras se redacta). Se
+        // devuelve ese mismo borrador para firmarlo, en vez de crear otro que
+        // quedaría para siempre como «documento sin firmar» en la bandeja.
+        if (subetapa != null) {
+            var borrador = documentoRepository
+                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                            contrato.getId(), subetapa.getId(), plantilla.nombre());
+            if (borrador.isPresent()) {
+                log.info("Se reutiliza el borrador {} de '{}' sin firmar en la subetapa {}.",
+                        borrador.get().getId(), plantilla.nombre(), subetapa.getCodigo());
+                return DocumentoMapper.toResponse(borrador.get());
+            }
+        }
+
         Observaciones obs = observaciones(plantilla, contrato, notas);
         LocalDate hoy = LocalDate.now(reloj);
         List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto());
@@ -132,6 +148,17 @@ public class GeneracionDocumentoService {
         // la trazabilidad.
         documento.setGeneradoPorIa(true);
 
+        // Segunda comprobación, justo antes de guardar: entre la primera y aquí
+        // pasan los segundos de la redacción con IA, y un doble clic o dos
+        // pestañas podían colarse las dos.
+        if (subetapa != null) {
+            var otro = documentoRepository
+                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                            contrato.getId(), subetapa.getId(), plantilla.nombre());
+            if (otro.isPresent()) {
+                return DocumentoMapper.toResponse(otro.get());
+            }
+        }
         Documento guardado = documentoRepository.save(documento);
 
         registroService.registrar(contrato, "DOCUMENTO_GENERADO",
@@ -178,9 +205,10 @@ public class GeneracionDocumentoService {
             long inicio = System.currentTimeMillis();
             redactado = ollamaClient.generar(prompt, false).strip();
             log.info("Observaciones de '{}' redactadas en {} ms", plantilla.nombre(), System.currentTimeMillis() - inicio);
-        } catch (IaNoDisponibleException e) {
-            // El documento no depende de la IA: si no responde, van las notas
-            // tal cual y el supervisor no pierde el paso.
+        } catch (IaNoDisponibleException | co.sena.sicot.exception.DemasiadasSolicitudesException e) {
+            // El documento no depende de la IA: si no responde —o el limitador
+            // la rechaza porque está atendiendo otras solicitudes (429)—, van
+            // las notas tal cual y el supervisor no pierde el paso.
             log.warn("No se pudieron redactar las observaciones de '{}' con la IA; se usan las notas tal cual: {}",
                     plantilla.nombre(), e.getMessage());
             return new Observaciones(recortadas, false,
@@ -199,7 +227,12 @@ public class GeneracionDocumentoService {
         datos.add(contrato.getNumeroContrato());
         datos.add(contrato.getContratistaNit());
         datos.add(contrato.getNumeroRegistroPresupuestal());
-        datos.add(contrato.getValor() != null ? contrato.getValor().toPlainString() : null);
+        // stripTrailingZeros: con la columna en escala 2, toPlainString daba
+        // «120450000.00» y el valor bien escrito («$120.450.000») se tomaba
+        // por una cifra inventada.
+        datos.add(contrato.getValor() != null ? contrato.getValor().stripTrailingZeros().toPlainString() : null);
+        // El valor en letras correcto tampoco es una cifra inventada.
+        datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
         if (corregido.isBlank() || !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)) {
             log.warn("La redacción de '{}' traía cifras que no están en las notas; se usan las notas tal cual.",
                     plantilla.nombre());

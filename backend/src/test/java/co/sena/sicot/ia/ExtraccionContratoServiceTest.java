@@ -457,4 +457,28 @@ class ExtraccionContratoServiceTest {
         assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
         verifyNoInteractions(ollamaClient);
     }
+
+    /** Revisión del 24-09-2026: la deducción de un archivo ganaba al rótulo de otro. */
+    @Test
+    void unTipoRotuladoEnOtroArchivoGanaAUnTipoDeducido() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "• Objeto: 5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS\n",
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nTIPO DE CONTRATO COMPRAVENTA\n");
+
+        // El acta no rotula el objeto: a ella sí se le pregunta al modelo.
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(NADA);
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf"), pdf("acta.pdf")));
+
+        assertThat(r.tipoContrato()).isEqualTo("Compraventa");
+    }
+
+    @Test
+    void siElLimitadorDeIaRechazaSeDevuelveLoLeidoDelDocumento() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("Contrato CO1.PCCNTR.8151794 sin objeto rotulado");
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new co.sena.sicot.exception.DemasiadasSolicitudesException("ocupado", 30L));
+
+        assertThat(servicio.extraer(List.of(pdf("a.pdf"))).idContrato()).isEqualTo("CO1.PCCNTR.8151794");
+    }
 }

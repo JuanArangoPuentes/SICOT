@@ -54,4 +54,44 @@ class FidelidadDeRedaccionTest {
                 "Se recibieron 124.510.000 pesos el 31 de diciembre.", "se recibieron los bienes",
                 List.of("120450000"))).isFalse();
     }
+
+    // ── Hallazgos de la revisión adversarial del 24-09-2026 ─────────────────
+
+    @Test
+    void unNombreDeDosPalabrasNoSeCorrige() {
+        List<String> nombres = List.of("Andrés Ospina", "Ana Mesa");
+        assertThat(FidelidadDeRedaccion.corregirNombres("La señora Andrea Ospina recibió los bienes.", nombres))
+                .isEqualTo("La señora Andrea Ospina recibió los bienes.");
+        assertThat(FidelidadDeRedaccion.corregirNombres("Se entregó una mesa en la sede.", nombres))
+                .isEqualTo("Se entregó una mesa en la sede.");
+    }
+
+    @Test
+    void unNombreExactoDeOtraPersonaNoSeCambiaPorUnoParecido() {
+        List<String> nombres = List.of("Juan Pablo Pérez", "Juana Pablo Pérez");
+        assertThat(FidelidadDeRedaccion.corregirNombres("reunión con Juan Pablo Pérez y Juana Pablo Pérez", nombres))
+                .isEqualTo("reunión con Juan Pablo Pérez y Juana Pablo Pérez");
+    }
+
+    @Test
+    void unNumeroInventadoEnLetrasSeDetecta() {
+        assertThat(FidelidadDeRedaccion.sinCifrasInventadas(
+                "Se recibieron veinticinco sillas por ciento veinticuatro millones de pesos.", "Recibí las sillas.",
+                List.of("120450000"))).isFalse();
+    }
+
+    @Test
+    void elValorDelContratoBienEscritoNoSeTomaPorInventado() {
+        assertThat(FidelidadDeRedaccion.sinCifrasInventadas(
+                "El contrato por $120.450.000 se ejecutó.", "se ejecutó", List.of("120450000"))).isTrue();
+        assertThat(FidelidadDeRedaccion.sinCifrasInventadas(
+                "Por ciento veinte millones cuatrocientos cincuenta mil pesos.", "se ejecutó",
+                List.of("CIENTO VEINTE MILLONES CUATROCIENTOS CINCUENTA MIL PESOS M/CTE"))).isTrue();
+    }
+
+    @Test
+    void unDecimalNoSeConfundeConOtroNumero() {
+        assertThat(FidelidadDeRedaccion.sinCifrasInventadas(
+                "Se recibieron 25 toneladas.", "llegaron 2,5 toneladas", List.of())).isFalse();
+    }
 }

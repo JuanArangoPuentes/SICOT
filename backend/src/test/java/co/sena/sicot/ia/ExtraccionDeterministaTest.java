@@ -346,4 +346,93 @@ class ExtraccionDeterministaTest {
     void tipoPorObjetoSinPistas() {
         assertThat(ExtraccionDeterminista.tipoPorObjeto("adquisición de herramienta manual")).isNull();
     }
+
+    // ── Hallazgos de la revisión adversarial del 24-09-2026 ─────────────────
+
+    @Test
+    @DisplayName("una racha enorme de espacios no dispara un retroceso cuadrático")
+    void sinRetrocesoCuadraticoAnteEspaciosLargos() {
+        String relleno = " ".repeat(40_000);
+        long inicio = System.nanoTime();
+        extractor.extraer("Contratista: A" + relleno + "B\nRepresentante legal: A" + relleno
+                + "B\nTIPO DE CONTRATO A" + relleno + "B\n");
+        long ms = (System.nanoTime() - inicio) / 1_000_000;
+        // Antes: 101 s solo con la primera línea. Un segundo es un margen amplio.
+        assertThat(ms).isLessThan(1_000);
+    }
+
+    @Test
+    @DisplayName("el NIT del SENA con dígito de verificación no se toma por el del contratista")
+    void elNitDelSenaConDigitoDeVerificacionNoEsElDelContratista() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                HERNAN RUIZ, representante legal de MANTENIMIENTOS DEL VALLE LTDA, suscribe con el SERVICIO
+                NACIONAL DE APRENDIZAJE SENA, con NIT 899.999.034-1, el presente acta.
+                CONTRATISTA MANTENIMIENTOS DEL VALLE LTDA
+                CC o NIT 800.765.432-1""");
+        assertThat(r.proveedor()).isEqualTo("MANTENIMIENTOS DEL VALLE LTDA");
+        assertThat(r.nit()).isEqualTo("800.765.432-1");
+    }
+
+    @Test
+    @DisplayName("una mención del lugar en prosa no gana a la fila rotulada")
+    void laFilaRotuladaDelLugarGanaALaProsa() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                El supervisor verificó las condiciones del lugar de ejecución del contrato y las encontró adecuadas.
+                LUGAR DE EJECUCIÓN CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA.""");
+        assertThat(r.lugarEjecucion()).isEqualTo("CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA");
+    }
+
+    @Test
+    @DisplayName("un formato en blanco no toma un rótulo por el valor de otro")
+    void unFormatoEnBlancoNoDevuelveRotulosComoValores() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                OBJETO
+                VALOR DEL CONTRATO
+                PLAZO DEL CONTRATO
+                Contratista:
+                NIT:
+                Representante legal:
+                Fecha de inicio:""");
+        assertThat(r.objeto()).isNull();
+        assertThat(r.proveedor()).isNull();
+        assertThat(r.representanteLegal()).isNull();
+    }
+
+    @Test
+    @DisplayName("el objeto de una notificación termina en la siguiente viñeta")
+    void elObjetoDeLaNotificacionNoSeTragaElRestoDelDocumento() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                - Objeto: contratar el suministro de materiales para la formación
+                - Supervisor: ALEX ZAPATA
+                - Dependencia: Almacen
+                - VALOR: $ 39.552.042
+                Atentamente,
+                Coordinador Grupo de Contratacion""");
+        assertThat(r.objeto()).isEqualTo("contratar el suministro de materiales para la formación");
+    }
+
+    @Test
+    @DisplayName("una palabra que empieza como un rótulo no corta el objeto")
+    void unaPalabraQueEmpiezaComoRotuloNoCortaElObjeto() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                OBJETO CONTRATAR LA ADQUISICION DE MATERIALES PARA LAS
+                CANTIDADES MINIMAS DEL AMBIENTE
+                VALOR DEL CONTRATO ($1.000.000 COP)""");
+        assertThat(r.objeto()).isEqualTo("CONTRATAR LA ADQUISICION DE MATERIALES PARA LAS CANTIDADES MINIMAS DEL AMBIENTE");
+    }
+
+    @Test
+    @DisplayName("el tipo sale de la primera palabra que lo dice, no de cualquiera")
+    void elTipoLoDiceElVerboPrincipal() {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(
+                "PRESTACION DEL SERVICIO DE MANTENIMIENTO INCLUIDA LA MANO DE OBRA")).isEqualTo("Servicios");
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(
+                "PRESTAR EL SERVICIO DE MANTENIMIENTO CON SUMINISTRO DE REPUESTOS")).isEqualTo("Servicios");
+    }
+
+    @Test
+    @DisplayName("«contrato de obra» en medio del objeto no es el título del documento")
+    void unaMencionDeContratoDeObraNoEsElTitulo() {
+        assertThat(ExtraccionDeterminista.tipo("OBJETO: INTERVENTORIA TECNICA AL CONTRATO DE OBRA No. 45")).isNull();
+    }
 }

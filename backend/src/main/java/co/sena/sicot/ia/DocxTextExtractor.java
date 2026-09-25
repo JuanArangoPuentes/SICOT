@@ -6,11 +6,14 @@ import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamConstants;
 import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.zip.ZipFile;
 
 /**
  * Texto de un documento de Word (.docx), para la extracción de datos del
@@ -40,17 +43,40 @@ public class DocxTextExtractor {
     /** Tope del XML descomprimido: un ZIP pequeño puede expandirse a gigabytes. */
     private static final long MAX_XML = 20L * 1024 * 1024;
 
+    /**
+     * Se lee con {@link ZipFile} desde un archivo temporal y no con
+     * {@code ZipInputStream}: para llegar a {@code word/document.xml},
+     * {@code ZipInputStream.getNextEntry()} descomprime entera cada entrada
+     * anterior, sin tope. Un .docx de 2 MB con 2 GB de ceros en una entrada
+     * previa tardaba 6,4 s (revisión del 24-09-2026); con los 20 MB que admite
+     * la carga, un minuto de CPU por archivo. {@code ZipFile} salta directo a
+     * la entrada por el índice central y solo descomprime esa.
+     */
     public String extraerTexto(byte[] docx) {
-        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(docx))) {
-            ZipEntry entrada;
-            while ((entrada = zip.getNextEntry()) != null) {
-                if ("word/document.xml".equals(entrada.getName())) {
-                    return leer(new LimitadoInputStream(zip, MAX_XML));
+        Path temporal = null;
+        try {
+            temporal = Files.createTempFile("sicot-docx-", ".zip");
+            Files.write(temporal, docx);
+            try (ZipFile zip = new ZipFile(temporal.toFile())) {
+                ZipEntry entrada = zip.getEntry("word/document.xml");
+                if (entrada == null) {
+                    return "";
+                }
+                try (InputStream xml = zip.getInputStream(entrada)) {
+                    return leer(new LimitadoInputStream(xml, MAX_XML));
                 }
             }
-            return "";
         } catch (IOException | XMLStreamException e) {
             return "";
+        } finally {
+            if (temporal != null) {
+                try {
+                    Files.deleteIfExists(temporal);
+                } catch (IOException ignorada) {
+                    // Un temporal que no se pudo borrar lo limpia el sistema; no
+                    // es motivo para perder la lectura del documento.
+                }
+            }
         }
     }
 
@@ -62,7 +88,10 @@ public class DocxTextExtractor {
         XMLStreamReader r = fabrica.createXMLStreamReader(xml);
 
         StringBuilder salida = new StringBuilder();
-        StringBuilder fila = null;      // no nulo mientras se está dentro de una fila de tabla
+        // Pila de filas: una tabla dentro de una celda abre una fila nueva sin
+        // cerrar la exterior. Con una sola variable, la fila interior pisaba a
+        // la exterior y se perdía su rótulo («CONTRATISTA | [tabla: …]»).
+        Deque<StringBuilder> filas = new ArrayDeque<>();
         StringBuilder parrafo = new StringBuilder();
         int profundidadTabla = 0;
         while (r.hasNext()) {
@@ -70,7 +99,7 @@ public class DocxTextExtractor {
             if (evento == XMLStreamConstants.START_ELEMENT && W.equals(r.getNamespaceURI())) {
                 switch (r.getLocalName()) {
                     case "tbl" -> profundidadTabla++;
-                    case "tr" -> fila = new StringBuilder();
+                    case "tr" -> filas.push(new StringBuilder());
                     case "tab" -> parrafo.append(' ');
                     case "br", "cr" -> parrafo.append(profundidadTabla > 0 ? ' ' : '\n');
                     case "t" -> parrafo.append(r.getElementText());
@@ -81,7 +110,8 @@ public class DocxTextExtractor {
                     case "p" -> {
                         String texto = parrafo.toString().strip();
                         parrafo.setLength(0);
-                        if (fila != null) {
+                        if (!filas.isEmpty()) {
+                            StringBuilder fila = filas.peek();
                             if (!texto.isEmpty()) {
                                 if (!fila.isEmpty()) fila.append(' ');
                                 fila.append(texto);
@@ -91,10 +121,16 @@ public class DocxTextExtractor {
                         }
                     }
                     case "tr" -> {
-                        if (fila != null) {
-                            salida.append(fila).append('\n');
+                        if (!filas.isEmpty()) {
+                            StringBuilder fila = filas.pop();
+                            if (filas.isEmpty()) {
+                                salida.append(fila).append('\n');
+                            } else if (!fila.isEmpty()) {
+                                StringBuilder exterior = filas.peek();
+                                if (!exterior.isEmpty()) exterior.append(' ');
+                                exterior.append(fila);
+                            }
                         }
-                        fila = null;
                     }
                     case "tbl" -> profundidadTabla--;
                     default -> { }

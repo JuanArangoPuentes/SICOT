@@ -186,6 +186,18 @@ public class DocumentoService {
         if (documento.getContenido() == null || documento.getContenido().length == 0) {
             throw new BusinessException("Este documento no tiene contenido: no hay nada que firmar.");
         }
+        // Dos actas firmadas del mismo paso son dos documentos oficiales que
+        // pueden contradecirse. Pasaba si quedaba un borrador de un intento
+        // anterior y se firmaba después desde Documentos (revisión del
+        // 24-09-2026). Solo aplica a lo generado por SICOT en una subetapa: dos
+        // fotos de evidencia de la misma subetapa son perfectamente válidas.
+        if (documento.isGeneradoPorIa() && documento.getSubetapa() != null
+                && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
+                        documento.getContrato().getId(), documento.getSubetapa().getId(),
+                        documento.getNombre(), documento.getId())) {
+            throw new BusinessException("Ya hay un «" + documento.getNombre() + "» firmado en esta subetapa. "
+                    + "Un documento firmado no se reemplaza firmando otro.");
+        }
         var usuario = SecurityUtils.currentUsuario();
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(

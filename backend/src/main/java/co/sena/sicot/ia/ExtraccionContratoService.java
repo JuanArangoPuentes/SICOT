@@ -124,6 +124,9 @@ public class ExtraccionContratoService {
         // Si no se pudo leer ningún archivo, un formulario vacío sin
         // explicación era lo que veía Gestión (prueba del 24-09-2026 con un PDF
         // escaneado: 200 con todos los campos en null). Se dice por qué.
+        if (resultado.tipoContrato() == null && resultado.objeto() != null) {
+            resultado = conTipo(resultado, ExtraccionDeterminista.tipoPorObjeto(resultado.objeto()));
+        }
         if (!sinTexto.isEmpty() && sinTexto.size() == procesados) {
             throw new BusinessException("No se pudo leer texto en " + String.join(", ", sinTexto)
                     + ". SICOT lee PDF con texto y documentos de Word (.docx); un PDF escaneado es una imagen"
@@ -174,15 +177,17 @@ public class ExtraccionContratoService {
         // preguntarle al modelo: la extracción termina en milisegundos en vez
         // de minutos, que en un equipo sin GPU es la diferencia entre usarla o
         // no (ver feedback de ADR-008: bastar con una IA pequeña).
-        // El tipo se deduce de las palabras del propio objeto cuando las hay
-        // («…contratar el suministro de…»). Llamar al modelo solo para proponer
-        // un valor de una lista desplegable costaba de uno a cuatro minutos en
-        // esta máquina, y el 24-09-2026 una notificación real se cortó por
-        // tiempo esperando justo eso.
-        if (deterministica.objeto() != null && deterministica.tipoContrato() == null) {
-            deterministica = conTipo(deterministica, ExtraccionDeterminista.tipoPorObjeto(deterministica.objeto()));
-        }
-        if (extraccionDeterminista.estaCompleta(deterministica)) {
+        // Si el objeto trae las palabras que dicen el tipo («…contratar el
+        // suministro de…»), tampoco hace falta el modelo: llamarlo solo para
+        // proponer un valor de una lista desplegable costaba de uno a cuatro
+        // minutos, y el 24-09-2026 una notificación real se cortó por tiempo
+        // esperando justo eso. El tipo deducido NO se fija aquí sino al final
+        // de extraer(), después de combinar: así un rótulo explícito en otro
+        // archivo gana siempre a una deducción de este.
+        boolean tipoDeducible = deterministica.objeto() != null
+                && ExtraccionDeterminista.tipoPorObjeto(deterministica.objeto()) != null;
+        if (extraccionDeterminista.estaCompleta(deterministica)
+                || (deterministica.objeto() != null && tipoDeducible)) {
             log.info("'{}': todos los campos salieron del documento sin usar el modelo.", archivo.getOriginalFilename());
             return deterministica;
         }
@@ -214,7 +219,7 @@ public class ExtraccionContratoService {
         String respuestaCruda;
         try {
             respuestaCruda = ollamaClient.generar(prompt, true);
-        } catch (IaNoDisponibleException e) {
+        } catch (IaNoDisponibleException | co.sena.sicot.exception.DemasiadasSolicitudesException e) {
             // Lo que el código ya leyó del documento no depende del modelo: si
             // el modelo no responde, se devuelve eso en vez de perderlo todo.
             // Antes un corte por tiempo tiraba el número, el valor y las fechas
@@ -224,6 +229,9 @@ public class ExtraccionContratoService {
             return deterministica;
         }
         log.info("Extracción de '{}' completada en {} ms", archivo.getOriginalFilename(), System.currentTimeMillis() - inicio);
+        if (respuestaCruda == null || respuestaCruda.isBlank()) {
+            return deterministica;
+        }
         ExtraccionContratoResponse delModelo;
         try {
             delModelo = objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);

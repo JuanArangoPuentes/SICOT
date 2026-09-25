@@ -328,4 +328,69 @@ class GeneracionDocumentoServiceTest {
         verify(documentoRepository, org.mockito.Mockito.atLeastOnce()).save(documento.capture());
         return documento.getValue();
     }
+
+    // ── Hallazgos de la revisión adversarial del 24-09-2026 ─────────────────
+
+    @Test
+    void unTabuladorEnLasNotasNoTumbaElPdf() {
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("La IA tardó más de 240 segundos."));
+
+        servicio.generar(1L, null, "ACTA_RECIBO", "Sillas\t20\tMesas\t5\r\nfin\u0085");
+
+        assertThat(textoDelPdf()).contains("Sillas").contains("Mesas");
+    }
+
+    @Test
+    void siElLimitadorDeIaRechazaElDocumentoSeGeneraIgual() {
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new co.sena.sicot.exception.DemasiadasSolicitudesException("ocupado", 30L));
+
+        servicio.generar(1L, null, "ACTA_RECIBO", "se recibieron los bienes completos");
+
+        assertThat(textoDelPdf()).contains("se recibieron los bienes completos");
+    }
+
+    @Test
+    void unEnlaceLargoNoSeSaleDeLaPagina() throws Exception {
+        String enlace = "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID="
+                + "CO1.NTC.5123456&isFromPublicArea=True&isModal=False";
+        given(ollamaClient.generar(anyString(), anyBoolean())).willThrow(new IaNoDisponibleException("no"));
+
+        servicio.generar(1L, null, "ACTA_RECIBO", "Publicado en SECOP II: " + enlace);
+
+        byte[] pdf = documentoGuardado().getContenido();
+        try (var doc = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            var stripper = new org.apache.pdfbox.text.PDFTextStripper() {
+                float maxX = 0;
+
+                @Override
+                protected void writeString(String text, java.util.List<org.apache.pdfbox.text.TextPosition> pos) {
+                    for (var p : pos) maxX = Math.max(maxX, p.getXDirAdj() + p.getWidthDirAdj());
+                }
+            };
+            stripper.getText(doc);
+            assertThat(stripper.maxX).isLessThanOrEqualTo(612 - 50 + 1);
+        }
+    }
+
+    @Test
+    void siHayUnBorradorSinFirmarDelMismoFormatoSeDevuelveEseYNoOtro() {
+        Subetapa subetapa = new Subetapa();
+        subetapa.setId(27L);
+        subetapa.setCodigo("2.7");
+        given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
+        Documento borrador = new Documento();
+        borrador.setId(99L);
+        borrador.setContrato(contrato);
+        borrador.setNombre("Acta de Inicio — CO1.PCCNTR.7986334");
+        borrador.setTipo(TipoDocumento.PDF);
+        borrador.setEstado(EstadoDocumento.PENDIENTE);
+        given(documentoRepository
+                .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                        1L, 27L, "Acta de Inicio")).willReturn(Optional.of(borrador));
+
+        assertThat(servicio.generar(1L, 27L, "ACTA_INICIO").id()).isEqualTo(99L);
+        verify(documentoRepository, never()).save(any());
+    }
 }

@@ -189,6 +189,9 @@ export default function GestionPanel({
     setRepresentanteLegal('')
     setLugarEjecucion('')
     setRegistroPresupuestal('')
+    // Desde que el tipo extraído sí se aplica, el del contrato anterior se
+    // quedaba puesto en la siguiente carga si esta no traía tipo.
+    setTipo('Suministro de Bienes')
   }
 
   const handleFileSelect = () => fileInputRef.current?.click()
