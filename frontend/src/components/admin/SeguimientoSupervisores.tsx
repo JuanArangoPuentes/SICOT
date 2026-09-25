@@ -68,7 +68,10 @@ export function estadoDocumentosFormales(c: ContratoSeguimiento) {
     if (docs.some((d) => d.firmado)) estado = { label: 'Firmado', type: 'signed' }
     else if (docs.length > 0) estado = { label: 'Pendiente de firma', type: 'unassigned' }
     else if (estadoSub === 'COMPLETADA') estado = { label: 'Paso cerrado sin documento', type: 'conflicto' }
-    else if (estadoSub === 'EN_CURSO') estado = { label: 'Por generar', type: 'running' }
+    // «Por generar» es el documento de la subetapa en la que va el supervisor.
+    // No se mira el estado EN_CURSO: en el flujo real casi ninguna subetapa lo
+    // tiene (el panel las cierra de PENDIENTE a COMPLETADA).
+    else if (c.subetapaEnCurso?.codigo === f.subStepId) estado = { label: 'Por generar', type: 'running' }
     else estado = { label: 'Aún no corresponde', type: 'pending' }
     return { ...f, estado }
   })
@@ -469,17 +472,20 @@ export default function SeguimientoSupervisores({
   onActualizar: () => void
 }) {
   const [filtro, setFiltro] = useState('')
+  const f = filtro.trim().toLowerCase()
+  const coincide = (c: ContratoSeguimiento) =>
+    c.numeroContrato.toLowerCase().includes(f) || c.objeto.toLowerCase().includes(f)
   const supervisores = useMemo(() => {
     if (!datos) return []
-    const f = filtro.trim().toLowerCase()
     if (!f) return datos.supervisores
     return datos.supervisores.filter(
-      (s) =>
-        s.nombre.toLowerCase().includes(f) ||
-        s.email.toLowerCase().includes(f) ||
-        s.contratos.some((c) => c.numeroContrato.toLowerCase().includes(f) || c.objeto.toLowerCase().includes(f)),
+      (s) => s.nombre.toLowerCase().includes(f) || s.email.toLowerCase().includes(f) || s.contratos.some(coincide),
     )
-  }, [datos, filtro])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datos, f])
+  // El buscador filtraba los supervisores pero no los contratos sin
+  // supervisor: buscar un contrato que no lo tenía no lo encontraba.
+  const sinSupervisor = datos ? (f ? datos.contratosSinSupervisor.filter(coincide) : datos.contratosSinSupervisor) : []
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
@@ -524,15 +530,18 @@ export default function SeguimientoSupervisores({
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Consultando el avance de los supervisores…</div>
       )}
 
-      {datos && datos.contratosSinSupervisor.length > 0 && (
+      {sinSupervisor.length > 0 && (
         <section className="card" style={{ padding: 16, borderColor: 'var(--alert-leve)' }}>
           <div
             style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, fontWeight: 600, marginBottom: 10 }}
           >
-            <IconAlertTriangle size={16} /> Contratos abiertos sin supervisor ({datos.contratosSinSupervisor.length})
+            <IconAlertTriangle size={16} /> Contratos abiertos sin supervisor ({sinSupervisor.length})
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: -4, marginBottom: 10 }}>
+            Incluye los asignados a una cuenta que ya no tiene el rol Supervisor.
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
-            {datos.contratosSinSupervisor.map((c) => (
+            {sinSupervisor.map((c) => (
               <TarjetaContrato key={c.id} c={c} />
             ))}
           </div>
@@ -547,7 +556,7 @@ export default function SeguimientoSupervisores({
         </div>
       )}
 
-      {datos && datos.supervisores.length > 0 && supervisores.length === 0 && (
+      {datos && datos.supervisores.length > 0 && supervisores.length === 0 && sinSupervisor.length === 0 && (
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Ningún supervisor coincide con «{filtro}».</div>
       )}
 
