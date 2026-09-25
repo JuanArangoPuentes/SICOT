@@ -71,4 +71,39 @@ class DocxTextExtractorTest {
         assertThat(new DocxTextExtractor().extraerTexto(malicioso)).contains("hola");
         assertThat(new DocxTextExtractor().extraerTexto(bytes.toByteArray())).doesNotContain("root");
     }
+
+    /** Revisión del 24-09-2026: la fila exterior perdía su rótulo con una tabla anidada. */
+    @Test
+    void unaTablaAnidadaNoBorraElRotuloDeLaFilaExterior() throws IOException {
+        String texto = new DocxTextExtractor().extraerTexto(docx("<w:tbl><w:tr><w:tc>" + p("CONTRATISTA")
+                + "</w:tc><w:tc><w:tbl>" + fila("EVENTOS SUPERNOVA S.A.S.", "") + "</w:tbl></w:tc></w:tr></w:tbl>"));
+
+        assertThat(texto).isEqualTo("CONTRATISTA EVENTOS SUPERNOVA S.A.S.\n");
+    }
+
+    /**
+     * Revisión del 24-09-2026: ZipInputStream descomprimía entera cada entrada
+     * anterior a word/document.xml, sin tope. 200 MB de ceros antes del
+     * documento no pueden costar lo que cuesta descomprimirlos.
+     */
+    @Test
+    void unaEntradaEnormeAntesDelDocumentoNoSeDescomprime() throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(bytes)) {
+            zip.putNextEntry(new ZipEntry("word/media/relleno.bin"));
+            byte[] ceros = new byte[1 << 20];
+            for (int i = 0; i < 200; i++) zip.write(ceros);
+            zip.closeEntry();
+            zip.putNextEntry(new ZipEntry("word/document.xml"));
+            zip.write(("<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">"
+                    + "<w:body>" + p("hola") + "</w:body></w:document>").getBytes(StandardCharsets.UTF_8));
+            zip.closeEntry();
+        }
+        long inicio = System.nanoTime();
+        String texto = new DocxTextExtractor().extraerTexto(bytes.toByteArray());
+        long ms = (System.nanoTime() - inicio) / 1_000_000;
+
+        assertThat(texto).contains("hola");
+        assertThat(ms).isLessThan(300);
+    }
 }
