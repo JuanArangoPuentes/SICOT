@@ -29,6 +29,14 @@ import { formatCOP, formatFecha } from '@/services/format'
 // misma lista vive en ExtraccionContratoService.TIPOS del backend.
 const CONTRACT_TYPES = ['Suministro de Bienes', 'Compraventa', 'Servicios', 'Obras', 'Arrendamiento'] as const
 
+// Columnas del registro de contratos. Antes eran cinco anchos fijos que
+// sumaban 820 px más el objeto con lo que sobrara: en un portátil de 1280 px
+// el contenedor mide 976 px y al objeto le quedaban 63 px, una palabra por
+// línea (medido el 24-09-2026). Con mínimos y proporciones, el objeto se lleva
+// la mayor parte del ancho y ninguna columna baja de lo que necesita.
+const COLUMNAS_REGISTRO =
+  'minmax(140px, 1.2fr) minmax(200px, 3fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr) minmax(100px, 0.9fr) minmax(130px, 1.1fr)'
+
 // Las 6 etapas reales del procedimiento GCCON-P-010, espejo de
 // `GcconP010Plantilla` en el backend.
 //
@@ -425,7 +433,7 @@ export default function GestionPanel({
             className="tabla-cabecera"
             style={{
               display: 'grid',
-              gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
+              gridTemplateColumns: COLUMNAS_REGISTRO,
               padding: '8px 16px',
               borderBottom: '1px solid var(--border)',
               fontSize: 11,
@@ -462,7 +470,7 @@ export default function GestionPanel({
               className="tabla-fila"
               style={{
                 display: 'grid',
-                gridTemplateColumns: '180px 1fr 180px 160px 120px 180px',
+                gridTemplateColumns: COLUMNAS_REGISTRO,
                 padding: '12px 16px',
                 borderBottom: '1px solid var(--border)',
                 fontSize: 13,
@@ -476,7 +484,12 @@ export default function GestionPanel({
             >
               <span
                 data-col="Contrato"
-                style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--accent-tech)' }}
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 11,
+                  color: 'var(--accent-tech)',
+                  overflowWrap: 'anywhere',
+                }}
               >
                 {c.id}
               </span>
