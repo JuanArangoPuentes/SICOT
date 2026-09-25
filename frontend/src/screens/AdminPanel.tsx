@@ -164,6 +164,7 @@ export default function AdminPanel({
     try {
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, activo: actualizado.activo } : x)))
+      cargarSeguimiento()
     } catch {
       setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
     }
@@ -174,6 +175,9 @@ export default function AdminPanel({
     try {
       const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
       setFirmas((fs) => fs.map((x) => (x.id === f.id ? { ...x, activa: actualizada.activa } : x)))
+      // El seguimiento dice qué supervisores tienen firma: sin recargarlo,
+      // seguía diciendo «Sin firma electrónica» después de asignarla.
+      cargarSeguimiento()
     } catch {
       setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
     }
@@ -585,6 +589,7 @@ export default function AdminPanel({
           onCreate={(u) => {
             setUsers((us) => [...us, u])
             setNewUser(false)
+            cargarSeguimiento()
           }}
         />
       )}
@@ -605,6 +610,7 @@ export default function AdminPanel({
           onCreate={(f) => {
             setFirmas((fs) => [...fs, f])
             setFirmaModalOpen(false)
+            cargarSeguimiento()
           }}
         />
       )}

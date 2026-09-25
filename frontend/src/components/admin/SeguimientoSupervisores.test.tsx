@@ -214,3 +214,33 @@ describe('ResumenSeguimiento', () => {
     expect(screen.getByText(/1 paso cerrado sin su documento/)).toBeInTheDocument()
   })
 })
+
+describe('hallazgos de la revisión del 24-09-2026', () => {
+  it('el documento de la subetapa en la que va el supervisor está «Por generar» aunque siga PENDIENTE', () => {
+    // 2.1 a 2.6 cerradas, 2.7 PENDIENTE: así queda con el panel real.
+    const c = contrato({
+      etapas: etapas('2.6', 'ninguna'),
+      subetapaEnCurso: {
+        id: 9,
+        codigo: '2.7',
+        nombre: 'Firma del Acta de Inicio',
+        descripcion: '',
+        estado: 'PENDIENTE',
+        responsable: 'Supervisor',
+      },
+    })
+    const por = Object.fromEntries(estadoDocumentosFormales(c).map((e) => [e.subStepId, e.estado.label]))
+    expect(por['2.7']).toBe('Por generar')
+  })
+
+  it('el buscador también encuentra los contratos sin supervisor', () => {
+    const d = datos(contrato())
+    d.contratosSinSupervisor = [contrato({ id: 55, numeroContrato: 'CO1.PCCNTR.HUERFANO' })]
+    render(<SeguimientoSupervisores datos={d} error="" cargando={false} onActualizar={vi.fn()} />)
+
+    fireEvent.change(screen.getByLabelText('Buscar supervisor, correo o contrato'), { target: { value: 'huerfano' } })
+
+    expect(screen.getByText('CO1.PCCNTR.HUERFANO')).toBeInTheDocument()
+    expect(screen.queryByText('Paola Mejía')).not.toBeInTheDocument()
+  })
+})
