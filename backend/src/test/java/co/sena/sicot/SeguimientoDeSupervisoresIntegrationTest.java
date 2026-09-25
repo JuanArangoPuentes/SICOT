@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -234,5 +235,42 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readValue(cuerpo, AuthResponse.class).token();
+    }
+
+    /**
+     * Revisión del 24-09-2026: si a la cuenta asignada se le cambia el rol, su
+     * contrato abierto no aparecía en ninguna lista del seguimiento.
+     */
+    @Test
+    void unContratoCuyoSupervisorDejoDeSerloAparaceSinSupervisor() throws Exception {
+        mockMvc.perform(put("/api/usuarios/{id}", idConFirma)
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Ana Con Firma","email":"%s","telefono":"3000000000","rol":"GESTION"}
+                                """.formatted(EMAIL_CON)))
+                .andExpect(status().isOk());
+
+        JsonNode sin = seguimiento(tokenAdmin).get("contratosSinSupervisor");
+        assertThat(sin).anySatisfy(c -> assertThat(c.get("id").asLong()).isEqualTo(contratoId));
+    }
+
+    /**
+     * La subetapa en curso es la primera sin cerrar de la etapa actual, aunque
+     * nadie la haya puesto EN_CURSO: el panel del supervisor cierra las
+     * subetapas de PENDIENTE a COMPLETADA.
+     */
+    @Test
+    void laSubetapaEnCursoEsLaPrimeraSinCerrarAunqueEsteEnPendiente() throws Exception {
+        String tokenSupervisor = login(EMAIL_CON, PASSWORD);
+        JsonNode subs = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
+                        .header("Authorization", "Bearer " + tokenSupervisor))
+                .andReturn().getResponse().getContentAsString()).get(0).get("subEtapas");
+        // 1.2 estaba EN_CURSO; se cierra, y 1.3 queda PENDIENTE sin que nadie la inicie.
+        cambiarSubetapa(tokenSupervisor, subs.get(1).get("id").asLong(), "COMPLETADA");
+
+        JsonNode c = supervisor(seguimiento(tokenAdmin), idConFirma).get("contratos").get(0);
+        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("1.3");
+        assertThat(c.get("subetapaEnCurso").get("estado").asText()).isEqualTo("PENDIENTE");
     }
 }

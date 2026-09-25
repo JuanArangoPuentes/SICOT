@@ -140,7 +140,9 @@ public class SeguimientoService {
         }
 
         List<SupervisorSeguimiento> supervisores = new ArrayList<>();
+        Set<Long> listados = new java.util.HashSet<>();
         for (Usuario u : usuarioRepository.findByRolOrderByNombreAsc(Rol.SUPERVISOR)) {
+            listados.add(u.getId());
             List<ContratoSeguimiento> suyos = porSupervisor.getOrDefault(u.getId(), List.of());
             // Una cuenta desactivada sin contratos abiertos ya no es nadie a
             // quien hacer seguimiento. Con contratos abiertos sí se muestra:
@@ -151,6 +153,17 @@ public class SeguimientoService {
             supervisores.add(new SupervisorSeguimiento(u.getId(), u.getNombre(), u.getEmail(), u.isActivo(),
                     conFirma.contains(u.getId()), finalizados.getOrDefault(u.getId(), 0L), suyos));
         }
+        // Un contrato abierto cuya cuenta asignada ya no tiene el rol Supervisor
+        // (se le cambió el rol después de asignarlo) no aparecía en ninguna
+        // lista: ni con su supervisor, que ya no se lista, ni sin supervisor,
+        // porque el campo no es nulo. Es la desaparición silenciosa contra la
+        // que advierte ContratoRepository; se muestra con los que no tienen
+        // supervisor, que es lo que en la práctica le pasa.
+        porSupervisor.forEach((idSupervisor, contratosDeEl) -> {
+            if (!listados.contains(idSupervisor)) {
+                sinSupervisor.addAll(contratosDeEl);
+            }
+        });
         return new SeguimientoResponse(supervisores, sinSupervisor, Instant.now(reloj));
     }
 
@@ -159,9 +172,16 @@ public class SeguimientoService {
                                      UltimaActividad ultima, LocalDate hoy) {
         List<EtapaResponse> etapasDto = etapas.stream().map(EtapaMapper::toResponse).toList();
         Etapa enCurso = etapas.stream().filter(e -> e.getEstado() != EstadoEtapa.COMPLETADA).findFirst().orElse(null);
-        SubetapaResponse subEnCurso = etapasDto.stream()
+        // La subetapa en la que se está trabajando es la primera sin cerrar de
+        // la etapa actual, igual que en GuiaDelPasoActual. Antes se buscaba la
+        // primera en estado EN_CURSO, pero en el flujo real ese estado solo lo
+        // tiene la primera subetapa de cada paso: el panel del supervisor cierra
+        // las demás directamente de PENDIENTE a COMPLETADA. Con eso «Trabajando
+        // en» salía casi siempre vacío (revisión del 24-09-2026).
+        SubetapaResponse subEnCurso = enCurso == null ? null : etapasDto.stream()
+                .filter(e -> e.numero() == enCurso.getNumero())
                 .flatMap(e -> e.subEtapas().stream())
-                .filter(s -> s.estado() == EstadoSubetapa.EN_CURSO)
+                .filter(s -> s.estado() != EstadoSubetapa.COMPLETADA)
                 .findFirst()
                 .orElse(null);
         long total = foto != null ? foto.subetapasTotales() : 0;
