@@ -176,7 +176,7 @@ public class DocumentoController {
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
     public ResponseEntity<DocumentoResponse> generar(@PathVariable Long contratoId,
                                                      @Valid @RequestBody GenerarDocumentoRequest request) {
-        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo()));
+        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(), request.notas()));
     }
 
     @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual")

@@ -77,6 +77,11 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
      * El caso que motivó toda esta corrección: {@code OllamaClient} falla de
      * forma explícita y con un mensaje accionable cuando Ollama no responde,
      * en vez de inventar un resultado. Ese mensaje debe llegar al usuario.
+     *
+     * <p>Se prueba con el chat del copiloto y una pregunta libre, que sí
+     * depende del modelo. Hasta el 24-09-2026 se probaba con la extracción,
+     * pero la extracción ya no falla cuando falla el modelo: devuelve lo que
+     * leyó del documento (ver la prueba siguiente).
      */
     @Test
     void ollamaCaidoDevuelve503ConMensajeHonesto() throws Exception {
@@ -86,12 +91,20 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
                 .willThrow(new IaNoDisponibleException(
                         "El servicio de IA no está disponible en este momento. "
                                 + "Intente de nuevo en unos minutos; si el problema persiste, avise al área de sistemas."));
+        String creado = mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.ERRORES-IA","objeto":"Contrato de la prueba de errores",
+                                 "valor":1000000,"fechaInicio":"2026-01-01","fechaFin":"2026-12-31"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long contratoId = objectMapper.readTree(creado).get("id").asLong();
 
-        MockMultipartFile pdf = new MockMultipartFile(
-                "archivos", "acta.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
-
-        mockMvc.perform(multipart("/api/ia/extraer-contrato").file(pdf)
-                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + login("administrador@soy.sena.edu.co", "Admin123*"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"¿Qué dice el manual de supervisión sobre la liquidación?\"}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503))
                 // El mensaje real del backend debe propagarse, no el generico.
@@ -99,6 +112,25 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
                 // ...pero sin filtrar topologia interna al cliente.
                 .andExpect(jsonPath("$.message", not(containsString("localhost"))))
                 .andExpect(jsonPath("$.message", not(containsString("11434"))));
+    }
+
+    /**
+     * La extracción usa el modelo solo para completar: si el modelo no
+     * responde, Gestión recibe lo que se leyó del documento en vez de un 503
+     * que tira también los datos ya leídos (prueba integral del 24-09-2026).
+     */
+    @Test
+    void ollamaCaidoNoTumbaLaExtraccionDeLoQueElDocumentoTraeEscrito() throws Exception {
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("La IA tardó más de 240 segundos."));
+
+        MockMultipartFile pdf = new MockMultipartFile(
+                "archivos", "acta.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
+
+        mockMvc.perform(multipart("/api/ia/extraer-contrato").file(pdf)
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idContrato").value("CO1.PCCNTR.PRUEBA"));
     }
 
     @Test
@@ -117,9 +149,8 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
      *
      * Tiene que llevar texto de verdad: {@code ExtraccionContratoService} se
      * detiene antes de llamar a Ollama si el PDF no tiene texto legible (caso
-     * de un escaneo sin OCR) y devuelve una respuesta vacía. Con un PDF sin
-     * texto esta prueba pasaría por el camino equivocado y nunca ejercitaría
-     * el manejo del fallo de la IA.
+     * de un escaneo sin OCR). Con un PDF sin texto la prueba pasaría por el
+     * camino equivocado y nunca ejercitaría el fallo de la IA.
      */
     private byte[] pdfConTextoExtraible() throws Exception {
         try (PDDocument documento = new PDDocument();

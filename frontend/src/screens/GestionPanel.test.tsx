@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GestionPanel from './GestionPanel'
 import { PrefsProvider } from '@/prefs'
@@ -87,5 +87,36 @@ describe('GestionPanel', () => {
 
     await waitFor(() => expect(screen.getAllByText(/contrato/i).length).toBeGreaterThan(0))
     expect(screen.queryByText(/CTMA-2026-0184/)).not.toBeInTheDocument()
+  })
+
+  /**
+   * El tipo que el backend lee del documento tiene que llegar al formulario.
+   * Hasta el 24-09-2026 se comparaba con Object.keys de la lista —los índices—
+   * y el formulario se quedaba siempre en «Suministro de Bienes».
+   */
+  it('aplica al formulario el tipo de contrato leído del documento', async () => {
+    const { extraerDatosContrato } = await import('@/services/documentoService')
+    vi.mocked(extraerDatosContrato).mockResolvedValue({
+      idContrato: 'CO1.PCCNTR.9100001',
+      objeto: 'Adquisición de herramienta',
+      proveedor: 'FERRETERÍA INDUSTRIAL LOS ANDES S.A.S.',
+      nit: '901.234.567-8',
+      representanteLegal: 'MARTA LUCÍA OSPINA GÓMEZ',
+      valor: '120450000',
+      vigenciaInicio: '2026-09-02',
+      vigenciaFin: '2026-12-31',
+      lugarEjecucion: 'Itagüí',
+      registroPresupuestal: '71204',
+      tipoContrato: 'Compraventa',
+    })
+
+    const { container } = montar()
+    fireEvent.click((await screen.findAllByText(/Cargar nueva ficha/))[0])
+    const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement
+    expect(input.accept).toContain('.docx')
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'acta.pdf', { type: 'application/pdf' })] } })
+    fireEvent.click(await screen.findByText(/Continuar a confirmación/))
+
+    await waitFor(() => expect(screen.getByDisplayValue('Compraventa')).toBeInTheDocument())
   })
 })

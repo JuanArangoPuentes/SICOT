@@ -70,6 +70,26 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     List<DocumentoResponse> listarPorContrato(@Param("contratoId") Long contratoId);
 
     /**
+     * ¿Hay ya un documento firmado de este formato en la subetapa? Lo usa la
+     * generación para no crear un segundo «Acta de Inicio» después de firmada
+     * la primera: el borrador sobrante quedaba como tarea pendiente en la
+     * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+            Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /** El borrador sin firmar más reciente de un formato en una subetapa. */
+    java.util.Optional<Documento> findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+            Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /**
+     * ¿Hay otro documento firmado con el mismo nombre en la subetapa? Lo usa
+     * la firma para no dejar dos actas firmadas del mismo paso.
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
+            Long contratoId, Long subetapaId, String nombre, Long id);
+
+    /**
      * Resumen de los documentos de varios contratos, sin contenido binario.
      *
      * <p>Mismo cuidado que {@link #listarPorContrato}: una proyección que no
