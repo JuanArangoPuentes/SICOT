@@ -21,18 +21,29 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
   if (responsable) partes.push(`Responsable: ${responsable}.`)
 
   const doc = AI_GENERATED_DOCS.has(sub.id) ? FORMAL_DOCS.find((d) => d.subStepId === sub.id) : undefined
+  // Solo al cerrar el último sub-paso de un paso se le piden al supervisor las
+  // observaciones (SupervisorPanel.handleActionSubStep). 2.7, 3.4, 4.3 y 5.3 lo
+  // son; 6.3 no (el último del Paso 6 es 6.4), y su documento se genera y firma
+  // al pulsar el botón. Prometer las observaciones en 6.3 dejaba al supervisor
+  // esperando una pregunta que no llegaba, con el Informe Final ya firmado.
+  const pideObservaciones = step.subSteps.length === 0 || step.subSteps[step.subSteps.length - 1]?.id === sub.id
   if (doc) {
     partes.push(
       `Qué hacer en SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «${doc.name}»` +
         `${doc.code === 'PENDIENTE_DE_DEFINIR' ? '' : ` (${doc.code})`} con los datos exactos del contrato, ` +
-        'y usted lo firma con su firma electrónica. Antes le pediré que me cuente qué hizo en el paso: eso va ' +
-        'como observaciones del documento. Lo que SICOT no sabe (facturas, pólizas, pagos) queda marcado como ' +
-        '«dato pendiente».',
+        'y usted lo revisa y lo firma con su firma electrónica. ' +
+        (pideObservaciones
+          ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. '
+          : 'Se genera y se firma en el momento, sin observaciones: revise antes que todo lo del paso esté hecho. ') +
+        'Lo que SICOT no sabe (facturas, pólizas, pagos) queda marcado como «dato pendiente».',
     )
   } else if (SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(sub.id)) {
+    // La vista previa no es la carga: hasta pulsar «Cargar evidencia» la foto
+    // no llega al expediente, y marcar el sub-paso antes lo cerraba sin ella.
     partes.push(
-      'Qué hacer en SICOT: tome la foto de la entrega con «Tomar foto de la entrega» (o elija una de la galería). ' +
-        'SICOT la guarda tal como sale de la cámara, con la fecha y el lugar en que se tomó.',
+      'Qué hacer en SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», ' +
+        'pulse «Cargar evidencia» y, cuando aparezca como cargada, marque el sub-paso como completado. ' +
+        'Con la cámara, SICOT guarda la fecha y el lugar de la toma; una foto de la galería puede no traer el lugar.',
     )
   } else if (!esDelSupervisor) {
     partes.push(

@@ -71,11 +71,6 @@ import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
 
-// Pregunta que se envía al Copiloto real para guiar cada sub-paso del
-// tutorial — reemplaza el texto estático que antes vivía en TUTORIAL. Al
-// pasar por Ollama con los datos reales del contrato, la respuesta es
-// específica a ESTE contrato (contratista, valor, fechas reales), no un
-// texto genérico repetido igual para cualquier contrato.
 // Chips de preguntas frecuentes — el label es corto para el botón, la
 // pregunta real que se envía al Copiloto va completa para que la respuesta
 // de Ollama sea específica y no un genérico "¿en qué te ayudo?".
@@ -873,8 +868,8 @@ export default function SupervisorPanel({
         categoria: 'Documento',
         titulo: `Documento sin firmar: ${doc.nombre}`,
         detalle: formal
-          ? `${formal.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : formal.code} · generado por el Copiloto en el sub-paso ${formal.subStepId}.`
-          : 'Documento generado por el Copiloto IA que todavía no tiene firma registrada.',
+          ? `${formal.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : formal.code} · generado por SICOT en el sub-paso ${formal.subStepId}.`
+          : 'Documento generado por SICOT que todavía no tiene firma registrada.',
         fecha: formatFecha(doc.fechaSubida.slice(0, 10)),
         accionLabel: formal ? 'Ir a firmar' : undefined,
         onAccion: formal ? () => goToSubStep(formal.subStepId, formal.step) : undefined,
@@ -1058,7 +1053,7 @@ export default function SupervisorPanel({
             <SectionHeader
               eyebrow="Proceso GCCON-P-010"
               title="Etapas y sub-pasos"
-              desc="Cada paso se abre para ver sus puntos de control. El Copiloto lo guía en el paso activo y redacta los documentos formales; usted revisa y firma."
+              desc="Cada paso se abre para ver sus puntos de control. El Copiloto lo guía en el paso activo y SICOT arma los documentos formales con los datos del contrato; usted revisa y firma."
             />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 22 }}>
               {steps.length === 0 && (

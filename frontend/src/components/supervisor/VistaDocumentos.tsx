@@ -168,7 +168,7 @@ export default function VistaDocumentos({
       <SectionHeader
         eyebrow="GCCON-P-010"
         title="Documentos formales"
-        desc="SICOT redacta cada documento con los datos del contrato cuando usted llega a su sub-paso; lo que falte sale marcado como dato pendiente. Aquí solo se marca como disponible lo que ya se generó de verdad."
+        desc="SICOT arma cada documento con los datos del contrato cuando usted llega a su sub-paso; lo que falte sale marcado como dato pendiente. Aquí solo se marca como disponible lo que ya se generó de verdad."
       />
 
       {tieneFirma === false && (
@@ -220,7 +220,7 @@ export default function VistaDocumentos({
         </div>
       )}
 
-      {/* Documentos formales — Copiloto genera, supervisor firma.
+      {/* Documentos formales — SICOT los arma, el supervisor firma.
           El estado viene de docsContrato (datos reales), no de los pasos locales:
           si el documento no existe todavía en el backend, se marca "Sin generar",
           nunca se ofrece firmar algo que no fue realmente redactado. */}

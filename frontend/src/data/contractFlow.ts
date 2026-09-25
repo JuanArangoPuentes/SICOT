@@ -6,7 +6,7 @@
 
 import type { Step } from '@/types/domain'
 
-// Sub-steps where the Copiloto generates the document; supervisor only signs.
+// Sub-pasos cuyo documento formal arma SICOT con los datos del contrato; el supervisor lo revisa y lo firma.
 // Corregido contra fuentes reales (Datos SICOT, ver memoria de proyecto
 // project_sicot_gccon_p010_grounded): el Oficio de Pago GRF-F-089 ("SCM") lo
 // firma el Ordenador del gasto, no el supervisor — no se incluye aquí.
@@ -267,15 +267,13 @@ export const STEPS_INITIAL: Step[] = [
 export const TUTORIAL: Record<string, string> = {
   welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá las 6 etapas del proceso GCCON-P-010. Yo lo voy a guiar paso a paso — en cada etapa activa le explico qué hacer, y los documentos formales los arma SICOT con los datos del contrato; usted los revisa y los firma. Haga clic en "Iniciar Paso" cuando esté listo para empezar.`,
 
-  // Los textos de guía por sub-paso (antes hardcodeados aquí, uno por uno)
-  // se eliminaron: SupervisorPanel.tsx ahora le pregunta al Copiloto real
-  // (Ollama, vía preguntaGuiaSubPaso + preguntarCopiloto) qué hacer en cada
-  // sub-paso, anclado a los datos reales de ESE contrato — no un texto
-  // genérico idéntico para cualquier contrato. Solo quedan aquí los mensajes
-  // de cierre de cada paso (no son instrucciones de tarea, son un resumen
-  // rápido de transición que no necesita ser específico por contrato).
+  // La guía de cada sub-paso no vive aquí: la arma data/guiaSubPaso.ts con la
+  // descripción y el responsable de la plantilla GCCON-P-010, sin llamar al
+  // modelo (antes se le preguntaba a Ollama en cada sub-paso y en un portátil
+  // la respuesta se cortaba a los 240 s). Aquí solo quedan los mensajes de
+  // cierre de cada paso, que son un resumen de transición.
   step1done:
-    'Ha completado el Paso 1 — Inicio. Ahora empieza su participación activa: en el Paso 2 usted revisa los datos del contratista, confirma el cronograma y firma el Acta de Inicio GCCON-F-018, que yo genero automáticamente con los datos del contrato.',
+    'Ha completado el Paso 1 — Inicio. Ahora empieza su participación activa: en el Paso 2 usted revisa los datos del contratista, confirma el cronograma y firma el Acta de Inicio GCCON-F-018, que SICOT arma con los datos del contrato.',
   step2done:
     'Ha completado el Paso 2 — Inicio. El Acta GCCON-F-018 quedó firmada y registrada. Ahora avanzamos al Paso 3: Inspección, donde verificará la entrega física en bodega.',
   step3done:
@@ -294,7 +292,7 @@ export const TUTORIAL: Record<string, string> = {
 // anclada a los datos reales del contrato y al estado real de sus etapas.
 // Ver services/documentoService.ts#preguntarCopiloto.
 
-// Formal documents the Copiloto generates — tracked for the Documentos tab
+// Documentos formales que arma SICOT — se siguen en la pestaña Documentos
 // (GCCON-P-010 / GCCON-M-002). Claves de generación (`tipo`) coinciden con
 // PlantillaDocumentoIA.CATALOGO en el backend.
 export const FORMAL_DOCS = [

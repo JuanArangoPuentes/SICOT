@@ -55,7 +55,7 @@ export function verificarIntegridad(contratoId: number, documentoId: number): Pr
   return apiFetch<VerificacionIntegridadResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/verificacion`)
 }
 
-// Descarga el archivo real (PDF generado por la IA o cargado manualmente)
+// Descarga el archivo real (PDF generado por SICOT o cargado manualmente)
 // vía fetch con token Bearer — apiFetch no sirve aquí porque la respuesta es
 // binaria, no JSON (mismo patrón que formatoService.descargarFormato).
 //

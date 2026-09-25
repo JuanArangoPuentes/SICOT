@@ -38,28 +38,28 @@ final class GcconP010Plantilla {
                     new SubetapaDef("2.4", "Establecimiento de responsabilidades y puntos de control", "Definición de la matriz de control del contrato.", "Supervisor"),
                     new SubetapaDef("2.5", "Verificación de afiliaciones a seguridad social", "Verificación de planillas PILA del contratista.", "Supervisor"),
                     new SubetapaDef("2.6", "Registro de garantías vigentes", "Registro de pólizas de cumplimiento vigentes.", "Unidad de Contratación"),
-                    new SubetapaDef("2.7", "Firma del Acta de Inicio (GCCON-F-018)", "Acta de inicio generada por el Copiloto IA con los datos del contrato; el supervisor solo la firma.", "Supervisor")
+                    new SubetapaDef("2.7", "Firma del Acta de Inicio (GCCON-F-018)", "SICOT arma el Acta de Inicio con los datos del contrato; el supervisor la revisa y la firma.", "Supervisor")
             )),
             new EtapaDef("INSPECCIÓN — Monitoreo y Ejecución", List.of(
                     new SubetapaDef("3.1", "Verificación física de la entrega en bodega", "Verificación física de la entrega de materiales en bodega.", "Supervisor"),
                     new SubetapaDef("3.2", "Carga de evidencia fotográfica georreferenciada", "Evidencia fotográfica con georreferenciación activa.", "Supervisor"),
                     new SubetapaDef("3.3", "Comparación cantidad/calidad vs. ficha técnica", "Verificación de cantidades y calidad contra la ficha técnica.", "Supervisor"),
-                    new SubetapaDef("3.4", "Firma del Informe de Supervisión (GCCON-F-031)", "Informe de supervisión generado por el Copiloto IA; el supervisor solo lo firma.", "Supervisor")
+                    new SubetapaDef("3.4", "Firma del Informe de Supervisión (GCCON-F-031)", "SICOT arma el Informe de Supervisión con los datos del contrato; el supervisor lo revisa y lo firma.", "Supervisor")
             )),
             new EtapaDef("RECEPCIÓN — Acta de Recibo a Satisfacción", List.of(
                     new SubetapaDef("4.1", "Verificación de aportes a seguridad social (PILA)", "Verificación de planillas PILA para recepción.", "Supervisor"),
                     new SubetapaDef("4.2", "Verificación de factura electrónica DIAN (FEV)", "Verificación de la factura electrónica de venta en DIAN.", "Supervisor"),
-                    new SubetapaDef("4.3", "Firma del Acta de Recibo a Satisfacción (GIL-F-010)", "Acta de recibo generada por el Copiloto IA; el supervisor solo la firma.", "Supervisor")
+                    new SubetapaDef("4.3", "Firma del Acta de Recibo a Satisfacción (GIL-F-010)", "SICOT arma el Acta de Recibo a Satisfacción con los datos del contrato; el supervisor la revisa y la firma.", "Supervisor")
             )),
             new EtapaDef("CERTIFICACIÓN — Cumplimiento y Trámite de Pago", List.of(
                     new SubetapaDef("5.1", "Verificación de vigencia de garantías", "Verificación de pólizas de vigencia del contrato.", "Supervisor"),
                     new SubetapaDef("5.2", "Revisión de orden de pago y CRP", "Revisión de la orden de pago y Certificado de Registro Presupuestal.", "Supervisor"),
-                    new SubetapaDef("5.3", "Firma de la Certificación de cumplimiento", "Certificación de cumplimiento generada por el Copiloto IA; el supervisor solo la firma.", "Supervisor")
+                    new SubetapaDef("5.3", "Firma de la Certificación de cumplimiento", "SICOT arma la Certificación de cumplimiento con los datos del contrato; el supervisor la revisa y la firma.", "Supervisor")
             )),
             new EtapaDef("CIERRE — Informe Final y Archivo (GCCON-F-030)", List.of(
                     new SubetapaDef("6.1", "Verificación de cumplimiento total del objeto contractual", "Verificación del cumplimiento integral del objeto contractual.", "Supervisor"),
                     new SubetapaDef("6.2", "Evaluación de modificaciones o adiciones (si aplica)", "Evaluación de adiciones o prórrogas registradas en SECOP II.", "Supervisor"),
-                    new SubetapaDef("6.3", "Firma del Informe Final de Supervisión (GCCON-F-030)", "Informe final generado por el Copiloto IA; el supervisor solo lo firma.", "Supervisor"),
+                    new SubetapaDef("6.3", "Firma del Informe Final de Supervisión (GCCON-F-030)", "SICOT arma el Informe Final de Supervisión con los datos del contrato; el supervisor lo revisa y lo firma.", "Supervisor"),
                     new SubetapaDef("6.4", "Cierre y archivo del expediente digital en SIGEP", "Cierre y archivo del expediente digital del contrato.", "Unidad de Contratación")
             ))
     );

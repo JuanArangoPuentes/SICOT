@@ -216,7 +216,10 @@ public class SecurityConfig {
         config.setAllowedOrigins(origenes);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-        config.setExposedHeaders(List.of("Authorization"));
+        // Retry-After también: la app de escritorio siempre llama entre orígenes
+        // (tauri.localhost → servidor) y sin exponerla no podía decir cuántos
+        // minutos esperar tras un 429 en el inicio de sesión.
+        config.setExposedHeaders(List.of("Authorization", "Retry-After"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
