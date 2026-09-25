@@ -332,11 +332,17 @@ export default function PanelCopiloto({
                 : 'Escriba una orden o pregunta a la IA...'
           }
           disabled={pensando}
+          // Sin etiqueta visible: el lector de pantalla necesita un nombre, y el
+          // placeholder cambia según el momento (no sirve de etiqueta).
+          aria-label="Mensaje para el Copiloto"
           style={{ flex: 1, padding: '9px 12px', opacity: pensando ? 0.6 : 1 }}
         />
         <button
           className="btn-green"
           onClick={onEnviar}
+          // Botón de solo icono: sin esto, un lector de pantalla lo anuncia como
+          // «botón» a secas (visto en el APK el 24-09-2026).
+          aria-label="Enviar al Copiloto"
           disabled={pensando}
           style={{
             padding: '8px 14px',

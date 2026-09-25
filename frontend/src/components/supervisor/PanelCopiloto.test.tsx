@@ -46,4 +46,11 @@ describe('PanelCopiloto — confirmar un paso', () => {
 
     expect(screen.getByRole('button', { name: 'Confirmar Paso 1 como completado' })).toBeInTheDocument()
   })
+
+  it('el campo y el botón de enviar tienen nombre para un lector de pantalla', () => {
+    montar({ stepId: 1, subStepId: '1.6', listaParaConfirmar: true })
+
+    expect(screen.getByRole('textbox', { name: 'Mensaje para el Copiloto' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Enviar al Copiloto' })).toBeInTheDocument()
+  })
 })
