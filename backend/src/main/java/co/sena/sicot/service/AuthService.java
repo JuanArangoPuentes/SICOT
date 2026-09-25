@@ -64,9 +64,23 @@ public class AuthService {
 
         // Se compara siempre, exista el usuario o no: contra su hash real o
         // contra el señuelo. Es lo que iguala los tiempos de respuesta.
-        boolean passwordCorrecta = passwordEncoder.matches(
-                request.password(),
-                usuario != null ? usuario.getPassword() : HASH_SEÑUELO);
+        String hash = usuario != null ? usuario.getPassword() : HASH_SEÑUELO;
+        boolean passwordCorrecta = passwordEncoder.matches(request.password(), hash);
+
+        // Una contraseña pegada desde el correo de credenciales (o desde un
+        // chat) suele arrastrar un espacio al final, que no se ve en el campo.
+        // El 25-09-2026 eso dejó fuera al supervisor de prueba en el escritorio
+        // y en Android con la contraseña correcta: el campo tenía 17 caracteres
+        // y la contraseña 16. Desde entonces ninguna contraseña nueva puede
+        // empezar ni terminar en espacio (ver CrearUsuarioRequest), así que
+        // quitarlos solo puede recuperar lo que la persona quiso escribir.
+        // Se prueba primero tal cual, por si una cuenta anterior tuviera uno de
+        // verdad, y la segunda comparación también va contra el señuelo cuando
+        // el usuario no existe, para no delatar por el tiempo qué correos hay.
+        String sinEspacios = request.password().strip();
+        if (!passwordCorrecta && !sinEspacios.isEmpty() && !sinEspacios.equals(request.password())) {
+            passwordCorrecta = passwordEncoder.matches(sinEspacios, hash);
+        }
 
         if (usuario == null || !passwordCorrecta) {
             loginAttemptService.registrarFallo(email, origen);

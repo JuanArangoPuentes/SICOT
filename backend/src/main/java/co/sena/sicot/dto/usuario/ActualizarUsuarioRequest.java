@@ -4,6 +4,7 @@ import co.sena.sicot.entity.enums.Rol;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record ActualizarUsuarioRequest(
@@ -17,6 +18,9 @@ public record ActualizarUsuarioRequest(
         String email,
 
         @Size(min = 8, max = 100, message = "La contraseña debe tener entre 8 y 100 caracteres.")
+        // Misma regla que al crear: ver CrearUsuarioRequest.
+        @Pattern(regexp = "^\\S(?:.*\\S)?$",
+                message = "La contraseña no puede empezar ni terminar con espacios.")
         String password,
 
         @NotBlank(message = "El número de teléfono es obligatorio.")

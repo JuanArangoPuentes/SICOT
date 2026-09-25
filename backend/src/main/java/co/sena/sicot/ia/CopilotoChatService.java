@@ -87,6 +87,19 @@ public class CopilotoChatService {
     private final GuiaDelPasoActual guiaDelPasoActual;
 
     /**
+     * Preguntas del supervisor que están ahora mismo en Ollama.
+     *
+     * <p>El 25-09-2026 una pregunta tardó 163 s porque, mientras se respondía,
+     * abrir el mismo contrato en el otro dispositivo (escritorio y teléfono con
+     * la misma cuenta) lanzó un precalentado nuevo, y las dos inferencias se
+     * repartieron la CPU de un portátil sin tarjeta gráfica. Una pregunta en
+     * curso ya está construyendo el prefijo que el precalentado quería dejar en
+     * caché, así que precalentar en ese momento solo sirve para frenarla.
+     */
+    private final java.util.concurrent.atomic.AtomicInteger preguntasEnCurso =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
      * Un solo hilo, propio y con nombre, para el precalentado.
      *
      * <p>Propio y no el de Tomcat porque precalentar es trabajo de fondo que no
@@ -188,6 +201,13 @@ public class CopilotoChatService {
         // servía para hacer esperar al primero.
         precalentadosEnVuelo.computeIfAbsent(contratoId, id -> {
             CompletableFuture<Void> tarea = CompletableFuture.runAsync(() -> {
+                // Se mira al arrancar y no al encolar: entre una cosa y otra
+                // puede haber empezado una pregunta. Ver preguntasEnCurso.
+                if (preguntasEnCurso.get() > 0) {
+                    log.info("Precalentado del contrato {} omitido: hay una pregunta respondiéndose "
+                            + "y competiría con ella por la CPU.", id);
+                    return;
+                }
                 try {
                     long inicio = System.currentTimeMillis();
                     // Se manda un saludo a propósito: construye el MISMO prefijo de
@@ -394,9 +414,20 @@ public class CopilotoChatService {
 
         log.info("Copiloto: respondiendo pregunta del contrato {} con Ollama...", contrato.getNumeroContrato());
         long inicio = System.currentTimeMillis();
-        String respuesta = ollamaClient.generar(prompt, false);
-        log.info("Copiloto: respuesta generada en {} ms", System.currentTimeMillis() - inicio);
-        return respuesta.trim();
+        // Solo las preguntas del supervisor cuentan (esperarAlPrecalentado es
+        // true justo para ellas): el precalentado no se bloquea a sí mismo.
+        if (esperarAlPrecalentado) {
+            preguntasEnCurso.incrementAndGet();
+        }
+        try {
+            String respuesta = ollamaClient.generar(prompt, false);
+            log.info("Copiloto: respuesta generada en {} ms", System.currentTimeMillis() - inicio);
+            return respuesta.trim();
+        } finally {
+            if (esperarAlPrecalentado) {
+                preguntasEnCurso.decrementAndGet();
+            }
+        }
     }
 
     /**
