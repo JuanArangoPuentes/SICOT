@@ -168,7 +168,7 @@ export default function VistaDocumentos({
       <SectionHeader
         eyebrow="GCCON-P-010"
         title="Documentos formales"
-        desc="El Copiloto IA redacta cada documento cuando usted llega a su sub-paso — antes de eso, todavía no existe. Aquí solo se marca como disponible lo que ya se generó de verdad."
+        desc="SICOT arma cada documento con los datos del contrato cuando usted llega a su sub-paso; lo que falte sale marcado como dato pendiente. Aquí solo se marca como disponible lo que ya se generó de verdad."
       />
 
       {tieneFirma === false && (
@@ -220,7 +220,7 @@ export default function VistaDocumentos({
         </div>
       )}
 
-      {/* Documentos formales — Copiloto genera, supervisor firma.
+      {/* Documentos formales — SICOT los arma, el supervisor firma.
           El estado viene de docsContrato (datos reales), no de los pasos locales:
           si el documento no existe todavía en el backend, se marca "Sin generar",
           nunca se ofrece firmar algo que no fue realmente redactado. */}
@@ -279,7 +279,7 @@ export default function VistaDocumentos({
                     marginTop: 2,
                   }}
                 >
-                  IA genera · sub-paso {doc.subStepId}
+                  SICOT genera · sub-paso {doc.subStepId}
                 </div>
               </div>
               <span
@@ -402,7 +402,7 @@ export default function VistaDocumentos({
                   >
                     {doc.formatoCodigo ? `${doc.formatoCodigo} · ` : ''}
                     {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}
-                    {doc.generadoPorIa ? ' · Generado por el Copiloto IA' : ''}
+                    {doc.generadoPorIa ? ' · Generado por SICOT' : ''}
                     {doc.firmadoPorNombre ? ` · Firmado por ${doc.firmadoPorNombre}` : ''}
                   </div>
                   {doc.tipo === 'IMAGEN' && (

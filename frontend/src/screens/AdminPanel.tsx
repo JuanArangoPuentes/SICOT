@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import AppShell, { type NavGroup } from '@/components/AppShell'
 import { Chip, Field, Modal, type ChipType } from '@/components/ui'
 import {
@@ -15,12 +14,15 @@ import {
   IconUpload,
   IconUsers,
 } from '@/components/icons'
+import SeguimientoSupervisores, { ResumenSeguimiento } from '@/components/admin/SeguimientoSupervisores'
+import { getSeguimiento } from '@/services/seguimientoService'
 import type {
   AuthResponse,
   EstadoFormato,
   FirmaResponse,
   FormatoDocumentalResponse,
   Rol,
+  SeguimientoResponse,
   UsuarioResponse,
 } from '@/services/api/types'
 import type { AdminTab } from '@/types/domain'
@@ -42,7 +44,6 @@ import { ResetPasswordModal } from '@/components/admin/ResetPasswordModal'
 import { NewUserModal } from '@/components/admin/NewUserModal'
 import { NewFirmaModal } from '@/components/admin/NewFirmaModal'
 import {
-  ACTIVIDAD,
   FORMATO_CHIP,
   ROL_CARGO,
   ROL_LABEL,
@@ -93,6 +94,25 @@ export default function AdminPanel({
   // absolutamente nada, sin explicación.
   const [errorAccion, setErrorAccion] = useState('')
 
+  const [seguimiento, setSeguimiento] = useState<SeguimientoResponse | null>(null)
+  const [errorSeguimiento, setErrorSeguimiento] = useState('')
+  const [cargandoSeguimiento, setCargandoSeguimiento] = useState(false)
+
+  const cargarSeguimiento = () => {
+    setCargandoSeguimiento(true)
+    setErrorSeguimiento('')
+    getSeguimiento()
+      .then(setSeguimiento)
+      .catch((e) =>
+        setErrorSeguimiento(
+          e instanceof ApiError
+            ? `No se pudo consultar el avance de los supervisores: ${e.message}`
+            : 'No se pudo consultar el avance de los supervisores. Revise la conexión y use «Actualizar».',
+        ),
+      )
+      .finally(() => setCargandoSeguimiento(false))
+  }
+
   const cargarFormatos = () => {
     getFormatos()
       .then(setFormatos)
@@ -133,6 +153,7 @@ export default function AdminPanel({
         if (!cancelado) setFirmas(lista.map(mapFirma))
       })
       .catch(fallo)
+    cargarSeguimiento()
     return () => {
       cancelado = true
     }
@@ -143,6 +164,7 @@ export default function AdminPanel({
     try {
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, activo: actualizado.activo } : x)))
+      cargarSeguimiento()
     } catch {
       setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
     }
@@ -153,6 +175,9 @@ export default function AdminPanel({
     try {
       const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
       setFirmas((fs) => fs.map((x) => (x.id === f.id ? { ...x, activa: actualizada.activa } : x)))
+      // El seguimiento dice qué supervisores tienen firma: sin recargarlo,
+      // seguía diciendo «Sin firma electrónica» después de asignarla.
+      cargarSeguimiento()
     } catch {
       setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
     }
@@ -176,6 +201,12 @@ export default function AdminPanel({
       label: 'Administración',
       items: [
         { id: 'dashboard', label: 'Panel de Control', icon: <IconGrid size={17} /> },
+        {
+          id: 'seguimiento',
+          label: 'Seguimiento de supervisores',
+          icon: <IconClipboardList size={17} />,
+          count: seguimiento?.supervisores.length,
+        },
         { id: 'documentos', label: 'Formatos documentales', icon: <IconFileText size={17} />, count: formatos.length },
       ],
     },
@@ -190,6 +221,10 @@ export default function AdminPanel({
 
   const TITULO: Record<AdminTab, { titulo: string; sub: string }> = {
     dashboard: { titulo: 'Panel de Control', sub: 'Cifras generales del sistema' },
+    seguimiento: {
+      titulo: 'Seguimiento de supervisores',
+      sub: 'En qué paso va cada supervisor y cómo va cada contrato',
+    },
     documentos: { titulo: 'Formatos documentales', sub: 'Catálogo oficial de formatos institucionales' },
     usuarios: { titulo: 'Usuarios', sub: 'Cuentas y roles del sistema' },
     firmas: { titulo: 'Firmas electrónicas', sub: 'Asignación y vigencia de firmas' },
@@ -291,58 +326,46 @@ export default function AdminPanel({
               />
             </div>
 
+            {/* Antes aquí había una gráfica de «actividad de los últimos 30
+                días» que leía una constante vacía: decía que las estadísticas
+                aparecerían «cuando existan contratos activos» incluso con
+                contratos activos. Se sustituye por cifras reales del mismo
+                cálculo que usa el seguimiento. */}
             <div className="card" style={{ padding: '16px 18px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Actividad de los últimos 30 días</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-                Contratos creados, supervisados y cerrados
-              </div>
-              <div style={{ height: 260 }}>
-                {ACTIVIDAD.length === 0 ? (
-                  <div
-                    style={{
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 13,
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                      padding: '0 20px',
-                    }}
-                  >
-                    Las estadísticas se mostrarán en este panel cuando existan contratos activos.
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ flex: '1 1 220px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Cómo van los contratos activos</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Semáforo del cronograma de cada contrato, el mismo que ve su supervisor
                   </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={ACTIVIDAD} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
-                      <CartesianGrid stroke="var(--border)" vertical={false} />
-                      <XAxis
-                        dataKey="dia"
-                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                        axisLine={{ stroke: 'var(--border)' }}
-                        tickLine={false}
-                      />
-                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        cursor={{ fill: 'var(--accent-soft)' }}
-                        contentStyle={{
-                          background: 'var(--bg-surface)',
-                          border: '1px solid var(--accent-line)',
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                        labelStyle={{ color: 'var(--text-primary)' }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-secondary)' }} />
-                      <Bar dataKey="creados" name="Creados" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="supervisados" name="Supervisados" fill="var(--chip-blue)" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cerrados" name="Cerrados" fill="var(--chip-purple)" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                </div>
+                <button
+                  className="btn-green"
+                  onClick={() => setTab('seguimiento')}
+                  style={{ padding: '8px 14px', fontSize: 12, minHeight: 44 }}
+                >
+                  Ver seguimiento por supervisor
+                </button>
               </div>
+              {errorSeguimiento && (
+                <div style={{ fontSize: 12, color: 'var(--alert-critica)' }}>{errorSeguimiento}</div>
+              )}
+              {!seguimiento && !errorSeguimiento && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Consultando…</div>
+              )}
+              {seguimiento && <ResumenSeguimiento datos={seguimiento} />}
             </div>
           </>
+        )}
+
+        {/* ── Seguimiento de supervisores ── */}
+        {tab === 'seguimiento' && (
+          <SeguimientoSupervisores
+            datos={seguimiento}
+            error={errorSeguimiento}
+            cargando={cargandoSeguimiento}
+            onActualizar={cargarSeguimiento}
+          />
         )}
 
         {/* ── Documentos ── */}
@@ -566,6 +589,7 @@ export default function AdminPanel({
           onCreate={(u) => {
             setUsers((us) => [...us, u])
             setNewUser(false)
+            cargarSeguimiento()
           }}
         />
       )}
@@ -586,6 +610,7 @@ export default function AdminPanel({
           onCreate={(f) => {
             setFirmas((fs) => [...fs, f])
             setFirmaModalOpen(false)
+            cargarSeguimiento()
           }}
         />
       )}

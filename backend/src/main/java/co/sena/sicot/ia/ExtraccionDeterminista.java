@@ -3,6 +3,7 @@ package co.sena.sicot.ia;
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -36,12 +37,13 @@ import java.util.regex.Pattern;
  * CPU en algo que una expresión regular resuelve en menos de un milisegundo y
  * sin equivocarse.
  *
- * <h2>Qué NO hace, a propósito</h2>
- * No toca {@code objeto} ni {@code tipoContrato}. El objeto es prosa que hay que
- * resumir y el tipo es una clasificación: ahí el modelo sí aporta algo que el
- * código no tiene. Esos dos siguen siendo suyos, y al quedarse solo con ellos el
- * prompt se acorta y el trabajo cabe en un modelo mucho más pequeño — que es el
- * objetivo de fondo del proyecto.
+ * <h2>El objeto y el tipo, solo cuando el documento los rotula</h2>
+ * Hasta el 24-09-2026 esos dos se dejaban siempre al modelo, por ser prosa y
+ * clasificación. Pero cuando el documento los rotula («OBJETO …», «TIPO DE
+ * CONTRATO …», «• Objeto: …», «cuyo objeto es: …») no hay nada que resumir ni
+ * clasificar: hay que copiarlos. El modelo reescribía el objeto (cambió
+ * «CONTRATAR» por «CONTRAER» en un acta real) y forzaba el tipo a una de sus
+ * opciones. Si el documento no los rotula, siguen siendo del modelo.
  *
  * <h2>Dos formas de escribir los mismos datos</h2>
  * El contrato los redacta en prosa; el acta de inicio (GCCON-F-018) y la
@@ -102,22 +104,48 @@ public class ExtraccionDeterminista {
      * lo usa exige además que lo capturado traiga algún dígito.
      */
     private static final Pattern REGISTRO_PRESUPUESTAL = Pattern.compile(
-            "registro\\s+presupuestal\\s+(?:n[o°]\\.?\\s*)?([A-Z0-9\\-]+)",
-            Pattern.CASE_INSENSITIVE);
+            "registro\\s+presupuestal\\s*:?\\s*(?:(?:n[o°]|nro|n[uú]mero)\\.?\\s*)?([A-Z0-9\\-]+)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
-     * Lugar de ejecución, hasta el punto que cierra la frase.
+     * Fila «LUGAR DE EJECUCIÓN …» de la tabla: el resto de la línea.
      *
-     * <p>Ese punto no es «cualquier punto»: una dirección real trae puntos de
-     * abreviatura antes del final. «CALLE 63 NO. 58 B 03, BARRIO CALATRAVA-
-     * ITAGÜÍ, ANTIOQUIA.» se cortaba en «CALLE 63 NO», porque el primer punto
-     * del texto es el de «NO.». El anticipado descarta un punto seguido de
-     * dígitos —la forma que toma toda abreviatura de numeral— y deja pasar el
-     * que sí termina la frase.
+     * <p>Se toma la línea entera y no «hasta el primer punto»: una dirección
+     * real trae puntos de abreviatura («CALLE 63 NO. 58 B 03, BARRIO
+     * CALATRAVA- ITAGÜÍ, ANTIOQUIA.») y cortar en el primero dejaba «CALLE 63
+     * NO». El punto final se quita después, en {@link #lugar}.
      */
     private static final Pattern LUGAR = Pattern.compile(
-            "LUGAR\\s+DE\\s+EJECUCI[OÓ]N:?\\s*(.{10,200}?)\\.(?!\\s*\\d)",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
+            "^[ \\t]*LUGAR[ \\t]+DE[ \\t]+EJECUCI[OÓ]N[ \\t]*:?[ \\t]*(\\S[^\\n]{8,300})$",
+            // Anclada al comienzo de la línea: la fila rotulada de la tabla. Una
+            // mención en prosa («verificó las condiciones del lugar de
+            // ejecución del contrato») no es el lugar (revisión del 24-09-2026).
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Cláusula «CUARTA. LUGAR DE EJECUCIÓN: Las obligaciones se ejecutarán en…»,
+     * hasta el punto que cierra la frase (un punto seguido de dígitos es una
+     * abreviatura, «NO. 58», y no corta). Exige los dos puntos: es lo que la
+     * separa de una mención en prosa.
+     */
+    private static final Pattern LUGAR_CLAUSULA = Pattern.compile(
+            "LUGAR\\s+DE\\s+EJECUCI[OÓ]N[ \\t]*:\\s*(.{10,200}?)\\.(?!\\s*\\d)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
+
+    /** «• Lugar de ejecución: …» en una línea, sin punto final. */
+    private static final Pattern LUGAR_EN_LINEA = Pattern.compile(
+            "^[^\\n:]{0,4}?Lugar[ \\t]+de[ \\t]+ejecuci[oó]n[ \\t]*:[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * «El lugar de ejecución son las instalaciones de …». Exige el verbo: sin
+     * él, cualquier mención en prosa («verificó las condiciones del lugar de
+     * ejecución del contrato») se tomaba por el lugar y ganaba a la fila
+     * rotulada que venía después (revisión del 24-09-2026).
+     */
+    private static final Pattern LUGAR_EN_PROSA = Pattern.compile(
+            "lugar\\s+de\\s+ejecuci[oó]n\\s+(?:del\\s+contrato\\s+)?(?:es|son|ser[aá]n?)\\s+(.{10,200}?)\\.(?!\\s*\\d)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
 
     /** «02 de febrero de 2026» → 2026-02-02. */
     private static final Pattern FECHA_EN_LETRAS = Pattern.compile(
@@ -164,7 +192,7 @@ public class ExtraccionDeterminista {
      * Servicios».
      */
     private static final Pattern CONTRATISTA_ETIQUETA = Pattern.compile(
-            "^[ \\t]*CONTRATISTA[ \\t]+(\\S.*?)[ \\t]*$", Pattern.MULTILINE);
+            "^[ \\t]*CONTRATISTA[ \\t]+(\\S[^\\n]*)$", Pattern.MULTILINE);
 
     /** Fila «CC o NIT …», y también el «NIT. 900.478.852-5» del pie de firma. */
     private static final Pattern NIT_ETIQUETA = Pattern.compile(
@@ -181,7 +209,7 @@ public class ExtraccionDeterminista {
      * en mayúsculas de la tabla es la que trae a la persona.
      */
     private static final Pattern REPRESENTANTE_ETIQUETA = Pattern.compile(
-            "^[ \\t]*REPRESENTANTE[ \\t]+LEGAL[ \\t]+(\\S.*?)[ \\t]*$", Pattern.MULTILINE);
+            "^[ \\t]*REPRESENTANTE[ \\t]+LEGAL[ \\t]+(\\S[^\\n]*)$", Pattern.MULTILINE);
 
     /**
      * «Fecha de inicio 17 de junio de 2025» (acta) y «• Fecha de inicio:
@@ -197,6 +225,127 @@ public class ExtraccionDeterminista {
             "^[^\\n]*?Fecha\\s+de\\s+(?:terminaci[oó]n|finalizaci[oó]n)[ \\t]*:?[ \\t]*(.{5,60}?)[ \\t]*$",
             Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
 
+
+    // ── Tercera familia: «Etiqueta: valor» en línea, y la prosa más común ───
+    //
+    // La prueba integral del 24-09-2026 cargó actas y notificaciones escritas
+    // de otras dos formas que las anteriores no leían: la notificación con
+    // viñetas («• Contratista: X, NIT Y», «• Representante legal: Z») y el acta
+    // redactada en prosa («el señor X, representante legal de Y, con NIT Z»).
+    // Contratista, NIT, representante y registro presupuestal volvían vacíos
+    // aunque estaban escritos. Van después de las dos familias anteriores y,
+    // como ellas, solo llenan lo que siga vacío.
+
+    /**
+     * «• Contratista: TAPICERÍAS … S.A.S., NIT 900.112.233-4». Exige los dos
+     * puntos: sin ellos, «Contratista Abogada Apoyo…» (el cargo de quien
+     * elaboró el acta) pasaría por proveedor.
+     */
+    //
+    // Los patrones de fila leen «el resto de la línea» con un único
+    // «[^\n]*» codicioso y recortan después en código. La forma anterior,
+    // «(.+?)[ \t]*$», retrocede de forma cuadrática ante una racha larga de
+    // espacios o tabuladores: «Contratista: A» + 40 000 espacios + «B» tardaba
+    // 101 s (revisión del 24-09-2026), con un hilo de Tomcat ocupado.
+    // «[ \t]» y no «\s» después de los dos puntos: «\s» cruzaba el salto de
+    // línea y un rótulo vacío tomaba como valor el rótulo siguiente.
+    private static final Pattern CONTRATISTA_EN_LINEA = Pattern.compile(
+            "^[^\\n:]{0,4}?Contratista[ \\t]*:[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** El NIT al final de la línea del contratista. Se aplica a una línea ya recortada. */
+    private static final Pattern NIT_AL_FINAL = Pattern.compile(
+            "^(.*?)[,;]?[ \\t]*(?:con[ \\t]+)?NIT\\.?[ \\t]*:?[ \\t]*(\\d[\\d.\\-]{6,20}\\d)[ \\t]*$",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    private static final Pattern REPRESENTANTE_EN_LINEA = Pattern.compile(
+            "^[^\\n:]{0,4}?Representante[ \\t]+legal[ \\t]*:[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * «representante legal de MANTENIMIENTOS … LTDA, con NIT 800.765.432-1».
+     * El nombre no admite comas: con «.{5,90}?» el nombre se estiraba hasta
+     * «… LTDA, suscribe con el SERVICIO NACIONAL DE APRENDIZAJE SENA» y se
+     * quedaba con el NIT del SENA.
+     */
+    private static final Pattern REPRESENTANTE_DE_Y_NIT = Pattern.compile(
+            "representante\\s+legal\\s+de\\s+([^,\\n]{3,90}?)[ \\t]*,?\\s+(?:identificad[ao]\\s+)?con\\s+NIT\\.?\\s*(\\d[\\d.\\-]{6,20}\\d)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** «el señor HERNÁN DARÍO CASTAÑO VÉLEZ, representante legal de …». */
+    private static final Pattern SENOR_REPRESENTANTE = Pattern.compile(
+            "se[ñn]ora?\\s+(\\p{Lu}[\\p{Lu}\\s]{5,60}?),\\s+(?:en\\s+calidad\\s+de\\s+)?representante\\s+legal",
+            Pattern.DOTALL);
+
+    // ── El objeto y el tipo, cuando el documento los rotula ─────────────────
+    //
+    // El objeto se dejaba entero al modelo por ser «prosa que hay que
+    // resumir». Pero no hay que resumirlo: el acta lo trae escrito, y el
+    // formulario tiene que guardarlo tal cual. El 24-09-2026 el modelo
+    // devolvió el objeto del acta real 7986334 con «CONTRATAR» cambiado por
+    // «CONTRAER». Cuando el documento lo rotula, se copia; el modelo queda
+    // para cuando no lo rotula.
+
+    /** Rótulo «OBJETO» de la tabla. El valor se lee en código (ver {@link #valorRotulado}). */
+    private static final Pattern OBJETO_ETIQUETA = Pattern.compile(
+            "^[ \\t]*OBJETO(?:[ \\t]+DEL[ \\t]+CONTRATO)?[ \\t]*:?[ \\t]*([^\\n]*)$", Pattern.MULTILINE);
+
+    /** «• Objeto: …» de la notificación. */
+    private static final Pattern OBJETO_EN_LINEA = Pattern.compile(
+            "^[^\\n:]{0,4}?Objeto[ \\t]*:[ \\t]*([^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Una línea que ya no es parte del valor: otra viñeta, otro rótulo o una
+     * despedida. Las palabras van con «\b»: sin él, «CANTIDADES MÍNIMAS…»,
+     * continuación legítima de un objeto, se tomaba por el rótulo «CANTIDAD».
+     */
+    private static final Pattern FIN_DE_VALOR = Pattern.compile(
+            // Una viñeta es cualquier símbolo al comienzo de la línea que no sea
+            // letra, número, comilla ni paréntesis: cada procesador de texto usa
+            // la suya («•», «-», el U+F0B7 de la fuente Symbol de Word, o un «?»
+            // cuando la fuente del PDF no tenía el glifo).
+            "^[ \\t]*(?:[^\\p{L}\\p{N}\\s(\"«'¿¡]|(?:VALOR|PLAZO|LUGAR|CONTRATISTA|TIPO|FECHA|CC|NIT|REPRESENTANTE|"
+                    + "SUPERVISOR|CANTIDAD|DEPENDENCIA|ATENTAMENTE|CORDIALMENTE|N[ÚU]MERO|REGISTRO|PLAN|OBJETO)\\b)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Tope del objeto: el más largo visto en un acta real ronda los 250 caracteres. */
+    private static final int MAX_OBJETO = 700;
+
+    /** «… del contrato cuyo objeto es: …» / «cuyo objeto lo constituye …». */
+    private static final Pattern OBJETO_EN_PROSA = Pattern.compile(
+            "cuyo\\s+objeto\\s+(?:es|lo\\s+constituye|consiste\\s+en)\\s*:?\\s*(.{10,800}?)(?:\\.(?=[ \\t]*\\R)|\\.\\s+(?=\\p{Lu})|,\\s+celebrado|\\z)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
+
+    private static final Pattern TIPO_ETIQUETA = Pattern.compile(
+            "^[^\\n:]{0,4}?TIPO[ \\t]+DE[ \\t]+CONTRATO[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * El tipo en el título del documento («ACTA DE INICIO DEL CONTRATO DE
+     * PRESTACIÓN DE SERVICIOS…»). Anclado al comienzo de la línea: suelto,
+     * «INTERVENTORÍA TÉCNICA AL CONTRATO DE OBRA No. 45» daba «Obras».
+     */
+    private static final Pattern TIPO_EN_TITULO = Pattern.compile(
+            "^[ \\t]*(?:ACTA[ \\t]+DE[ \\t]+INICIO[ \\t]+DEL[ \\t]+)?CONTRATO[ \\t]+DE[ \\t]+"
+                    + "(PRESTACI[OÓ]N[ \\t]+DE[ \\t]+SERVICIOS|SUMINISTRO|COMPRAVENTA|OBRA|ARRENDAMIENTO)\\b",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * El NIT del propio SENA, que aparece en los contratos y nunca es el del
+     * contratista. Se compara como prefijo: escrito con su dígito de
+     * verificación («899.999.034-1») son diez dígitos, y la comparación exacta
+     * lo dejaba pasar como NIT del contratista.
+     */
+    private static final String NIT_SENA = "899999034";
+
+    /**
+     * Tope del texto que se examina. Los documentos con datos del contrato
+     * rondan los 2 000 a 4 000 caracteres; un manual entero no aporta nada y
+     * solo multiplica el costo de cada patrón.
+     */
+    static final int MAX_TEXTO = 20_000;
+
     private static final Map<String, String> MESES = Map.ofEntries(
             Map.entry("enero", "01"), Map.entry("febrero", "02"), Map.entry("marzo", "03"),
             Map.entry("abril", "04"), Map.entry("mayo", "05"), Map.entry("junio", "06"),
@@ -207,12 +356,20 @@ public class ExtraccionDeterminista {
 
     /**
      * Extrae lo que se pueda del texto. Los campos que no aparezcan vuelven a
-     * {@code null}; {@code objeto} y {@code tipoContrato} vuelven siempre a
-     * {@code null} porque son trabajo del modelo.
+     * {@code null} y los completa el modelo (objeto y tipo) o la persona.
      */
     public ExtraccionContratoResponse extraer(String texto) {
         if (texto == null || texto.isBlank()) {
             return vacia();
+        }
+        // PDFBox separa las líneas con el separador del sistema: \r\n en
+        // Windows y \n en Linux. Con \r\n, «\R[ \t]*\R» (línea en blanco)
+        // casaba en CADA salto —un \R puede tomar el \r y el siguiente el \n—
+        // y el objeto de varias líneas se cortaba en la primera, solo en
+        // Windows. Se normaliza para que la extracción no dependa de la máquina.
+        texto = texto.replace("\r\n", "\n").replace('\r', '\n');
+        if (texto.length() > MAX_TEXTO) {
+            texto = texto.substring(0, MAX_TEXTO);
         }
 
         String proveedor = null;
@@ -222,17 +379,42 @@ public class ExtraccionDeterminista {
             proveedor = normalizarEspacios(m.group(1));
             nit = recortarPuntuacionFinal(m.group(2));
         }
-        // Respaldo de formulario, solo para lo que la prosa no trajo.
+        // Respaldo de formulario, solo para lo que la prosa no trajo. La tabla
+        // va antes que la prosa del representante: es la fuente más fiable.
         if (proveedor == null) {
             proveedor = normalizarEspacios(primerGrupo(CONTRATISTA_ETIQUETA, texto, 1));
         }
         if (nit == null) {
             nit = recortarPuntuacionFinal(primerGrupo(NIT_ETIQUETA, texto, 1));
         }
+        m = CONTRATISTA_EN_LINEA.matcher(texto);
+        if (m.find() && (proveedor == null || nit == null)) {
+            String linea = recortar(m.group(1), 300);
+            Matcher conNit = NIT_AL_FINAL.matcher(linea);
+            String nombre = conNit.matches() ? conNit.group(1) : linea;
+            if (proveedor == null) proveedor = normalizarEspacios(nombre.replaceAll("[,;\\s]+$", ""));
+            if (nit == null && conNit.matches()) nit = recortarPuntuacionFinal(conNit.group(2));
+        }
+        if (proveedor == null || nit == null) {
+            m = REPRESENTANTE_DE_Y_NIT.matcher(texto);
+            while (m.find()) {
+                if (!esNitDelSena(m.group(2))) {
+                    if (proveedor == null) proveedor = normalizarEspacios(m.group(1));
+                    if (nit == null) nit = recortarPuntuacionFinal(m.group(2));
+                    break;
+                }
+            }
+        }
 
         String representante = normalizarEspacios(primerGrupo(REPRESENTANTE, texto, 1));
         if (representante == null) {
             representante = normalizarEspacios(primerGrupo(REPRESENTANTE_ETIQUETA, texto, 1));
+        }
+        if (representante == null) {
+            representante = normalizarEspacios(primerGrupo(REPRESENTANTE_EN_LINEA, texto, 1));
+        }
+        if (representante == null) {
+            representante = normalizarEspacios(primerGrupo(SENOR_REPRESENTANTE, texto, 1));
         }
 
         String inicio = null;
@@ -253,17 +435,145 @@ public class ExtraccionDeterminista {
 
         return new ExtraccionContratoResponse(
                 primerGrupo(NUMERO_CONTRATO, texto, 0),
-                null, // objeto — es prosa, lo resume el modelo
+                objeto(texto),
                 proveedor,
                 nit,
                 representante,
                 soloDigitos(primerGrupo(VALOR, texto, 1)),
                 inicio,
                 fin,
-                normalizarEspacios(primerGrupo(LUGAR, texto, 1)),
+                lugar(texto),
                 conAlgunDigito(primerGrupo(REGISTRO_PRESUPUESTAL, texto, 1)),
-                null // tipoContrato — es clasificación, la hace el modelo
+                tipo(texto)
         );
+    }
+
+    /**
+     * El objeto rotulado en el documento, copiado tal cual (solo se unen las
+     * líneas). {@code null} si el documento no lo rotula: entonces lo intenta
+     * el modelo.
+     */
+    private static String objeto(String texto) {
+        for (Pattern rotulo : List.of(OBJETO_ETIQUETA, OBJETO_EN_LINEA)) {
+            String v = valorRotulado(texto, rotulo);
+            if (v != null && v.length() >= 10) {
+                return v;
+            }
+        }
+        String v = normalizarEspacios(primerGrupo(OBJETO_EN_PROSA, texto, 1));
+        return v != null && v.length() >= 10 ? v.replaceAll("[.\\s]+$", "") : null;
+    }
+
+    /**
+     * El valor de un rótulo: lo que sigue en su línea y, si continúa, las
+     * líneas siguientes hasta una línea en blanco, otra viñeta u otro rótulo.
+     * Se hace en código y no con una expresión regular: acotar un valor de
+     * varias líneas con un «(.+?)» perezoso y una lista de finales era lo que
+     * se tragaba el resto del documento cuando ningún final aparecía.
+     */
+    static String valorRotulado(String texto, Pattern rotulo) {
+        Matcher m = rotulo.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        StringBuilder valor = new StringBuilder(m.group(1).strip());
+        if (valor.length() > 0 && FIN_DE_VALOR.matcher(valor).find()) {
+            return null; // el «valor» es otro rótulo: el campo está vacío
+        }
+        int desde = m.end() + 1;
+        while (desde < texto.length() && valor.length() < MAX_OBJETO) {
+            int finDeLinea = texto.indexOf('\n', desde);
+            String linea = texto.substring(desde, finDeLinea < 0 ? texto.length() : finDeLinea);
+            if (linea.isBlank() || FIN_DE_VALOR.matcher(linea).find()) {
+                break;
+            }
+            if (valor.length() > 0) valor.append(' ');
+            valor.append(linea.strip());
+            if (finDeLinea < 0) break;
+            desde = finDeLinea + 1;
+        }
+        String limpio = normalizarEspacios(valor.toString());
+        if (limpio == null) {
+            return null;
+        }
+        limpio = limpio.replaceAll("[.\\s]+$", "");
+        return limpio.length() > MAX_OBJETO ? limpio.substring(0, MAX_OBJETO) : limpio;
+    }
+
+    /**
+     * El lugar: primero la fila rotulada, después «Lugar de ejecución: …» en una
+     * línea y por último la prosa con verbo.
+     */
+    private static String lugar(String texto) {
+        String v = normalizarEspacios(primerGrupo(LUGAR, texto, 1));
+        if (v == null) v = normalizarEspacios(primerGrupo(LUGAR_CLAUSULA, texto, 1));
+        if (v == null) v = normalizarEspacios(primerGrupo(LUGAR_EN_LINEA, texto, 1));
+        if (v == null) v = normalizarEspacios(primerGrupo(LUGAR_EN_PROSA, texto, 1));
+        return v == null ? null : v.replaceAll("[.\\s]+$", "");
+    }
+
+    /**
+     * El tipo de contrato cuando el documento lo dice, llevado a las opciones
+     * del formulario de Gestión. Sin esto, un acta que decía «COMPRAVENTA»
+     * quedaba como «Suministro de Bienes» porque así la clasificaba el modelo.
+     */
+    static String tipo(String texto) {
+        String rotulo = primerGrupo(TIPO_ETIQUETA, texto, 1);
+        if (rotulo == null || rotulo.isBlank()) {
+            rotulo = primerGrupo(TIPO_EN_TITULO, texto, 1);
+        }
+        if (rotulo == null) {
+            return null;
+        }
+        return tipoPorPalabras(rotulo);
+    }
+
+    /**
+     * El tipo a partir de las palabras del objeto, cuando las trae. Gana la
+     * palabra que aparece PRIMERO, que es el verbo principal: «prestar el
+     * servicio de mantenimiento… con suministro de repuestos» es un servicio,
+     * no un suministro. {@code null} si no hay ninguna: entonces lo propone el
+     * modelo. Es una propuesta: el formulario la muestra y Gestión la confirma.
+     */
+    public static String tipoPorObjeto(String objeto) {
+        return tipoPorPalabras(objeto);
+    }
+
+    private static final Map<String, String> TIPO_POR_PALABRA = Map.ofEntries(
+            Map.entry("suministro", "Suministro de Bienes"),
+            Map.entry("compraventa", "Compraventa"),
+            Map.entry("arrendamiento", "Arrendamiento"),
+            Map.entry("obra", "Obras"),
+            Map.entry("obras", "Obras"),
+            Map.entry("construccion", "Obras"),
+            Map.entry("adecuacion", "Obras"),
+            Map.entry("servicio", "Servicios"),
+            Map.entry("servicios", "Servicios"),
+            Map.entry("mantenimiento", "Servicios"),
+            Map.entry("prestacion", "Servicios"));
+
+    private static String tipoPorPalabras(String texto) {
+        if (texto == null) {
+            return null;
+        }
+        String o = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toLowerCase(Locale.ROOT);
+        for (String palabra : o.split("[^a-z]+")) {
+            String tipo = TIPO_POR_PALABRA.get(palabra);
+            if (tipo != null) {
+                return tipo;
+            }
+        }
+        return null;
+    }
+
+    private static boolean esNitDelSena(String nit) {
+        String d = soloDigitos(nit);
+        return d != null && d.startsWith(NIT_SENA);
+    }
+
+    private static String recortar(String v, int max) {
+        return v.length() > max ? v.substring(0, max) : v;
     }
 
     /** True si ya no queda nada útil que preguntarle al modelo. */

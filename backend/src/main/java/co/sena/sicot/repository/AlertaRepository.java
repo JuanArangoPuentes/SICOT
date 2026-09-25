@@ -1,9 +1,13 @@
 package co.sena.sicot.repository;
 
+import co.sena.sicot.dto.seguimiento.ConteoPorId;
 import co.sena.sicot.entity.Alerta;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface AlertaRepository extends JpaRepository<Alerta, Long> {
@@ -24,4 +28,13 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
     // Pageable (no un List sin límite): las alertas se acumulan con el uso
     // normal del sistema y sin tope terminarían cargando toda la tabla.
     List<Alerta> findAllByOrderByFechaCreacionDesc(Pageable pageable);
+
+    /** Alertas sin leer por contrato, para el seguimiento: un número por contrato y no las filas. */
+    @Query("""
+            SELECT new co.sena.sicot.dto.seguimiento.ConteoPorId(a.contrato.id, COUNT(a))
+              FROM Alerta a
+             WHERE a.contrato.id IN :contratoIds AND a.leida = false
+             GROUP BY a.contrato.id
+            """)
+    List<ConteoPorId> contarSinLeerPorContrato(@Param("contratoIds") Collection<Long> contratoIds);
 }

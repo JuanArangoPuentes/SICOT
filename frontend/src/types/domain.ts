@@ -9,7 +9,7 @@
 /** Vistas del panel del Supervisor — una por entrada de la barra lateral. */
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 
-export type AdminTab = 'dashboard' | 'documentos' | 'usuarios' | 'firmas'
+export type AdminTab = 'dashboard' | 'seguimiento' | 'documentos' | 'usuarios' | 'firmas'
 export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {
@@ -18,6 +18,9 @@ export interface SubStep {
   responsible: string
   document: string
   completed: boolean
+  // Descripción de la subetapa en la plantilla GCCON-P-010 del backend; la usa
+  // la guía del tutorial (data/guiaSubPaso.ts) sin tener que preguntarle al modelo.
+  description?: string
   // true = the copiloto generates this document and the supervisor only signs it
   aiGenerated?: boolean
   // id numérico de la subetapa en el backend (para PATCH /api/subetapas/{id}/estado)

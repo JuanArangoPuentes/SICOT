@@ -10,3 +10,9 @@ playwright-report/
 test-results/
 blob-report/
 playwright/.cache/
+# La imagen web no usa nada de src-tauri: el empaquetado de escritorio y de
+# Android se compila fuera de Docker. Sin esta línea, tras compilar una vez el
+# APK o el instalador, el contexto de build arrastraba la salida de Rust y de
+# Gradle (2,5 GB medidos el 24-09-2026) y solo transferirlo tardaba más de
+# cinco minutos antes de empezar a compilar.
+src-tauri/

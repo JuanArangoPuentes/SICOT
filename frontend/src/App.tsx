@@ -53,7 +53,7 @@ const TOUR_SUPERVISOR: TourStep[] = [
   },
   {
     selector: '[data-tour="nav-documentos"]',
-    text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.',
+    text: 'Los documentos formales: SICOT los arma con los datos del contrato y usted los revisa y firma.',
   },
   {
     selector: '[data-tour="nav-registros"]',
@@ -87,7 +87,7 @@ const rutaDeRol = (u: AuthResponse): string => {
 }
 
 const VISTAS_SUPERVISOR: Tab[] = ['bandeja', 'contrato', 'alertas', 'documentos', 'registros']
-const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'documentos', 'usuarios', 'firmas']
+const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'seguimiento', 'documentos', 'usuarios', 'firmas']
 
 /** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
 function vistaValida<T extends string>(valor: string | undefined, permitidas: T[], porDefecto: T): T {

@@ -77,6 +77,9 @@ regexes = [
   # dentro de la misma prueba y nunca salen de ella.
   '''Contrasena-Larga-2026''',
   '''Aislamiento123''',
+  # Del escenario de SeguimientoDeSupervisoresIntegrationTest (24-09-2026):
+  # crea dos supervisores de prueba con esta clave y entra con ellos.
+  '''Seguimiento123''',
 
   # Contraseñas de las cuentas demo, documentadas en `backend/README.md` y
   # declaradas fuera de alcance en `SECURITY.md`. `DataInitializer` sólo las

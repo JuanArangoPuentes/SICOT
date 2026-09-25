@@ -90,11 +90,77 @@ class ExtraccionDeterministaTest {
     }
 
     @Test
-    @DisplayName("deja objeto y tipoContrato al modelo, no los inventa")
-    void noTocaLosCamposQueSonTrabajoDelModelo() {
-        ExtraccionContratoResponse r = extractor.extraer(CONTRATO);
+    @DisplayName("sin rótulo de objeto ni de tipo, los deja al modelo en vez de adivinarlos")
+    void sinRotuloNoAdivinaObjetoNiTipo() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "Contrato CO1.PCCNTR.1 entre las partes, por valor de $1.000.000 pesos.");
         assertThat(r.objeto()).isNull();
         assertThat(r.tipoContrato()).isNull();
+    }
+
+    // ── Formatos de la prueba integral del 24-09-2026 ───────────────────────
+
+    @Test
+    @DisplayName("notificación con viñetas «Etiqueta: valor»")
+    void leeLaNotificacionConVinetas() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                Número de contrato CO1.PCCNTR.9100003
+                •  Objeto: 05-9-2026-009120 contratar el suministro de insumos de tapicería, espumas y telas para los
+                programas de formación en diseño de mobiliario - Lote 3
+                •  Contratista: TAPICERÍAS Y ESPUMAS DE ANTIOQUIA S.A.S., NIT 900.112.233-4
+                •  Representante legal: LUIS FERNANDO ARANGO ZULUAGA
+                •  Valor: $ 54.780.300
+                •  Fecha de inicio: 22/09/2026
+                •  Registro presupuestal: 81502 del 18/09/2026""");
+
+        assertThat(r.objeto()).isEqualTo("05-9-2026-009120 contratar el suministro de insumos de tapicería, espumas y"
+                + " telas para los programas de formación en diseño de mobiliario - Lote 3");
+        assertThat(r.proveedor()).isEqualTo("TAPICERÍAS Y ESPUMAS DE ANTIOQUIA S.A.S.");
+        assertThat(r.nit()).isEqualTo("900.112.233-4");
+        assertThat(r.representanteLegal()).isEqualTo("LUIS FERNANDO ARANGO ZULUAGA");
+        assertThat(r.registroPresupuestal()).isEqualTo("81502");
+        assertThat(r.valor()).isEqualTo("54780300");
+    }
+
+    @Test
+    @DisplayName("acta redactada en prosa")
+    void leeElActaEnProsa() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                ACTA DE INICIO DEL CONTRATO DE PRESTACIÓN DE SERVICIOS No. CO1.PCCNTR.9100002
+                se reunieron JORGE ANDRÉS BETANCUR RÚA, en su calidad de supervisor, y el señor HERNÁN
+                DARÍO CASTAÑO VÉLEZ, representante legal de MANTENIMIENTOS TÉCNICOS DEL VALLE LTDA, con NIT
+                800.765.432-1, con el fin de dar inicio a la ejecución del contrato cuyo objeto es: PRESTAR EL SERVICIO
+                DE MANTENIMIENTO PREVENTIVO A LA MAQUINARIA.
+                El valor total es de ($86.000.000), amparado en el certificado de registro presupuestal número 80311.
+                El lugar de ejecución son las instalaciones del Centro en la Calle 63 No. 58B-03,
+                Itagüí.""");
+
+        assertThat(r.proveedor()).isEqualTo("MANTENIMIENTOS TÉCNICOS DEL VALLE LTDA");
+        assertThat(r.nit()).isEqualTo("800.765.432-1");
+        assertThat(r.representanteLegal()).isEqualTo("HERNÁN DARÍO CASTAÑO VÉLEZ");
+        assertThat(r.objeto()).isEqualTo("PRESTAR EL SERVICIO DE MANTENIMIENTO PREVENTIVO A LA MAQUINARIA");
+        assertThat(r.registroPresupuestal()).isEqualTo("80311");
+        assertThat(r.lugarEjecucion()).isEqualTo("las instalaciones del Centro en la Calle 63 No. 58B-03, Itagüí");
+        assertThat(r.tipoContrato()).isEqualTo("Servicios");
+    }
+
+    @Test
+    @DisplayName("un objeto de tabla en varias líneas no se corta con saltos de línea de Windows")
+    void elObjetoDeVariasLineasSaleEnteroAunqueLasLineasTerminenEnCRLF() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "TIPO DE CONTRATO COMPRAVENTA\r\nOBJETO \r\n5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER\r\n"
+                        + "DE TOLDOS PARA EVENTOS \r\nAL APRENDIZ \r\nVALOR DEL CONTRATO ($10.000.000 COP)\r\n");
+
+        assertThat(r.objeto()).isEqualTo("5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS PARA EVENTOS AL APRENDIZ");
+        assertThat(r.tipoContrato()).isEqualTo("Compraventa");
+    }
+
+    @Test
+    @DisplayName("«Contratista» sin dos puntos no es el proveedor: es el cargo de quien elaboró")
+    void elCargoDeQuienElaboroNoPasaPorProveedor() {
+        ExtraccionContratoResponse r = extractor.extraer(
+                "Elaboró: Valentina Jiménez\nContratista Abogada Apoyo Bienes y Servicios\n");
+        assertThat(r.proveedor()).isNull();
     }
 
     @Test
@@ -260,5 +326,113 @@ class ExtraccionDeterministaTest {
     void noTomaUnaPalabraCualquieraComoRegistroPresupuestal() {
         assertThat(extractor.extraer("El registro presupuestal del contrato se anexa.")
                 .registroPresupuestal()).isNull();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+            "contratar el suministro de materiales para la formación | Suministro de Bienes",
+            "ADQUISICIÓN POR COMPRAVENTA DE EQUIPOS | Compraventa",
+            "arrendamiento de un bien inmueble | Arrendamiento",
+            "adecuación de la obra civil del ambiente | Obras",
+            "PRESTAR EL SERVICIO DE MANTENIMIENTO PREVENTIVO | Servicios",
+    })
+    @DisplayName("el tipo se deduce de las palabras del objeto")
+    void tipoPorObjeto(String objeto, String tipo) {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(objeto)).isEqualTo(tipo);
+    }
+
+    @Test
+    @DisplayName("sin una palabra inequívoca, el tipo queda para el modelo")
+    void tipoPorObjetoSinPistas() {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto("adquisición de herramienta manual")).isNull();
+    }
+
+    // ── Hallazgos de la revisión adversarial del 24-09-2026 ─────────────────
+
+    @Test
+    @DisplayName("una racha enorme de espacios no dispara un retroceso cuadrático")
+    void sinRetrocesoCuadraticoAnteEspaciosLargos() {
+        String relleno = " ".repeat(40_000);
+        long inicio = System.nanoTime();
+        extractor.extraer("Contratista: A" + relleno + "B\nRepresentante legal: A" + relleno
+                + "B\nTIPO DE CONTRATO A" + relleno + "B\n");
+        long ms = (System.nanoTime() - inicio) / 1_000_000;
+        // Antes: 101 s solo con la primera línea. Un segundo es un margen amplio.
+        assertThat(ms).isLessThan(1_000);
+    }
+
+    @Test
+    @DisplayName("el NIT del SENA con dígito de verificación no se toma por el del contratista")
+    void elNitDelSenaConDigitoDeVerificacionNoEsElDelContratista() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                HERNAN RUIZ, representante legal de MANTENIMIENTOS DEL VALLE LTDA, suscribe con el SERVICIO
+                NACIONAL DE APRENDIZAJE SENA, con NIT 899.999.034-1, el presente acta.
+                CONTRATISTA MANTENIMIENTOS DEL VALLE LTDA
+                CC o NIT 800.765.432-1""");
+        assertThat(r.proveedor()).isEqualTo("MANTENIMIENTOS DEL VALLE LTDA");
+        assertThat(r.nit()).isEqualTo("800.765.432-1");
+    }
+
+    @Test
+    @DisplayName("una mención del lugar en prosa no gana a la fila rotulada")
+    void laFilaRotuladaDelLugarGanaALaProsa() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                El supervisor verificó las condiciones del lugar de ejecución del contrato y las encontró adecuadas.
+                LUGAR DE EJECUCIÓN CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA.""");
+        assertThat(r.lugarEjecucion()).isEqualTo("CALLE 63 NO. 58 B 03, BARRIO CALATRAVA- ITAGUI, ANTIOQUIA");
+    }
+
+    @Test
+    @DisplayName("un formato en blanco no toma un rótulo por el valor de otro")
+    void unFormatoEnBlancoNoDevuelveRotulosComoValores() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                OBJETO
+                VALOR DEL CONTRATO
+                PLAZO DEL CONTRATO
+                Contratista:
+                NIT:
+                Representante legal:
+                Fecha de inicio:""");
+        assertThat(r.objeto()).isNull();
+        assertThat(r.proveedor()).isNull();
+        assertThat(r.representanteLegal()).isNull();
+    }
+
+    @Test
+    @DisplayName("el objeto de una notificación termina en la siguiente viñeta")
+    void elObjetoDeLaNotificacionNoSeTragaElRestoDelDocumento() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                - Objeto: contratar el suministro de materiales para la formación
+                - Supervisor: ALEX ZAPATA
+                - Dependencia: Almacen
+                - VALOR: $ 39.552.042
+                Atentamente,
+                Coordinador Grupo de Contratacion""");
+        assertThat(r.objeto()).isEqualTo("contratar el suministro de materiales para la formación");
+    }
+
+    @Test
+    @DisplayName("una palabra que empieza como un rótulo no corta el objeto")
+    void unaPalabraQueEmpiezaComoRotuloNoCortaElObjeto() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                OBJETO CONTRATAR LA ADQUISICION DE MATERIALES PARA LAS
+                CANTIDADES MINIMAS DEL AMBIENTE
+                VALOR DEL CONTRATO ($1.000.000 COP)""");
+        assertThat(r.objeto()).isEqualTo("CONTRATAR LA ADQUISICION DE MATERIALES PARA LAS CANTIDADES MINIMAS DEL AMBIENTE");
+    }
+
+    @Test
+    @DisplayName("el tipo sale de la primera palabra que lo dice, no de cualquiera")
+    void elTipoLoDiceElVerboPrincipal() {
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(
+                "PRESTACION DEL SERVICIO DE MANTENIMIENTO INCLUIDA LA MANO DE OBRA")).isEqualTo("Servicios");
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(
+                "PRESTAR EL SERVICIO DE MANTENIMIENTO CON SUMINISTRO DE REPUESTOS")).isEqualTo("Servicios");
+    }
+
+    @Test
+    @DisplayName("«contrato de obra» en medio del objeto no es el título del documento")
+    void unaMencionDeContratoDeObraNoEsElTitulo() {
+        assertThat(ExtraccionDeterminista.tipo("OBJETO: INTERVENTORIA TECNICA AL CONTRATO DE OBRA No. 45")).isNull();
     }
 }

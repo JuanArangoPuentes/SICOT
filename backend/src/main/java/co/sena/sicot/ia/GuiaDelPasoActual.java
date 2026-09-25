@@ -87,7 +87,19 @@ public class GuiaDelPasoActual {
             // falta» atrapa «¿qué me falta?», «me falta para cerrar» y demás.
             "me falta", "me hace falta", "me queda pendiente",
             "falta para cerrar", "falta para terminar", "falta por hacer",
-            "me toca", "me corresponde");
+            "me toca", "me corresponde",
+            // ── Órdenes cortas ───────────────────────────────────────────
+            //
+            // 25-09-2026: en la prueba del APK el supervisor escribió
+            // «siguiente paso» a secas. La lista traía «cuál es el siguiente
+            // paso» pero no la orden sola, así que fue al modelo: esperó 120 s a
+            // un precalentado y 163 s más a la respuesta, en un portátil sin
+            // tarjeta gráfica. La respuesta era esta misma plantilla.
+            "siguiente paso", "paso siguiente", "siguiente sub-paso", "siguiente subpaso",
+            "proximo paso", "próximo paso");
+            // «qué hago» o «continuar» a secas se dejaron fuera a propósito:
+            // también aparecen en preguntas abiertas («¿qué hago si no llega la
+            // póliza?») que esta plantilla contestaría mal.
 
     /**
      * ¿Es una pregunta que se puede contestar sin modelo?
@@ -157,6 +169,14 @@ public class GuiaDelPasoActual {
 
         SubetapaResponse siguiente = pendientes.get(0);
         sb.append("\n\nEmpiece por %s: %s.".formatted(siguiente.codigo(), siguiente.nombre()));
+        // La descripción y el responsable salen de la plantilla GCCON-P-010: es
+        // lo que el supervisor necesita para saber qué hacer, sin modelo.
+        if (siguiente.descripcion() != null && !siguiente.descripcion().isBlank()) {
+            sb.append(" ").append(siguiente.descripcion().strip());
+        }
+        if (siguiente.responsable() != null && !siguiente.responsable().isBlank()) {
+            sb.append(" Responsable: %s.".formatted(siguiente.responsable().strip()));
+        }
         sb.append("\n\nSi necesita detalle de alguno de estos subpasos —qué documento sirve de soporte, "
                 + "de dónde sale un insumo— pregúnteme por él y se lo explico.");
         return Optional.of(sb.toString());

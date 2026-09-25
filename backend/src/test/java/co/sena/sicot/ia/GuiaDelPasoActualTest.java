@@ -72,6 +72,15 @@ class GuiaDelPasoActualTest {
      */
     @Test
     @DisplayName("reconoce la pregunta aunque lleve pronombre: «qué ME falta»")
+    void reconoceLasOrdenesCortas() {
+        // 25-09-2026: «siguiente paso» a secas iba al modelo y tardaba minutos.
+        assertThat(guia.puedeResponder("siguiente paso")).isTrue();
+        assertThat(guia.puedeResponder("Siguiente paso")).isTrue();
+        assertThat(guia.puedeResponder("próximo paso")).isTrue();
+        assertThat(guia.puedeResponder("¿qué hago si el contratista no entrega la póliza?")).isFalse();
+    }
+
+    @Test
     void reconoceLasVariantesConPronombre() {
         assertThat(guia.puedeResponder("¿Qué me falta para cerrar el paso en el que estoy?")).isTrue();
         assertThat(guia.puedeResponder("¿qué me falta?")).isTrue();
