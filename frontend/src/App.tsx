@@ -53,7 +53,7 @@ const TOUR_SUPERVISOR: TourStep[] = [
   },
   {
     selector: '[data-tour="nav-documentos"]',
-    text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.',
+    text: 'Los documentos formales: SICOT los arma con los datos del contrato y usted los revisa y firma.',
   },
   {
     selector: '[data-tour="nav-registros"]',
