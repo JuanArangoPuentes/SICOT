@@ -168,7 +168,7 @@ export default function VistaDocumentos({
       <SectionHeader
         eyebrow="GCCON-P-010"
         title="Documentos formales"
-        desc="El Copiloto IA redacta cada documento cuando usted llega a su sub-paso — antes de eso, todavía no existe. Aquí solo se marca como disponible lo que ya se generó de verdad."
+        desc="SICOT redacta cada documento con los datos del contrato cuando usted llega a su sub-paso; lo que falte sale marcado como dato pendiente. Aquí solo se marca como disponible lo que ya se generó de verdad."
       />
 
       {tieneFirma === false && (
@@ -279,7 +279,7 @@ export default function VistaDocumentos({
                     marginTop: 2,
                   }}
                 >
-                  IA genera · sub-paso {doc.subStepId}
+                  SICOT genera · sub-paso {doc.subStepId}
                 </div>
               </div>
               <span

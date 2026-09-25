@@ -34,10 +34,8 @@ import {
 import { SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
 import {
   AvatarIcon,
-  IconArrowRight,
   IconBell,
   IconCheck,
-  IconChevron,
   IconClock,
   IconContract,
   IconFileText,
@@ -390,7 +388,8 @@ export default function SupervisorPanel({
   const toggleStep = (id: number) => {
     setExpandedSteps((prev) => {
       const n = new Set(prev)
-      n.has(id) ? n.delete(id) : n.add(id)
+      if (n.has(id)) n.delete(id)
+      else n.add(id)
       return n
     })
   }
@@ -1220,7 +1219,7 @@ export default function SupervisorPanel({
                                         borderRadius: 3,
                                       }}
                                     >
-                                      IA genera
+                                      SICOT genera
                                     </span>
                                   )}
                                 </span>
