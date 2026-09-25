@@ -28,6 +28,7 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       label: ss.nombre,
       responsible: ss.responsable,
       document: DOCUMENTOS_POR_CODIGO.get(ss.codigo) ?? ss.descripcion,
+      description: ss.descripcion,
       completed: ss.estado === 'COMPLETADA',
       aiGenerated: AI_GENERATED_DOCS.has(ss.codigo),
       apiId: ss.id,

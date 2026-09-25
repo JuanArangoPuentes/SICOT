@@ -56,6 +56,7 @@ import type {
   CronogramaResponse,
 } from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
+import { guiaDelSubPaso } from '@/data/guiaSubPaso'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
 import { getCronograma } from '@/services/cronogramaService'
 import { useRecursoDelContrato } from '@/hooks/useRecursoDelContrato'
@@ -77,12 +78,6 @@ import { formatFecha } from '@/services/format'
 // pasar por Ollama con los datos reales del contrato, la respuesta es
 // específica a ESTE contrato (contratista, valor, fechas reales), no un
 // texto genérico repetido igual para cualquier contrato.
-const preguntaGuiaSubPaso = (step: Step, sub: { id: string; label: string }) =>
-  `Explíqueme en detalle y de forma extremadamente específica qué debo hacer exactamente en el ` +
-  `sub-paso ${sub.id} — "${sub.label}" — del Paso ${step.id} (${step.title}). Deme el paso a paso ` +
-  `completo y concreto: qué debo revisar o conseguir, de dónde exactamente lo consigo, y qué debo ` +
-  `hacer en SICOT al terminar.`
-
 // Chips de preguntas frecuentes — el label es corto para el botón, la
 // pregunta real que se envía al Copiloto va completa para que la respuesta
 // de Ollama sea específica y no un genérico "¿en qué te ayudo?".
@@ -416,7 +411,9 @@ export default function SupervisorPanel({
     setTutorialMode(true)
     setActiveSubStep(primeraPendiente.id)
     setExpandedSteps(new Set([stepId]))
-    preguntarAlCopiloto(preguntaGuiaSubPaso(step, primeraPendiente))
+    // La guía sale de la plantilla del procedimiento, al instante; antes era
+    // una pregunta al modelo por sub-paso (ver data/guiaSubPaso.ts).
+    setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(step, primeraPendiente) }])
   }
 
   // Ejecuta de verdad la acción de un sub-paso (generar/firmar si aplica y
@@ -543,7 +540,8 @@ export default function SupervisorPanel({
         const next = orden[idx + 1]
         setActiveSubStep(next)
         const nextSub = pasoActual?.subSteps.find((ss) => ss.id === next)
-        if (pasoActual && nextSub) preguntarAlCopiloto(preguntaGuiaSubPaso(pasoActual, nextSub))
+        if (pasoActual && nextSub)
+          setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(pasoActual, nextSub) }])
       } else {
         setActiveSubStep(null)
         setTutorialMode(false)

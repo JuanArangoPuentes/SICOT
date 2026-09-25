@@ -265,7 +265,7 @@ export const STEPS_INITIAL: Step[] = [
 ]
 
 export const TUTORIAL: Record<string, string> = {
-  welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá las 6 etapas del proceso GCCON-P-010. Yo lo voy a guiar paso a paso — en cada etapa activa le explico qué hacer, y en los documentos formales los redacto yo; usted solo revisa y firma. Haga clic en "Iniciar Paso" cuando esté listo para empezar.`,
+  welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá las 6 etapas del proceso GCCON-P-010. Yo lo voy a guiar paso a paso — en cada etapa activa le explico qué hacer, y los documentos formales los arma SICOT con los datos del contrato; usted los revisa y los firma. Haga clic en "Iniciar Paso" cuando esté listo para empezar.`,
 
   // Los textos de guía por sub-paso (antes hardcodeados aquí, uno por uno)
   // se eliminaron: SupervisorPanel.tsx ahora le pregunta al Copiloto real
