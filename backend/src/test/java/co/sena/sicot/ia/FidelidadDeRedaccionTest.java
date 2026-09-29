@@ -322,6 +322,10 @@ class FidelidadDeRedaccionTest {
                 {"el 15/09/2026 llegaron las sillas, algunas con rayones",
                         "El 15 de septiembre de 2026 llegaron las sillas, un par de ellas con rayones."},
                 {"el contratista entregó la mitad de los bienes", "El contratista entregó los bienes."},
+                // en vivo, en el panel, el 29-09-2026
+                {"se recibieron en bodega las 20 carpas completas y en buen estado, el almacenista firmó el recibido",
+                        "Se recibieron 20 carpas completas y en buen estado, being la recepción confirmada por el"
+                                + " almacenista."},
                 {"el almacenista recibió los bienes, faltan los cargadores",
                         "Los bienes fueron recibidos por el almacenista; however, the chargers are yet to arrive."},
                 // prueba en vivo: agrega que la entrega fue a tiempo

@@ -1330,9 +1330,15 @@ public final class FidelidadDeRedaccion {
         });
     }
 
+    // «being» salió en vivo el 29-09-2026: «…en buen estado, being la
+    // recepción confirmada por el almacenista». Ninguna de estas es una
+    // palabra del español.
     private static final Set<String> PALABRAS_DEL_INGLES = Set.of("the", "and", "of", "is", "are", "was", "were",
             "however", "yet", "still", "with", "have", "been", "will", "which", "this", "these", "those", "from",
-            "that", "for", "by", "to", "their", "they", "it", "its", "has", "not");
+            "that", "for", "by", "to", "their", "they", "it", "its", "has", "not", "being", "had", "would", "should",
+            "could", "there", "where", "while", "when", "into", "also", "such", "only", "some", "any", "all", "what",
+            "who", "than", "then", "because", "after", "before", "without", "within", "between", "our", "your",
+            "his", "her", "them", "we", "you", "upon", "whose");
 
     private static Set<String> palabrasLargas(String texto) {
         Set<String> r = new HashSet<>();
