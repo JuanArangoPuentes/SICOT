@@ -7,6 +7,8 @@ import co.sena.sicot.entity.Documento;
 import co.sena.sicot.ia.GeneracionDocumentoService;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DocumentoService;
+import co.sena.sicot.service.NombreDeDescarga;
+import co.sena.sicot.exception.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,7 +18,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -26,7 +27,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -109,7 +109,7 @@ public class DocumentoController {
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "403", description = "Sin acceso a este contrato",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Documento no encontrado",
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado o sin archivo guardado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
@@ -117,11 +117,17 @@ public class DocumentoController {
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long contratoId, @PathVariable Long id) {
         Documento documento = documentoService.buscarConContenido(id);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename(documento.getNombre(), StandardCharsets.UTF_8)
-                .build();
+        // Un documento sin contenido se servía como 200 con cero bytes, y el
+        // navegador guardaba un «.pdf» vacío que el lector daba por dañado
+        // (así bajaron tres archivos de las filas de demostración sin archivo,
+        // auditoría del 28-09-2026). Un 404 con el motivo es lo honesto.
+        if (documento.getContenido() == null || documento.getContenido().length == 0) {
+            throw new ResourceNotFoundException("El documento «" + documento.getNombre()
+                    + "» no tiene archivo guardado: se registró sin contenido y no hay nada que descargar.");
+        }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        NombreDeDescarga.cabecera(documento.getNombre(), documento.getContentType()))
                 // Estado de integridad en la propia descarga, para que una
                 // auditoría automatizada pueda comprobarlo sin una segunda
                 // petición. La verificación legible para una persona está en
@@ -176,7 +182,8 @@ public class DocumentoController {
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
     public ResponseEntity<DocumentoResponse> generar(@PathVariable Long contratoId,
                                                      @Valid @RequestBody GenerarDocumentoRequest request) {
-        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(), request.notas()));
+        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(),
+                request.notas(), request.datos()));
     }
 
     @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual")
