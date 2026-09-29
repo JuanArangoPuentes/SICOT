@@ -3,10 +3,16 @@ package co.sena.sicot.dto.ia;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import java.util.Map;
+
 /**
  * @param notas lo que el supervisor escribió sobre lo que hizo en el paso. Es
  *              opcional: sin notas, el apartado de observaciones queda marcado
  *              como pendiente en el documento en vez de inventarse.
+ * @param datos datos del documento que el contrato no tiene —número de factura,
+ *              póliza, cédulas…—, por clave (ver {@code PlantillaDocumentoIA.campos},
+ *              que se consultan en {@code GET /api/ia/plantillas}). Opcional: los
+ *              que falten salen como «[dato pendiente…]».
  */
 public record GenerarDocumentoRequest(
         @NotBlank(message = "El tipo de documento es obligatorio (ver PlantillaDocumentoIA.CATALOGO).")
@@ -14,6 +20,13 @@ public record GenerarDocumentoRequest(
         String tipo,
         Long subetapaId,
         @Size(max = 4000, message = "Las notas del supervisor no pueden superar 4000 caracteres.")
-        String notas
+        String notas,
+        @Size(max = 40, message = "Demasiados datos para un solo documento.")
+        Map<String, String> datos
 ) {
+    /** Compatibilidad con quien genera sin datos complementarios. */
+    public GenerarDocumentoRequest(String tipo, Long subetapaId, String notas) {
+        this(tipo, subetapaId, notas, null);
+    }
+
 }

@@ -74,7 +74,7 @@ class GeneracionDocumentoServiceTest {
     void construirElServicio() {
         Clock reloj = Clock.fixed(Instant.parse("2026-09-24T15:00:00Z"), ZoneId.of("America/Bogota"));
         servicio = new GeneracionDocumentoService(contratoService, subetapaRepository, documentoRepository,
-                ollamaClient, new SimplePdfWriter(reloj), registroService, reloj);
+                ollamaClient, new PdfInstitucional(reloj), registroService, reloj);
 
         Usuario supervisor = new Usuario();
         supervisor.setId(2L);
@@ -126,18 +126,43 @@ class GeneracionDocumentoServiceTest {
         servicio.generar(1L, null, "ACTA_INICIO");
 
         assertThat(textoDelPdf())
-                .contains("GCCON-F-018")
+                .contains("GCCON-F-018 V.04")
                 .contains("CO1.PCCNTR.7986334")
-                .contains("Suministro de materiales para el lote 8")
-                .contains("$10.000.000")
-                .contains("DIEZ MILLONES DE PESOS M/CTE")
-                .contains("02/03/2026")
-                .contains("15/12/2026")
+                .contains("SUMINISTRO DE MATERIALES PARA EL LOTE 8")
+                .contains("DIEZ MILLONES DE PESOS ($10.000.000 COP)")
+                .contains("2 de marzo de 2026")
+                .contains("15 de diciembre de 2026")
                 .contains("EVENTOS SUPERNOVA S.A.S.")
                 .contains("900123456-7")
-                .contains("María Fernanda Ruiz")
+                .contains("MARÍA FERNANDA RUIZ")
                 .contains("RP-2026-0451")
-                .contains("Alex Zapata");
+                .contains("ALEX ZAPATA");
+    }
+
+    @Test
+    void losDatosQueDaElSupervisorLleganAlDocumentoYLosAjenosNo() {
+        servicio.generar(1L, null, "CERTIFICACION_CUMPLIMIENTO", null,
+                java.util.Map.of("numeroFactura", "FE 547", "banco", "Bancolombia", "claveInventada", "no va"));
+
+        assertThat(textoDelPdf()).contains("FE 547").contains("BANCOLOMBIA").doesNotContain("no va");
+        assertThat(registro()).contains("2 datos aportados por el supervisor");
+    }
+
+    @Test
+    void unDatoDemasiadoLargoSeRechazaConUnMensaje() {
+        assertThatThrownBy(() -> servicio.generar(1L, null, "ACTA_INICIO", null,
+                java.util.Map.of("cedulaSupervisor", "9".repeat(GeneracionDocumentoService.MAX_DATO + 1))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cedulaSupervisor");
+    }
+
+    /** El Acta de Inicio no tiene apartado de observaciones: las notas no van al modelo. */
+    @Test
+    void enUnFormatoSinObservacionesLasNotasNoSeMandanAlModelo() {
+        servicio.generar(1L, null, "ACTA_INICIO", "verifiqué las pólizas");
+
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+        assertThat(registro()).contains("el formato no tiene apartado de observaciones");
     }
 
     @Test
@@ -264,14 +289,14 @@ class GeneracionDocumentoServiceTest {
         verify(documentoRepository, never()).save(any());
     }
 
-    /** El ámbar marca solo el tramo pendiente, aunque el ajuste de línea lo parta. */
+    /** Lo que SICOT no sabe se marca como pendiente, aunque el ajuste de línea parta el marcador. */
     @Test
     void losPendientesDeUnParrafoLargoSiguenEnElPdf() {
         servicio.generar(1L, null, "CERTIFICACION_CUMPLIMIENTO");
 
         assertThat(textoDelPdf().replaceAll("\\s+", " "))
-                .contains("[dato pendiente: número y fecha de la factura]")
-                .contains("[dato pendiente: saldo por ejecutar]");
+                .contains("[dato pendiente: número de la factura]")
+                .contains("[dato pendiente: saldo por ejecutar después del pago]");
     }
 
     // ── Registro y borrador ─────────────────────────────────────────────────
@@ -286,7 +311,8 @@ class GeneracionDocumentoServiceTest {
         servicio.generar(1L, 27L, "ACTA_INICIO");
 
         assertThat(registro()).isEqualTo("Acta de Inicio (GCCON-F-018) generado por SICOT con los datos del"
-                + " contrato en la subetapa 2.7; queda pendiente de firma.");
+                + " contrato en la subetapa 2.7; queda pendiente de firma (5 datos del formato quedaron marcados"
+                + " como pendientes).");
     }
 
     @Test
@@ -370,12 +396,18 @@ class GeneracionDocumentoServiceTest {
                 }
             };
             stripper.getText(doc);
-            assertThat(stripper.maxX).isLessThanOrEqualTo(612 - 50 + 1);
+            // La hoja GIL-F-010 ocupa de 64 a 548 pt: nada puede pasar de ahí.
+            assertThat(stripper.maxX).isLessThanOrEqualTo(612 - 60);
         }
     }
 
+    /**
+     * Un borrador sin firmar del mismo formato en la subetapa es el intento
+     * anterior: se regenera en ese mismo documento (con los datos nuevos) en
+     * vez de crear otro que quedaría huérfano en la bandeja.
+     */
     @Test
-    void siHayUnBorradorSinFirmarDelMismoFormatoSeDevuelveEseYNoOtro() {
+    void siHayUnBorradorSinFirmarDelMismoFormatoSeRegeneraEseMismo() {
         Subetapa subetapa = new Subetapa();
         subetapa.setId(27L);
         subetapa.setCodigo("2.7");
@@ -383,14 +415,21 @@ class GeneracionDocumentoServiceTest {
         Documento borrador = new Documento();
         borrador.setId(99L);
         borrador.setContrato(contrato);
+        borrador.setSubetapa(subetapa);
         borrador.setNombre("Acta de Inicio — CO1.PCCNTR.7986334");
         borrador.setTipo(TipoDocumento.PDF);
         borrador.setEstado(EstadoDocumento.PENDIENTE);
+        borrador.setContenido(new byte[]{1, 2, 3});
         given(documentoRepository
                 .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
                         1L, 27L, "Acta de Inicio")).willReturn(Optional.of(borrador));
 
-        assertThat(servicio.generar(1L, 27L, "ACTA_INICIO").id()).isEqualTo(99L);
-        verify(documentoRepository, never()).save(any());
+        assertThat(servicio.generar(1L, 27L, "ACTA_INICIO", null,
+                java.util.Map.of("cedulaSupervisor", "43.512.887")).id()).isEqualTo(99L);
+
+        Documento guardado = documentoGuardado();
+        assertThat(guardado).isSameAs(borrador);
+        assertThat(textoDelPdf()).contains("43.512.887");
+        assertThat(registro()).startsWith("Acta de Inicio (GCCON-F-018) regenerado por SICOT");
     }
 }

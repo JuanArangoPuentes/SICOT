@@ -11,6 +11,7 @@ import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
+import co.sena.sicot.ia.EstampaDeFirma;
 import co.sena.sicot.mapper.DocumentoMapper;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.FirmaElectronicaRepository;
@@ -41,12 +42,13 @@ public class DocumentoService {
     private final RegistroService registroService;
     private final ArchivoValidator archivoValidator;
     private final LectorDeCaptura lectorDeCaptura;
+    private final EstampaDeFirma estampaDeFirma;
 
     public DocumentoService(DocumentoRepository documentoRepository, ContratoService contratoService,
                              SubetapaRepository subetapaRepository, FirmaElectronicaRepository firmaElectronicaRepository,
                              FormatoDocumentalRepository formatoDocumentalRepository,
                              RegistroService registroService, ArchivoValidator archivoValidator,
-                             LectorDeCaptura lectorDeCaptura) {
+                             LectorDeCaptura lectorDeCaptura, EstampaDeFirma estampaDeFirma) {
         this.documentoRepository = documentoRepository;
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
@@ -55,6 +57,7 @@ public class DocumentoService {
         this.registroService = registroService;
         this.archivoValidator = archivoValidator;
         this.lectorDeCaptura = lectorDeCaptura;
+        this.estampaDeFirma = estampaDeFirma;
     }
 
     /**
@@ -87,6 +90,12 @@ public class DocumentoService {
                 : nombre.trim();
         if (nombreLimpio == null || nombreLimpio.isBlank()) {
             throw new BusinessException("El nombre del documento es obligatorio.");
+        }
+        // «�» (U+FFFD) es lo que queda de un nombre enviado en otra codificación
+        // que UTF-8: dos cargas del 21-09-2026 quedaron como «supervisi�n» y así
+        // se descargaban. Mejor rechazarlo con un mensaje que guardarlo dañado.
+        if (nombreLimpio.indexOf('�') >= 0 || nombreLimpio.chars().anyMatch(Character::isISOControl)) {
+            throw new BusinessException("El nombre del documento tiene caracteres no válidos; escríbalo de nuevo.");
         }
         if (archivo == null || archivo.isEmpty()) {
             throw new BusinessException("Debe seleccionar un archivo para cargar.");
@@ -203,12 +212,23 @@ public class DocumentoService {
                 .orElseThrow(() -> new BusinessException(
                         "No tiene una firma electrónica activa asignada. Solicítela al Administrador."));
 
+        Instant ahora = Instant.now();
+        // Los documentos que genera SICOT llevan la firma visible: se estampa
+        // en el hueco que el PDF reservó para ella ANTES de calcular la
+        // huella, así que lo que queda registrado como firmado es el PDF con
+        // la firma ya puesta. Un PDF cargado desde fuera se firma tal cual.
+        if (documento.isGeneradoPorIa() && "application/pdf".equalsIgnoreCase(documento.getContentType())) {
+            byte[] estampado = estampaDeFirma.estampar(documento.getContenido(), usuario.getNombre(),
+                    firma.getFirmaId(), ahora);
+            documento.setContenido(estampado);
+            documento.setTamanioBytes((long) estampado.length);
+        }
         String huella = HuellaDeDocumento.calcular(documento.getContenido());
 
         documento.setFirmaId(firma.getFirmaId());
         documento.setFirmaHashSha256(huella);
         documento.setFirmadoPor(usuario);
-        documento.setFechaFirma(Instant.now());
+        documento.setFechaFirma(ahora);
         documento.setEstado(EstadoDocumento.APROBADO);
         Documento guardado = documentoRepository.save(documento);
 

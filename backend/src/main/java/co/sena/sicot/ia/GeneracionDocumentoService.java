@@ -19,7 +19,11 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Genera el borrador (estado PENDIENTE) de un documento formal del supervisor.
@@ -55,24 +59,29 @@ public class GeneracionDocumentoService {
     private final SubetapaRepository subetapaRepository;
     private final DocumentoRepository documentoRepository;
     private final OllamaClient ollamaClient;
-    private final SimplePdfWriter pdfWriter;
+    private final PdfInstitucional pdfInstitucional;
     private final RegistroService registroService;
     private final Clock reloj;
 
     public GeneracionDocumentoService(ContratoService contratoService, SubetapaRepository subetapaRepository,
                                       DocumentoRepository documentoRepository, OllamaClient ollamaClient,
-                                      SimplePdfWriter pdfWriter, RegistroService registroService, Clock reloj) {
+                                      PdfInstitucional pdfInstitucional, RegistroService registroService,
+                                      Clock reloj) {
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
         this.documentoRepository = documentoRepository;
         this.ollamaClient = ollamaClient;
-        this.pdfWriter = pdfWriter;
+        this.pdfInstitucional = pdfInstitucional;
         this.registroService = registroService;
         this.reloj = reloj;
     }
 
     public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave) {
-        return generar(contratoId, subetapaId, tipoClave, null);
+        return generar(contratoId, subetapaId, tipoClave, null, Map.of());
+    }
+
+    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas) {
+        return generar(contratoId, subetapaId, tipoClave, notas, Map.of());
     }
 
     // Sin @Transactional a propósito — mismo motivo que CopilotoChatService.responder:
@@ -80,11 +89,18 @@ public class GeneracionDocumentoService {
     // conexión del pool de Hikari todo ese tiempo. contratoService.buscar,
     // subetapaRepository y documentoRepository.save abren y cierran sus propias
     // transacciones cortas.
-    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas) {
+    /**
+     * @param datos datos del documento que el contrato no tiene (factura,
+     *              póliza, cédulas…), por clave de {@link PlantillaDocumentoIA#campos}.
+     *              Los que falten salen en el PDF como «[dato pendiente…]».
+     */
+    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
+                                     Map<String, String> datos) {
         PlantillaDocumentoIA plantilla = PlantillaDocumentoIA.CATALOGO.get(tipoClave);
         if (plantilla == null) {
             throw new BusinessException("Tipo de documento no reconocido: " + tipoClave);
         }
+        Map<String, String> datosValidos = datosDeLaPlantilla(plantilla, datos);
         Contrato contrato = contratoService.buscar(contratoId);
 
         // La consulta exige que la subetapa sea de ESTE contrato: sin esa
@@ -107,35 +123,44 @@ public class GeneracionDocumentoService {
                     + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
         }
 
-        // Un borrador de este formato sin firmar en la misma subetapa es el
-        // intento anterior que no llegó a firmarse (en el teléfono, la conexión
-        // se corta si SICOT pasa a segundo plano mientras se redacta). Se
-        // devuelve ese mismo borrador para firmarlo, en vez de crear otro que
-        // quedaría para siempre como «documento sin firmar» en la bandeja.
-        if (subetapa != null) {
-            var borrador = documentoRepository
-                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
-                            contrato.getId(), subetapa.getId(), plantilla.nombre());
-            if (borrador.isPresent()) {
-                log.info("Se reutiliza el borrador {} de '{}' sin firmar en la subetapa {}.",
-                        borrador.get().getId(), plantilla.nombre(), subetapa.getCodigo());
-                return DocumentoMapper.toResponse(borrador.get());
-            }
-        }
-
         Observaciones obs = observaciones(plantilla, contrato, notas);
         LocalDate hoy = LocalDate.now(reloj);
-        List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto());
+        List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto(),
+                datosValidos);
 
         String firmante = contrato.getSupervisor() != null ? contrato.getSupervisor().getNombre() : null;
         String origen = obs.conIa() ? "Generado en SICOT con apoyo del Copiloto IA" : "Generado en SICOT";
-        byte[] pdf = pdfWriter.generar(plantilla.nombre(), plantilla.codigo(), contrato.getNumeroContrato(),
-                firmante, "Supervisor del contrato", bloques, origen);
+        byte[] pdf = pdfInstitucional.generar(new DocumentoFormal(plantilla.formato(),
+                plantilla.nombre() + " — " + contrato.getNumeroContrato(), contrato.getNumeroContrato(),
+                firmante, origen, bloques));
 
-        Documento documento = new Documento();
-        documento.setContrato(contrato);
-        documento.setSubetapa(subetapa);
-        documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
+        // Un borrador de este formato sin firmar en la misma subetapa es un
+        // intento anterior que no llegó a firmarse (en el teléfono la conexión
+        // se corta si SICOT pasa a segundo plano mientras se redacta). Se
+        // actualiza ESE borrador en vez de crear otro, que quedaría para
+        // siempre como «documento sin firmar» en la bandeja. Hasta el
+        // 28-09-2026 se devolvía tal cual, sin regenerarlo: con los datos
+        // complementarios eso habría firmado el borrador viejo sin los datos
+        // que el supervisor acababa de corregir. Se busca justo antes de
+        // guardar porque entre el inicio y aquí pasan los segundos de la
+        // redacción con IA, y un doble clic o dos pestañas podían colarse.
+        Documento documento = null;
+        if (subetapa != null) {
+            documento = documentoRepository
+                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                            contrato.getId(), subetapa.getId(), plantilla.nombre())
+                    .orElse(null);
+        }
+        boolean reutilizado = documento != null;
+        if (documento == null) {
+            documento = new Documento();
+            documento.setContrato(contrato);
+            documento.setSubetapa(subetapa);
+            documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
+        } else {
+            log.info("Se regenera el borrador {} de '{}' sin firmar en la subetapa {}.",
+                    documento.getId(), plantilla.nombre(), subetapa.getCodigo());
+        }
         documento.setTipo(TipoDocumento.PDF);
         documento.setContentType("application/pdf");
         documento.setContenido(pdf);
@@ -147,26 +172,48 @@ public class GeneracionDocumentoService {
         // proceso. Si la IA intervino lo dice el registro, que es donde queda
         // la trazabilidad.
         documento.setGeneradoPorIa(true);
-
-        // Segunda comprobación, justo antes de guardar: entre la primera y aquí
-        // pasan los segundos de la redacción con IA, y un doble clic o dos
-        // pestañas podían colarse las dos.
-        if (subetapa != null) {
-            var otro = documentoRepository
-                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
-                            contrato.getId(), subetapa.getId(), plantilla.nombre());
-            if (otro.isPresent()) {
-                return DocumentoMapper.toResponse(otro.get());
-            }
-        }
         Documento guardado = documentoRepository.save(documento);
 
+        int pendientes = RedactorDeDocumentos.contarPendientes(bloques);
         registroService.registrar(contrato, "DOCUMENTO_GENERADO",
-                plantilla.nombre() + " (" + plantilla.codigo() + ") generado por SICOT con los datos del contrato"
+                plantilla.nombre() + " (" + plantilla.codigo() + ") " + (reutilizado ? "regenerado" : "generado")
+                        + " por SICOT con los datos del contrato"
+                        + (datosValidos.isEmpty() ? "" : " y " + datosValidos.size() + " datos aportados por el supervisor")
                         + obs.descripcion()
                         + (subetapa != null ? " en la subetapa " + subetapa.getCodigo() : "")
-                        + "; queda pendiente de firma.");
+                        + "; queda pendiente de firma"
+                        + (pendientes > 0 ? " (" + pendientes + " datos del formato quedaron marcados como pendientes)" : "")
+                        + ".");
         return DocumentoMapper.toResponse(guardado);
+    }
+
+    /** Longitud máxima de un dato complementario: una forma de pago o un rubro caben de sobra. */
+    static final int MAX_DATO = 600;
+
+    /**
+     * Solo pasan las claves que el formato declara: una clave desconocida no
+     * llega al documento, y un valor demasiado largo se rechaza con un
+     * mensaje en vez de dibujarse a medias. Los caracteres de control (un
+     * tabulador pegado de Excel) pasan a espacio.
+     */
+    static Map<String, String> datosDeLaPlantilla(PlantillaDocumentoIA plantilla, Map<String, String> datos) {
+        Map<String, String> validos = new LinkedHashMap<>();
+        if (datos == null) {
+            return validos;
+        }
+        Set<String> claves = new HashSet<>();
+        plantilla.campos().forEach(cd -> claves.add(cd.clave()));
+        for (Map.Entry<String, String> e : datos.entrySet()) {
+            String valor = e.getValue() == null ? "" : e.getValue().strip();
+            if (valor.isEmpty() || !claves.contains(e.getKey())) {
+                continue;
+            }
+            if (valor.length() > MAX_DATO) {
+                throw new BusinessException("El dato «" + e.getKey() + "» supera " + MAX_DATO + " caracteres.");
+            }
+            validos.put(e.getKey(), valor.replaceAll("\\p{Cntrl}", " "));
+        }
+        return validos;
     }
 
     /** El apartado de observaciones y cómo se obtuvo, para el registro. */
@@ -176,6 +223,14 @@ public class GeneracionDocumentoService {
     private Observaciones observaciones(PlantillaDocumentoIA plantilla, Contrato contrato, String notas) {
         if (notas == null || notas.isBlank()) {
             return new Observaciones(null, false, "");
+        }
+        // El Acta de Inicio y el certificado no tienen apartado de
+        // observaciones: agregarles uno los apartaría del formato. Las notas no
+        // se mandan al modelo —serían minutos de redacción para nada— y el
+        // registro dice por qué no aparecen.
+        if (!plantilla.llevaObservaciones()) {
+            return new Observaciones(null, false,
+                    "; las notas del supervisor no se incluyen porque el formato no tiene apartado de observaciones");
         }
         String recortadas = notas.strip();
         if (recortadas.length() > MAX_NOTAS) {
@@ -191,13 +246,19 @@ public class GeneracionDocumentoService {
                 - Usa únicamente los hechos que dicen las notas. No agregues cifras, fechas, nombres, \
                 entidades, cantidades ni verificaciones que no estén en ellas.
                 - No repitas los datos del contrato (número, valor, fechas, contratista): ya van en la ficha.
-                - Si las notas son breves, el texto también debe serlo.
+                - Si las notas son breves, el texto también debe serlo.%s
                 - Responde solo con el texto final, sin títulos, sin viñetas y sin markdown.
 
                 %s
 
                 %s
-                """.formatted(plantilla.nombre(), plantilla.codigo(), EntradaNoConfiable.INSTRUCCION,
+                """.formatted(plantilla.nombre(), plantilla.codigo(),
+                // La hoja GIL-F-010 solo tiene dos renglones para observaciones:
+                // lo que no quepa va a una hoja de continuación, pero el acta
+                // se lee mejor si cabe en su casilla.
+                "ACTA_RECIBO".equals(plantilla.clave())
+                        ? "\n- No pases de 350 caracteres: en el formato solo caben dos renglones." : "",
+                EntradaNoConfiable.INSTRUCCION,
                 EntradaNoConfiable.bloque("NOTAS DEL SUPERVISOR", recortadas));
 
         String redactado;
