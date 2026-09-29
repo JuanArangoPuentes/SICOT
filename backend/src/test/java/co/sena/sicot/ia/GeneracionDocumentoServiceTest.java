@@ -292,7 +292,7 @@ class GeneracionDocumentoServiceTest {
         subetapa.setId(27L);
         subetapa.setCodigo("3.4");
         given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
-        given(documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+        given(documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
                 1L, 27L, "Informe de Supervisión")).willReturn(true);
 
         assertThatThrownBy(() -> servicio.generar(1L, 27L, "INFORME_SUPERVISION"))

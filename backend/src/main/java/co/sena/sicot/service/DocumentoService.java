@@ -213,10 +213,28 @@ public class DocumentoService {
         // otra persona —un administrador con firma propia— dejaba su nombre
         // estampado en el hueco del supervisor: un documento oficial que
         // atribuye la firma a quien no firmó (revisión del 28-09-2026).
+        //
+        // Tres casos, según la revisión del 29-09-2026: sin supervisor asignado
+        // el administrador podía firmarlo sobre «[dato pendiente: supervisor]»;
+        // y si Gestión reasignaba el contrato, el supervisor nuevo firmaba un
+        // borrador que llevaba impreso el nombre del anterior. Por eso se mira
+        // también para quién se generó (queda en el PDF), no solo quién es
+        // el supervisor hoy. Regenerar el borrador lo pone a nombre del actual.
         var supervisor = documento.getContrato().getSupervisor();
-        if (documento.isGeneradoPorIa() && supervisor != null && !supervisor.getId().equals(usuario.getId())) {
-            throw new BusinessException("Este documento lo firma el supervisor del contrato ("
-                    + supervisor.getNombre() + "): su nombre es el que aparece en el bloque de firma.");
+        if (documento.isGeneradoPorIa()) {
+            if (supervisor == null) {
+                throw new BusinessException("El contrato no tiene supervisor asignado, y un documento generado lleva"
+                        + " el nombre del supervisor en su bloque de firma. Asigne el supervisor y vuelva a generarlo.");
+            }
+            if (!supervisor.getId().equals(usuario.getId())) {
+                throw new BusinessException("Este documento lo firma el supervisor del contrato ("
+                        + supervisor.getNombre() + "): su nombre es el que aparece en el bloque de firma.");
+            }
+            Long previsto = estampaDeFirma.firmantePrevisto(documento.getContenido());
+            if (previsto != null && !previsto.equals(usuario.getId())) {
+                throw new BusinessException("Este borrador se generó cuando el supervisor del contrato era otra"
+                        + " persona, y lleva su nombre en el bloque de firma. Vuelva a generarlo para que lleve el suyo.");
+            }
         }
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(

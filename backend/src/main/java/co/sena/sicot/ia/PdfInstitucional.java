@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Dibuja un {@link DocumentoFormal} como el formato oficial del SENA al que
@@ -52,13 +53,18 @@ import java.util.Locale;
  * <h2>Ancla de la firma</h2>
  * El PDF guarda en sus propiedades dónde quedó el hueco de la firma del
  * supervisor ({@value #PROPIEDAD_ANCLA_FIRMA}), para que al firmar se estampe
- * ahí sin volver a generar el documento.
+ * ahí sin volver a generar el documento. Guarda también para quién se generó
+ * ({@value #PROPIEDAD_FIRMANTE}): el nombre del bloque de firma es el del
+ * supervisor de ese momento, y solo esa persona puede firmarlo.
  */
 @Component
 public class PdfInstitucional {
 
     /** Propiedad del PDF con la página y el recuadro de la firma: «página;x;y;ancho;alto», en puntos PDF. */
     public static final String PROPIEDAD_ANCLA_FIRMA = "SICOT-AnclaFirma";
+
+    /** Propiedad del PDF con el id del usuario cuyo nombre lleva el bloque de firma del supervisor. */
+    public static final String PROPIEDAD_FIRMANTE = "SICOT-Firmante";
 
     static final float ANCHO = PDRectangle.LETTER.getWidth();
     static final float ALTO = PDRectangle.LETTER.getHeight();
@@ -79,6 +85,26 @@ public class PdfInstitucional {
     static final float BORDE = 0.48f;
     /** Sangría francesa de los apartados numerados: 567 twips (1 cm). */
     private static final float SANGRIA_SECCION = 28.35f;
+
+    /**
+     * La letra más pequeña a la que se reduce una cifra para que no se parta.
+     * Con 6,5 pt, «$9.999.999.999,99» cabe en las columnas de valores más
+     * estrechas de los formatos (unos 63 pt útiles) y se sigue leyendo impreso.
+     */
+    private static final float TAMANO_MINIMO_CIFRA = 6.5f;
+
+    /** Un valor en pesos, un número o un porcentaje, tal como los escribe el redactor. */
+    private static final Pattern CIFRA =
+            Pattern.compile("\\$?\\s?-?[\\d.,]+(\\s?%)?");
+
+    private static boolean esCifra(List<Tramo> tramos) {
+        StringBuilder texto = new StringBuilder();
+        for (Tramo t : tramos) {
+            texto.append(t.texto() == null ? "" : t.texto());
+        }
+        String limpio = texto.toString().strip();
+        return !limpio.isEmpty() && CIFRA.matcher(limpio).matches();
+    }
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
@@ -137,6 +163,9 @@ public class PdfInstitucional {
         info.setModificationDate(ahora);
         if (anclaFirma != null) {
             info.setCustomMetadataValue(PROPIEDAD_ANCLA_FIRMA, anclaFirma);
+        }
+        if (d.firmanteId() != null) {
+            info.setCustomMetadataValue(PROPIEDAD_FIRMANTE, d.firmanteId().toString());
         }
         pdf.getDocumentCatalog().setLanguage("es-CO");
     }
@@ -407,10 +436,10 @@ public class PdfInstitucional {
                 List<CeldaLista> celdas = List.of(
                         new CeldaLista(izquierda, anchoEtiqueta,
                                 envolver(trocear(List.of(Tramo.negrita(campo.etiqueta()))), anchoEtiqueta - 2 * r),
-                                Alineacion.IZQUIERDA, ficha.centrarVertical(), null, r),
+                                Alineacion.IZQUIERDA, ficha.centrarVertical(), null, r, tamano),
                         new CeldaLista(izquierda + anchoEtiqueta, anchoValor,
                                 envolver(trocear(List.of(new Tramo(valor, campo.estiloValor()))), anchoValor - 2 * r),
-                                Alineacion.JUSTIFICADO, ficha.centrarVertical(), null, r));
+                                Alineacion.JUSTIFICADO, ficha.centrarVertical(), null, r, tamano));
                 filaSencilla(celdas);
             }
         }
@@ -454,9 +483,25 @@ public class PdfInstitucional {
                     }
                     float x = xs[c];
                     float w = xs[c + abarca] - x;
-                    List<Linea> lineas = envolver(trocear(celda.tramos()), w - 2 * tabla.relleno());
+                    float disponible = w - 2 * tabla.relleno();
+                    List<Pieza> piezas = trocear(celda.tramos());
+                    List<Linea> lineas = envolver(piezas, disponible);
+                    float tamanoCelda = tamano;
+                    if (lineas.size() > 1 && esCifra(celda.tramos())) {
+                        // Una cifra no se parte: «$139.400.634,0» en un renglón y
+                        // «0» en el siguiente es otro número para quien lo lee o
+                        // lo copia del informe que autoriza el pago. Se reduce la
+                        // letra de esa celda hasta que quepa entera, como haría
+                        // quien diligencia el formato a mano.
+                        tamanoCelda = tamanoParaUnRenglon(piezas, disponible);
+                        float anterior = tamano;
+                        tamano = tamanoCelda;
+                        lineas = envolver(piezas, disponible);
+                        tamano = anterior;
+                    }
                     colocadas.add(new CeldaColocada(f, baja, new CeldaLista(x, w, lineas, celda.alineacion(),
-                            celda.centrarVertical(), celda.gris() ? GRIS_ENCABEZADO : null, tabla.relleno())));
+                            celda.centrarVertical(), celda.gris() ? GRIS_ENCABEZADO : null, tabla.relleno(),
+                            tamanoCelda)));
                     c += abarca;
                 }
                 porFila.add(colocadas);
@@ -570,13 +615,32 @@ public class PdfInstitucional {
 
         void dibujarCelda(CeldaLista c, float top, float alto, List<Linea> lineas) throws IOException {
             rectangulo(c.x, top - alto, c.ancho, alto, c.fondo, NEGRO);
-            float usado = lineas.size() * interlinea();
-            float desplazamiento = c.centrarVertical ? Math.max(0, (alto - BORDE - usado) / 2) : 0;
-            float yy = top - BORDE - desplazamiento;
-            for (Linea l : lineas) {
-                dibujarLinea(l, c.x + c.relleno, yy - ascenso(), c.ancho - 2 * c.relleno, c.alineacion, NEGRO);
-                yy -= interlinea();
+            float anterior = tamano;
+            tamano = c.tamano;
+            try {
+                float usado = lineas.size() * interlinea();
+                float desplazamiento = c.centrarVertical ? Math.max(0, (alto - BORDE - usado) / 2) : 0;
+                float yy = top - BORDE - desplazamiento;
+                for (Linea l : lineas) {
+                    dibujarLinea(l, c.x + c.relleno, yy - ascenso(), c.ancho - 2 * c.relleno, c.alineacion, NEGRO);
+                    yy -= interlinea();
+                }
+            } finally {
+                tamano = anterior;
             }
+        }
+
+        /** La letra, en cuartos de punto, con que las piezas caben en un solo renglón. */
+        float tamanoParaUnRenglon(List<Pieza> piezas, float disponible) throws IOException {
+            float natural = 0;
+            for (int i = 0; i < piezas.size(); i++) {
+                Pieza p = piezas.get(i);
+                natural += ancho(p) + (i > 0 && p.espacioAntes ? anchoEspacio(p) : 0);
+            }
+            if (natural <= disponible) {
+                return tamano;
+            }
+            return Math.max(TAMANO_MINIMO_CIFRA, (float) Math.floor(tamano * disponible / natural * 4) / 4f);
         }
 
         /**
@@ -623,60 +687,63 @@ public class PdfInstitucional {
             if (firmantes.isEmpty()) {
                 return;
             }
-            int renglones = firmantes.stream().mapToInt(f -> f.lineas().size() + 1).max().orElse(1);
-            float espacio = firmas.espacioParaFirmar();
-            // El bloque entero en la misma página que su hueco de firma.
-            asegurar(espacio + renglones * interlinea() + BORDE);
-            float yNombres = y - espacio;
-            switch (firmas.disposicion()) {
-                case CENTRADA -> {
-                    BloqueDocumento.Firmante f = firmantes.getFirst();
-                    anclar(ANCHO / 2 - 90f, yNombres, 180f, espacio);
-                    float yy = yNombres;
-                    List<Tramo> renglonesFirma = new ArrayList<>();
-                    renglonesFirma.add(new Tramo(f.nombre(), f.nombreEnNegrita() ? Estilo.NEGRITA : Estilo.NORMAL));
-                    f.lineas().forEach(t -> renglonesFirma.add(new Tramo(t,
-                            f.nombreEnNegrita() ? Estilo.NEGRITA : Estilo.NORMAL)));
-                    for (Tramo t : renglonesFirma) {
-                        for (Linea l : envolver(trocear(List.of(t)), ANCHO - 2 * izquierda)) {
-                            dibujarLinea(l, 0, yy - ascenso(), ANCHO, Alineacion.CENTRO, NEGRO);
-                            yy -= interlinea();
-                        }
-                    }
-                    y = yy;
+            boolean centrada = firmas.disposicion() == BloqueDocumento.DisposicionFirmas.CENTRADA;
+            int columnas = centrada || firmas.disposicion() == BloqueDocumento.DisposicionFirmas.IZQUIERDA
+                    ? 1 : Math.max(2, firmantes.size());
+            float anchoColumna = anchoUtil / columnas;
+            float anchoTexto = centrada ? ANCHO - 2 * izquierda : anchoColumna - 10.8f;
+            // Los renglones se cuentan ya partidos al ancho de su columna. Antes
+            // se contaban los renglones lógicos, y una razón social, un nombre o
+            // un correo que ocupaban dos se salían del cuerpo —encima del pie—
+            // o del recuadro de la tabla de firmas.
+            List<List<Linea>> porFirmante = new ArrayList<>();
+            int renglones = 1;
+            for (int i = 0; i < (centrada ? 1 : Math.min(firmantes.size(), columnas)); i++) {
+                BloqueDocumento.Firmante f = firmantes.get(i);
+                Estilo estiloLineas = centrada && f.nombreEnNegrita() ? Estilo.NEGRITA : Estilo.NORMAL;
+                List<Tramo> renglonesFirma = new ArrayList<>();
+                renglonesFirma.add(new Tramo(f.nombre(), f.nombreEnNegrita() ? Estilo.NEGRITA : Estilo.NORMAL));
+                f.lineas().forEach(t -> renglonesFirma.add(new Tramo(t, estiloLineas)));
+                List<Linea> lineas = new ArrayList<>();
+                for (Tramo t : renglonesFirma) {
+                    lineas.addAll(envolver(trocear(List.of(t)), anchoTexto));
                 }
-                case IZQUIERDA, COLUMNAS, TABLA -> {
-                    int columnas = firmas.disposicion() == BloqueDocumento.DisposicionFirmas.IZQUIERDA
-                            ? 1 : Math.max(2, firmantes.size());
-                    float anchoColumna = anchoUtil / columnas;
-                    float altoTabla = renglones * interlinea() + BORDE;
-                    float yy0 = yNombres;
-                    for (int i = 0; i < Math.min(firmantes.size(), columnas); i++) {
-                        BloqueDocumento.Firmante f = firmantes.get(i);
-                        float x = izquierda + i * anchoColumna;
-                        if (i == 0) {
-                            anclar(x + 5.4f, yNombres, Math.min(anchoColumna - 10.8f, 200f), espacio);
-                        }
-                        if (firmas.disposicion() == BloqueDocumento.DisposicionFirmas.TABLA) {
-                            rectangulo(x, yNombres - altoTabla, anchoColumna, altoTabla, null, NEGRO);
-                        }
-                        float yy = yNombres - (firmas.disposicion() == BloqueDocumento.DisposicionFirmas.TABLA ? BORDE : 0);
-                        List<Tramo> renglonesFirma = new ArrayList<>();
-                        renglonesFirma.add(new Tramo(f.nombre(), f.nombreEnNegrita() ? Estilo.NEGRITA : Estilo.NORMAL));
-                        f.lineas().forEach(t -> renglonesFirma.add(Tramo.normal(t)));
-                        for (Tramo t : renglonesFirma) {
-                            for (Linea l : envolver(trocear(List.of(t)), anchoColumna - 10.8f)) {
-                                dibujarLinea(l, x + 5.4f, yy - ascenso(), anchoColumna - 10.8f,
-                                        Alineacion.IZQUIERDA, NEGRO);
-                                yy -= interlinea();
-                            }
-                        }
-                        yy0 = Math.min(yy0, yy);
-                    }
-                    y = firmas.disposicion() == BloqueDocumento.DisposicionFirmas.TABLA
-                            ? Math.min(yNombres - altoTabla, yy0) : yy0;
-                }
+                porFirmante.add(lineas);
+                renglones = Math.max(renglones, lineas.size());
             }
+            float espacio = firmas.espacioParaFirmar();
+            float altoTabla = renglones * interlinea() + BORDE;
+            // El bloque entero en la misma página que su hueco de firma.
+            asegurar(espacio + altoTabla);
+            float yNombres = y - espacio;
+            if (centrada) {
+                anclar(ANCHO / 2 - 90f, yNombres, 180f, espacio);
+                float yy = yNombres;
+                for (Linea l : porFirmante.getFirst()) {
+                    dibujarLinea(l, 0, yy - ascenso(), ANCHO, Alineacion.CENTRO, NEGRO);
+                    yy -= interlinea();
+                }
+                y = yy;
+                return;
+            }
+            boolean enTabla = firmas.disposicion() == BloqueDocumento.DisposicionFirmas.TABLA;
+            float yy0 = yNombres;
+            for (int i = 0; i < porFirmante.size(); i++) {
+                float x = izquierda + i * anchoColumna;
+                if (i == 0) {
+                    anclar(x + 5.4f, yNombres, Math.min(anchoColumna - 10.8f, 200f), espacio);
+                }
+                if (enTabla) {
+                    rectangulo(x, yNombres - altoTabla, anchoColumna, altoTabla, null, NEGRO);
+                }
+                float yy = yNombres - (enTabla ? BORDE : 0);
+                for (Linea l : porFirmante.get(i)) {
+                    dibujarLinea(l, x + 5.4f, yy - ascenso(), anchoTexto, Alineacion.IZQUIERDA, NEGRO);
+                    yy -= interlinea();
+                }
+                yy0 = Math.min(yy0, yy);
+            }
+            y = enTabla ? Math.min(yNombres - altoTabla, yy0) : yy0;
         }
 
         /** Guarda el hueco de la firma del supervisor (la primera que se dibuja). */
@@ -851,6 +918,13 @@ public class PdfInstitucional {
             return lineas;
         }
 
+        /**
+         * Parte una palabra que no cabe sola en el renglón. Si el trozo tiene un
+         * guion, una barra o un guion bajo, se corta justo después del último:
+         * «A-02-02-01-003-» / «008-01» se sigue leyendo como un código, y
+         * «A-02-02-01-003-0» / «08-01» no. Solo si no hay ninguno se corta
+         * donde se acabe el ancho.
+         */
         List<Pieza> partir(Pieza p, float disponible) throws IOException {
             List<Pieza> trozos = new ArrayList<>();
             StringBuilder trozo = new StringBuilder();
@@ -859,9 +933,17 @@ public class PdfInstitucional {
                 int cp = p.texto.codePointAt(i);
                 String siguiente = trozo + new String(Character.toChars(cp));
                 if (FuentesDelDocumento.ancho(p.fuente, tamano, siguiente) > disponible && !trozo.isEmpty()) {
+                    int corte = Math.max(trozo.lastIndexOf("-"),
+                            Math.max(trozo.lastIndexOf("/"), trozo.lastIndexOf("_")));
+                    String resto = "";
+                    if (corte > 0 && corte < trozo.length() - 1) {
+                        resto = trozo.substring(corte + 1);
+                        trozo.setLength(corte + 1);
+                    }
                     trozos.add(new Pieza(trozo.toString(), p.fuente, p.pendiente, trozos.isEmpty() && p.espacioAntes,
                             false));
                     trozo.setLength(0);
+                    trozo.append(resto);
                 } else {
                     trozo.appendCodePoint(cp);
                     i += Character.charCount(cp);
@@ -968,11 +1050,11 @@ public class PdfInstitucional {
     private record Linea(List<Pieza> piezas, boolean ultima) {
     }
 
-    /** Una celda con su texto ya repartido en renglones. */
+    /** Una celda con su texto ya repartido en renglones, y la letra con que se partió. */
     private record CeldaLista(float x, float ancho, List<Linea> lineas, Alineacion alineacion,
-                              boolean centrarVertical, Color fondo, float relleno) {
+                              boolean centrarVertical, Color fondo, float relleno, float tamano) {
         CeldaLista conLineas(List<Linea> otras) {
-            return new CeldaLista(x, ancho, otras, alineacion, centrarVertical, fondo, relleno);
+            return new CeldaLista(x, ancho, otras, alineacion, centrarVertical, fondo, relleno, tamano);
         }
     }
 

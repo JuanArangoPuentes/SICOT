@@ -9,6 +9,10 @@ import co.sena.sicot.ia.BloqueDocumento.Parrafo;
 import co.sena.sicot.ia.BloqueDocumento.Tabla;
 import co.sena.sicot.ia.BloqueDocumento.Tramo;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.contentstream.operator.color.SetNonStrokingColor;
+import org.apache.pdfbox.contentstream.operator.color.SetNonStrokingColorN;
+import org.apache.pdfbox.contentstream.operator.color.SetNonStrokingColorSpace;
+import org.apache.pdfbox.contentstream.operator.color.SetNonStrokingDeviceRGBColor;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -322,7 +326,151 @@ class PdfInstitucionalTest {
         assertThat(t).contains("[OK]").contains("[X]").contains("anchocero").contains("con tabs");
     }
 
+    // ── Hallazgos de la revisión del generador del 29-09-2026 ───────────────
+
+    /**
+     * «$139.400.634,0» en un renglón y «0» en el siguiente, en la columna de
+     * valores del GCCON-F-031: quien copiaba la cifra del informe que autoriza
+     * el pago obtenía otro número.
+     */
+    @Test
+    void unaCifraEnUnaColumnaEstrechaNoSeParte() throws Exception {
+        byte[] pdf = generar(List.of(new Tabla(List.of(76f, 394f), List.of(
+                Fila.de(Celda.de("$139.400.634,00"), Celda.de("facturado")),
+                Fila.de(Celda.de("$ 1.234.567.890,00"), Celda.de("ejecutado")),
+                Fila.de(Celda.de("55,76 %"), Celda.de("avance"))), 0, false, 5.4f)));
+
+        String t = texto(pdf);
+        assertThat(t).contains("$139.400.634,00").contains("$ 1.234.567.890,00").contains("55,76 %");
+        assertThat(maximaAlturaYAnchura(pdf)).allSatisfy(dentro -> assertThat(dentro).isTrue());
+    }
+
+    /** «A-02-02-01-003-0» / «08-01» ya no es el código; «A-02-02-01-003-» / «008-01» sí se lee como tal. */
+    @Test
+    void unCodigoLargoSeParteDespuesDeUnGuion() throws Exception {
+        byte[] pdf = generar(List.of(new Tabla(List.of(62f, 408f),
+                List.of(Fila.de(Celda.de("A-02-02-01-003-008-01"), Celda.de("uso"))), 0, false, 5.4f)));
+
+        List<String> renglones = texto(pdf).lines().filter(l -> l.startsWith("A-02") || l.matches("^\\d.*-\\d\\d.*"))
+                .toList();
+        assertThat(renglones.getFirst()).endsWith("-");
+        assertThat(texto(pdf).replaceAll("\\s+", "")).contains("A-02-02-01-003-008-01");
+    }
+
+    /**
+     * El bloque de firmas reservaba sitio por renglones lógicos: una razón
+     * social, un nombre o un correo que se partían en dos renglones salían por
+     * debajo del cuerpo, encima del pie. Se prueba con el bloque en todas las
+     * alturas de la página.
+     */
+    @Test
+    void elBloqueDeFirmasNoPasaDelFinDelCuerpoAunqueLosNombresOcupenDosRenglones() throws Exception {
+        float finCuerpo = INFORME.formato().pagina().finCuerpo();
+        BloqueDocumento.Firmas firmas = new BloqueDocumento.Firmas(List.of(
+                new BloqueDocumento.Firmante("MARÍA ALEJANDRA GUTIÉRREZ CASTAÑEDA DE RESTREPO VILLEGAS", true,
+                        List.of("Supervisor del contrato", "correo.muy.largo.de.la.supervisora@sena.edu.co")),
+                new BloqueDocumento.Firmante("UNIÓN TEMPORAL MOBILIARIO ESCOLAR ANTIOQUIA 2026", true,
+                        List.of("Contratista", "contratacion@uniontemporalmobiliarioescolar.com.co"))),
+                BloqueDocumento.DisposicionFirmas.TABLA, 42f);
+        for (int relleno = 0; relleno < 60; relleno++) {
+            List<BloqueDocumento> bloques = new ArrayList<>(parrafos(relleno));
+            bloques.add(firmas);
+            byte[] pdf = generar(bloques);
+            try (PDDocument d = Loader.loadPDF(pdf)) {
+                List<Float> bajos = new ArrayList<>();
+                new PDFTextStripper() {
+                    @Override
+                    protected void writeString(String text, List<TextPosition> posiciones) {
+                        if (text.contains("Supervisor del contrato") || text.contains("Contratista")
+                                || text.contains("@")) {
+                            posiciones.forEach(p -> bajos.add(p.getYDirAdj()));
+                        }
+                    }
+                }.getText(d);
+                assertThat(bajos).as("relleno " + relleno)
+                        .allSatisfy(yy -> assertThat(yy).isLessThanOrEqualTo(finCuerpo + 1f));
+            }
+        }
+    }
+
+    /**
+     * La hoja GIL-F-010: en la casilla estrecha de la cantidad, el aviso de
+     * continuación no cabía al lado del texto y la cantidad salía espaciada
+     * letra por letra («2 6 re s m a s»). La hoja de continuación, además,
+     * decía «Casilla de la fila 30» para las dos cantidades.
+     */
+    @Test
+    void enLaHojaDeReciboUnaCantidadLargaNoSeDesarmaYSuContinuacionDiceQueEs() throws Exception {
+        PlantillaDocumentoIA recibo = PlantillaDocumentoIA.CATALOGO.get("ACTA_RECIBO");
+        String consumo = "26 resmas de papel carta, 10 cajas de ganchos, 40 carpetas de yute y 12 marcadores";
+        String devolutivos = "12 sillas ergonómicas con brazos, 4 mesas plegables y 2 tableros acrílicos móviles";
+        BloqueDocumento.DatosActaDeRecibo datos = new BloqueDocumento.DatosActaDeRecibo("[dato pendiente]",
+                "28/09/2026", "Itagüí", "5", "Antioquia", "Centro", "920510", "Compra", "Total", "CO1.PCCNTR.1",
+                "17/06/2025", "C-3603", "Proveedor", "900", "$1", "17/12/2025", "Objeto", devolutivos, consumo, null,
+                "Paola", "43", "p@sena.edu.co", "Instructora", "300");
+        byte[] pdf = generar(recibo, List.of(new BloqueDocumento.HojaDeRecibo(datos)));
+
+        String t = texto(pdf);
+        assertThat(t).doesNotContain("2 6 ").doesNotContain("1 2 s");
+        assertThat(t.replaceAll("\\s+", " ")).contains("CANTIDAD BIENES DE CONSUMO " + consumo)
+                .contains("CANTIDAD BIENES DEVOLUTIVOS " + devolutivos)
+                .doesNotContain("Casilla de la fila");
+        // El marcador del número de acta sale en rojo, como todos los pendientes.
+        assertThat(colorDe(pdf, "[dato")).isEqualTo(0xC00000);
+    }
+
+    @Test
+    void unNumeroDeActaLargoNoSeSaleDeLaHoja() throws Exception {
+        PlantillaDocumentoIA recibo = PlantillaDocumentoIA.CATALOGO.get("ACTA_RECIBO");
+        String numero = "ACTA DE RECIBO 001-2026 ALMACÉN CENTRO TECNOLÓGICO DEL MOBILIARIO ITAGÜÍ ANTIOQUIA";
+        BloqueDocumento.DatosActaDeRecibo datos = new BloqueDocumento.DatosActaDeRecibo(numero, "28/09/2026",
+                "Itagüí", "5", "Antioquia", "Centro", "920510", "Compra", "Total", "CO1.PCCNTR.1", "17/06/2025",
+                "C-3603", "Proveedor", "900", "$1", "17/12/2025", "Objeto", "1", "1", null, "Paola", "43",
+                "p@sena.edu.co", "Instructora", "300");
+        byte[] pdf = generar(recibo, List.of(new BloqueDocumento.HojaDeRecibo(datos)));
+
+        assertThat(maximaAlturaYAnchura(pdf)).allSatisfy(dentro -> assertThat(dentro).isTrue());
+        assertThat(texto(pdf).replaceAll("\\s+", " ")).contains(numero);
+    }
+
     // ── Utilidades ──────────────────────────────────────────────────────────
+
+    /** El color de relleno (RGB, sin alfa) con que se dibujó la primera palabra que empieza por el texto. */
+    private static int colorDe(byte[] pdf, String buscado) throws IOException {
+        java.util.Map<TextPosition, Integer> colores = new java.util.IdentityHashMap<>();
+        int[] color = {-1};
+        try (PDDocument d = Loader.loadPDF(pdf)) {
+            PDFTextStripper s = new PDFTextStripper() {
+                {
+                    // El extractor de texto no sigue los colores si no se le pide.
+                    addOperator(new SetNonStrokingColorSpace(this));
+                    addOperator(new SetNonStrokingDeviceRGBColor(this));
+                    addOperator(new SetNonStrokingColor(this));
+                    addOperator(new SetNonStrokingColorN(this));
+                }
+
+                @Override
+                protected void processTextPosition(TextPosition text) {
+                    try {
+                        colores.put(text, getGraphicsState().getNonStrokingColor().toRGB());
+                    } catch (IOException e) {
+                        colores.put(text, -1);
+                    }
+                    super.processTextPosition(text);
+                }
+
+                @Override
+                protected void writeString(String text, List<TextPosition> posiciones) throws IOException {
+                    if (color[0] == -1 && text.startsWith(buscado) && !posiciones.isEmpty()) {
+                        color[0] = colores.getOrDefault(posiciones.getFirst(), -1);
+                    }
+                    super.writeString(text, posiciones);
+                }
+            };
+            s.getText(d);
+        }
+        return color[0];
+    }
 
     private static List<BloqueDocumento> parrafos(int n) {
         return IntStream.rangeClosed(1, n)

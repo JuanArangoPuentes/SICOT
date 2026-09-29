@@ -74,8 +74,14 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      * generación para no crear un segundo «Acta de Inicio» después de firmada
      * la primera: el borrador sobrante quedaba como tarea pendiente en la
      * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     *
+     * <p>Solo cuenta lo que generó SICOT, con el mismo criterio que el panel:
+     * un PDF cargado a mano y firmado con nombre parecido («Acta de Inicio
+     * firmada por el contratista») bloqueaba la generación, el panel no lo
+     * reconocía como el acta del paso, y el sub-paso no se cerraba nunca
+     * (revisión del 29-09-2026).
      */
-    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
     /**

@@ -83,6 +83,8 @@ final class HojaActaDeRecibo {
     private static final Color NEGRO = Color.BLACK;
     private static final Color BLANCO = Color.WHITE;
     private static final String AVISO = "(continúa en la hoja siguiente)";
+    /** El aviso para las casillas donde el largo no cabe junto al texto. */
+    private static final String AVISO_CORTO = "(sigue en la hoja 2)";
 
     private final PDPageContentStream cs;
     private final FuentesDelDocumento fuentes;
@@ -161,41 +163,45 @@ final class HojaActaDeRecibo {
         linea(FILA[10], B, FIN, MEDIA);
 
         texto("Acta N°", F, 203.91f, arialNegrita, 6.6f, NEGRO, Alinear.CENTRO, G);
-        texto(d.actaNumero(), H, 199.78f, arialNegrita, 6.6f, NEGRO, Alinear.CENTRO, FIN);
+        // Con escribirValor y no con texto(): así se parte, reduce la letra o
+        // pasa a la hoja de continuación si es largo, y el «[dato pendiente]»
+        // sale en rojo como los demás. Antes era el único marcador en negro de
+        // la hoja, y un número largo se salía del recuadro y de la página.
+        escribirValor("ACTA N°", d.actaNumero(), H, FIN, 199.78f, arialNegrita, 6.6f, Alinear.CENTRO);
         linea(FILA[12], H, FIN, DELGADA);
 
         // ── Datos ───────────────────────────────────────────────────────────
         etiqueta("FECHA:", B, 12);
-        valor(d.fecha(), C, F, 12, arialNegrita, 6.05f, Alinear.CENTRO, true);
+        valor("FECHA", d.fecha(), C, F, 12, arialNegrita, 6.05f, Alinear.CENTRO, true);
         etiqueta("CIUDAD/MUNICIPIO:", F, 12);
-        valor(d.ciudad(), H, FIN, 12, arialNegrita, 6.05f, Alinear.IZQUIERDA, true);
+        valor("CIUDAD/MUNICIPIO", d.ciudad(), H, FIN, 12, arialNegrita, 6.05f, Alinear.IZQUIERDA, true);
         etiqueta("COD REGIONAL:", B, 13);
-        valor(d.codigoRegional(), C, F, 13, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("COD REGIONAL", d.codigoRegional(), C, F, 13, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("REGIONAL", F, 13);
-        valor(d.regional(), G, FIN, 13, arialNegrita, 6.05f, Alinear.CENTRO, true);
+        valor("REGIONAL", d.regional(), G, FIN, 13, arialNegrita, 6.05f, Alinear.CENTRO, true);
         etiqueta("CENTRO DE COSTO:", B, 14);
-        valor(d.centroCosto(), C, F, 14, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("CENTRO DE COSTO", d.centroCosto(), C, F, 14, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("COD CENTRO DE COSTO:", B, 15);
-        valor(d.codigoCentroCosto(), C, F, 15, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("COD CENTRO DE COSTO", d.codigoCentroCosto(), C, F, 15, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("TIPO DE ADQUISICIÓN:", B, 16);
-        valor(d.tipoAdquisicion(), C, F, 16, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("TIPO DE ADQUISICIÓN", d.tipoAdquisicion(), C, F, 16, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("TIPO DE ENTREGA:", F, 16);
-        valor(d.tipoEntrega(), H, FIN, 16, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("TIPO DE ENTREGA", d.tipoEntrega(), H, FIN, 16, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("N° DE ACTO ADMINISTRATIVO:", B, 17);
-        valor(d.numeroActoAdministrativo(), C, F, 17, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("N° DE ACTO ADMINISTRATIVO", d.numeroActoAdministrativo(), C, F, 17, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("FECHA  ACTO ADMINISTRATIVO:", F, 17);
-        valor(d.fechaActoAdministrativo(), H, FIN, 17, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("FECHA ACTO ADMINISTRATIVO", d.fechaActoAdministrativo(), H, FIN, 17, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("RUBRO PRESUPUESTAL", B, 18);
-        valor(d.rubroPresupuestal(), C, FIN, 18, arialNegrita, 5.5f, Alinear.IZQUIERDA, true);
+        valor("RUBRO PRESUPUESTAL", d.rubroPresupuestal(), C, FIN, 18, arialNegrita, 5.5f, Alinear.IZQUIERDA, true);
         etiqueta("PROVEEDOR CONTRATISTA:", B, 19);
-        valor(d.proveedor(), C, F, 19, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("PROVEEDOR CONTRATISTA", d.proveedor(), C, F, 19, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("NIT/CEDULA DE CIUDADANIA:", B, 20);
-        valor(d.nitProveedor(), C, F, 20, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("NIT/CÉDULA DE CIUDADANÍA", d.nitProveedor(), C, F, 20, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("VALOR TOTAL:", B, 21);
-        valor(d.valorTotal(), C, F, 21, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("VALOR TOTAL", d.valorTotal(), C, F, 21, arialNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("FECHA DE VENCIMIENTO:", B, 22);
         // Sin subrayado propio: se apoya en la línea gruesa de encima del objeto.
-        valor(d.fechaVencimiento(), C, F, 22, arialNegrita, 5.5f, Alinear.CENTRO, false);
+        valor("FECHA DE VENCIMIENTO", d.fechaVencimiento(), C, F, 22, arialNegrita, 5.5f, Alinear.CENTRO, false);
 
         linea(FILA[23], B, FIN, MEDIA);
         etiqueta("OBJETO DEL CONTRATO:", B, 23);
@@ -212,12 +218,12 @@ final class HojaActaDeRecibo {
         enRenglones("OBJETO DEL CONTRATO", d.objeto(), renglonesObjeto, arialNegrita);
 
         etiqueta("CANTIDAD BIENES DEVOLUTIVOS", B, 30);
-        valor(d.cantidadDevolutivos(), C, D, 30, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("CANTIDAD BIENES DEVOLUTIVOS", d.cantidadDevolutivos(), C, D, 30, arialNegrita, 5.5f, Alinear.CENTRO, true);
         // En el formato real la etiqueta no cabe en F:G y sale cortada
         // («CONSUMC»): se escribe un poco más pequeña en vez de recortarla.
         texto("CANTIDAD BIENES DE CONSUMO", F + SANGRIA, FILA[31] - SOBRE_LA_LINEA, arialNegrita, 5.35f, NEGRO,
                 Alinear.IZQUIERDA, 0);
-        valor(d.cantidadConsumo(), H, J, 30, arialNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("CANTIDAD BIENES DE CONSUMO", d.cantidadConsumo(), H, J, 30, arialNegrita, 5.5f, Alinear.CENTRO, true);
 
         relleno(B, FILA[32], FIN, FILA[33], NEGRO);
         linea(FILA[32], B, FIN, DELGADA);
@@ -247,15 +253,15 @@ final class HojaActaDeRecibo {
         etiqueta("FIRMA SUPERVISOR", B, 39);
         linea(FILA[40], C, F, DELGADA);
         etiqueta("NOMBRE COMPLETO", B, 40);
-        valor(d.nombreSupervisor(), C, F, 40, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("NOMBRE COMPLETO DEL SUPERVISOR", d.nombreSupervisor(), C, F, 40, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("N° DE IDENTIFICACIÓN", B, 41);
-        valor(d.identificacionSupervisor(), C, F, 41, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("N° DE IDENTIFICACIÓN DEL SUPERVISOR", d.identificacionSupervisor(), C, F, 41, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("CORREO INSTITUCIONAL", B, 42);
-        valor(d.correoSupervisor(), C, F, 42, carlito, 6.6f, Alinear.CENTRO, true);
+        valor("CORREO INSTITUCIONAL DEL SUPERVISOR", d.correoSupervisor(), C, F, 42, carlito, 6.6f, Alinear.CENTRO, true);
         etiqueta("CARGO", B, 43);
-        valor(d.cargoSupervisor(), C, F, 43, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("CARGO DEL SUPERVISOR", d.cargoSupervisor(), C, F, 43, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
         etiqueta("N° DE CONTACTO", F, 43);
-        valor(d.contactoSupervisor(), H, FIN, 43, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
+        valor("N° DE CONTACTO DEL SUPERVISOR", d.contactoSupervisor(), H, FIN, 43, carlitoNegrita, 5.5f, Alinear.CENTRO, true);
         linea(FILA[45], B - 0.49f, FIN + 0.48f, MEDIA);
 
         // Hueco de la firma: sobre la línea de FIRMA SUPERVISOR, en C:E.
@@ -276,11 +282,21 @@ final class HojaActaDeRecibo {
      * renglones dentro de la misma fila y, si aun así no cabe, se reduce la
      * letra hasta {@value #LETRA_MINIMA} pt.
      */
-    private void valor(String valor, float desde, float hasta, int fila, PDFont f, float tamano, Alinear alinear,
-                       boolean subrayar) throws IOException {
+    private void valor(String rotulo, String valor, float desde, float hasta, int fila, PDFont f, float tamano,
+                       Alinear alinear, boolean subrayar) throws IOException {
         if (subrayar) {
             linea(FILA[fila + 1], desde, hasta, DELGADA);
         }
+        escribirValor(rotulo, valor, desde, hasta, FILA[fila + 1] - SOBRE_LA_LINEA, f, tamano, alinear);
+    }
+
+    /**
+     * @param rotulo con qué nombre aparece el valor en la hoja de continuación
+     *               si no cabe: «Casilla de la fila 30» no decía si eran los
+     *               bienes devolutivos o los de consumo, que van en la misma fila.
+     */
+    private void escribirValor(String rotulo, String valor, float desde, float hasta, float baseInferior, PDFont f,
+                               float tamano, Alinear alinear) throws IOException {
         if (valor == null || valor.isBlank()) {
             return;
         }
@@ -289,7 +305,7 @@ final class HojaActaDeRecibo {
         float disponible = hasta - desde - 2 * SANGRIA;
         float tam = tamano;
         if (FuentesDelDocumento.ancho(f, tam, t) <= disponible) {
-            texto(t, desde + SANGRIA, FILA[fila + 1] - SOBRE_LA_LINEA, f, tam, color, alinear, hasta - SANGRIA);
+            texto(t, desde + SANGRIA, baseInferior, f, tam, color, alinear, hasta - SANGRIA);
             return;
         }
         List<String> lineas = partir(t, f, tam, List.of(disponible));
@@ -300,12 +316,21 @@ final class HojaActaDeRecibo {
         if (lineas.size() > 2) {
             // Más de dos renglones pisarían la fila de arriba: el valor completo
             // va a la hoja de continuación y aquí queda el comienzo con el aviso.
-            continuaciones.add(new String[]{"Casilla de la fila " + fila, valor.strip()});
-            float reservado = FuentesDelDocumento.ancho(f, tam, " " + AVISO);
-            List<String> cabe = partir(t, f, tam, List.of(disponible, disponible - reservado));
-            lineas = List.of(cabe.get(0), cabe.get(1) + " " + AVISO);
+            continuaciones.add(new String[]{rotulo, valor.strip()});
+            // En las casillas estrechas el aviso largo no cabe al lado del
+            // texto: reservarle su ancho dejaba un ancho negativo, y las
+            // cantidades salían letra por letra («2 6 re s m a s»). Ahí va el
+            // aviso corto, y si tampoco cabe al lado, en su propio renglón.
+            String aviso = FuentesDelDocumento.ancho(f, tam, " " + AVISO) <= disponible / 2 ? AVISO : AVISO_CORTO;
+            float resto = disponible - FuentesDelDocumento.ancho(f, tam, " " + aviso);
+            if (resto >= disponible / 3) {
+                List<String> cabe = partir(t, f, tam, List.of(disponible, resto));
+                lineas = List.of(cabe.get(0), cabe.get(1) + " " + aviso);
+            } else {
+                lineas = List.of(partir(t, f, tam, List.of(disponible)).getFirst(), aviso);
+            }
         }
-        float base = FILA[fila + 1] - SOBRE_LA_LINEA - (lineas.size() - 1) * tam * 1.15f;
+        float base = baseInferior - (lineas.size() - 1) * tam * 1.15f;
         for (String l : lineas) {
             texto(l, desde + SANGRIA, base, f, tam, color, alinear, hasta - SANGRIA);
             base += tam * 1.15f;
@@ -359,7 +384,8 @@ final class HojaActaDeRecibo {
             }
             // Una palabra más ancha que su renglón (un enlace del SECOP) se
             // parte en trozos: sin esto salía por fuera del recuadro de la hoja.
-            float limiteDePalabra = anchos.stream().min(Float::compare).orElse(100f);
+            // Nunca un límite de cero o negativo: partía la palabra en letras sueltas.
+            float limiteDePalabra = Math.max(anchos.stream().min(Float::compare).orElse(100f), 12f);
             List<String> trozos = new ArrayList<>();
             StringBuilder trozo = new StringBuilder();
             for (int i = 0; i < entera.length(); ) {
@@ -374,8 +400,11 @@ final class HojaActaDeRecibo {
                 }
             }
             trozos.add(trozo.toString());
-            for (String palabra : trozos) {
-                String candidata = actual.isEmpty() ? palabra : actual + " " + palabra;
+            for (int k = 0; k < trozos.size(); k++) {
+                String palabra = trozos.get(k);
+                // Los trozos de una misma palabra que caben en el mismo renglón
+                // se vuelven a juntar sin espacio: «Antio quia» no es lo escrito.
+                String candidata = actual.isEmpty() ? palabra : actual + (k == 0 ? " " : "") + palabra;
                 float limite = anchos.get(Math.min(lineas.size(), anchos.size() - 1));
                 if (FuentesDelDocumento.ancho(f, tamano, candidata) <= limite || actual.isEmpty()) {
                     actual = new StringBuilder(candidata);

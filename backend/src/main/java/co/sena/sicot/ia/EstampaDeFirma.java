@@ -60,6 +60,21 @@ public class EstampaDeFirma {
      * @return el PDF con la firma estampada, o el mismo arreglo si el PDF no
      *         trae ancla (no lo generó SICOT) o no se puede leer.
      */
+    /**
+     * El id del usuario para quien se generó el documento (su nombre es el
+     * del bloque de firma), o {@code null} si el PDF no lo dice: uno cargado
+     * desde fuera, o uno generado antes de que SICOT lo guardara.
+     */
+    public Long firmantePrevisto(byte[] pdf) {
+        try (PDDocument documento = Loader.loadPDF(pdf)) {
+            String valor = documento.getDocumentInformation()
+                    .getCustomMetadataValue(PdfInstitucional.PROPIEDAD_FIRMANTE);
+            return valor == null || valor.isBlank() ? null : Long.valueOf(valor.strip());
+        } catch (IOException | RuntimeException e) {
+            return null;
+        }
+    }
+
     public byte[] estampar(byte[] pdf, String firmante, String codigoFirma, Instant cuando) {
         try (PDDocument documento = Loader.loadPDF(pdf)) {
             String ancla = documento.getDocumentInformation()
@@ -81,16 +96,28 @@ public class EstampaDeFirma {
             PDFont negrita = fuentes.fuente(Familia.CALIBRI, Estilo.NEGRITA);
             PDFont normal = fuentes.fuente(Familia.CALIBRI, Estilo.NORMAL);
             ZonedDateTime momento = cuando.atZone(reloj.getZone());
-            List<String> lineas = List.of(
-                    "Firmado electrónicamente en SICOT",
-                    firmante != null ? firmante : "",
-                    "Firma " + (codigoFirma != null ? codigoFirma : ""),
-                    momento.format(FECHA_HORA));
-            // La letra se ajusta al hueco: en la GIL-F-010 el hueco es bajo.
-            float tam = Math.min(8f, (alto - 4f) / (lineas.size() * 1.2f));
-            float anchoTexto = 0;
-            for (String l : lineas) {
-                anchoTexto = Math.max(anchoTexto, FuentesDelDocumento.ancho(negrita, tam, fuentes.escribible(negrita, l)));
+            List<Renglon> contenido = List.of(
+                    new Renglon("Firmado electrónicamente en SICOT", normal, VERDE),
+                    new Renglon(firmante != null ? firmante : "", negrita, GRIS),
+                    new Renglon("Firma " + (codigoFirma != null ? codigoFirma : ""), normal, GRIS),
+                    new Renglon(momento.format(FECHA_HORA), normal, GRIS));
+            // La letra se ajusta al hueco, en alto y en ancho: en la GIL-F-010
+            // el hueco es bajo, y un nombre largo («María Alejandra Gutiérrez
+            // Castañeda de Restrepo Villegas») se salía del recuadro y, con unos
+            // 70 caracteres, de la hoja. Primero se reduce la letra; si ni con
+            // la mínima cabe, el nombre se parte en dos renglones.
+            float tam = Math.min(8f, (alto - 4f) / (contenido.size() * 1.2f));
+            List<Renglon> lineas = contenido;
+            float anchoTexto = anchoMaximo(fuentes, lineas, tam);
+            while (anchoTexto + 10f > ancho && tam > TAMANO_MINIMO) {
+                tam = Math.max(TAMANO_MINIMO, tam - 0.25f);
+                anchoTexto = anchoMaximo(fuentes, lineas, tam);
+            }
+            if (anchoTexto + 10f > ancho) {
+                lineas = partirAlAncho(fuentes, contenido, tam, ancho - 10f);
+                // Un renglón más tiene que seguir cabiendo en el alto del hueco.
+                tam = Math.max(TAMANO_MINIMO, Math.min(tam, (alto - 4f) / (lineas.size() * 1.2f)));
+                anchoTexto = anchoMaximo(fuentes, lineas, tam);
             }
             float anchoRecuadro = Math.min(ancho, anchoTexto + 10f);
             float altoRecuadro = lineas.size() * tam * 1.2f + 4f;
@@ -102,13 +129,12 @@ public class EstampaDeFirma {
                 cs.addRect(x, yRecuadro, anchoRecuadro, altoRecuadro);
                 cs.stroke();
                 float base = yRecuadro + altoRecuadro - 2f - tam * 0.95f;
-                for (int i = 0; i < lineas.size(); i++) {
-                    PDFont f = i == 1 ? negrita : normal;
+                for (Renglon r : lineas) {
                     cs.beginText();
-                    cs.setNonStrokingColor(i == 0 ? VERDE : GRIS);
-                    cs.setFont(f, tam);
+                    cs.setNonStrokingColor(r.color());
+                    cs.setFont(r.fuente(), tam);
                     cs.newLineAtOffset(x + 5f, base);
-                    cs.showText(fuentes.escribible(f, lineas.get(i)));
+                    cs.showText(fuentes.escribible(r.fuente(), r.texto()));
                     cs.endText();
                     base -= tam * 1.2f;
                 }
@@ -123,5 +149,44 @@ public class EstampaDeFirma {
             log.warn("No se pudo estampar la firma en el PDF; se firma sin estampa: {}", e.getMessage());
             return pdf;
         }
+    }
+
+    /** Por debajo de 4,5 pt la estampa ya no se lee impresa. */
+    private static final float TAMANO_MINIMO = 4.5f;
+
+    private record Renglon(String texto, PDFont fuente, Color color) {
+    }
+
+    private static float anchoMaximo(FuentesDelDocumento fuentes, List<Renglon> lineas, float tam)
+            throws IOException {
+        float maximo = 0;
+        for (Renglon r : lineas) {
+            maximo = Math.max(maximo,
+                    FuentesDelDocumento.ancho(r.fuente(), tam, fuentes.escribible(r.fuente(), r.texto())));
+        }
+        return maximo;
+    }
+
+    /** Reparte cada renglón por palabras para que ninguno pase del ancho. */
+    private static List<Renglon> partirAlAncho(FuentesDelDocumento fuentes, List<Renglon> lineas, float tam,
+                                               float ancho) throws IOException {
+        List<Renglon> resultado = new java.util.ArrayList<>();
+        for (Renglon r : lineas) {
+            StringBuilder actual = new StringBuilder();
+            for (String palabra : r.texto().split(" ")) {
+                String prueba = actual.isEmpty() ? palabra : actual + " " + palabra;
+                if (!actual.isEmpty()
+                        && FuentesDelDocumento.ancho(r.fuente(), tam, fuentes.escribible(r.fuente(), prueba)) > ancho) {
+                    resultado.add(new Renglon(actual.toString(), r.fuente(), r.color()));
+                    actual.setLength(0);
+                    actual.append(palabra);
+                } else {
+                    actual.setLength(0);
+                    actual.append(prueba);
+                }
+            }
+            resultado.add(new Renglon(actual.toString(), r.fuente(), r.color()));
+        }
+        return resultado;
     }
 }

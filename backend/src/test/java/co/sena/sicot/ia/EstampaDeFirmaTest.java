@@ -55,6 +55,41 @@ class EstampaDeFirmaTest {
         }
     }
 
+    /**
+     * Con un nombre largo, el texto de la estampa se salía de su recuadro y,
+     * hacia los 70 caracteres, de la hoja (revisión del 29-09-2026). La letra
+     * se reduce y, si no alcanza, el nombre se parte en dos renglones.
+     */
+    @Test
+    void unNombreLargoNoSeSaleDelHuecoDeLaFirma() throws Exception {
+        String nombre = "MARÍA ALEJANDRA GUTIÉRREZ CASTAÑEDA DE RESTREPO VILLEGAS OCHOA DE LA TORRE";
+        for (String tipo : PlantillaDocumentoIA.CATALOGO.keySet()) {
+            byte[] borrador = documento(tipo);
+            byte[] firmado = estampa.estampar(borrador, nombre, "FIRMA-2026-0042", Instant.parse("2026-09-28T20:15:00Z"));
+            try (org.apache.pdfbox.pdmodel.PDDocument d = org.apache.pdfbox.Loader.loadPDF(firmado)) {
+                String[] ancla = d.getDocumentInformation()
+                        .getCustomMetadataValue(PdfInstitucional.PROPIEDAD_ANCLA_FIRMA).split(";");
+                float derecha = Float.parseFloat(ancla[1]) + Float.parseFloat(ancla[3]);
+                java.util.List<Float> finales = new java.util.ArrayList<>();
+                new org.apache.pdfbox.text.PDFTextStripper() {
+                    @Override
+                    protected void writeString(String text,
+                                               java.util.List<org.apache.pdfbox.text.TextPosition> posiciones) {
+                        // Solo las palabras del nombre, que no están en el borrador.
+                        if (text.contains("CASTAÑEDA") || text.contains("VILLEGAS") || text.contains("TORRE")
+                                || text.contains("electrónicamente")) {
+                            posiciones.forEach(p -> finales.add(p.getXDirAdj() + p.getWidthDirAdj()));
+                        }
+                    }
+                }.getText(d);
+                assertThat(finales).as(tipo).isNotEmpty()
+                        .allSatisfy(x -> assertThat(x).isLessThanOrEqualTo(derecha + 0.5f));
+            }
+            assertThat(new PdfTextExtractor().extraerTexto(firmado).replaceAll("\\s+", " ")).as(tipo)
+                    .contains("VILLEGAS OCHOA");
+        }
+    }
+
     /** Un PDF que no generó SICOT no trae el hueco de la firma: se firma tal cual, sin tocarlo. */
     @Test
     void unPdfCargadoDesdeFueraNoSeModifica() {

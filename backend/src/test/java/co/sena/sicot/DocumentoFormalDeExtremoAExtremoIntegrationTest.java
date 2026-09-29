@@ -56,6 +56,9 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     @Autowired
     private co.sena.sicot.repository.SubetapaRepository subetapaRepository;
 
+    @Autowired
+    private co.sena.sicot.repository.UsuarioRepository usuarioRepository;
+
     private String supervisor;
     private String admin;
     private String gestion;
@@ -275,6 +278,100 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(segundo).isEqualTo(primero);
         assertThat(documentoRepository.findById(segundo).orElseThrow().getNombre())
                 .isEqualTo("Acta de Inicio — CO1.PCCNTR.8151685-CORREGIDO");
+    }
+
+    // ── Hallazgos de la revisión del 29-09-2026 ─────────────────────────────
+
+    private void asegurarFirmaDelAdministrador() throws Exception {
+        String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + admin))
+                .andReturn().getResponse().getContentAsString();
+        if (!objectMapper.readTree(miFirma).get("tieneFirmaActiva").asBoolean()) {
+            long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
+                    .get("usuarioId").asLong();
+            mockMvc.perform(post("/api/firmas")
+                            .header("Authorization", "Bearer " + admin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"usuarioId\":" + idAdmin + "}"))
+                    .andExpect(status().isCreated());
+        }
+    }
+
+    /**
+     * Gestión reasigna el contrato con un borrador ya generado: el supervisor
+     * nuevo no puede firmar un documento que lleva impreso el nombre del
+     * anterior. Regenerarlo lo pone a su nombre, y entonces sí.
+     */
+    @Test
+    void trasReasignarElContratoElBorradorDelSupervisorAnteriorNoSeFirmaSinRegenerarlo() throws Exception {
+        asegurarFirmaDelAdministrador();
+        long subetapa = subetapa27();
+        long id = generarActa(subetapa);
+        var contrato = contratoRepository.findById(contratoId).orElseThrow();
+        long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
+                .get("usuarioId").asLong();
+        contrato.setSupervisor(usuarioRepository.findById(idAdmin).orElseThrow());
+        contratoRepository.save(contrato);
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("era otra persona")));
+
+        String regenerado = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(objectMapper.readTree(regenerado).get("id").asLong()).isEqualTo(id);
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isOk());
+    }
+
+    /** Sin supervisor, el administrador firmaba sobre «[dato pendiente: supervisor sin asignar]». */
+    @Test
+    void unDocumentoGeneradoDeUnContratoSinSupervisorNoSeFirma() throws Exception {
+        asegurarFirmaDelAdministrador();
+        var contrato = contratoRepository.findById(contratoId).orElseThrow();
+        contrato.setSupervisor(null);
+        contratoRepository.save(contrato);
+        String generado = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\"}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(generado).get("id").asLong();
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("no tiene supervisor asignado")));
+    }
+
+    /**
+     * Un PDF cargado a mano y firmado en la subetapa, con nombre parecido, no
+     * es el acta generada del paso: no bloquea generarla. Antes el servidor lo
+     * contaba como «ya firmado» y el panel no, y el sub-paso no se cerraba.
+     */
+    @Test
+    void unDocumentoCargadoAManoYFirmadoNoImpideGenerarElDelPaso() throws Exception {
+        long subetapa = subetapa27();
+        Documento cargado = new Documento();
+        cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        cargado.setSubetapa(subetapaRepository.findById(subetapa).orElseThrow());
+        cargado.setNombre("Acta de Inicio firmada por el contratista");
+        cargado.setTipo(TipoDocumento.PDF);
+        cargado.setContentType("application/pdf");
+        byte[] escaneado = "%PDF-1.4 escaneado".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        cargado.setContenido(escaneado);
+        cargado.setTamanioBytes((long) escaneado.length);
+        cargado.setEstado(EstadoDocumento.APROBADO);
+        cargado.setFirmaId("FIRMA-EN-PAPEL");
+        documentoRepository.save(cargado);
+
+        assertThat(generarActa(subetapa)).isPositive();
     }
 
     private String login(String email, String password) throws Exception {

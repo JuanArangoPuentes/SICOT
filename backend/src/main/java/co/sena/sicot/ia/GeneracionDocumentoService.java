@@ -117,7 +117,7 @@ public class GeneracionDocumentoService {
         // Un documento firmado es oficial: no se reemplaza generando otro
         // encima. Sin esta comprobación, un doble clic o un reintento dejaba un
         // segundo borrador que la bandeja mostraba como «documento sin firmar».
-        if (subetapa != null && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+        if (subetapa != null && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
                 contrato.getId(), subetapa.getId(), plantilla.nombre())) {
             throw new BusinessException("Ya hay un «" + plantilla.nombre() + "» firmado en la subetapa "
                     + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
@@ -132,7 +132,7 @@ public class GeneracionDocumentoService {
         String origen = obs.conIa() ? "Generado en SICOT con apoyo del Copiloto IA" : "Generado en SICOT";
         byte[] pdf = pdfInstitucional.generar(new DocumentoFormal(plantilla.formato(),
                 plantilla.nombre() + " — " + contrato.getNumeroContrato(), contrato.getNumeroContrato(),
-                firmante, origen, bloques));
+                firmante, origen, bloques, contrato.getSupervisor() != null ? contrato.getSupervisor().getId() : null));
 
         // Un borrador de este formato sin firmar en la misma subetapa es un
         // intento anterior que no llegó a firmarse (en el teléfono la conexión
