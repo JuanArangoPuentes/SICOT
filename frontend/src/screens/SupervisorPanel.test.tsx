@@ -372,7 +372,7 @@ describe('SupervisorPanel', () => {
       1,
       expect.objectContaining({ tipo: 'ACTA_INICIO', datos: { cedulaSupervisor: '98.587.121' } }),
     )
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
     expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
@@ -390,6 +390,7 @@ describe('SupervisorPanel', () => {
       observaciones: null,
       observacionesRedactadasConIa: false,
       motivoNotasTalCual: null,
+      huellaDelBorrador: 'huella-del-borrador',
       ...parcial,
     }
   }
@@ -418,9 +419,10 @@ describe('SupervisorPanel', () => {
 
     await act(async () => fireEvent.click(screen.getByText('Firmar con esta redacción')))
 
-    // Se firma el mismo borrador que se mostró, sin regenerarlo.
+    // Se firma el mismo borrador que se mostró, sin regenerarlo, y con su
+    // huella: si otra pestaña lo regeneró entre medias, el servidor no firma.
     expect(documentos.generarDocumento).toHaveBeenCalledTimes(1)
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
     expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
   })
 
@@ -438,7 +440,7 @@ describe('SupervisorPanel', () => {
 
     expect(documentos.generarDocumento).toHaveBeenCalledTimes(2)
     expect(documentos.generarDocumento).toHaveBeenLastCalledWith(1, expect.objectContaining({ redactarConIa: false }))
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
   })
 
   it('cancelar deja el borrador sin firmar y el sub-paso libre', async () => {
@@ -470,6 +472,6 @@ describe('SupervisorPanel', () => {
     await firmarActa()
 
     expect(screen.queryByText('Firmar con esta redacción')).not.toBeInTheDocument()
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
   })
 })

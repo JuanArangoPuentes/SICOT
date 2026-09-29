@@ -275,6 +275,16 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).contains("así lo pidió");
     }
 
+    /** «Tal cual» es completas: el tope de 2000 caracteres es solo para lo que va al modelo. */
+    @Test
+    void lasNotasTalCualVanCompletasAunqueSeanLargas() {
+        String largas = "revisé la entrega del paso ".repeat(90) + "y todo quedó en orden al final";
+
+        servicio.generar(1L, null, "INFORME_SUPERVISION", largas, java.util.Map.of(), false);
+
+        assertThat(textoDelPdf().replaceAll("\s+", " ")).contains("y todo quedó en orden al final");
+    }
+
     /** El caso real del 29-09-2026, en la prueba desde el panel: «5 camas» salió como «las cunas». */
     @Test
     void siLaRedaccionPierdeUnaCantidadOCambiaUnaPalabraSeUsanLasNotasTalCual() {

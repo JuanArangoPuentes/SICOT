@@ -275,6 +275,11 @@ export interface DocumentoGeneradoResponse extends DocumentoResponse {
   observacionesRedactadasConIa: boolean
   /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
   motivoNotasTalCual: string | null
+  /**
+   * SHA-256 del borrador tal como quedó. Se devuelve al firmar para que se
+   * firme exactamente lo que el supervisor leyó.
+   */
+  huellaDelBorrador: string
 }
 
 export interface ChatResponse {

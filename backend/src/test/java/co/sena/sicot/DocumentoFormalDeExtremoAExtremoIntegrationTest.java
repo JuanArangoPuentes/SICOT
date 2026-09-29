@@ -380,6 +380,65 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(generarActa(subetapa)).isPositive();
     }
 
+    /**
+     * «Firmar con esta redacción» firma lo que el supervisor leyó: si el
+     * borrador se regeneró entre medias (otra pestaña, un reintento), su
+     * huella ya no es la revisada y la firma se rechaza.
+     */
+    @Test
+    void soloSeFirmaElBorradorQueElSupervisorRevisó() throws Exception {
+        long subetapa = subetapa27();
+        String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.huellaDelBorrador").exists())
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(r).get("id").asLong();
+        String huellaRevisada = objectMapper.readTree(r).get("huellaDelBorrador").asText();
+        // Otra pestaña regenera el mismo borrador con otros datos.
+        mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa
+                                + ",\"datos\":{\"cedulaSupervisor\":\"98.587.121\"}}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", huellaRevisada)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("cambió desde que lo revisó")));
+        assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
+
+        String actual = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(documentoRepository.findById(id).orElseThrow().getContenido()));
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", actual)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Quien integre contra Swagger tiene que ver los campos que dicen si la
+     * redacción la hizo el Copiloto (y que hay que mostrarla antes de firmar),
+     * junto a los del documento, al mismo nivel que en el JSON real.
+     */
+    @Test
+    void swaggerDocumentaLaRespuestaDeLaGeneracion() throws Exception {
+        JsonNode api = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        String ref = api.at("/paths/~1api~1contratos~1{contratoId}~1documentos~1generar/post/responses/200/content")
+                .elements().next().get("schema").get("$ref").asText();
+        assertThat(ref).endsWith("/DocumentoGeneradoResponse");
+        JsonNode propiedades = api.at("/components/schemas/DocumentoGeneradoResponse/properties");
+        assertThat(propiedades.has("observacionesRedactadasConIa")).isTrue();
+        assertThat(propiedades.has("huellaDelBorrador")).isTrue();
+        assertThat(propiedades.has("id")).as("los campos del documento, al mismo nivel").isTrue();
+    }
+
     private String login(String email, String password) throws Exception {
         return objectMapper.readValue(loginBody(email, password), AuthResponse.class).token();
     }

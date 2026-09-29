@@ -40,8 +40,8 @@
 | 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso (el SUPERVISOR, solo en su contrato) | **201** | `DocumentoResponse` |
 | 20 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
 | 20b | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
-| 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
-| 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
+| 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoGeneradoResponse` (los campos de `DocumentoResponse` más `observaciones`, `observacionesRedactadasConIa`, `motivoNotasTalCual` y `huellaDelBorrador`) |
+| 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (opcional `?huellaRevisada=`: solo firma si el borrador sigue siendo el revisado) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
 | 23 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse` |
 | 24 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
 | 25 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |

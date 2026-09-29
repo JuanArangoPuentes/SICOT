@@ -21,10 +21,15 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
  * @param motivoNotasTalCual            por qué van las notas tal cual cuando se pidió la
  *                                      redacción («la IA no respondió», «la redacción de la IA
  *                                      perdía cifras de sus notas»…), o {@code null}.
+ * @param huellaDelBorrador             SHA-256 del borrador tal como quedó. El panel la devuelve al
+ *                                      firmar ({@code ?huellaRevisada=}) para que se firme exactamente
+ *                                      lo que el supervisor leyó: si otra pestaña o un reintento lo
+ *                                      regeneró entre medias, la firma se rechaza.
  */
 public record DocumentoGeneradoResponse(
         @JsonUnwrapped DocumentoResponse documento,
         String observaciones,
         boolean observacionesRedactadasConIa,
-        String motivoNotasTalCual) {
+        String motivoNotasTalCual,
+        String huellaDelBorrador) {
 }

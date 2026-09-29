@@ -312,6 +312,7 @@ export default function SupervisorPanel({
     datos: Record<string, string>
     revision?: RevisionPaso
     documentoId: number
+    huella: string
     documento: string
     observaciones: string
   } | null>(null)
@@ -488,7 +489,7 @@ export default function SupervisorPanel({
      * tal cual, sin regenerarlo. redactarConIa false: «Usar mis notas tal
      * cual», se regenera sin pasar por el Copiloto.
      */
-    opciones?: { firmarId?: number; redactarConIa?: boolean },
+    opciones?: { firmarId?: number; huellaRevisada?: string; redactarConIa?: boolean },
   ) => {
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
@@ -569,6 +570,7 @@ export default function SupervisorPanel({
                 datos: datos ?? {},
                 revision,
                 documentoId: generado.id,
+                huella: generado.huellaDelBorrador,
                 documento: doc.name,
                 observaciones: generado.observaciones,
               })
@@ -577,7 +579,7 @@ export default function SupervisorPanel({
             documentoId = generado.id
             motivoNotasTalCual = generado.motivoNotasTalCual
           }
-          await firmarDocumento(contrato.id, documentoId)
+          await firmarDocumento(contrato.id, documentoId, opciones?.huellaRevisada)
           setBorradores((prev) => {
             const resto = { ...prev }
             delete resto[subStepId]
@@ -1558,7 +1560,10 @@ export default function SupervisorPanel({
           onFirmar={() => {
             const r = revisionRedaccion
             setRevisionRedaccion(null)
-            ejecutarAccionSubPaso(r.stepId, r.subStepId, r.notas, r.datos, r.revision, { firmarId: r.documentoId })
+            ejecutarAccionSubPaso(r.stepId, r.subStepId, r.notas, r.datos, r.revision, {
+              firmarId: r.documentoId,
+              huellaRevisada: r.huella,
+            })
           }}
           onUsarNotas={() => {
             const r = revisionRedaccion

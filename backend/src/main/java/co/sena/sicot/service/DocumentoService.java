@@ -186,6 +186,18 @@ public class DocumentoService {
      */
     @Transactional
     public DocumentoResponse firmar(Long id) {
+        return firmar(id, null);
+    }
+
+    /**
+     * @param huellaRevisada SHA-256 del borrador que el supervisor leyó antes de
+     *                       firmar, o {@code null}. Si el contenido ya no es ese —otra
+     *                       pestaña o un reintento lo regeneró entre medias—, no se firma:
+     *                       se habría firmado una redacción que nadie leyó (revisión del
+     *                       29-09-2026).
+     */
+    @Transactional
+    public DocumentoResponse firmar(Long id, String huellaRevisada) {
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Documento", id));
         SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
@@ -194,6 +206,11 @@ public class DocumentoService {
         }
         if (documento.getContenido() == null || documento.getContenido().length == 0) {
             throw new BusinessException("Este documento no tiene contenido: no hay nada que firmar.");
+        }
+        if (huellaRevisada != null && !huellaRevisada.isBlank()
+                && !huellaRevisada.strip().equalsIgnoreCase(HuellaDeDocumento.calcular(documento.getContenido()))) {
+            throw new BusinessException("El borrador cambió desde que lo revisó: se volvió a generar en otra"
+                    + " pestaña o en un intento anterior. Vuelva a firmar el paso para ver la redacción actual.");
         }
         // Dos actas firmadas del mismo paso son dos documentos oficiales que
         // pueden contradecirse. Pasaba si quedaba un borrador de un intento

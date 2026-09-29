@@ -46,8 +46,16 @@ export function generarDocumento(
   })
 }
 
-export function firmarDocumento(contratoId: number, documentoId: number): Promise<DocumentoResponse> {
-  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/firmar`, {
+// huellaRevisada: la del borrador que el supervisor leyó. Con ella el servidor
+// solo firma si el borrador no se regeneró entre medias (otra pestaña, un
+// reintento): si no, se habría firmado una redacción que nadie leyó.
+export function firmarDocumento(
+  contratoId: number,
+  documentoId: number,
+  huellaRevisada?: string,
+): Promise<DocumentoResponse> {
+  const consulta = huellaRevisada ? `?huellaRevisada=${encodeURIComponent(huellaRevisada)}` : ''
+  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/firmar${consulta}`, {
     method: 'POST',
   })
 }

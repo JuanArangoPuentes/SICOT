@@ -161,10 +161,14 @@ public class DocumentoController {
     }
 
     @Operation(summary = "Generar (redactar) un documento formal con el Copiloto IA a partir de los datos reales del contrato",
-            description = "Crea el documento en estado PENDIENTE — el supervisor lo revisa y firma después con POST /{id}/firmar.")
+            description = "Crea el documento en estado PENDIENTE — el supervisor lo revisa y firma después con "
+                    + "POST /{id}/firmar. Si las observaciones las redactó el Copiloto "
+                    + "(observacionesRedactadasConIa), el cliente debe mostrarlas antes de firmar y firmar con "
+                    + "?huellaRevisada=<huellaDelBorrador>. Con redactarConIa=false van las notas tal cual.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Documento generado",
-                    content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
+            @ApiResponse(responseCode = "200", description = "Documento generado, con cómo quedaron sus observaciones",
+                    content = @Content(schema = @Schema(
+                            implementation = co.sena.sicot.dto.documento.DocumentoGeneradoResponse.class))),
             @ApiResponse(responseCode = "400", description = "Datos inválidos",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
@@ -186,7 +190,9 @@ public class DocumentoController {
                 request.notas(), request.datos(), !Boolean.FALSE.equals(request.redactarConIa())));
     }
 
-    @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual")
+    @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual",
+            description = "Con ?huellaRevisada= (la huellaDelBorrador que devolvió la generación), solo se firma "
+                    + "si el borrador sigue siendo el que el supervisor revisó; si no, 400.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Documento firmado",
                     content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
@@ -201,7 +207,8 @@ public class DocumentoController {
     })
     @PostMapping("/{id}/firmar")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
-    public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id) {
-        return ResponseEntity.ok(documentoService.firmar(id));
+    public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id,
+                                                    @RequestParam(required = false) String huellaRevisada) {
+        return ResponseEntity.ok(documentoService.firmar(id, huellaRevisada));
     }
 }

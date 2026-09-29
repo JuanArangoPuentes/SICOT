@@ -196,7 +196,7 @@ public class GeneracionDocumentoService {
                         + (pendientes > 0 ? " (" + pendientes + " datos del formato quedaron marcados como pendientes)" : "")
                         + ".");
         return new DocumentoGeneradoResponse(DocumentoMapper.toResponse(guardado), obs.texto(), obs.conIa(),
-                obs.motivoNotasTalCual());
+                obs.motivoNotasTalCual(), co.sena.sicot.service.HuellaDeDocumento.calcular(pdf));
     }
 
     /** Longitud máxima de un dato complementario: una forma de pago o un rubro caben de sobra. */
@@ -251,12 +251,14 @@ public class GeneracionDocumentoService {
             return new Observaciones(null, false,
                     "; las notas del supervisor no se incluyen porque el formato no tiene apartado de observaciones");
         }
-        String recortadas = notas.strip();
-        if (recortadas.length() > MAX_NOTAS) {
-            recortadas = recortadas.substring(0, MAX_NOTAS);
-        }
+        // Tal cual quiere decir completas: el tope es solo para lo que se le
+        // manda al modelo. Recortarlas también al usarlas tal cual cortaba a
+        // mitad de palabra unas notas que el diálogo de revisión mostraba
+        // enteras (revisión del 29-09-2026). El DTO ya las limita a 4000.
+        String completas = notas.strip();
+        String recortadas = completas.length() > MAX_NOTAS ? completas.substring(0, MAX_NOTAS) : completas;
         if (!redactarConIa) {
-            return new Observaciones(recortadas, false,
+            return new Observaciones(completas, false,
                     "; las observaciones van tal como las escribió el supervisor (así lo pidió)");
         }
 
@@ -295,7 +297,7 @@ public class GeneracionDocumentoService {
             // las notas tal cual y el supervisor no pierde el paso.
             log.warn("No se pudieron redactar las observaciones de '{}' con la IA; se usan las notas tal cual: {}",
                     plantilla.nombre(), e.getMessage());
-            return new Observaciones(recortadas, false,
+            return new Observaciones(completas, false,
                     "; las observaciones van tal como las escribió el supervisor (la IA no respondió)",
                     "el Copiloto no respondió a tiempo");
         }
@@ -321,7 +323,7 @@ public class GeneracionDocumentoService {
         String infiel = motivoDeInfidelidad(corregido, recortadas, datos);
         if (infiel != null) {
             log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
-            return new Observaciones(recortadas, false,
+            return new Observaciones(completas, false,
                     "; las observaciones van tal como las escribió el supervisor (la redacción de la IA " + infiel
                             + ")",
                     "la redacción del Copiloto " + infiel);

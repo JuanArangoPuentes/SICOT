@@ -395,6 +395,13 @@ export interface LiveAlert {
 
 // ─── Modal genérico ───────────────────────────────────────────────────────────
 
+// Los diálogos abiertos, del de abajo al de arriba. Solo el de arriba atiende
+// el teclado y va por encima: desde que la revisión de la redacción se abre
+// sola cuando el Copiloto termina —minutos después—, puede aparecer con
+// Configuración abierta, y un solo Escape cerraba los dos (el de revisión,
+// además, tapado) (revisión del 29-09-2026).
+const DIALOGOS_ABIERTOS: HTMLElement[] = []
+
 const ENFOCABLES =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
@@ -423,6 +430,7 @@ export function Modal({
   // página de detrás —tapada por el telón—, Escape no hacía nada y, al
   // cerrarlo, el foco se perdía al principio del documento.
   const dialogoRef = useRef<HTMLDivElement>(null)
+  const [capa, setCapa] = useState(200)
   // El efecto de abajo corre una sola vez; el ref le da siempre el onClose
   // vigente, que cambia en cada render de quien abre el diálogo.
   const cerrarRef = useRef(onClose)
@@ -436,7 +444,10 @@ export function Modal({
     // Al diálogo, no a su primer campo: en un teléfono enfocar un campo abre el
     // teclado y tapa medio formulario antes de que se haya podido leer.
     dialogo.focus()
+    DIALOGOS_ABIERTOS.push(dialogo)
+    setCapa(200 + DIALOGOS_ABIERTOS.length)
     const alPulsarTecla = (e: KeyboardEvent) => {
+      if (DIALOGOS_ABIERTOS[DIALOGOS_ABIERTOS.length - 1] !== dialogo) return
       if (e.key === 'Escape') {
         e.stopPropagation()
         cerrarRef.current()
@@ -462,6 +473,8 @@ export function Modal({
     document.addEventListener('keydown', alPulsarTecla)
     return () => {
       document.removeEventListener('keydown', alPulsarTecla)
+      const i = DIALOGOS_ABIERTOS.indexOf(dialogo)
+      if (i >= 0) DIALOGOS_ABIERTOS.splice(i, 1)
       if (anterior?.isConnected) anterior.focus()
     }
   }, [])
@@ -477,7 +490,7 @@ export function Modal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 200,
+        zIndex: capa,
         // Zonas seguras: sin esto, en un teléfono con barra de gestos el borde
         // inferior del diálogo —donde están Cancelar y Confirmar— queda debajo
         // de la barra. Es el mismo defecto que se corrigió en el armazón el 16

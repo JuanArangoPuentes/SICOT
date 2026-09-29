@@ -54,6 +54,33 @@ describe('Modal', () => {
     expect(document.activeElement).toBe(aceptar)
   })
 
+  /**
+   * La revisión de la redacción se abre sola cuando el Copiloto termina, y
+   * puede aparecer con Configuración abierta: Escape cierra solo el de
+   * arriba, y el de arriba va por encima.
+   */
+  it('con dos diálogos abiertos, Escape cierra solo el de arriba', () => {
+    const abajo = vi.fn()
+    const arriba = vi.fn()
+    render(
+      <>
+        <Modal title="Configuración" onClose={abajo}>
+          <button>Tema</button>
+        </Modal>
+        <Modal title="Revise las observaciones" onClose={arriba}>
+          <button>Firmar</button>
+        </Modal>
+      </>,
+    )
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    expect(arriba).toHaveBeenCalledTimes(1)
+    expect(abajo).not.toHaveBeenCalled()
+    const [telonAbajo, telonArriba] = screen.getAllByRole('presentation')
+    expect(Number(telonArriba.style.zIndex)).toBeGreaterThan(Number(telonAbajo.style.zIndex))
+  })
+
   it('por defecto un toque fuera lo cierra', () => {
     const onClose = vi.fn()
     render(<ConBoton onClose={onClose} />)
