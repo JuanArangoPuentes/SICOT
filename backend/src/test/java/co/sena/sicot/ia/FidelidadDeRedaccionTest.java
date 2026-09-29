@@ -149,12 +149,7 @@ class FidelidadDeRedaccionTest {
             "RP-2026-0451");
 
     private static boolean fiel(String redactado, String notas) {
-        return !FidelidadDeRedaccion.enOtraEscritura(redactado, notas)
-                && FidelidadDeRedaccion.sinCifrasInventadas(redactado, notas, DATOS)
-                && FidelidadDeRedaccion.conservaLasCifras(redactado, notas, DATOS)
-                && FidelidadDeRedaccion.sinPalabrasCambiadas(redactado, notas, DATOS)
-                && FidelidadDeRedaccion.sinSentidoInvertido(redactado, notas)
-                && FidelidadDeRedaccion.sinAfirmacionesAgregadas(redactado, notas);
+        return FidelidadDeRedaccion.motivoDeInfidelidad(redactado, notas, DATOS) == null;
     }
 
     @Test
@@ -225,6 +220,27 @@ class FidelidadDeRedaccionTest {
                         "El contratista cumplió con la instalación de los puestos de trabajo conforme a lo acordado."},
                 {"el contrato 71204 va al día, revisado el 01/10/2026",
                         "El contrato se encuentra al día, según revisión del 1 de octubre de 2026."},
+                // Redacciones reales de la sexta revisión que no deben descartarse
+                {"a las 8 am llegaron los computadores, a las 2 pm quedaron instalados",
+                        "A las 8:00 am se recibieron los equipos y a las 14:00 horas quedaron instalados."},
+                {"llegaron 12 mesas y 5 sillas, 2 sillas con rayones, se pidió el cambio de esas 2",
+                        "Se recibieron 12 mesas y 5 sillas; 2 sillas presentaban daños y se solicitó su cambio."},
+                {"la factura FE-118 es por $4.500.000 y la FE-119 por $3.200.000, las dos corresponden a lo entregado",
+                        "Se emitieron las facturas FE-118 por $4.500.000 y FE-119 por $3.200.000, ambas relacionadas"
+                                + " con la entrega realizada."},
+                {"hice visita el 02/10/2026, algunas lámparas del ambiente no prenden",
+                        "El 2 de octubre de 2026 se observó que algunas lámparas del ambiente no encendían"
+                                + " correctamente."},
+                {"no hubo multas", "No se presentaron multas."},
+                {"se recibió la 1ra entrega de 25 sillas, falta la segunda",
+                        "Se ha recibido la primera entrega de 25 sillas; falta la segunda entrega."},
+                {"revisé los computadores entregados, en total 7. funcionan todos",
+                        "Se revisaron los siete equipos entregados y todos funcionan correctamente."},
+                {"llegaron 20 colchonetas y 12 balones, no llegaron los conos",
+                        "Se recibieron 20 colchonetas y 12 balones, mientras que los conos no fueron entregados."},
+                {"el contratista no ha pagado la seguridad social de agosto, se le pidió por correo",
+                        "El contratista no ha cumplido con el pago de la seguridad social de agosto; se le solicitó"
+                                + " por correo."},
                 // modelo #12: el valor en letras
                 {"recibí la factura FE-4521 por $4.500.000 del periodo de agosto",
                         "Se recibió la factura FE-4521 por un monto de cuatro millones quinientos mil pesos"
@@ -275,6 +291,39 @@ class FidelidadDeRedaccionTest {
                         "Se instalaron los equipos del primer piso; quedan pendientes los del segundo piso."},
                 {"el contratista cumplió con la entrega", "El contratista no cumplió con la entrega."},
                 {"no se entregaron las sillas", "Se entregaron las sillas."},
+                // Sexta revisión del 29-09-2026 (banco del revisor, una clase por renglón)
+                {"llegaron 12 mesas y 5 sillas para el ambiente 204",
+                        "Se recibieron 5 mesas y 12 sillas para el ambiente 204."},
+                {"llegaron 5 sillas y 5 mesas", "Se recibieron 5 sillas y las mesas."},
+                {"el 02/10/2026 llegaron las sillas, algunas con rayones",
+                        "El 2 de octubre de 2026 se recibieron las sillas, dos de ellas con rayones."},
+                {"a las 8 am llegaron los computadores del ambiente",
+                        "A las 8 a. m. llegaron los 8 computadores del ambiente."},
+                {"llegaron los computadores portátiles, todos funcionando",
+                        "Llegaron 7 computadores portátiles, todos en funcionamiento."},
+                {"la entrega fue el 30 de septiembre de 2026", "La entrega se realizó el 30 de noviembre de 2026."},
+                {"el lunes hice la visita a la sede", "El martes realicé la visita a la sede."},
+                {"la visita fue el 15/09 y la entrega el 30/09", "La visita fue el 30/09 y la entrega el 15/09."},
+                {"llegaron los equipos a las 10:30 am", "Los equipos llegaron a las 10:30 p. m."},
+                {"se recibió la primera entrega de 25 sillas", "Se recibió la segunda entrega de 25 sillas."},
+                {"el contratista no ha cumplido con la entrega de las mesas",
+                        "El contratista ha cumplido con la entrega de las mesas."},
+                {"se entregaron las pólizas", "No se han entregado las pólizas."},
+                {"no hay saldo para el siguiente pago", "Hay saldo para el siguiente pago."},
+                {"las sillas llegaron en mal estado", "Las sillas llegaron en buen estado."},
+                {"las mesas llegaron con rayones", "Las mesas llegaron sin rayones."},
+                {"el contratista va fuera del plazo", "El contratista va dentro del plazo."},
+                {"entregó los bienes", "Entregó la totalidad de los bienes."},
+                {"se instalaron los equipos", "Se instalaron los equipos correctamente."},
+                {"revisé la factura", "Revisé la factura, la cual queda aprobada para pago."},
+                {"el contratista entregó las sillas fuera del plazo, se le hizo requerimiento",
+                        "El contratista entregó las sillas a entera satisfacción y en cumplimiento del plazo."},
+                {"se recibieron 2.5 toneladas de cemento", "Se recibió el cemento."},
+                {"el 15/09/2026 llegaron las sillas, algunas con rayones",
+                        "El 15 de septiembre de 2026 llegaron las sillas, un par de ellas con rayones."},
+                {"el contratista entregó la mitad de los bienes", "El contratista entregó los bienes."},
+                {"el almacenista recibió los bienes, faltan los cargadores",
+                        "Los bienes fueron recibidos por el almacenista; however, the chargers are yet to arrive."},
                 // prueba en vivo: agrega que la entrega fue a tiempo
                 {"el contratista cumplió con el objeto, entregó la 2da parte de los bienes y no hubo multas",
                         "El contratista cumplió con el objeto del contrato, entregando la segunda parte de los bienes"
