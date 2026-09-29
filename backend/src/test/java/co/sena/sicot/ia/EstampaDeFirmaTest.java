@@ -70,24 +70,70 @@ class EstampaDeFirmaTest {
                 String[] ancla = d.getDocumentInformation()
                         .getCustomMetadataValue(PdfInstitucional.PROPIEDAD_ANCLA_FIRMA).split(";");
                 float derecha = Float.parseFloat(ancla[1]) + Float.parseFloat(ancla[3]);
+                // El hueco medido desde arriba, que es como mide el extractor de texto.
+                float altoPagina = d.getPage(Integer.parseInt(ancla[0])).getMediaBox().getHeight();
+                float techo = altoPagina - (Float.parseFloat(ancla[2]) + Float.parseFloat(ancla[4]));
+                float suelo = altoPagina - Float.parseFloat(ancla[2]);
                 java.util.List<Float> finales = new java.util.ArrayList<>();
+                java.util.List<float[]> alturas = new java.util.ArrayList<>();
                 new org.apache.pdfbox.text.PDFTextStripper() {
                     @Override
                     protected void writeString(String text,
                                                java.util.List<org.apache.pdfbox.text.TextPosition> posiciones) {
-                        // Solo las palabras del nombre, que no están en el borrador.
+                        // Solo las palabras de la estampa, que no están en el borrador.
                         if (text.contains("CASTAÑEDA") || text.contains("VILLEGAS") || text.contains("TORRE")
-                                || text.contains("electrónicamente")) {
-                            posiciones.forEach(p -> finales.add(p.getXDirAdj() + p.getWidthDirAdj()));
+                                || text.contains("electrónicamente") || text.contains("FIRMA-2026-0042")) {
+                            posiciones.forEach(p -> {
+                                finales.add(p.getXDirAdj() + p.getWidthDirAdj());
+                                alturas.add(new float[]{p.getYDirAdj() - p.getHeightDir(), p.getYDirAdj()});
+                            });
                         }
                     }
                 }.getText(d);
                 assertThat(finales).as(tipo).isNotEmpty()
                         .allSatisfy(x -> assertThat(x).isLessThanOrEqualTo(derecha + 0.5f));
+                assertThat(alturas).as(tipo).allSatisfy(a -> {
+                    assertThat(a[0]).isGreaterThanOrEqualTo(techo - 0.5f);
+                    assertThat(a[1]).isLessThanOrEqualTo(suelo + 0.5f);
+                });
+                // Y el recuadro verde tampoco sale por arriba ni por abajo: en la
+                // GIL-F-010 la primera corrección lo hacía 5,6 pt más alto que el
+                // hueco, y los filetes de la hoja lo tachaban.
+                float xAncla = Float.parseFloat(ancla[1]);
+                float yAncla = Float.parseFloat(ancla[2]);
+                float altoHueco = Float.parseFloat(ancla[4]);
+                float[] recuadro = recuadroEn(d.getPage(Integer.parseInt(ancla[0])), xAncla);
+                assertThat(recuadro).as(tipo + ": recuadro de la estampa").isNotNull();
+                assertThat(recuadro[1]).as(tipo).isGreaterThanOrEqualTo(yAncla - 0.5f);
+                assertThat(recuadro[1] + recuadro[3]).as(tipo).isLessThanOrEqualTo(yAncla + altoHueco + 0.5f);
             }
             assertThat(new PdfTextExtractor().extraerTexto(firmado).replaceAll("\\s+", " ")).as(tipo)
                     .contains("VILLEGAS OCHOA");
         }
+    }
+
+    /** El último rectángulo («re») de la página que empieza en esa x: el recuadro de la estampa. */
+    private static float[] recuadroEn(org.apache.pdfbox.pdmodel.PDPage pagina, float x) throws java.io.IOException {
+        List<Object> fichas = new org.apache.pdfbox.pdfparser.PDFStreamParser(pagina).parse();
+        float[] encontrado = null;
+        for (int i = 4; i < fichas.size(); i++) {
+            if (fichas.get(i) instanceof org.apache.pdfbox.contentstream.operator.Operator op
+                    && op.getName().equals("re")) {
+                float[] r = new float[4];
+                boolean numeros = true;
+                for (int k = 0; k < 4; k++) {
+                    if (fichas.get(i - 4 + k) instanceof org.apache.pdfbox.cos.COSNumber n) {
+                        r[k] = n.floatValue();
+                    } else {
+                        numeros = false;
+                    }
+                }
+                if (numeros && Math.abs(r[0] - x) < 0.01f) {
+                    encontrado = r;
+                }
+            }
+        }
+        return encontrado;
     }
 
     /** Un PDF que no generó SICOT no trae el hueco de la firma: se firma tal cual, sin tocarlo. */

@@ -148,6 +148,11 @@ public final class FidelidadDeRedaccion {
     public static boolean sinCifrasInventadas(String redactado, String notas, List<String> datosConocidos) {
         Set<String> conocidas = new HashSet<>(cifras(notas));
         Set<String> palabrasConocidas = new HashSet<>(palabrasNumericas(notas));
+        // «treinta pupitres» por «30 pupitres» no inventa nada: es la misma
+        // cifra en letras, y descartarla dejaba fuera redacciones fieles.
+        for (String cifra : cifras(notas)) {
+            palabrasConocidas.addAll(enLetras(cifra));
+        }
         for (String dato : datosConocidos) {
             conocidas.addAll(cifras(dato));
             palabrasConocidas.addAll(palabrasNumericas(dato));
@@ -173,55 +178,261 @@ public final class FidelidadDeRedaccion {
      */
     private static final Pattern SUB_PASO = Pattern.compile("[1-6]\\.[1-9]");
 
+    /** El número de un punto de una lista: «1. revisé…», «2) …». */
+    private static final Pattern ENUMERADOR = Pattern.compile("(?:^|[\\s;:,])(\\d{1,2})[.)](?=\\s)");
+
+    /**
+     * Un ordinal abreviado: «1ra», «2do», «3er», «4.º». El sufijo va pegado y
+     * el número no puede ser la cola de otro: «71204 va» no es un «4.º».
+     */
+    private static final Pattern ORDINAL = Pattern.compile(
+            "(?<![\\d.,])(\\d{1,2})(?:ro|ra|do|da|er|to|ta|vo|va|no|na|mo|ma|\\.?[°ºª])(?![\\p{L}\\d])",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Una fecha en cifras: «15/09/2026», «29-09-2026». */
+    private static final Pattern FECHA = Pattern.compile("\\b(\\d{1,2})[/-](\\d{1,2})[/-](\\d{4})\\b");
+
+    private static final String[] ORDINALES = {"", "primer", "segund", "tercer", "cuart", "quint", "sext",
+            "septim", "octav", "noven", "decim"};
+
+    private static final String[] MESES = {"", "enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+            "agosto", "septiembre", "octubre", "noviembre", "diciembre"};
+
     /**
      * ¿Cada cifra de las notas sigue en la redacción? El 29-09-2026 el
      * supervisor escribió «la entrega de 5 camas» y el modelo redactó «la
      * recepción de las cunas»: sin la cantidad, el acta ya no dice lo que el
      * supervisor verificó. Una cantidad o una fecha que se pierde es tan grave
      * como una que se inventa.
+     *
+     * <p>Una cifra se da por conservada si la redacción la trae igual o escrita
+     * en letras («treinta» por «30»). No se exige lo que la redacción quita con
+     * razón, porque exigirlo descartaba redacciones fieles (revisión del
+     * 29-09-2026, con el modelo real: 5 de 20):
+     * <ul>
+     *   <li>los números de sub-paso y de los puntos de una lista;</li>
+     *   <li>los datos del contrato, que el prompt le pide no repetir;</li>
+     *   <li>una fecha pasada a forma larga («15 de septiembre de 2026»), si
+     *       siguen el día, el mes y el año;</li>
+     *   <li>un ordinal escrito en letras («segundo piso» por «2do piso»).</li>
+     * </ul>
      */
-    public static boolean conservaLasCifras(String redactado, String notas) {
+    public static boolean conservaLasCifras(String redactado, String notas, List<String> datosConocidos) {
+        if (notas == null || notas.isBlank()) {
+            return true;
+        }
+        String textoRedactado = normalizar(redactado);
         Set<String> enRedaccion = new HashSet<>(cifras(redactado));
-        Matcher m = NUMERO.matcher(notas == null ? "" : notas);
+        Set<String> palabrasRedaccion = new HashSet<>(List.of(textoRedactado.split("[^a-z]+")));
+        Set<String> delContrato = new HashSet<>();
+        for (String dato : datosConocidos) {
+            delContrato.addAll(cifras(dato));
+        }
+        // Lo que se revisa aparte (fechas y ordinales) o no se exige
+        // (enumeradores) se tapa, para que su número no se cuente dos veces.
+        StringBuilder resto = new StringBuilder(notas);
+        Matcher fecha = FECHA.matcher(notas);
+        while (fecha.find()) {
+            int dia = Integer.parseInt(fecha.group(1));
+            int mes = Integer.parseInt(fecha.group(2));
+            String anio = fecha.group(3);
+            boolean igual = redactado != null && (redactado.contains(fecha.group())
+                    || redactado.contains(fecha.group().replace('-', '/'))
+                    || redactado.contains(fecha.group().replace('/', '-')));
+            boolean larga = mes >= 1 && mes <= 12 && enRedaccion.contains(String.valueOf(dia))
+                    && enRedaccion.contains(anio) && palabrasRedaccion.contains(MESES[mes]);
+            if (!igual && !larga) {
+                return false;
+            }
+            tapar(resto, fecha.start(), fecha.end());
+        }
+        Matcher ordinal = ORDINAL.matcher(resto.toString());
+        while (ordinal.find()) {
+            int n = Integer.parseInt(ordinal.group(1));
+            boolean enLetras = n >= 1 && n <= 10 && textoRedactado.contains(ORDINALES[n]);
+            if (!enLetras && !enRedaccion.contains(String.valueOf(n))) {
+                return false;
+            }
+            tapar(resto, ordinal.start(), ordinal.end());
+        }
+        Matcher enumerador = ENUMERADOR.matcher(resto.toString());
+        while (enumerador.find()) {
+            tapar(resto, enumerador.start(1), enumerador.end(1));
+        }
+        Matcher m = NUMERO.matcher(resto.toString());
         while (m.find()) {
-            if (!SUB_PASO.matcher(m.group()).matches() && !enRedaccion.contains(valorCanonico(m.group()))) {
+            String cifra = m.group();
+            String canonica = valorCanonico(cifra);
+            if (SUB_PASO.matcher(cifra).matches() || delContrato.contains(canonica) || enRedaccion.contains(canonica)
+                    || enLetrasEnLaRedaccion(canonica, palabrasRedaccion)) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private static void tapar(StringBuilder texto, int desde, int hasta) {
+        for (int i = desde; i < hasta; i++) {
+            texto.setCharAt(i, ' ');
+        }
+    }
+
+    /** ¿Está el entero escrito en letras en la redacción? («30» → «treinta»). */
+    private static boolean enLetrasEnLaRedaccion(String canonica, Set<String> palabrasRedaccion) {
+        List<String> palabras = enLetras(canonica);
+        return !palabras.isEmpty() && palabrasRedaccion.containsAll(palabras);
+    }
+
+    /** Las palabras de un entero de 2 en adelante («4500000» → cuatro, millones, quinientos, mil). */
+    private static List<String> enLetras(String canonica) {
+        try {
+            long n = Long.parseLong(canonica);
+            if (n < 2 || n > 999_999_999_999L) {
+                return List.of();
+            }
+            List<String> r = new ArrayList<>();
+            for (String p : normalizar(NumeroEnLetras.entero(n)).split("[^a-z]+")) {
+                if (!p.isEmpty() && !p.equals("y") && !p.equals("un") && !p.equals("uno") && !p.equals("de")) {
+                    r.add(p);
+                }
+            }
+            return r;
+        } catch (NumberFormatException e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Palabras que el modelo introduce al pasar a registro formal y que
+     * quedan a una o dos letras de otras de las notas: «en buen estado» por
+     * «llegó bien», «para» cerca de «pero», «ha sido» cerca de «sede». No son
+     * alteraciones, y contarlas descartaba redacciones fieles.
+     */
+    private static final Set<String> DEL_REGISTRO_FORMAL = Set.of("buen", "buena", "bien", "para", "pero", "sido",
+            "sera", "esta", "este", "esto", "estos", "estas", "todo", "toda", "todos", "todas", "tuvo", "otra",
+            "otro", "otros", "otras", "cada", "cual", "como", "cuando", "donde", "desde", "hasta", "sobre", "entre",
+            "segun", "ante", "bajo", "mismo", "misma", "dicho", "dicha", "tanto", "tambien", "ademas", "aqui",
+            "alli", "siendo", "hace", "hizo", "haber", "habia", "tener", "tiene", "tenia", "mas",
+            "menos", "segunda", "segundo", "primera", "primero", "tercera", "tercero");
+
+    /** Terminaciones de flexión: si solo cambia esto, es la redacción conjugando o concordando. */
+    private static final Set<String> FLEXIONES = Set.of("", "a", "o", "e", "i", "as", "os", "es", "is", "an", "en",
+            "on", "ar", "er", "ir", "ado", "ada", "ados", "adas", "ido", "ida", "idos", "idas", "aba", "aban", "ia",
+            "ian", "ron", "ban", "aron", "ieron", "mos", "amos", "emos", "imos", "ando", "iendo", "ste", "aste",
+            "iste", "n", "s", "r", "ra", "ro");
+
+    /**
+     * ¿Cambió el modelo una palabra de las notas por otra casi igual? Es el
+     * otro error del 29-09-2026: «camas» se volvió «cunas». Cuenta como
+     * alterada una palabra de la redacción que no está en las notas ni en los
+     * datos del contrato, con la misma longitud e inicial que una palabra de
+     * las notas que YA NO está en la redacción, y a dos letras o menos de ella.
+     *
+     * <p>No cuenta, porque es justo el trabajo de la redacción:
+     * <ul>
+     *   <li>cambiar la flexión: «entregó» por «entrega», «recibo» por «recibí»
+     *       (solo si la raíz común tiene al menos tres letras: «cama» y «caja»
+     *       comparten dos y sí es un cambio de objeto);</li>
+     *   <li>corregir la ortografía: «rebisé» por «revisé», «resibí» por
+     *       «recibí» (misma pronunciación);</li>
+     *   <li>palabras del registro formal («buen», «para», «sido»).</li>
+     * </ul>
+     * Si la regla se equivoca, van las notas tal cual, que es lo seguro.
+     */
+    public static boolean sinPalabrasCambiadas(String redactado, String notas, List<String> datosConocidos) {
+        Set<String> deNotas = palabrasLargas(notas);
+        Set<String> enRedaccion = palabrasLargas(redactado);
+        Set<String> conocidas = new HashSet<>(deNotas);
+        for (String dato : datosConocidos) {
+            conocidas.addAll(palabrasLargas(dato));
+        }
+        for (String w : enRedaccion) {
+            if (conocidas.contains(w) || DEL_REGISTRO_FORMAL.contains(w)) {
+                continue;
+            }
+            if (invierteElSentido(w, deNotas, enRedaccion)) {
+                return false;
+            }
+            for (String v : deNotas) {
+                if (enRedaccion.contains(v) || v.length() != w.length() || v.charAt(0) != w.charAt(0)
+                        || distancia(v, w) > 2 || claveFonetica(v).equals(claveFonetica(w))
+                        // Sobre la forma fonética: «rebisé» por «revisó» corrige
+                        // la ortografía y conjuga a la vez.
+                        || esFlexion(claveFonetica(v), claveFonetica(w))) {
+                    continue;
+                }
                 return false;
             }
         }
         return true;
     }
 
+    /** Prefijos que niegan: «incumplió», «imposible», «desorden», «disconforme». */
+    private static final List<String> NEGACIONES = List.of("des", "dis", "in", "im");
+
     /**
-     * ¿Cambió el modelo una palabra de las notas por otra casi igual? Es el
-     * otro error del 29-09-2026: «camas» se volvió «cunas». Una palabra del
-     * texto redactado que no está en las notas ni en los datos del contrato,
-     * con la misma longitud y la misma inicial que una palabra de las notas y
-     * a dos letras o menos de ella, es casi siempre una palabra alterada.
-     *
-     * <p>Solo cuenta si la diferencia está en la raíz, no en las dos últimas
-     * letras: «entregó» por «entrega» o «recibo» por «recibí» es la redacción
-     * cambiando la conjugación, que es justo su trabajo. Si la regla se
-     * equivoca, lo que pasa es que van las notas tal cual, que es lo seguro.
+     * ¿Dice la redacción lo contrario que las notas? «El contratista cumplió»
+     * redactado como «incumplió» es una palabra más larga, así que la regla de
+     * palabras parecidas no la veía (revisión del 29-09-2026). Se mira en los
+     * dos sentidos: que la redacción niegue una palabra de las notas, o que
+     * quite la negación que las notas tenían.
      */
-    public static boolean sinPalabrasCambiadas(String redactado, String notas, List<String> datosConocidos) {
-        Set<String> deNotas = palabrasLargas(notas);
-        Set<String> conocidas = new HashSet<>(deNotas);
-        for (String dato : datosConocidos) {
-            conocidas.addAll(palabrasLargas(dato));
-        }
-        for (String w : palabrasLargas(redactado)) {
-            if (conocidas.contains(w)) {
-                continue;
+    private static boolean invierteElSentido(String w, Set<String> deNotas, Set<String> enRedaccion) {
+        for (String prefijo : NEGACIONES) {
+            if (w.startsWith(prefijo) && w.length() - prefijo.length() >= 4) {
+                String sinPrefijo = w.substring(prefijo.length());
+                for (String v : deNotas) {
+                    if (mismaPalabra(v, sinPrefijo)) {
+                        return true;
+                    }
+                }
             }
             for (String v : deNotas) {
-                if (v.length() == w.length() && v.charAt(0) == w.charAt(0)
-                        && !v.substring(0, v.length() - 2).equals(w.substring(0, w.length() - 2))
-                        && distancia(v, w) <= 2) {
-                    return false;
+                if (v.startsWith(prefijo) && v.length() - prefijo.length() >= 4 && !enRedaccion.contains(v)
+                        && mismaPalabra(v.substring(prefijo.length()), w)) {
+                    return true;
                 }
             }
         }
-        return true;
+        return false;
+    }
+
+    private static boolean mismaPalabra(String a, String b) {
+        return a.equals(b) || esFlexion(claveFonetica(a), claveFonetica(b));
+    }
+
+    private static boolean esFlexion(String v, String w) {
+        int comun = 0;
+        while (comun < Math.min(v.length(), w.length()) && v.charAt(comun) == w.charAt(comun)) {
+            comun++;
+        }
+        return comun >= 3 && FLEXIONES.contains(v.substring(comun)) && FLEXIONES.contains(w.substring(comun));
+    }
+
+    /** Cómo suena la palabra en español: b=v, s=z=c(e,i), j=g(e,i), y=ll, sin h, mb=nb. */
+    static String claveFonetica(String palabra) {
+        String p = palabra.replace("h", "").replace("ll", "y").replace("qu", "k")
+                .replace("ce", "se").replace("ci", "si").replace("ge", "je").replace("gi", "ji")
+                .replace('z', 's').replace('v', 'b').replace("nb", "mb").replace("np", "mp");
+        return p.replace('c', 'k');
+    }
+
+    /**
+     * ¿Trae la redacción texto en otra escritura? El modelo de SICOT (qwen)
+     * mezcló párrafos en chino en dos de veinte redacciones de la revisión del
+     * 29-09-2026 («Se procedió al退货四箱…»). Si no llevan cifras, las demás
+     * comprobaciones no los ven.
+     */
+    public static boolean enOtraEscritura(String redactado) {
+        if (redactado == null) {
+            return false;
+        }
+        return redactado.codePoints().anyMatch(cp -> {
+            Character.UnicodeScript s = Character.UnicodeScript.of(cp);
+            return s != Character.UnicodeScript.LATIN && s != Character.UnicodeScript.COMMON
+                    && s != Character.UnicodeScript.INHERITED;
+        });
     }
 
     private static Set<String> palabrasLargas(String texto) {

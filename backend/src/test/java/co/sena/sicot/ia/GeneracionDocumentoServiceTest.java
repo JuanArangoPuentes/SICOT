@@ -248,6 +248,18 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).contains("perdía cifras de sus notas");
     }
 
+    /** qwen mezcló chino en dos de veinte redacciones de la revisión del 29-09-2026. */
+    @Test
+    void siLaRedaccionMezclaOtraEscrituraSeUsanLasNotasTalCual() {
+        given(ollamaClient.generar(anyString(), eq(false)))
+                .willReturn("Se recibió el material en estado mojado. Se procedió al退货。");
+
+        servicio.generar(1L, null, "INFORME_SUPERVISION", "el material llegó mojado");
+
+        assertThat(textoDelPdf()).contains("el material llegó mojado");
+        assertThat(registro()).contains("mezclaba texto en otro idioma");
+    }
+
     @Test
     void siLaIaNoRespondeElDocumentoSeGeneraIgualConLasNotas() {
         given(ollamaClient.generar(anyString(), anyBoolean()))

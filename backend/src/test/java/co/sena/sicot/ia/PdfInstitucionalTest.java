@@ -433,6 +433,37 @@ class PdfInstitucionalTest {
         assertThat(texto(pdf).replaceAll("\\s+", " ")).contains(numero);
     }
 
+    /**
+     * Un número de acta de dos renglones se apilaba hacia arriba desde la
+     * altura de un renglón, y el de arriba pisaba el filete grueso de la fila
+     * de clasificación, que en la hoja impresa queda a 184,3 pt del borde
+     * superior de la página.
+     */
+    @Test
+    void unNumeroDeActaDeDosRenglonesNoPisaElFileteDeArriba() throws Exception {
+        PlantillaDocumentoIA recibo = PlantillaDocumentoIA.CATALOGO.get("ACTA_RECIBO");
+        for (String numero : List.of("ACTA DE RECIBO 001-2026 ALMACÉN", "ACTA DE RECIBO 001-2026 ALMACÉN CENTRO",
+                "ACTA DE RECIBO 001-2026 ALMACÉN CENTRO TECNOLÓGICO DEL")) {
+            BloqueDocumento.DatosActaDeRecibo datos = new BloqueDocumento.DatosActaDeRecibo(numero, "28/09/2026",
+                    "Itagüí", "5", "Antioquia", "Centro", "920510", "Compra", "Total", "CO1.PCCNTR.1", "17/06/2025",
+                    "C-3603", "Proveedor", "900", "$1", "17/12/2025", "Objeto", "1", "1", null, "Paola", "43",
+                    "p@sena.edu.co", "Instructora", "300");
+            byte[] pdf = generar(recibo, List.of(new BloqueDocumento.HojaDeRecibo(datos)));
+            List<Float> techos = new ArrayList<>();
+            try (PDDocument d = Loader.loadPDF(pdf)) {
+                new PDFTextStripper() {
+                    @Override
+                    protected void writeString(String text, List<TextPosition> posiciones) {
+                        if (text.startsWith("ACTA") || text.startsWith("RECIBO") || text.startsWith("001-2026")) {
+                            posiciones.forEach(p -> techos.add(p.getYDirAdj() - p.getHeightDir()));
+                        }
+                    }
+                }.getText(d);
+            }
+            assertThat(techos).as(numero).isNotEmpty().allSatisfy(t -> assertThat(t).isGreaterThan(184.3f));
+        }
+    }
+
     // ── Utilidades ──────────────────────────────────────────────────────────
 
     /** El color de relleno (RGB, sin alfa) con que se dibujó la primera palabra que empieza por el texto. */

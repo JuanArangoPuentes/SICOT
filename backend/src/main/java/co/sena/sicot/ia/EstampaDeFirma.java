@@ -114,9 +114,19 @@ public class EstampaDeFirma {
                 anchoTexto = anchoMaximo(fuentes, lineas, tam);
             }
             if (anchoTexto + 10f > ancho) {
-                lineas = partirAlAncho(fuentes, contenido, tam, ancho - 10f);
-                // Un renglón más tiene que seguir cabiendo en el alto del hueco.
-                tam = Math.max(TAMANO_MINIMO, Math.min(tam, (alto - 4f) / (lineas.size() * 1.2f)));
+                // El nombre se parte, y para no sumar alto el código de firma y
+                // la fecha van en un mismo renglón. El alto del hueco manda: la
+                // letra solo baja, nunca sube. La primera versión la subía al
+                // mínimo después de partir, y en la GIL-F-010 —donde la letra ya
+                // sale en 4,47 pt— la estampa sobresalía del hueco por arriba y
+                // por abajo, tachada por los filetes (revisión del 29-09-2026).
+                List<Renglon> compacto = List.of(contenido.get(0), contenido.get(1),
+                        new Renglon(contenido.get(2).texto() + " · " + contenido.get(3).texto(), normal, GRIS));
+                lineas = partirAlAncho(fuentes, compacto, tam, ancho - 10f);
+                for (int intento = 0; intento < 8 && lineas.size() * tam * 1.2f + 4f > alto; intento++) {
+                    tam = (alto - 4f) / (lineas.size() * 1.2f);
+                    lineas = partirAlAncho(fuentes, compacto, tam, ancho - 10f);
+                }
                 anchoTexto = anchoMaximo(fuentes, lineas, tam);
             }
             float anchoRecuadro = Math.min(ancho, anchoTexto + 10f);

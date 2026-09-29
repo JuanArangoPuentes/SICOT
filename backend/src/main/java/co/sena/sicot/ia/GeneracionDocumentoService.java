@@ -299,9 +299,11 @@ public class GeneracionDocumentoService {
         // El valor en letras correcto tampoco es una cifra inventada.
         datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
         String infiel = corregido.isBlank() ? "venía vacía"
+                : FidelidadDeRedaccion.enOtraEscritura(corregido)
+                        ? "mezclaba texto en otro idioma"
                 : !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)
                         ? "agregaba cifras que no estaban en sus notas"
-                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas)
+                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas, datos)
                         ? "perdía cifras de sus notas"
                 : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
                         ? "cambiaba palabras de sus notas por otras parecidas"

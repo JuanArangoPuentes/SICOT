@@ -167,7 +167,12 @@ final class HojaActaDeRecibo {
         // pasa a la hoja de continuación si es largo, y el «[dato pendiente]»
         // sale en rojo como los demás. Antes era el único marcador en negro de
         // la hoja, y un número largo se salía del recuadro y de la página.
-        escribirValor("ACTA N°", d.actaNumero(), H, FIN, 199.78f, arialNegrita, 6.6f, Alinear.CENTRO);
+        // Un renglón va a la altura medida en el formato real (199,78); dos se
+        // apoyan en el subrayado de la fila, como las demás casillas: apilados
+        // desde 199,78, el de arriba pisaba el filete grueso de la fila de
+        // clasificación (revisión del 29-09-2026).
+        escribirValor("ACTA N°", d.actaNumero(), H, FIN, 199.78f, FILA[12] - SOBRE_LA_LINEA, arialNegrita, 6.6f,
+                Alinear.CENTRO);
         linea(FILA[12], H, FIN, DELGADA);
 
         // ── Datos ───────────────────────────────────────────────────────────
@@ -287,7 +292,8 @@ final class HojaActaDeRecibo {
         if (subrayar) {
             linea(FILA[fila + 1], desde, hasta, DELGADA);
         }
-        escribirValor(rotulo, valor, desde, hasta, FILA[fila + 1] - SOBRE_LA_LINEA, f, tamano, alinear);
+        float base = FILA[fila + 1] - SOBRE_LA_LINEA;
+        escribirValor(rotulo, valor, desde, hasta, base, base, f, tamano, alinear);
     }
 
     /**
@@ -295,7 +301,8 @@ final class HojaActaDeRecibo {
      *               si no cabe: «Casilla de la fila 30» no decía si eran los
      *               bienes devolutivos o los de consumo, que van en la misma fila.
      */
-    private void escribirValor(String rotulo, String valor, float desde, float hasta, float baseInferior, PDFont f,
+    private void escribirValor(String rotulo, String valor, float desde, float hasta, float baseUnRenglon,
+                               float baseInferior, PDFont f,
                                float tamano, Alinear alinear) throws IOException {
         if (valor == null || valor.isBlank()) {
             return;
@@ -305,7 +312,7 @@ final class HojaActaDeRecibo {
         float disponible = hasta - desde - 2 * SANGRIA;
         float tam = tamano;
         if (FuentesDelDocumento.ancho(f, tam, t) <= disponible) {
-            texto(t, desde + SANGRIA, baseInferior, f, tam, color, alinear, hasta - SANGRIA);
+            texto(t, desde + SANGRIA, baseUnRenglon, f, tam, color, alinear, hasta - SANGRIA);
             return;
         }
         List<String> lineas = partir(t, f, tam, List.of(disponible));
