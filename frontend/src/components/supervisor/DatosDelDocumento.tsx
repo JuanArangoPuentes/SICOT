@@ -37,6 +37,24 @@ export function esRespuestaNegativa(valor: string | undefined): boolean {
 type Campo = PlantillaDocumento['campos'][number]
 
 /**
+ * De lo escrito, solo lo que es de este documento (la factura, el periodo, el
+ * número de informe): es lo único que se guarda como borrador del sub-paso.
+ * Lo del contrato ya se recuerda aparte, y guardarlo también en el borrador
+ * pisaba una corrección hecha después en otro documento.
+ */
+export function soloLoDelDocumento(
+  plantilla: PlantillaDocumento,
+  valores: Record<string, string>,
+): Record<string, string> {
+  const propios: Record<string, string> = {}
+  for (const campo of plantilla.campos) {
+    const valor = valores[campo.clave]?.trim()
+    if (campo.porDocumento && valor) propios[campo.clave] = valor
+  }
+  return propios
+}
+
+/**
  * Un opcional pasa a obligatorio cuando el dato del que depende dice que sí:
  * con una adición, el valor actualizado del contrato ya no se puede deducir y
  * sin él el informe queda con un pendiente.

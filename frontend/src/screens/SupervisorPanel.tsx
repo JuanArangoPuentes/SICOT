@@ -45,7 +45,7 @@ import {
 } from '@/components/icons'
 import { AI_GENERATED_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
-import DatosDelDocumento from '@/components/supervisor/DatosDelDocumento'
+import DatosDelDocumento, { soloLoDelDocumento } from '@/components/supervisor/DatosDelDocumento'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
   AuthResponse,
@@ -323,10 +323,15 @@ export default function SupervisorPanel({
       }
       return siguiente
     })
-  // Lo escrito en un formulario que se canceló, por sub-paso: incluye lo que es
-  // de ese documento (la factura, el periodo), que no se recuerda para los
-  // demás pero tampoco debe perderse por un Escape o un Cancelar sin querer.
+  // Lo escrito en un formulario que se canceló, por sub-paso, pero SOLO lo que
+  // es de ese documento (la factura, el periodo): eso no se recuerda para los
+  // demás, pero tampoco debe perderse por un Escape o un Cancelar sin querer.
+  // Lo que es del contrato ya está en datosRecordados. Si el borrador lo
+  // guardara también, pisaría una corrección hecha después en otro documento:
+  // la fecha mal escrita volvía a aparecer (revisión del 29-09-2026).
   const [borradores, setBorradores] = useState<Record<string, Record<string, string>>>({})
+  const guardarBorrador = (subStepId: string, plantilla: PlantillaDocumento, valores: Record<string, string>) =>
+    setBorradores((prev) => ({ ...prev, [subStepId]: soloLoDelDocumento(plantilla, valores) }))
   // Lo recordado es de UN contrato: al cambiar de contrato se olvida.
   useEffect(() => {
     setDatosRecordados({})
@@ -1478,7 +1483,7 @@ export default function SupervisorPanel({
           onCancelar={(valores) => {
             const d = datosDocumento
             recordarDatos(d.plantilla, valores)
-            setBorradores((prev) => ({ ...prev, [d.subStepId]: valores }))
+            guardarBorrador(d.subStepId, d.plantilla, valores)
             setDatosDocumento(null)
             setProcesandoFirma(null)
             if (d.revision) setRevisionPaso(d.revision)
@@ -1488,7 +1493,7 @@ export default function SupervisorPanel({
             recordarDatos(d.plantilla, datos)
             // Se guarda también aquí: si la generación falla, el siguiente
             // intento vuelve a traer la factura y el periodo. Se borra al firmar.
-            setBorradores((prev) => ({ ...prev, [d.subStepId]: datos }))
+            guardarBorrador(d.subStepId, d.plantilla, datos)
             setDatosDocumento(null)
             ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, datos, d.revision)
           }}

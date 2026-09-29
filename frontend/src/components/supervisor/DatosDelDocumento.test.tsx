@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import DatosDelDocumento, { esRespuestaNegativa } from './DatosDelDocumento'
+import DatosDelDocumento, { esRespuestaNegativa, soloLoDelDocumento } from './DatosDelDocumento'
 import type { PlantillaDocumento } from '@/services/api/types'
 
 const campo = (
@@ -118,6 +118,21 @@ describe('DatosDelDocumento', () => {
 
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(onCancelar).toHaveBeenCalledWith({ banco: 'BANCOLOMBIA' })
+  })
+})
+
+describe('soloLoDelDocumento', () => {
+  // El borrador de un sub-paso guardaba también la fecha de suscripción; si
+  // el supervisor la corregía después en otro documento, al volver le salía
+  // la fecha vieja (revisión del 29-09-2026).
+  it('del borrador solo guarda lo que es de ese documento, nunca lo del contrato', () => {
+    expect(
+      soloLoDelDocumento(certificado, {
+        numeroFactura: ' FE 900 ',
+        banco: 'BANCOLOMBIA',
+        cedulaSupervisor: '43.512.887',
+      }),
+    ).toEqual({ numeroFactura: 'FE 900' })
   })
 })
 
