@@ -298,18 +298,7 @@ public class GeneracionDocumentoService {
         datos.add(contrato.getValor() != null ? contrato.getValor().stripTrailingZeros().toPlainString() : null);
         // El valor en letras correcto tampoco es una cifra inventada.
         datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
-        String infiel = corregido.isBlank() ? "venía vacía"
-                : FidelidadDeRedaccion.enOtraEscritura(corregido)
-                        ? "mezclaba texto en otro idioma"
-                : !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)
-                        ? "agregaba cifras que no estaban en sus notas"
-                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas, datos)
-                        ? "perdía cifras de sus notas"
-                : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
-                        ? "cambiaba palabras de sus notas por otras parecidas"
-                : !FidelidadDeRedaccion.sinAfirmacionesAgregadas(corregido, recortadas)
-                        ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
-                : null;
+        String infiel = motivoDeInfidelidad(corregido, recortadas, datos);
         if (infiel != null) {
             log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
             return new Observaciones(recortadas, false,
@@ -318,5 +307,37 @@ public class GeneracionDocumentoService {
         }
         return new Observaciones(corregido, true,
                 "; las observaciones del supervisor se redactaron con el copiloto");
+    }
+
+    /**
+     * Por qué la redacción no es fiel a las notas, o {@code null} si lo es.
+     * Las comprobaciones son heurísticas: si alguna fallara con una entrada
+     * que no se previó, se toma la redacción por no fiel y van las notas tal
+     * cual, en vez de dejar al supervisor sin su documento.
+     */
+    private static String motivoDeInfidelidad(String corregido, String recortadas, List<String> datos) {
+        try {
+            return motivoDeInfidelidadSinProteger(corregido, recortadas, datos);
+        } catch (RuntimeException e) {
+            log.warn("La comprobación de fidelidad falló; se usan las notas tal cual", e);
+            return "no se pudo comprobar";
+        }
+    }
+
+    private static String motivoDeInfidelidadSinProteger(String corregido, String recortadas, List<String> datos) {
+        return corregido.isBlank() ? "venía vacía"
+                : FidelidadDeRedaccion.enOtraEscritura(corregido, recortadas)
+                        ? "mezclaba texto en otro idioma"
+                : !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)
+                        ? "agregaba cifras que no estaban en sus notas"
+                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas, datos)
+                        ? "perdía cifras de sus notas"
+                : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
+                        ? "cambiaba palabras de sus notas por otras parecidas"
+                : !FidelidadDeRedaccion.sinSentidoInvertido(corregido, recortadas)
+                        ? "decía lo contrario de sus notas"
+                : !FidelidadDeRedaccion.sinAfirmacionesAgregadas(corregido, recortadas)
+                        ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
+                : null;
     }
 }

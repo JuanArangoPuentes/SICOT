@@ -145,13 +145,15 @@ class FidelidadDeRedaccionTest {
     // fijan que lo fiel pasa y lo alterado no. Los marcados «modelo» son
     // redacciones reales de qwen2.5:7b con el prompt de SICOT.
 
-    private static final List<String> DATOS = List.of("CO1.PCCNTR.71204", "EVENTOS SUPERNOVA S.A.S.");
+    private static final List<String> DATOS = List.of("CO1.PCCNTR.71204", "EVENTOS SUPERNOVA S.A.S.", "900123456-7",
+            "RP-2026-0451");
 
     private static boolean fiel(String redactado, String notas) {
-        return !FidelidadDeRedaccion.enOtraEscritura(redactado)
+        return !FidelidadDeRedaccion.enOtraEscritura(redactado, notas)
                 && FidelidadDeRedaccion.sinCifrasInventadas(redactado, notas, DATOS)
                 && FidelidadDeRedaccion.conservaLasCifras(redactado, notas, DATOS)
                 && FidelidadDeRedaccion.sinPalabrasCambiadas(redactado, notas, DATOS)
+                && FidelidadDeRedaccion.sinSentidoInvertido(redactado, notas)
                 && FidelidadDeRedaccion.sinAfirmacionesAgregadas(redactado, notas);
     }
 
@@ -203,6 +205,26 @@ class FidelidadDeRedaccionTest {
                 {"el contratista cumple las especificaciones y hay retraso en la pintura",
                         "El contratista cumplió con las especificaciones técnicas; se presentan retrasos en la"
                                 + " pintura."},
+                // Revisión del 29-09-2026: lo que la versión anterior de esta
+                // comprobación descartaba sin razón.
+                {"revisé los documentos del programa de formación, están completos",
+                        "Se revisó la información y los documentos del programa de formación, encontrándose completos."},
+                {"se entregaron los muebles en la sede", "Se entregaron los muebles en el inmueble de la sede."},
+                {"me desplacé a la obra, el contratista va dentro del plazo previsto",
+                        "El contratista se encuentra en cumplimiento con el plazo establecido."},
+                {"1. revisé las facturas 2. revisé las planillas", "Se revisaron las facturas y las planillas."},
+                {"medí la resistencia de tierra, 10 Ω, dentro de lo exigido",
+                        "Se midió la resistencia de puesta a tierra, con un valor de 10 Ω, dentro de lo exigido."},
+                {"llegaron 31 sillas", "Se recibieron treinta y una sillas."},
+                {"sin novedades en la entrega", "No se observaron novedades en la entrega."},
+                {"el contratista cumplió con el objeto y no hubo multas",
+                        "El contratista cumplió con el objeto, sin que se haya incurrido en ninguna multa."},
+                {"la obra va bien, pero hay retraso en la pintura",
+                        "La obra avanza en buen estado general; sin embargo, se presenta retraso en la pintura."},
+                {"el contratista instaló los puestos de trabajo como estaba acordado",
+                        "El contratista cumplió con la instalación de los puestos de trabajo conforme a lo acordado."},
+                {"el contrato 71204 va al día, revisado el 01/10/2026",
+                        "El contrato se encuentra al día, según revisión del 1 de octubre de 2026."},
                 // modelo #12: el valor en letras
                 {"recibí la factura FE-4521 por $4.500.000 del periodo de agosto",
                         "Se recibió la factura FE-4521 por un monto de cuatro millones quinientos mil pesos"
@@ -234,6 +256,25 @@ class FidelidadDeRedaccionTest {
                 // el sentido invertido, en los dos sentidos
                 {"el contratista cumplió con la entrega", "El contratista incumplió con la entrega."},
                 {"el contratista incumplió el plazo", "El contratista cumplió el plazo."},
+                // Revisión del 29-09-2026: excepciones que eran por piezas
+                {"llegaron 7 computadores portátiles, todos funcionando",
+                        "Se recibieron los computadores portátiles, todos en funcionamiento."},
+                {"camas recibidas: 5. mesas recibidas: 12. todo en buen estado",
+                        "Se recibieron las camas y las mesas, todo en buen estado."},
+                {"llegaron las sillas, en total 20. estaban en buen estado",
+                        "Llegaron las sillas y estaban en buen estado."},
+                {"llegaron 31 sillas", "Se recibieron treinta sillas."},
+                {"llegaron 35 sillas y 5 mesas", "Llegaron treinta sillas y cinco mesas."},
+                {"el 15/09/2026 llegaron las sillas, algunas con rayones",
+                        "El 15 de septiembre de 2026 se recibieron las sillas, dos de ellas con rayones."},
+                {"recibí la factura por $4.500.000 y las sillas", "Recibí la factura por $4.500.000 y cuatro sillas."},
+                {"el 05/09/2026 llegaron 12 sillas", "El 12 de septiembre de 2026 llegaron 5 sillas."},
+                {"visita el 15/09/2026, entrega el 30/09/2026",
+                        "La visita fue el 30 de septiembre de 2026 y la entrega el 15 de septiembre de 2026."},
+                {"se instalaron los equipos del 2do piso; quedan pendientes los del 1er piso",
+                        "Se instalaron los equipos del primer piso; quedan pendientes los del segundo piso."},
+                {"el contratista cumplió con la entrega", "El contratista no cumplió con la entrega."},
+                {"no se entregaron las sillas", "Se entregaron las sillas."},
                 // prueba en vivo: agrega que la entrega fue a tiempo
                 {"el contratista cumplió con el objeto, entregó la 2da parte de los bienes y no hubo multas",
                         "El contratista cumplió con el objeto del contrato, entregando la segunda parte de los bienes"
