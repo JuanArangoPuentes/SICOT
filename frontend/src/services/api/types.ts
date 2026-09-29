@@ -414,6 +414,19 @@ export interface PlantillaDocumento {
   nombre: string
   /** Si el formato tiene un apartado donde van las notas del supervisor. */
   llevaObservaciones: boolean
-  /** `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no siempre aplica). */
-  campos: Array<{ clave: string; etiqueta: string; ejemplo: string; opcional: boolean }>
+  /**
+   * `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no
+   * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
+   * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
+   * cambia en cada documento (número de informe, factura…), así que no se
+   * recuerda para el siguiente.
+   */
+  campos: Array<{
+    clave: string
+    etiqueta: string
+    ejemplo: string
+    opcional: boolean
+    dependeDe: string | null
+    porDocumento: boolean
+  }>
 }

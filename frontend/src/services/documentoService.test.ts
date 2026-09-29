@@ -29,4 +29,11 @@ describe('nombreConExtension', () => {
   it('deja el nombre tal cual si el tipo no se conoce', () => {
     expect(nombreConExtension('soporte', 'application/octet-stream')).toBe('soporte')
   })
+
+  it('no propone un nombre que el sistema de archivos no acepta', () => {
+    // El «/» partía el nombre en una carpeta inexistente en el diálogo de guardar.
+    expect(nombreConExtension('Informe 3/2025: pago?', 'application/pdf')).toBe('Informe 3_2025_ pago_.pdf')
+    expect(nombreConExtension('Acta final. ', 'application/pdf')).toBe('Acta final.pdf')
+    expect(nombreConExtension('...', 'application/pdf')).toBe('documento.pdf')
+  })
 })

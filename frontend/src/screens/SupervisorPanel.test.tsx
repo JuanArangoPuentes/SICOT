@@ -1,9 +1,10 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
-import { contrato, sesionSupervisor } from '@/test/dobles'
+import { contrato, documento, sesionSupervisor } from '@/test/dobles'
 import type { Step, SubStep } from '@/types/domain'
+import type { PlantillaDocumento } from '@/services/api/types'
 
 /**
  * Pruebas de la pantalla que ve un supervisor todos los días.
@@ -37,6 +38,7 @@ vi.mock('@/services/documentoService', () => ({
   preguntarCopiloto: vi.fn(),
   verificarIntegridad: vi.fn(),
   descargarDocumento: vi.fn(),
+  getPlantillasDocumento: vi.fn(),
 }))
 vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
@@ -253,5 +255,122 @@ describe('SupervisorPanel', () => {
     for (const indicador of [/etapas cerradas/i, /sub-pasos por cerrar/i, /vigencia/i]) {
       expect(screen.getAllByText(indicador).length).toBeGreaterThan(0)
     }
+  })
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Generar y firmar un documento formal
+  //
+  // Un documento firmado no se puede corregir. Cada prueba fija un camino en el
+  // que, hasta el 29-09-2026, el panel firmaba algo que no debía, dejaba el
+  // sub-paso bloqueado o decía que la firma había fallado cuando no.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /** El sub-paso 2.7 (Acta de Inicio) en un paso que sigue abierto después de él. */
+  function pasoConActa(): Step[] {
+    return [
+      {
+        id: 1,
+        title: 'INICIO — Acta de Inicio (GCCON-F-018)',
+        status: 'active',
+        subSteps: [
+          {
+            id: '2.7',
+            label: 'Firmar el Acta de Inicio',
+            responsible: 'Supervisor',
+            document: 'Acta',
+            completed: false,
+            apiId: 27,
+          },
+          { id: '2.8', label: 'Archivar', responsible: 'Supervisor', document: 'Acta', completed: false, apiId: 28 },
+        ],
+      },
+    ]
+  }
+
+  const plantillaActa: PlantillaDocumento = {
+    tipo: 'ACTA_INICIO',
+    codigo: 'GCCON-F-018',
+    nombre: 'Acta de Inicio',
+    llevaObservaciones: false,
+    campos: [
+      {
+        clave: 'cedulaSupervisor',
+        etiqueta: 'Cédula del supervisor',
+        ejemplo: '1',
+        opcional: false,
+        dependeDe: null,
+        porDocumento: false,
+      },
+    ],
+  }
+
+  /** Inicia el paso desde el copiloto (el botón de firmar solo sale en el sub-paso activo) y pulsa firmar. */
+  async function firmarActa() {
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: /iniciar paso 1/i })))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar documento' })))
+  }
+
+  async function servicios() {
+    return {
+      documentos: vi.mocked(await import('@/services/documentoService')),
+      etapas: vi.mocked(await import('@/services/etapaService')),
+    }
+  }
+
+  it('si no puede consultar qué datos pide el formato, no genera ni firma nada', async () => {
+    const { documentos } = await servicios()
+    documentos.getPlantillasDocumento.mockRejectedValue(new Error('sin red'))
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(documentos.generarDocumento).not.toHaveBeenCalled()
+    expect(await screen.findByText(/no pude consultar qué datos pide «Acta de Inicio»/i)).toBeInTheDocument()
+    // Y el sub-paso queda libre para intentarlo otra vez.
+    expect(screen.getByRole('button', { name: 'Firmar documento' })).toBeEnabled()
+  })
+
+  it('si el documento del sub-paso ya está firmado, lo cierra en vez de generar otro', async () => {
+    const { documentos, etapas } = await servicios()
+    documentos.getDocumentosContrato.mockResolvedValue([
+      documento({
+        nombre: 'Acta de Inicio — CTMA-2026-0184',
+        subetapaId: 27,
+        generadoPorIa: true,
+        firmaId: 'FIRMA-TEST',
+      }),
+    ])
+    etapas.cambiarEstadoSubetapa.mockResolvedValue(undefined as never)
+    etapas.getEtapasContrato.mockResolvedValue([])
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(documentos.generarDocumento).not.toHaveBeenCalled()
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+  })
+
+  it('pide los datos antes de firmar y, si luego falla el registro, no dice que la firma falló', async () => {
+    const { documentos, etapas } = await servicios()
+    documentos.getPlantillasDocumento.mockResolvedValue([plantillaActa])
+    documentos.generarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true }))
+    documentos.firmarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true, firmaId: 'FIRMA-TEST' }))
+    etapas.cambiarEstadoSubetapa.mockResolvedValue(undefined as never)
+    etapas.getEtapasContrato.mockResolvedValue([])
+    const onRefreshRegistros = vi.fn().mockRejectedValue(new Error('registro caído'))
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa(), onRefreshRegistros })
+
+    await firmarActa()
+    expect(documentos.generarDocumento).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Cédula del supervisor'), { target: { value: '98.587.121' } })
+    await act(async () => fireEvent.click(screen.getByText('Generar y firmar')))
+
+    expect(documentos.generarDocumento).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ tipo: 'ACTA_INICIO', datos: { cedulaSupervisor: '98.587.121' } }),
+    )
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+    expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
 })

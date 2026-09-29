@@ -292,20 +292,45 @@ export default function SupervisorPanel({
   // supervisor (o falló al intentarlo) — antes de eso no se puede confirmar.
   const [revisionPaso, setRevisionPaso] = useState<RevisionPaso | null>(null)
   // Datos del documento que el supervisor está por generar y firmar.
+  // `revision` es la revisión del Copiloto que llevó hasta aquí (último
+  // sub-paso de un paso): si el supervisor cancela el formulario, se devuelve,
+  // para no obligarlo a describir el paso otra vez.
   const [datosDocumento, setDatosDocumento] = useState<{
     stepId: number
     subStepId: string
     notas?: string
     plantilla: PlantillaDocumento
+    revision?: RevisionPaso
   } | null>(null)
   // Lo ya escrito para otro documento de este contrato (su cédula, la fecha de
   // suscripción…), para no pedirlo dos veces. Solo en memoria, a propósito: una
   // cédula no se guarda en el almacenamiento del navegador de un equipo que
   // puede ser compartido.
   const [datosRecordados, setDatosRecordados] = useState<Record<string, string>>({})
+  // Se recuerda solo lo que es del contrato. Lo que es de cada documento (el
+  // número de informe, el periodo, la factura) no: arrastrarlo al informe
+  // siguiente dejaba precargado el del mes pasado, y firmarlo sin notarlo
+  // ponía un dato falso en un documento oficial. Lo que el supervisor borró
+  // también se olvida, en vez de volver a aparecer.
+  const recordarDatos = (plantilla: PlantillaDocumento, valores: Record<string, string>) =>
+    setDatosRecordados((prev) => {
+      const siguiente = { ...prev }
+      for (const campo of plantilla.campos) {
+        if (campo.porDocumento) continue
+        const valor = valores[campo.clave]?.trim()
+        if (valor) siguiente[campo.clave] = valor
+        else delete siguiente[campo.clave]
+      }
+      return siguiente
+    })
+  // Lo escrito en un formulario que se canceló, por sub-paso: incluye lo que es
+  // de ese documento (la factura, el periodo), que no se recuerda para los
+  // demás pero tampoco debe perderse por un Escape o un Cancelar sin querer.
+  const [borradores, setBorradores] = useState<Record<string, Record<string, string>>>({})
   // Lo recordado es de UN contrato: al cambiar de contrato se olvida.
   useEffect(() => {
     setDatosRecordados({})
+    setBorradores({})
   }, [contrato?.id])
   // Firma electrónica real de la cuenta — si el Administrador no la asignó
   // aún, se muestra honestamente en vez de dejar que el intento de firmar falle.
@@ -438,6 +463,7 @@ export default function SupervisorPanel({
     subStepId: string,
     notas?: string,
     datos?: Record<string, string>,
+    revision?: RevisionPaso,
   ) => {
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
@@ -453,79 +479,120 @@ export default function SupervisorPanel({
         ])
         return
       }
-      // Antes de generar y firmar se preguntan los datos que el formato pide y
-      // el contrato no tiene: firmado, el documento ya no se puede corregir.
-      // Si el catálogo no responde se sigue sin ellos —el documento los marca
-      // como pendientes—, en vez de bloquear el paso.
-      let plantilla: PlantillaDocumento | undefined
-      try {
-        plantilla = (await getPlantillasDocumento()).find((p) => p.tipo === doc.tipo)
-      } catch {
-        plantilla = undefined
-      }
-      if (datos === undefined && plantilla && plantilla.campos.length > 0) {
-        setDatosDocumento({ stepId, subStepId, notas, plantilla })
-        return
-      }
-      if (datos) setDatosRecordados((prev) => ({ ...prev, ...datos }))
-      setProcesandoFirma(subStepId)
-      const vigia = vigilarSegundoPlano()
-      try {
-        const generado = await generarDocumento(contrato.id, {
-          tipo: doc.tipo,
-          subetapaId: sub?.apiId ?? null,
-          notas: notas ?? null,
-          datos: datos ?? {},
-        })
-        await firmarDocumento(contrato.id, generado.id)
-        // El documento lleva los datos exactos del contrato y los que acaba de
-        // dar el supervisor; lo que siga faltando queda marcado en el PDF como
-        // «dato pendiente». No se da una cuenta: lo que falta se ve en el PDF y
-        // el registro dice cuántos quedaron. Las observaciones solo se
-        // mencionan si el formato tiene dónde ponerlas.
-        const conObservaciones = !!notas && (plantilla?.llevaObservaciones ?? true)
+      // Si el documento de este sub-paso ya está firmado —se firmó y después
+      // falló algo al refrescar, o la conexión se cortó justo después de
+      // firmar—, no se intenta generar otro: el servidor lo rechaza siempre y
+      // el sub-paso quedaba bloqueado para siempre. Se cierra el sub-paso.
+      const yaFirmado = docsContrato.some(
+        (d) =>
+          d.generadoPorIa &&
+          d.firmaId &&
+          sub?.apiId != null &&
+          d.subetapaId === sub.apiId &&
+          d.nombre.startsWith(doc.name),
+      )
+      if (!yaFirmado) {
+        // Ocupado desde ya: antes se marcaba después de consultar el catálogo,
+        // y en ese rato un doble clic generaba y firmaba dos veces.
+        setProcesandoFirma(subStepId)
+        // Antes de generar y firmar se preguntan los datos que el formato pide y
+        // el contrato no tiene: firmado, el documento ya no se puede corregir.
+        // Si el catálogo no responde NO se genera: seguir sin preguntar era
+        // firmar con todo pendiente, justo lo que el formulario evita.
+        let plantilla: PlantillaDocumento | undefined
+        try {
+          plantilla = (await getPlantillasDocumento()).find((p) => p.tipo === doc.tipo)
+        } catch {
+          setProcesandoFirma(null)
+          if (revision) setRevisionPaso(revision)
+          setChatMsgs((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              text: `No pude consultar qué datos pide «${doc.name}», así que no lo generé: firmado sin ellos ya no se podría corregir. Inténtelo de nuevo en un momento.`,
+            },
+          ])
+          return
+        }
+        if (datos === undefined && plantilla && plantilla.campos.length > 0) {
+          // El sub-paso sigue ocupado mientras el formulario esté abierto.
+          setDatosDocumento({ stepId, subStepId, notas, plantilla, revision })
+          return
+        }
+        const vigia = vigilarSegundoPlano()
+        try {
+          const generado = await generarDocumento(contrato.id, {
+            tipo: doc.tipo,
+            subetapaId: sub?.apiId ?? null,
+            notas: notas ?? null,
+            datos: datos ?? {},
+          })
+          await firmarDocumento(contrato.id, generado.id)
+          setBorradores((prev) => {
+            const resto = { ...prev }
+            delete resto[subStepId]
+            return resto
+          })
+          // El documento lleva los datos exactos del contrato y los que acaba de
+          // dar el supervisor; lo que siga faltando queda marcado en el PDF como
+          // «dato pendiente». Las observaciones solo se mencionan si el formato
+          // tiene dónde ponerlas.
+          const conObservaciones = !!notas && doc.llevaObservaciones
+          setChatMsgs((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              text:
+                `Generé y firmé «${doc.name}» con los datos del contrato${conObservaciones ? ' y sus observaciones' : ''}. ` +
+                'Revíselo en Documentos: si algún dato quedó marcado en rojo como ' +
+                '«dato pendiente», es porque no estaba en el contrato ni en lo que usted escribió.',
+            },
+          ])
+        } catch (e) {
+          setProcesandoFirma(null)
+          if (revision) setRevisionPaso(revision)
+          // Aquí NO se reintenta, a diferencia del chat del copiloto. Si la
+          // conexión se cortó al pasar SICOT a segundo plano, el servidor puede
+          // haber generado el documento igualmente —así pasó al medirlo—, y
+          // repetir la petición crearía un segundo documento oficial del mismo
+          // paso. Lo honesto es decir qué pasó y mandar a comprobarlo.
+          const cortadoPorSegundoPlano = !(e instanceof ApiError) && vigia.seOculto()
+          const mensaje = cortadoPorSegundoPlano
+            ? 'la conexión se cortó porque SICOT pasó a segundo plano, y el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. Es posible que el documento se haya generado igualmente: revise Documentos antes de volver a intentarlo, para no crear uno repetido.'
+            : e instanceof ApiError
+              ? e.message
+              : 'No se pudo generar o firmar el documento con el Copiloto IA.'
+          setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude completar la firma: ${mensaje}` }])
+          // La lista de documentos se refresca (al volver, si se cortó por
+          // segundo plano): si el documento llegó a firmarse, el siguiente
+          // intento lo encuentra y cierra el sub-paso en vez de chocar.
+          const refrescar = () =>
+            getDocumentosContrato(contrato.id)
+              .then(setDocsContrato)
+              .catch(() => {})
+          if (cortadoPorSegundoPlano) void esperarPrimerPlano().then(refrescar)
+          else void refrescar()
+          return
+        } finally {
+          vigia.terminar()
+        }
+      } else {
         setChatMsgs((prev) => [
           ...prev,
           {
             role: 'ai',
-            text:
-              `Generé y firmé «${doc.name}» con los datos del contrato${conObservaciones ? ' y sus observaciones' : ''}. ` +
-              'Revíselo en Documentos: si algún dato quedó marcado en rojo como ' +
-              '«dato pendiente», es porque no estaba en el contrato ni en lo que usted escribió.',
+            text: `«${doc.name}» ya estaba firmado en este sub-paso; lo marco como completado.`,
           },
         ])
-        await onRefreshRegistros()
-        getDocumentosContrato(contrato.id)
-          .then(setDocsContrato)
-          .catch(() => {})
-      } catch (e) {
-        setProcesandoFirma(null)
-        // Aquí NO se reintenta, a diferencia del chat del copiloto. Si la
-        // conexión se cortó al pasar SICOT a segundo plano, el servidor puede
-        // haber generado el documento igualmente —así pasó al medirlo—, y
-        // repetir la petición crearía un segundo documento oficial del mismo
-        // paso. Lo honesto es decir qué pasó y mandar a comprobarlo.
-        const cortadoPorSegundoPlano = !(e instanceof ApiError) && vigia.seOculto()
-        const mensaje = cortadoPorSegundoPlano
-          ? 'la conexión se cortó porque SICOT pasó a segundo plano, y el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. Es posible que el documento se haya generado igualmente: revise Documentos antes de volver a intentarlo, para no crear uno repetido.'
-          : e instanceof ApiError
-            ? e.message
-            : 'No se pudo generar o firmar el documento con el Copiloto IA.'
-        setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude completar la firma: ${mensaje}` }])
-        if (cortadoPorSegundoPlano) {
-          // Al volver, la lista de documentos se refresca sola, para que si el
-          // documento llegó a generarse aparezca sin tener que buscarlo.
-          void esperarPrimerPlano().then(() =>
-            getDocumentosContrato(contrato.id)
-              .then(setDocsContrato)
-              .catch(() => {}),
-          )
-        }
-        return
-      } finally {
-        vigia.terminar()
       }
       setProcesandoFirma(null)
+      // Fuera del try de la firma: si refrescar el registro falla, la firma ya
+      // se hizo, y decir «no pude completar la firma» era falso y dejaba el
+      // sub-paso sin cerrar.
+      void onRefreshRegistros().catch(() => {})
+      getDocumentosContrato(contrato.id)
+        .then(setDocsContrato)
+        .catch(() => {})
     }
     const previo = steps
     const updated = steps.map((s) =>
@@ -1183,7 +1250,9 @@ export default function SupervisorPanel({
                           const isAiDoc = AI_GENERATED_DOCS.has(ss.id)
                           const procesando = procesandoFirma === ss.id
                           const actionLabel = procesando
-                            ? 'Generando y firmando…'
+                            ? datosDocumento?.subStepId === ss.id
+                              ? 'Esperando datos…'
+                              : 'Generando y firmando…'
                             : isAiDoc
                               ? 'Firmar documento'
                               : 'Marcar completado'
@@ -1371,7 +1440,7 @@ export default function SupervisorPanel({
               onConfirmarRevision={() => {
                 const r = revisionPaso
                 setRevisionPaso(null)
-                if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion)
+                if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion, undefined, r)
               }}
               onCancelarRevision={() => setRevisionPaso(null)}
             />
@@ -1405,12 +1474,23 @@ export default function SupervisorPanel({
       {datosDocumento && (
         <DatosDelDocumento
           plantilla={datosDocumento.plantilla}
-          iniciales={datosRecordados}
-          onCancelar={() => setDatosDocumento(null)}
+          iniciales={{ ...datosRecordados, ...borradores[datosDocumento.subStepId] }}
+          onCancelar={(valores) => {
+            const d = datosDocumento
+            recordarDatos(d.plantilla, valores)
+            setBorradores((prev) => ({ ...prev, [d.subStepId]: valores }))
+            setDatosDocumento(null)
+            setProcesandoFirma(null)
+            if (d.revision) setRevisionPaso(d.revision)
+          }}
           onConfirmar={(datos) => {
             const d = datosDocumento
+            recordarDatos(d.plantilla, datos)
+            // Se guarda también aquí: si la generación falla, el siguiente
+            // intento vuelve a traer la factura y el periodo. Se borra al firmar.
+            setBorradores((prev) => ({ ...prev, [d.subStepId]: datos }))
             setDatosDocumento(null)
-            ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, datos)
+            ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, datos, d.revision)
           }}
         />
       )}

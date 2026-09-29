@@ -15,6 +15,39 @@ import { useState } from 'react'
 import { Field, Modal } from '@/components/ui'
 import type { PlantillaDocumento } from '@/services/api/types'
 
+/**
+ * La misma lectura de «no» que hace el backend al redactar
+ * (RedactorDeDocumentos.esNo): si el supervisor escribe «No» en la adición,
+ * el valor actualizado no hace falta, y contarlo como pendiente era falso.
+ */
+export function esRespuestaNegativa(valor: string | undefined): boolean {
+  if (!valor) return false
+  const v = valor.trim().normalize('NFD').replace(/\p{M}/gu, '').toUpperCase().replace(/\./g, '')
+  return (
+    v === 'NO' ||
+    v === 'N/A' ||
+    v === 'NA' ||
+    v.startsWith('NO APLICA') ||
+    v.startsWith('NINGUN') ||
+    v.startsWith('NO HUBO') ||
+    v.startsWith('NO SE PRESENTARON')
+  )
+}
+
+type Campo = PlantillaDocumento['campos'][number]
+
+/**
+ * Un opcional pasa a obligatorio cuando el dato del que depende dice que sí:
+ * con una adición, el valor actualizado del contrato ya no se puede deducir y
+ * sin él el informe queda con un pendiente.
+ */
+export function esObligatorio(campo: Campo, valores: Record<string, string>): boolean {
+  if (!campo.opcional) return true
+  if (!campo.dependeDe) return false
+  const base = valores[campo.dependeDe]?.trim()
+  return !!base && !esRespuestaNegativa(base)
+}
+
 export default function DatosDelDocumento({
   plantilla,
   iniciales,
@@ -25,7 +58,8 @@ export default function DatosDelDocumento({
   /** Lo que el supervisor ya escribió para otro documento de este contrato (su cédula, la fecha de suscripción…). */
   iniciales: Record<string, string>
   onConfirmar: (datos: Record<string, string>) => void
-  onCancelar: () => void
+  /** Recibe lo escrito, para no perderlo si el supervisor vuelve a abrir el formulario. */
+  onCancelar: (valores: Record<string, string>) => void
 }) {
   const [valores, setValores] = useState<Record<string, string>>(() => {
     const v: Record<string, string> = {}
@@ -34,24 +68,31 @@ export default function DatosDelDocumento({
   })
   // Los opcionales no se cuentan: el plazo se deduce de las fechas y el correo
   // del contratista no siempre existe; que falten no deja nada pendiente.
-  const obligatorios = plantilla.campos.filter((c) => !c.opcional)
+  const obligatorios = plantilla.campos.filter((c) => esObligatorio(c, valores))
   const vacios = obligatorios.filter((c) => !valores[c.clave]?.trim()).length
 
-  const confirmar = () => {
-    const limpios: Record<string, string> = {}
-    for (const [clave, valor] of Object.entries(valores)) if (valor.trim()) limpios[clave] = valor.trim()
-    onConfirmar(limpios)
+  const limpios = () => {
+    const l: Record<string, string> = {}
+    for (const [clave, valor] of Object.entries(valores)) if (valor.trim()) l[clave] = valor.trim()
+    return l
   }
+  const cancelar = () => onCancelar(limpios())
+
+  // El código va en el título solo si ya existe: «(PENDIENTE_DE_DEFINIR)» es
+  // la marca interna de un formato sin código oficial, no algo que leer.
+  const titulo = plantilla.codigo.startsWith('PENDIENTE')
+    ? `Datos para ${plantilla.nombre}`
+    : `Datos para ${plantilla.nombre} (${plantilla.codigo})`
 
   return (
-    <Modal title={`Datos para ${plantilla.nombre} (${plantilla.codigo})`} onClose={onCancelar} width={560}>
+    <Modal title={titulo} onClose={cancelar} width={560} cerrarAlTocarFuera={false}>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
         Estos datos van en el formato pero no están registrados en el contrato. Escríbalos como aparecen en sus
         soportes. Lo que deje vacío saldrá en el documento como «dato pendiente», en rojo; después de firmado ya no se
         puede corregir.
       </p>
       {plantilla.campos.map((c) => (
-        <Field key={c.clave} label={c.opcional ? `${c.etiqueta} (opcional)` : c.etiqueta}>
+        <Field key={c.clave} label={esObligatorio(c, valores) ? c.etiqueta : `${c.etiqueta} (opcional)`}>
           <input
             type="text"
             value={valores[c.clave] ?? ''}
@@ -68,10 +109,14 @@ export default function DatosDelDocumento({
           : 'Todos los datos del formato están completos.'}
       </p>
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={onCancelar}>
+        <button className="btn-ghost" style={{ flex: 1, padding: '10px 0', fontSize: 13 }} onClick={cancelar}>
           Cancelar
         </button>
-        <button className="btn-green" style={{ flex: 2, padding: '10px 0', fontSize: 13 }} onClick={confirmar}>
+        <button
+          className="btn-green"
+          style={{ flex: 2, padding: '10px 0', fontSize: 13 }}
+          onClick={() => onConfirmar(limpios())}
+        >
           Generar y firmar
         </button>
       </div>

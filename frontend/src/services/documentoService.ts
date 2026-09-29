@@ -91,7 +91,13 @@ const EXTENSIONES: Record<string, string> = {
 // pegaba «.pdf» a todo nombre que no terminara en .pdf: una foto de evidencia
 // bajaba como «…jpg.pdf», Windows la abría con el lector de PDF y la daba por
 // dañada; lo mismo habría pasado con un .docx o un .xlsx de Gestión.
-export function nombreConExtension(nombre: string, tipo: string): string {
+//
+// El nombre se limpia antes, igual que en el backend (NombreDeDescarga): en la
+// aplicación de escritorio va como ruta propuesta al diálogo de guardar, y un
+// «/» de «Informe 3/2025» lo partía en una carpeta que no existe; Windows,
+// además, rechaza los nombres con «: * ? " < > |» o que acaban en punto.
+export function nombreConExtension(nombreOriginal: string, tipo: string): string {
+  const nombre = nombreOriginal.replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '') || 'documento'
   const extension = EXTENSIONES[tipo.split(';')[0].trim().toLowerCase()]
   if (!extension) return nombre
   const minusculas = nombre.toLowerCase()
