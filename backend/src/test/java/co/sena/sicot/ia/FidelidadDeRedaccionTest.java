@@ -94,4 +94,48 @@ class FidelidadDeRedaccionTest {
         assertThat(FidelidadDeRedaccion.sinCifrasInventadas(
                 "Se recibieron 25 toneladas.", "llegaron 2,5 toneladas", List.of())).isFalse();
     }
+
+    // ── Caso real del 29-09-2026: «5 camas» salió como «las cunas» ──────────
+
+    private static final String NOTAS_REALES = "3.1 verifiqué en bodega la entrega de 5 camas; 3.2 cargué las fotos; "
+            + "3.3 comparé cantidades y calidad con la ficha técnica y coinciden.";
+    private static final String REDACCION_REAL = "He verificado la recepción de las cunas en la bodega, comprobando su "
+            + "conformidad con los datos detallados en la ficha técnica. Asimismo, he registrado las fotografías "
+            + "correspondientes a esta inspección y confirmo que tanto las cantidades como las características "
+            + "presentan coincidencia con los estándares contractuales.";
+
+    @Test
+    void unaCantidadQueSePierdeEnLaRedaccionSeDetecta() {
+        assertThat(FidelidadDeRedaccion.conservaLasCifras(REDACCION_REAL, NOTAS_REALES)).isFalse();
+    }
+
+    @Test
+    void unaPalabraCambiadaPorOtraParecidaSeDetecta() {
+        assertThat(FidelidadDeRedaccion.sinPalabrasCambiadas(REDACCION_REAL, NOTAS_REALES, List.of())).isFalse();
+        assertThat(FidelidadDeRedaccion.sinPalabrasCambiadas("Se instalaron las cargas.", "instalaron las carpas",
+                List.of())).isFalse();
+    }
+
+    @Test
+    void losNumerosDeSubPasoNoSonCifrasQueSePierdan() {
+        assertThat(FidelidadDeRedaccion.conservaLasCifras(
+                "Verifiqué en bodega la entrega de las camas y cargué las fotos.",
+                "3.1 verifiqué en bodega la entrega de 5 camas; 3.2 cargué las fotos")).isFalse();
+        assertThat(FidelidadDeRedaccion.conservaLasCifras(
+                "Verifiqué en bodega la entrega de las 5 camas y cargué las fotos.",
+                "3.1 verifiqué en bodega la entrega de 5 camas; 3.2 cargué las fotos")).isTrue();
+    }
+
+    @Test
+    void cambiarLaConjugacionNoEsCambiarLaPalabra() {
+        assertThat(FidelidadDeRedaccion.sinPalabrasCambiadas(
+                "El contratista entregó las 5 camas y recibo a satisfacción.",
+                "el contratista entrega 5 camas, recibí a satisfacción", List.of())).isTrue();
+    }
+
+    @Test
+    void unaPalabraQueVieneDeLosDatosDelContratoNoSeTomaPorCambiada() {
+        assertThat(FidelidadDeRedaccion.sinPalabrasCambiadas("Se recibieron las carpas de Eventos Supernova.",
+                "se recibieron las carpas de eventos", List.of("EVENTOS SUPERNOVA S.A.S."))).isTrue();
+    }
 }

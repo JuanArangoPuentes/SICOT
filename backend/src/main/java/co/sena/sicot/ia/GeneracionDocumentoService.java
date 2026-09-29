@@ -298,12 +298,19 @@ public class GeneracionDocumentoService {
         datos.add(contrato.getValor() != null ? contrato.getValor().stripTrailingZeros().toPlainString() : null);
         // El valor en letras correcto tampoco es una cifra inventada.
         datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
-        if (corregido.isBlank() || !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)) {
-            log.warn("La redacción de '{}' traía cifras que no están en las notas; se usan las notas tal cual.",
-                    plantilla.nombre());
+        String infiel = corregido.isBlank() ? "venía vacía"
+                : !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)
+                        ? "agregaba cifras que no estaban en sus notas"
+                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas)
+                        ? "perdía cifras de sus notas"
+                : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
+                        ? "cambiaba palabras de sus notas por otras parecidas"
+                : null;
+        if (infiel != null) {
+            log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
             return new Observaciones(recortadas, false,
-                    "; las observaciones van tal como las escribió el supervisor (la redacción de la IA agregaba"
-                            + " cifras que no estaban en sus notas)");
+                    "; las observaciones van tal como las escribió el supervisor (la redacción de la IA " + infiel
+                            + ")");
         }
         return new Observaciones(corregido, true,
                 "; las observaciones del supervisor se redactaron con el copiloto");

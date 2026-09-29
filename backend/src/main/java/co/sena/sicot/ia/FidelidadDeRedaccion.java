@@ -26,6 +26,9 @@ import java.util.regex.Pattern;
  *       trae un número —en cifras o en letras— que no aparece en las notas ni
  *       en los datos del contrato, el modelo lo inventó; entonces se usan las
  *       notas tal como las escribió el supervisor.</li>
+ *   <li><b>Una redacción que pierde una cifra o cambia una palabra también se
+ *       descarta</b> (desde el 29-09-2026, cuando «5 camas» salió como «las
+ *       cunas»).</li>
  * </ol>
  */
 public final class FidelidadDeRedaccion {
@@ -160,6 +163,78 @@ public final class FidelidadDeRedaccion {
             }
         }
         return true;
+    }
+
+    /**
+     * Un número de sub-paso del procedimiento («3.1», «4.2»). La revisión del
+     * paso le pide al supervisor contar qué hizo «en cada uno de estos
+     * puntos», así que sus notas suelen empezar cada frase con uno; la
+     * redacción formal los quita con razón, y no son una cifra que se pierda.
+     */
+    private static final Pattern SUB_PASO = Pattern.compile("[1-6]\\.[1-9]");
+
+    /**
+     * ¿Cada cifra de las notas sigue en la redacción? El 29-09-2026 el
+     * supervisor escribió «la entrega de 5 camas» y el modelo redactó «la
+     * recepción de las cunas»: sin la cantidad, el acta ya no dice lo que el
+     * supervisor verificó. Una cantidad o una fecha que se pierde es tan grave
+     * como una que se inventa.
+     */
+    public static boolean conservaLasCifras(String redactado, String notas) {
+        Set<String> enRedaccion = new HashSet<>(cifras(redactado));
+        Matcher m = NUMERO.matcher(notas == null ? "" : notas);
+        while (m.find()) {
+            if (!SUB_PASO.matcher(m.group()).matches() && !enRedaccion.contains(valorCanonico(m.group()))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * ¿Cambió el modelo una palabra de las notas por otra casi igual? Es el
+     * otro error del 29-09-2026: «camas» se volvió «cunas». Una palabra del
+     * texto redactado que no está en las notas ni en los datos del contrato,
+     * con la misma longitud y la misma inicial que una palabra de las notas y
+     * a dos letras o menos de ella, es casi siempre una palabra alterada.
+     *
+     * <p>Solo cuenta si la diferencia está en la raíz, no en las dos últimas
+     * letras: «entregó» por «entrega» o «recibo» por «recibí» es la redacción
+     * cambiando la conjugación, que es justo su trabajo. Si la regla se
+     * equivoca, lo que pasa es que van las notas tal cual, que es lo seguro.
+     */
+    public static boolean sinPalabrasCambiadas(String redactado, String notas, List<String> datosConocidos) {
+        Set<String> deNotas = palabrasLargas(notas);
+        Set<String> conocidas = new HashSet<>(deNotas);
+        for (String dato : datosConocidos) {
+            conocidas.addAll(palabrasLargas(dato));
+        }
+        for (String w : palabrasLargas(redactado)) {
+            if (conocidas.contains(w)) {
+                continue;
+            }
+            for (String v : deNotas) {
+                if (v.length() == w.length() && v.charAt(0) == w.charAt(0)
+                        && !v.substring(0, v.length() - 2).equals(w.substring(0, w.length() - 2))
+                        && distancia(v, w) <= 2) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static Set<String> palabrasLargas(String texto) {
+        Set<String> r = new HashSet<>();
+        if (texto == null) {
+            return r;
+        }
+        for (String p : normalizar(texto).split("[^a-z]+")) {
+            if (p.length() >= 4) {
+                r.add(p);
+            }
+        }
+        return r;
     }
 
     private static List<String> cifras(String texto) {

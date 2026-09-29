@@ -236,6 +236,18 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).contains("tal como las escribió el supervisor");
     }
 
+    /** El caso real del 29-09-2026, en la prueba desde el panel: «5 camas» salió como «las cunas». */
+    @Test
+    void siLaRedaccionPierdeUnaCantidadOCambiaUnaPalabraSeUsanLasNotasTalCual() {
+        given(ollamaClient.generar(anyString(), eq(false)))
+                .willReturn("He verificado la recepción de las cunas en la bodega.");
+
+        servicio.generar(1L, null, "INFORME_SUPERVISION", "verifiqué en bodega la entrega de 5 camas");
+
+        assertThat(textoDelPdf()).contains("verifiqué en bodega la entrega de 5 camas").doesNotContain("cunas");
+        assertThat(registro()).contains("perdía cifras de sus notas");
+    }
+
     @Test
     void siLaIaNoRespondeElDocumentoSeGeneraIgualConLasNotas() {
         given(ollamaClient.generar(anyString(), anyBoolean()))
