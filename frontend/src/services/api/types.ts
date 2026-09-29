@@ -414,5 +414,6 @@ export interface PlantillaDocumento {
   nombre: string
   /** Si el formato tiene un apartado donde van las notas del supervisor. */
   llevaObservaciones: boolean
-  campos: Array<{ clave: string; etiqueta: string; ejemplo: string }>
+  /** `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no siempre aplica). */
+  campos: Array<{ clave: string; etiqueta: string; ejemplo: string; opcional: boolean }>
 }

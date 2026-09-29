@@ -42,7 +42,20 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
      *
      * @param ejemplo cómo lo escribe el formato real, para quien lo diligencia.
      */
-    public record CampoDelDocumento(String clave, String etiqueta, String ejemplo) {
+    public record CampoDelDocumento(String clave, String etiqueta, String ejemplo, boolean opcional) {
+        public CampoDelDocumento(String clave, String etiqueta, String ejemplo) {
+            this(clave, etiqueta, ejemplo, false);
+        }
+
+        /**
+         * Un dato que, si falta, no deja nada pendiente: se deduce (el plazo,
+         * de las fechas) o solo aplica a veces (el correo del contratista, el
+         * valor actual cuando hubo adiciones). El formulario no lo cuenta
+         * entre los que quedarán pendientes.
+         */
+        static CampoDelDocumento opcional(String clave, String etiqueta, String ejemplo) {
+            return new CampoDelDocumento(clave, etiqueta, ejemplo, true);
+        }
     }
 
     private static final String GESTION_CONTRACTUAL = "GESTIÓN CONTRACTUAL";
@@ -68,7 +81,7 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
      * número exacto de meses; si no, escribe las fechas de inicio y fin.
      */
     private static final CampoDelDocumento PLAZO =
-            new CampoDelDocumento("plazo", "Plazo pactado del contrato", "Dos (02) meses");
+            CampoDelDocumento.opcional("plazo", "Plazo pactado del contrato", "Dos (02) meses");
     /**
      * Si hubo multas o sanciones. Es una certificación del supervisor: sin
      * ella, el documento no afirma que no las hubo.
@@ -92,7 +105,7 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                             new CampoDelDocumento("expedicionCedulaRepresentante",
                                     "Lugar de expedición de la cédula del representante legal", "Bello-Antioquia"),
                             FECHA_GARANTIAS,
-                            new CampoDelDocumento("correoContratista", "Correo del contratista",
+                            CampoDelDocumento.opcional("correoContratista", "Correo del contratista",
                                     "contratista@correo.com")),
                     false),
             "INFORME_SUPERVISION", new PlantillaDocumentoIA(
@@ -104,9 +117,9 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                     List.of(FECHA_SUSCRIPCION, PLAZO, FORMA_DE_PAGO,
                             new CampoDelDocumento("prorroga", "Prórrogas del contrato", "N/A"),
                             new CampoDelDocumento("adicion", "Adiciones al contrato", "N/A"),
-                            new CampoDelDocumento("valorActual", "Valor actual del contrato (si hubo adiciones)",
+                            CampoDelDocumento.opcional("valorActual", "Valor actual del contrato (si hubo adiciones)",
                                     "$25.000.000,00"),
-                            new CampoDelDocumento("fechaTerminacionActual",
+                            CampoDelDocumento.opcional("fechaTerminacionActual",
                                     "Fecha de terminación actual (si hubo prórrogas)", "20/12/2025"),
                             new CampoDelDocumento("informeNumero", "Número del informe de supervisión", "1"),
                             new CampoDelDocumento("periodoDesde", "Inicio del periodo del informe", "01/09/2026"),

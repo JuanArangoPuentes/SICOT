@@ -32,7 +32,10 @@ export default function DatosDelDocumento({
     for (const c of plantilla.campos) if (iniciales[c.clave]) v[c.clave] = iniciales[c.clave]
     return v
   })
-  const vacios = plantilla.campos.filter((c) => !valores[c.clave]?.trim()).length
+  // Los opcionales no se cuentan: el plazo se deduce de las fechas y el correo
+  // del contratista no siempre existe; que falten no deja nada pendiente.
+  const obligatorios = plantilla.campos.filter((c) => !c.opcional)
+  const vacios = obligatorios.filter((c) => !valores[c.clave]?.trim()).length
 
   const confirmar = () => {
     const limpios: Record<string, string> = {}
@@ -48,7 +51,7 @@ export default function DatosDelDocumento({
         puede corregir.
       </p>
       {plantilla.campos.map((c) => (
-        <Field key={c.clave} label={c.etiqueta}>
+        <Field key={c.clave} label={c.opcional ? `${c.etiqueta} (opcional)` : c.etiqueta}>
           <input
             type="text"
             value={valores[c.clave] ?? ''}
@@ -61,7 +64,7 @@ export default function DatosDelDocumento({
       ))}
       <p style={{ fontSize: 12, color: vacios > 0 ? 'var(--alert-leve)' : 'var(--text-muted)', margin: '4px 0 12px' }}>
         {vacios > 0
-          ? `${vacios} de ${plantilla.campos.length} datos quedarán marcados como pendientes.`
+          ? `${vacios} de ${obligatorios.length} datos obligatorios quedarán marcados como pendientes.`
           : 'Todos los datos del formato están completos.'}
       </p>
       <div style={{ display: 'flex', gap: 10 }}>

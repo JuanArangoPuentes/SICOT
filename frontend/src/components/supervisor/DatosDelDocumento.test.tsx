@@ -9,9 +9,10 @@ const certificado: PlantillaDocumento = {
   nombre: 'Certificación de cumplimiento',
   llevaObservaciones: false,
   campos: [
-    { clave: 'numeroFactura', etiqueta: 'Número de la factura', ejemplo: 'FE 547' },
-    { clave: 'banco', etiqueta: 'Banco', ejemplo: 'BANCOLOMBIA' },
-    { clave: 'cedulaSupervisor', etiqueta: 'Cédula del supervisor', ejemplo: '98.587.121' },
+    { clave: 'numeroFactura', etiqueta: 'Número de la factura', ejemplo: 'FE 547', opcional: false },
+    { clave: 'banco', etiqueta: 'Banco', ejemplo: 'BANCOLOMBIA', opcional: false },
+    { clave: 'cedulaSupervisor', etiqueta: 'Cédula del supervisor', ejemplo: '98.587.121', opcional: false },
+    { clave: 'plazo', etiqueta: 'Plazo pactado del contrato', ejemplo: 'Dos (02) meses', opcional: true },
   ],
 }
 
@@ -23,7 +24,9 @@ describe('DatosDelDocumento', () => {
 
     expect(screen.getByLabelText('Número de la factura')).toBeTruthy()
     expect(screen.getByLabelText('Banco')).toBeTruthy()
-    expect(screen.getByText('3 de 3 datos quedarán marcados como pendientes.')).toBeTruthy()
+    // El plazo se deduce de las fechas: que falte no deja nada pendiente.
+    expect(screen.getByLabelText('Plazo pactado del contrato (opcional)')).toBeTruthy()
+    expect(screen.getByText('3 de 3 datos obligatorios quedarán marcados como pendientes.')).toBeTruthy()
   })
 
   it('trae lo ya escrito para otro documento del contrato y entrega solo lo diligenciado, sin espacios', () => {

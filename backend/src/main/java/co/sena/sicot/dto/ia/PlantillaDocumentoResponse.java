@@ -13,7 +13,10 @@ import java.util.List;
 public record PlantillaDocumentoResponse(String tipo, String codigo, String nombre, boolean llevaObservaciones,
                                          List<Campo> campos) {
 
-    /** @param ejemplo cómo lo escribe el formato real diligenciado. */
-    public record Campo(String clave, String etiqueta, String ejemplo) {
+    /**
+     * @param ejemplo  cómo lo escribe el formato real diligenciado.
+     * @param opcional si falta no deja nada pendiente (se deduce o no siempre aplica).
+     */
+    public record Campo(String clave, String etiqueta, String ejemplo, boolean opcional) {
     }
 }

@@ -73,7 +73,8 @@ public class IAController {
                 .sorted(Comparator.comparing(PlantillaDocumentoIA::clave))
                 .map(p -> new PlantillaDocumentoResponse(p.clave(), p.codigo(), p.nombre(), p.llevaObservaciones(),
                         p.campos().stream()
-                                .map(c -> new PlantillaDocumentoResponse.Campo(c.clave(), c.etiqueta(), c.ejemplo()))
+                                .map(c -> new PlantillaDocumentoResponse.Campo(c.clave(), c.etiqueta(), c.ejemplo(),
+                                        c.opcional()))
                                 .toList()))
                 .toList();
     }
