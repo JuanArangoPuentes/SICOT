@@ -45,6 +45,7 @@ import {
 } from '@/components/icons'
 import { AI_GENERATED_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
+import DatosDelDocumento from '@/components/supervisor/DatosDelDocumento'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
   AuthResponse,
@@ -52,6 +53,7 @@ import type {
   ContratoResponse,
   DocumentoResponse,
   CronogramaResponse,
+  PlantillaDocumento,
 } from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
@@ -62,6 +64,7 @@ import {
   getDocumentosContrato,
   generarDocumento,
   firmarDocumento,
+  getPlantillasDocumento,
   precalentarCopiloto,
   preguntarCopiloto,
 } from '@/services/documentoService'
@@ -288,6 +291,22 @@ export default function SupervisorPanel({
   // a true solo después de que el Copiloto ya revisó la descripción del
   // supervisor (o falló al intentarlo) — antes de eso no se puede confirmar.
   const [revisionPaso, setRevisionPaso] = useState<RevisionPaso | null>(null)
+  // Datos del documento que el supervisor está por generar y firmar.
+  const [datosDocumento, setDatosDocumento] = useState<{
+    stepId: number
+    subStepId: string
+    notas?: string
+    plantilla: PlantillaDocumento
+  } | null>(null)
+  // Lo ya escrito para otro documento de este contrato (su cédula, la fecha de
+  // suscripción…), para no pedirlo dos veces. Solo en memoria, a propósito: una
+  // cédula no se guarda en el almacenamiento del navegador de un equipo que
+  // puede ser compartido.
+  const [datosRecordados, setDatosRecordados] = useState<Record<string, string>>({})
+  // Lo recordado es de UN contrato: al cambiar de contrato se olvida.
+  useEffect(() => {
+    setDatosRecordados({})
+  }, [contrato?.id])
   // Firma electrónica real de la cuenta — si el Administrador no la asignó
   // aún, se muestra honestamente en vez de dejar que el intento de firmar falle.
   const [tieneFirma, setTieneFirma] = useState<boolean | null>(null)
@@ -414,7 +433,12 @@ export default function SupervisorPanel({
   // marcar completado en el backend). Separado de handleActionSubStep para
   // que el botón "Confirmar Paso" (después de la revisión de IA) pueda
   // invocarlo directamente, sin volver a pasar por la compuerta de revisión.
-  const ejecutarAccionSubPaso = async (stepId: number, subStepId: string, notas?: string) => {
+  const ejecutarAccionSubPaso = async (
+    stepId: number,
+    subStepId: string,
+    notas?: string,
+    datos?: Record<string, string>,
+  ) => {
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
       const doc = FORMAL_DOCS.find((d) => d.subStepId === subStepId)
@@ -429,6 +453,21 @@ export default function SupervisorPanel({
         ])
         return
       }
+      // Antes de generar y firmar se preguntan los datos que el formato pide y
+      // el contrato no tiene: firmado, el documento ya no se puede corregir.
+      // Si el catálogo no responde se sigue sin ellos —el documento los marca
+      // como pendientes—, en vez de bloquear el paso.
+      let plantilla: PlantillaDocumento | undefined
+      try {
+        plantilla = (await getPlantillasDocumento()).find((p) => p.tipo === doc.tipo)
+      } catch {
+        plantilla = undefined
+      }
+      if (datos === undefined && plantilla && plantilla.campos.length > 0) {
+        setDatosDocumento({ stepId, subStepId, notas, plantilla })
+        return
+      }
+      if (datos) setDatosRecordados((prev) => ({ ...prev, ...datos }))
       setProcesandoFirma(subStepId)
       const vigia = vigilarSegundoPlano()
       try {
@@ -436,17 +475,23 @@ export default function SupervisorPanel({
           tipo: doc.tipo,
           subetapaId: sub?.apiId ?? null,
           notas: notas ?? null,
+          datos: datos ?? {},
         })
         await firmarDocumento(contrato.id, generado.id)
-        // El documento lleva los datos exactos del contrato, pero SICOT no
-        // conoce todo (facturas, pólizas, pagos): lo que falta queda marcado en
-        // el PDF como «dato pendiente». Se dice aquí para que el supervisor lo
-        // revise en Documentos.
+        // El documento lleva los datos exactos del contrato y los que acaba de
+        // dar el supervisor; lo que siga faltando queda marcado en el PDF como
+        // «dato pendiente». No se da una cuenta: lo que falta se ve en el PDF y
+        // el registro dice cuántos quedaron. Las observaciones solo se
+        // mencionan si el formato tiene dónde ponerlas.
+        const conObservaciones = !!notas && (plantilla?.llevaObservaciones ?? true)
         setChatMsgs((prev) => [
           ...prev,
           {
             role: 'ai',
-            text: `Generé y firmé «${doc.name}» con los datos del contrato${notas ? ' y sus observaciones' : ''}. Los datos que SICOT no tiene (por ejemplo facturas, pólizas o pagos) quedan marcados en el documento como «dato pendiente»: revíselo en Documentos.`,
+            text:
+              `Generé y firmé «${doc.name}» con los datos del contrato${conObservaciones ? ' y sus observaciones' : ''}. ` +
+              'Revíselo en Documentos: si algún dato quedó marcado en rojo como ' +
+              '«dato pendiente», es porque no estaba en el contrato ni en lo que usted escribió.',
           },
         ])
         await onRefreshRegistros()
@@ -1356,6 +1401,19 @@ export default function SupervisorPanel({
 
       {/* ── Registros ── */}
       {tab === 'registros' && <Registros extra={registros} />}
+
+      {datosDocumento && (
+        <DatosDelDocumento
+          plantilla={datosDocumento.plantilla}
+          iniciales={datosRecordados}
+          onCancelar={() => setDatosDocumento(null)}
+          onConfirmar={(datos) => {
+            const d = datosDocumento
+            setDatosDocumento(null)
+            ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, datos)
+          }}
+        />
+      )}
     </AppShell>
   )
 }

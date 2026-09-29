@@ -250,6 +250,12 @@ export interface GenerarDocumentoRequest {
    * apartado queda marcado como pendiente en vez de inventarse.
    */
   notas?: string | null
+  /**
+   * Datos del documento que el contrato no tiene —factura, póliza, cédulas…—,
+   * por clave (ver `PlantillaDocumento.campos`). Los que falten salen en el PDF
+   * como «[dato pendiente…]», en rojo, en vez de inventarse.
+   */
+  datos?: Record<string, string>
 }
 
 export interface ChatResponse {
@@ -399,4 +405,14 @@ export interface SeguimientoResponse {
   supervisores: SupervisorSeguimiento[]
   contratosSinSupervisor: ContratoSeguimiento[]
   generadoEn: string
+}
+
+/** Un documento formal que SICOT arma y los datos que pide que el contrato no tiene (GET /api/ia/plantillas). */
+export interface PlantillaDocumento {
+  tipo: string
+  codigo: string
+  nombre: string
+  /** Si el formato tiene un apartado donde van las notas del supervisor. */
+  llevaObservaciones: boolean
+  campos: Array<{ clave: string; etiqueta: string; ejemplo: string }>
 }
