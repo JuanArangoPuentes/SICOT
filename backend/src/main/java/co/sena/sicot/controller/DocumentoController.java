@@ -180,10 +180,10 @@ public class DocumentoController {
     })
     @PostMapping("/generar")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
-    public ResponseEntity<DocumentoResponse> generar(@PathVariable Long contratoId,
-                                                     @Valid @RequestBody GenerarDocumentoRequest request) {
+    public ResponseEntity<co.sena.sicot.dto.documento.DocumentoGeneradoResponse> generar(
+            @PathVariable Long contratoId, @Valid @RequestBody GenerarDocumentoRequest request) {
         return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(),
-                request.notas(), request.datos()));
+                request.notas(), request.datos(), !Boolean.FALSE.equals(request.redactarConIa())));
     }
 
     @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual")

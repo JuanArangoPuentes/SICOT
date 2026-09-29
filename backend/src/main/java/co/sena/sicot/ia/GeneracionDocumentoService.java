@@ -1,6 +1,6 @@
 package co.sena.sicot.ia;
 
-import co.sena.sicot.dto.documento.DocumentoResponse;
+import co.sena.sicot.dto.documento.DocumentoGeneradoResponse;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Documento;
 import co.sena.sicot.entity.Subetapa;
@@ -76,12 +76,17 @@ public class GeneracionDocumentoService {
         this.reloj = reloj;
     }
 
-    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave) {
+    public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave) {
         return generar(contratoId, subetapaId, tipoClave, null, Map.of());
     }
 
-    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas) {
+    public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas) {
         return generar(contratoId, subetapaId, tipoClave, notas, Map.of());
+    }
+
+    public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
+                                             Map<String, String> datos) {
+        return generar(contratoId, subetapaId, tipoClave, notas, datos, true);
     }
 
     // Sin @Transactional a propósito — mismo motivo que CopilotoChatService.responder:
@@ -90,12 +95,14 @@ public class GeneracionDocumentoService {
     // subetapaRepository y documentoRepository.save abren y cierran sus propias
     // transacciones cortas.
     /**
-     * @param datos datos del documento que el contrato no tiene (factura,
-     *              póliza, cédulas…), por clave de {@link PlantillaDocumentoIA#campos}.
-     *              Los que falten salen en el PDF como «[dato pendiente…]».
+     * @param datos         datos del documento que el contrato no tiene (factura,
+     *                      póliza, cédulas…), por clave de {@link PlantillaDocumentoIA#campos}.
+     *                      Los que falten salen en el PDF como «[dato pendiente…]».
+     * @param redactarConIa {@code false} cuando el supervisor pide sus notas tal cual, después
+     *                      de ver la redacción del Copiloto: no se llama al modelo.
      */
-    public DocumentoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
-                                     Map<String, String> datos) {
+    public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
+                                             Map<String, String> datos, boolean redactarConIa) {
         PlantillaDocumentoIA plantilla = PlantillaDocumentoIA.CATALOGO.get(tipoClave);
         if (plantilla == null) {
             throw new BusinessException("Tipo de documento no reconocido: " + tipoClave);
@@ -123,7 +130,7 @@ public class GeneracionDocumentoService {
                     + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
         }
 
-        Observaciones obs = observaciones(plantilla, contrato, notas);
+        Observaciones obs = observaciones(plantilla, contrato, notas, redactarConIa);
         LocalDate hoy = LocalDate.now(reloj);
         List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto(),
                 datosValidos);
@@ -188,7 +195,8 @@ public class GeneracionDocumentoService {
                         + "; queda pendiente de firma"
                         + (pendientes > 0 ? " (" + pendientes + " datos del formato quedaron marcados como pendientes)" : "")
                         + ".");
-        return DocumentoMapper.toResponse(guardado);
+        return new DocumentoGeneradoResponse(DocumentoMapper.toResponse(guardado), obs.texto(), obs.conIa(),
+                obs.motivoNotasTalCual());
     }
 
     /** Longitud máxima de un dato complementario: una forma de pago o un rubro caben de sobra. */
@@ -220,11 +228,18 @@ public class GeneracionDocumentoService {
         return validos;
     }
 
-    /** El apartado de observaciones y cómo se obtuvo, para el registro. */
-    private record Observaciones(String texto, boolean conIa, String descripcion) {
+    /**
+     * El apartado de observaciones y cómo se obtuvo: la descripción va al
+     * registro; el motivo, al supervisor, que decide si firma.
+     */
+    private record Observaciones(String texto, boolean conIa, String descripcion, String motivoNotasTalCual) {
+        Observaciones(String texto, boolean conIa, String descripcion) {
+            this(texto, conIa, descripcion, null);
+        }
     }
 
-    private Observaciones observaciones(PlantillaDocumentoIA plantilla, Contrato contrato, String notas) {
+    private Observaciones observaciones(PlantillaDocumentoIA plantilla, Contrato contrato, String notas,
+                                        boolean redactarConIa) {
         if (notas == null || notas.isBlank()) {
             return new Observaciones(null, false, "");
         }
@@ -239,6 +254,10 @@ public class GeneracionDocumentoService {
         String recortadas = notas.strip();
         if (recortadas.length() > MAX_NOTAS) {
             recortadas = recortadas.substring(0, MAX_NOTAS);
+        }
+        if (!redactarConIa) {
+            return new Observaciones(recortadas, false,
+                    "; las observaciones van tal como las escribió el supervisor (así lo pidió)");
         }
 
         String prompt = """
@@ -277,7 +296,8 @@ public class GeneracionDocumentoService {
             log.warn("No se pudieron redactar las observaciones de '{}' con la IA; se usan las notas tal cual: {}",
                     plantilla.nombre(), e.getMessage());
             return new Observaciones(recortadas, false,
-                    "; las observaciones van tal como las escribió el supervisor (la IA no respondió)");
+                    "; las observaciones van tal como las escribió el supervisor (la IA no respondió)",
+                    "el Copiloto no respondió a tiempo");
         }
 
         List<String> nombres = new ArrayList<>();
@@ -303,7 +323,8 @@ public class GeneracionDocumentoService {
             log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
             return new Observaciones(recortadas, false,
                     "; las observaciones van tal como las escribió el supervisor (la redacción de la IA " + infiel
-                            + ")");
+                            + ")",
+                    "la redacción del Copiloto " + infiel);
         }
         return new Observaciones(corregido, true,
                 "; las observaciones del supervisor se redactaron con el copiloto");
@@ -317,27 +338,10 @@ public class GeneracionDocumentoService {
      */
     private static String motivoDeInfidelidad(String corregido, String recortadas, List<String> datos) {
         try {
-            return motivoDeInfidelidadSinProteger(corregido, recortadas, datos);
+            return FidelidadDeRedaccion.motivoDeInfidelidad(corregido, recortadas, datos);
         } catch (RuntimeException e) {
             log.warn("La comprobación de fidelidad falló; se usan las notas tal cual", e);
             return "no se pudo comprobar";
         }
-    }
-
-    private static String motivoDeInfidelidadSinProteger(String corregido, String recortadas, List<String> datos) {
-        return corregido.isBlank() ? "venía vacía"
-                : FidelidadDeRedaccion.enOtraEscritura(corregido, recortadas)
-                        ? "mezclaba texto en otro idioma"
-                : !FidelidadDeRedaccion.sinCifrasInventadas(corregido, recortadas, datos)
-                        ? "agregaba cifras que no estaban en sus notas"
-                : !FidelidadDeRedaccion.conservaLasCifras(corregido, recortadas, datos)
-                        ? "perdía cifras de sus notas"
-                : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
-                        ? "cambiaba palabras de sus notas por otras parecidas"
-                : !FidelidadDeRedaccion.sinSentidoInvertido(corregido, recortadas)
-                        ? "decía lo contrario de sus notas"
-                : !FidelidadDeRedaccion.sinAfirmacionesAgregadas(corregido, recortadas)
-                        ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
-                : null;
     }
 }

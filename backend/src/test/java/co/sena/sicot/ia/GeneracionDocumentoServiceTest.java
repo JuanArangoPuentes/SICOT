@@ -236,6 +236,45 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).contains("tal como las escribió el supervisor");
     }
 
+    // ── Lo que el supervisor ve antes de firmar ─────────────────────────────
+
+    /** La redacción aceptada vuelve al panel para que el supervisor la lea antes de firmar. */
+    @Test
+    void laRedaccionAceptadaVuelveParaQueElSupervisorLaRevise() {
+        given(ollamaClient.generar(anyString(), eq(false)))
+                .willReturn("Se verificó en bodega la entrega de las 26 unidades solicitadas.");
+
+        var r = servicio.generar(1L, null, "ACTA_RECIBO", "entregaron las 26 unidades en bodega, todo bien");
+
+        assertThat(r.observacionesRedactadasConIa()).isTrue();
+        assertThat(r.observaciones()).isEqualTo("Se verificó en bodega la entrega de las 26 unidades solicitadas.");
+        assertThat(r.motivoNotasTalCual()).isNull();
+    }
+
+    @Test
+    void siLaRedaccionSeDescartaElPanelSabePorQue() {
+        given(ollamaClient.generar(anyString(), eq(false))).willReturn("He verificado la recepción de las cunas.");
+
+        var r = servicio.generar(1L, null, "INFORME_SUPERVISION", "verifiqué en bodega la entrega de 5 camas");
+
+        assertThat(r.observacionesRedactadasConIa()).isFalse();
+        assertThat(r.observaciones()).isEqualTo("verifiqué en bodega la entrega de 5 camas");
+        assertThat(r.motivoNotasTalCual()).contains("perdía cifras");
+    }
+
+    /** «Usar mis notas tal cual», después de ver la redacción: no se vuelve a llamar al modelo. */
+    @Test
+    void conRedactarConIaEnFalseVanLasNotasTalCualSinLlamarAlModelo() {
+        var r = servicio.generar(1L, null, "INFORME_SUPERVISION", "revisé la factura de agosto", java.util.Map.of(),
+                false);
+
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+        assertThat(r.observacionesRedactadasConIa()).isFalse();
+        assertThat(r.observaciones()).isEqualTo("revisé la factura de agosto");
+        assertThat(textoDelPdf()).contains("revisé la factura de agosto");
+        assertThat(registro()).contains("así lo pidió");
+    }
+
     /** El caso real del 29-09-2026, en la prueba desde el panel: «5 camas» salió como «las cunas». */
     @Test
     void siLaRedaccionPierdeUnaCantidadOCambiaUnaPalabraSeUsanLasNotasTalCual() {
@@ -462,7 +501,7 @@ class GeneracionDocumentoServiceTest {
                         1L, 27L, "Acta de Inicio")).willReturn(Optional.of(borrador));
 
         assertThat(servicio.generar(1L, 27L, "ACTA_INICIO", null,
-                java.util.Map.of("cedulaSupervisor", "43.512.887")).id()).isEqualTo(99L);
+                java.util.Map.of("cedulaSupervisor", "43.512.887")).documento().id()).isEqualTo(99L);
 
         Documento guardado = documentoGuardado();
         assertThat(guardado).isSameAs(borrador);

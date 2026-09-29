@@ -256,6 +256,25 @@ export interface GenerarDocumentoRequest {
    * como «[dato pendiente…]», en rojo, en vez de inventarse.
    */
   datos?: Record<string, string>
+  /**
+   * false: las observaciones van tal como el supervisor las escribió, sin
+   * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
+   */
+  redactarConIa?: boolean
+}
+
+/**
+ * El documento recién generado y cómo quedaron sus observaciones. El panel
+ * muestra la redacción del Copiloto antes de firmar: ninguna comprobación
+ * automática ve que cambie el sujeto de una frase, y quien firma sí.
+ */
+export interface DocumentoGeneradoResponse extends DocumentoResponse {
+  /** El texto que quedó en el apartado de observaciones, o null si no hay. */
+  observaciones: string | null
+  /** Si ese texto lo redactó el Copiloto (false: son las notas tal cual). */
+  observacionesRedactadasConIa: boolean
+  /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
+  motivoNotasTalCual: string | null
 }
 
 export interface ChatResponse {

@@ -102,6 +102,12 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                                 {"tipo":"CERTIFICACION_CUMPLIMIENTO","datos":{"numeroFactura":"FE 547",
                                  "fechaFactura":"03/11/2025","valorFactura":"$39.400.634,00","banco":"Bancolombia"}}"""))
                 .andExpect(status().isOk())
+                // Los campos del documento siguen al mismo nivel, y se suma cómo
+                // quedaron las observaciones (sin notas: ninguna).
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.nombre").exists())
+                .andExpect(jsonPath("$.documento").doesNotExist())
+                .andExpect(jsonPath("$.observacionesRedactadasConIa").value(false))
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(generado).get("id").asLong();
 

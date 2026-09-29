@@ -13,6 +13,9 @@ import java.util.Map;
  *              póliza, cédulas…—, por clave (ver {@code PlantillaDocumentoIA.campos},
  *              que se consultan en {@code GET /api/ia/plantillas}). Opcional: los
  *              que falten salen como «[dato pendiente…]».
+ * @param redactarConIa {@code false} para que las observaciones vayan tal como el supervisor las
+ *              escribió, sin pasar por el Copiloto. Lo usa el panel cuando el supervisor, al ver
+ *              la redacción antes de firmar, prefiere sus notas. Sin valor, se redacta.
  */
 public record GenerarDocumentoRequest(
         @NotBlank(message = "El tipo de documento es obligatorio (ver PlantillaDocumentoIA.CATALOGO).")
@@ -22,11 +25,16 @@ public record GenerarDocumentoRequest(
         @Size(max = 4000, message = "Las notas del supervisor no pueden superar 4000 caracteres.")
         String notas,
         @Size(max = 40, message = "Demasiados datos para un solo documento.")
-        Map<String, String> datos
+        Map<String, String> datos,
+        Boolean redactarConIa
 ) {
     /** Compatibilidad con quien genera sin datos complementarios. */
     public GenerarDocumentoRequest(String tipo, Long subetapaId, String notas) {
-        this(tipo, subetapaId, notas, null);
+        this(tipo, subetapaId, notas, null, null);
+    }
+
+    public GenerarDocumentoRequest(String tipo, Long subetapaId, String notas, Map<String, String> datos) {
+        this(tipo, subetapaId, notas, datos, null);
     }
 
 }

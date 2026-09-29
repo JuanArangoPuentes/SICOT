@@ -6,6 +6,7 @@ import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
 import type {
   ChatResponse,
+  DocumentoGeneradoResponse,
   DocumentoResponse,
   ExtraccionContratoResponse,
   GenerarDocumentoRequest,
@@ -35,8 +36,11 @@ export function subirDocumento(
   return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos`, { method: 'POST', body: form })
 }
 
-export function generarDocumento(contratoId: number, request: GenerarDocumentoRequest): Promise<DocumentoResponse> {
-  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/generar`, {
+export function generarDocumento(
+  contratoId: number,
+  request: GenerarDocumentoRequest,
+): Promise<DocumentoGeneradoResponse> {
+  return apiFetch<DocumentoGeneradoResponse>(`/api/contratos/${contratoId}/documentos/generar`, {
     method: 'POST',
     body: JSON.stringify(request),
   })

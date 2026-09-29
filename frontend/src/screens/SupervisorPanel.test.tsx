@@ -4,7 +4,7 @@ import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
 import { contrato, documento, sesionSupervisor } from '@/test/dobles'
 import type { Step, SubStep } from '@/types/domain'
-import type { PlantillaDocumento } from '@/services/api/types'
+import type { DocumentoGeneradoResponse, PlantillaDocumento } from '@/services/api/types'
 
 /**
  * Pruebas de la pantalla que ve un supervisor todos los días.
@@ -88,6 +88,9 @@ describe('SupervisorPanel', () => {
   // del archivo encuentra los servicios simulados y el resto recibe `undefined`
   // — un fallo que parece del componente y en realidad es del andamiaje.
   beforeEach(async () => {
+    // El historial de llamadas también: sin esto, «firmar no se llamó» veía
+    // las firmas de la prueba anterior.
+    vi.clearAllMocks()
     localStorage.clear()
     vi.mocked((await import('@/services/etapaService')).getEtapasContrato).mockResolvedValue([])
     vi.mocked((await import('@/services/alertaService')).getAlertasContrato).mockResolvedValue([])
@@ -353,7 +356,7 @@ describe('SupervisorPanel', () => {
   it('pide los datos antes de firmar y, si luego falla el registro, no dice que la firma falló', async () => {
     const { documentos, etapas } = await servicios()
     documentos.getPlantillasDocumento.mockResolvedValue([plantillaActa])
-    documentos.generarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true }))
+    documentos.generarDocumento.mockResolvedValue(generado())
     documentos.firmarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true, firmaId: 'FIRMA-TEST' }))
     etapas.cambiarEstadoSubetapa.mockResolvedValue(undefined as never)
     etapas.getEtapasContrato.mockResolvedValue([])
@@ -372,5 +375,101 @@ describe('SupervisorPanel', () => {
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
     expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
+  })
+
+  // ── La redacción del Copiloto se lee antes de firmar ────────────────────
+  //
+  // Hasta el 29-09-2026 el panel generaba y firmaba de un golpe: en la prueba
+  // en vivo, «se devolvieron al contratista 3 monitores» salió como «el
+  // contratista ha devuelto tres monitores» y se habría firmado sin leerlo.
+
+  /** El documento recién generado, con cómo quedaron sus observaciones. */
+  function generado(parcial: Partial<DocumentoGeneradoResponse> = {}): DocumentoGeneradoResponse {
+    return {
+      ...documento({ id: 9, generadoPorIa: true }),
+      observaciones: null,
+      observacionesRedactadasConIa: false,
+      motivoNotasTalCual: null,
+      ...parcial,
+    }
+  }
+
+  async function prepararRedaccion() {
+    const { documentos, etapas } = await servicios()
+    documentos.getPlantillasDocumento.mockResolvedValue([{ ...plantillaActa, campos: [] }])
+    documentos.firmarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true, firmaId: 'FIRMA-TEST' }))
+    etapas.cambiarEstadoSubetapa.mockResolvedValue(undefined as never)
+    etapas.getEtapasContrato.mockResolvedValue([])
+    return { documentos, etapas }
+  }
+
+  it('si el Copiloto redactó las observaciones, las muestra y no firma hasta que el supervisor las acepte', async () => {
+    const { documentos, etapas } = await prepararRedaccion()
+    documentos.generarDocumento.mockResolvedValue(
+      generado({ observaciones: 'El contratista ha devuelto tres monitores.', observacionesRedactadasConIa: true }),
+    )
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(screen.getByText('El contratista ha devuelto tres monitores.')).toBeInTheDocument()
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Revisando la redacción…' })).toBeDisabled()
+
+    await act(async () => fireEvent.click(screen.getByText('Firmar con esta redacción')))
+
+    // Se firma el mismo borrador que se mostró, sin regenerarlo.
+    expect(documentos.generarDocumento).toHaveBeenCalledTimes(1)
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+  })
+
+  it('«Usar mis notas tal cual» regenera sin el Copiloto y firma eso', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento
+      .mockResolvedValueOnce(
+        generado({ observaciones: 'El contratista ha devuelto tres monitores.', observacionesRedactadasConIa: true }),
+      )
+      .mockResolvedValueOnce(generado({ observaciones: 'se devolvieron al contratista 3 monitores' }))
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+    await act(async () => fireEvent.click(screen.getByText('Usar mis notas tal cual')))
+
+    expect(documentos.generarDocumento).toHaveBeenCalledTimes(2)
+    expect(documentos.generarDocumento).toHaveBeenLastCalledWith(1, expect.objectContaining({ redactarConIa: false }))
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
+  })
+
+  it('cancelar deja el borrador sin firmar y el sub-paso libre', async () => {
+    const { documentos, etapas } = await prepararRedaccion()
+    documentos.generarDocumento.mockResolvedValue(
+      generado({ observaciones: 'Texto redactado.', observacionesRedactadasConIa: true }),
+    )
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+    await act(async () => fireEvent.click(screen.getByText('Cancelar')))
+
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+    expect(etapas.cambiarEstadoSubetapa).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Firmar documento' })).toBeEnabled()
+    expect(screen.getByText(/quedó como borrador sin firmar/i)).toBeInTheDocument()
+  })
+
+  it('si van las notas tal cual, firma directo y dice por qué', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento.mockResolvedValue(
+      generado({
+        observaciones: 'mis notas',
+        motivoNotasTalCual: 'la redacción del Copiloto perdía cifras de sus notas',
+      }),
+    )
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(screen.queryByText('Firmar con esta redacción')).not.toBeInTheDocument()
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9)
   })
 })

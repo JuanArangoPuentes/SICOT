@@ -34,7 +34,12 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
         'y usted lo revisa y lo firma con su firma electrónica. ' +
         (pideObservaciones
           ? doc.llevaObservaciones
-            ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. '
+            ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. ' +
+              // Desde el 29-09-2026 la redacción del Copiloto se muestra antes
+              // de firmar: decir que va «tal cual» o firmarla sin enseñarla
+              // eran las dos cosas que no podían pasar.
+              'Si el Copiloto la redacta en lenguaje formal, se la mostraré junto a lo que usted escribió para que ' +
+              'decida antes de firmar. '
             : // El Acta de Inicio y la Certificación no tienen apartado de
               // observaciones: prometer que la descripción iría al documento
               // era falso desde que siguen el formato oficial (28-09-2026).
