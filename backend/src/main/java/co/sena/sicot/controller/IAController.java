@@ -74,7 +74,8 @@ public class IAController {
                 .map(p -> new PlantillaDocumentoResponse(p.clave(), p.codigo(), p.nombre(), p.llevaObservaciones(),
                         p.campos().stream()
                                 .map(c -> new PlantillaDocumentoResponse.Campo(c.clave(), c.etiqueta(), c.ejemplo(),
-                                        c.opcional()))
+                                        c.opcional(), PlantillaDocumentoIA.dependeDe(c.clave()),
+                                        PlantillaDocumentoIA.esPorDocumento(c.clave())))
                                 .toList()))
                 .toList();
     }

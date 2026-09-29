@@ -421,7 +421,7 @@ class GeneracionDocumentoServiceTest {
         borrador.setEstado(EstadoDocumento.PENDIENTE);
         borrador.setContenido(new byte[]{1, 2, 3});
         given(documentoRepository
-                .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
                         1L, 27L, "Acta de Inicio")).willReturn(Optional.of(borrador));
 
         assertThat(servicio.generar(1L, 27L, "ACTA_INICIO", null,

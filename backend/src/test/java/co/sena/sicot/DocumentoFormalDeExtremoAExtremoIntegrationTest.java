@@ -53,14 +53,19 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     @Autowired
     private ContratoRepository contratoRepository;
 
+    @Autowired
+    private co.sena.sicot.repository.SubetapaRepository subetapaRepository;
+
     private String supervisor;
+    private String admin;
+    private String gestion;
     private long contratoId;
 
     @BeforeEach
     void preparar() throws Exception {
-        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
         supervisor = login("supervisor@soy.sena.edu.co", "Supervisor123*");
-        String admin = login("administrador@soy.sena.edu.co", "Admin123*");
+        admin = login("administrador@soy.sena.edu.co", "Admin123*");
         long idSupervisor = objectMapper.readTree(loginBody("supervisor@soy.sena.edu.co", "Supervisor123*"))
                 .get("usuarioId").asLong();
         String creado = mockMvc.perform(post("/api/contratos")
@@ -152,6 +157,21 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(certificado).isNotNull();
         assertThat(certificado.get("llevaObservaciones").asBoolean()).isFalse();
         assertThat(certificado.get("campos").toString()).contains("numeroFactura").contains("numeroCuenta");
+
+        // El formulario usa estos dos datos para no recordar la factura del mes
+        // pasado en el informe siguiente y para exigir el valor actualizado
+        // solo cuando hubo adición.
+        java.util.Map<String, JsonNode> camposDelInforme = new java.util.HashMap<>();
+        for (JsonNode p : plantillas) {
+            if (p.get("tipo").asText().equals("INFORME_SUPERVISION")) {
+                p.get("campos").forEach(c -> camposDelInforme.put(c.get("clave").asText(), c));
+            }
+        }
+        assertThat(camposDelInforme.get("numeroFactura").get("porDocumento").asBoolean()).isTrue();
+        assertThat(camposDelInforme.get("valorActual").get("dependeDe").asText()).isEqualTo("adicion");
+        assertThat(camposDelInforme.get("valorActual").get("opcional").asBoolean()).isTrue();
+        assertThat(camposDelInforme.get("aseguradora").get("porDocumento").asBoolean()).isFalse();
+        assertThat(camposDelInforme.get("aseguradora").get("dependeDe").isNull()).isTrue();
     }
 
     /** Así bajaban los documentos de demostración sin archivo: 200 con cero bytes, un «.pdf» dañado. */
@@ -170,6 +190,91 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message", containsString("no tiene archivo guardado")));
+    }
+
+    // ── Hallazgos de la revisión adversarial del 28-09-2026 ─────────────────
+
+    private long subetapa27() throws Exception {
+        JsonNode etapas = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        return etapas.get(1).get("subEtapas").get(6).get("id").asLong();
+    }
+
+    private long generarActa(long subetapa) throws Exception {
+        String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(r).get("id").asLong();
+    }
+
+    /**
+     * Un PDF cargado a mano en la subetapa, con un nombre que empieza como el
+     * formato, se tomaba por borrador: la generación lo sobrescribía y
+     * respondía 500.
+     */
+    @Test
+    void generarNoSobrescribeUnDocumentoCargadoAManoConUnNombreParecido() throws Exception {
+        long subetapa = subetapa27();
+        byte[] escaneado = "%PDF-1.4 acta escaneada firmada en papel".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Documento cargado = new Documento();
+        cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        cargado.setSubetapa(subetapaRepository.findById(subetapa).orElseThrow());
+        cargado.setNombre("Acta de Inicio firmada por el contratista");
+        cargado.setTipo(TipoDocumento.PDF);
+        cargado.setContentType("application/pdf");
+        cargado.setContenido(escaneado);
+        cargado.setTamanioBytes((long) escaneado.length);
+        cargado.setEstado(EstadoDocumento.PENDIENTE);
+        long idCargado = documentoRepository.save(cargado).getId();
+
+        long generado = generarActa(subetapa);
+
+        assertThat(generado).isNotEqualTo(idCargado);
+        assertThat(documentoRepository.findById(idCargado).orElseThrow().getContenido()).isEqualTo(escaneado);
+    }
+
+    /** El nombre estampado en el hueco del supervisor tiene que ser el del supervisor. */
+    @Test
+    void unDocumentoGeneradoSoloLoFirmaElSupervisorDelContrato() throws Exception {
+        long id = generarActa(subetapa27());
+        String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + admin))
+                .andReturn().getResponse().getContentAsString();
+        if (!objectMapper.readTree(miFirma).get("tieneFirmaActiva").asBoolean()) {
+            long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
+                    .get("usuarioId").asLong();
+            mockMvc.perform(post("/api/firmas")
+                            .header("Authorization", "Bearer " + admin)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"usuarioId\":" + idAdmin + "}"))
+                    .andExpect(status().isCreated());
+        }
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("lo firma el supervisor del contrato")));
+        assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
+    }
+
+    /** Si Gestión corrige el número del contrato, el borrador regenerado lleva el nombre nuevo. */
+    @Test
+    void alRegenerarElBorradorTomaElNumeroDeContratoActual() throws Exception {
+        long subetapa = subetapa27();
+        long primero = generarActa(subetapa);
+        var contrato = contratoRepository.findById(contratoId).orElseThrow();
+        contrato.setNumeroContrato("CO1.PCCNTR.8151685-CORREGIDO");
+        contratoRepository.save(contrato);
+
+        long segundo = generarActa(subetapa);
+
+        assertThat(segundo).isEqualTo(primero);
+        assertThat(documentoRepository.findById(segundo).orElseThrow().getNombre())
+                .isEqualTo("Acta de Inicio — CO1.PCCNTR.8151685-CORREGIDO");
     }
 
     private String login(String email, String password) throws Exception {

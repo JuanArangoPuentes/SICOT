@@ -147,7 +147,7 @@ public class GeneracionDocumentoService {
         Documento documento = null;
         if (subetapa != null) {
             documento = documentoRepository
-                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
                             contrato.getId(), subetapa.getId(), plantilla.nombre())
                     .orElse(null);
         }
@@ -160,6 +160,10 @@ public class GeneracionDocumentoService {
         } else {
             log.info("Se regenera el borrador {} de '{}' sin firmar en la subetapa {}.",
                     documento.getId(), plantilla.nombre(), subetapa.getCodigo());
+            // El nombre se recalcula: si Gestión corrigió el número del
+            // contrato, el borrador guardaba el viejo y el expediente y la
+            // descarga lo seguían mostrando aunque el PDF ya llevara el nuevo.
+            documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
         }
         documento.setTipo(TipoDocumento.PDF);
         documento.setContentType("application/pdf");

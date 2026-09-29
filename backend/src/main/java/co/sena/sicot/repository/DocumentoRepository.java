@@ -78,8 +78,15 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
     boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
-    /** El borrador sin firmar más reciente de un formato en una subetapa. */
-    java.util.Optional<Documento> findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+    /**
+     * El borrador sin firmar más reciente de un formato en una subetapa, entre
+     * los que generó SICOT. Sin la condición de «generado», un PDF cargado a
+     * mano cuyo nombre empezara igual («Acta de Inicio firmada por el
+     * contratista») se tomaba por borrador y la regeneración lo sobrescribía
+     * (revisión adversarial del 28-09-2026).
+     */
+    java.util.Optional<Documento>
+            findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
     /**

@@ -58,6 +58,39 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
         }
     }
 
+    /**
+     * Datos que son de UN documento —la factura del periodo, sus valores, la
+     * declaración de multas— y no del contrato. El formulario no los ofrece ya
+     * escritos para el siguiente documento: el «NO» de multas del informe de
+     * un periodo aparecía puesto en el Informe Final y certificaba sin
+     * multas el contrato entero (revisión del 28-09-2026).
+     */
+    private static final java.util.Set<String> POR_DOCUMENTO = java.util.Set.of(
+            "informeNumero", "periodoDesde", "periodoHasta", "numeroFactura", "fechaFactura", "valorFactura",
+            "valorFacturado", "valorEjecutado", "periodoSeguridadSocial", "numeroPlanilla", "fechaPlanilla",
+            "multas", "actaNumero", "cantidadDevolutivos", "cantidadConsumo", "saldoPorEjecutar", "valorAObligar",
+            "valorTotalPagado", "valorTotalEjecutado", "cumplimientoObjeto", "mantenimiento",
+            "fechaCertificadoPagos", "terminacionAnticipada", "valorFinal", "fechaTerminacionFinal", "valorActual",
+            "fechaTerminacionActual", "prorroga", "adicion");
+
+    /**
+     * Un dato opcional que pasa a ser necesario según otro: el valor actual
+     * solo hace falta si hubo una adición, la fecha actual si hubo una
+     * prórroga. Con la adición declarada y el valor vacío, el documento sale
+     * con el valor pendiente, y el formulario tiene que contarlo.
+     */
+    private static final Map<String, String> DEPENDE_DE = Map.of(
+            "valorActual", "adicion", "fechaTerminacionActual", "prorroga");
+
+    public static boolean esPorDocumento(String clave) {
+        return POR_DOCUMENTO.contains(clave);
+    }
+
+    /** La clave del dato que vuelve necesario a este, o {@code null}. */
+    public static String dependeDe(String clave) {
+        return DEPENDE_DE.get(clave);
+    }
+
     private static final String GESTION_CONTRACTUAL = "GESTIÓN CONTRACTUAL";
 
     /** Carta con los márgenes de Word de los GCCON (2,5 cm a los lados, 3 cm arriba). */

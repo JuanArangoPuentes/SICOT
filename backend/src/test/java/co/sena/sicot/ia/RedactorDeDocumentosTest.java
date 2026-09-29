@@ -424,4 +424,17 @@ class RedactorDeDocumentosTest {
         assertThat(RedactorDeDocumentos.contarPendientes(RedactorDeDocumentos.componer(acta, contrato(), HOY, null)))
                 .isEqualTo(4);
     }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"No", "no.", "N/A", "No aplica", "Ningún", "ninguna", "No hubo", "No se presentaron"})
+    void unaRespuestaNegativaSeReconoceAunqueLleveTilde(String respuesta) {
+        assertThat(RedactorDeDocumentos.esNo(respuesta)).isTrue();
+    }
+
+    @Test
+    void unaRespuestaConContenidoNoSeTomaComoNegativa() {
+        assertThat(RedactorDeDocumentos.esNo("Otrosí No. 1 del 15/08/2025")).isFalse();
+        assertThat(RedactorDeDocumentos.esNo("$ 5.000.000")).isFalse();
+        assertThat(RedactorDeDocumentos.esNo(null)).isFalse();
+    }
 }

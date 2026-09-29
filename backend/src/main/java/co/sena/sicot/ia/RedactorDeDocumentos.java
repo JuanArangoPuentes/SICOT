@@ -442,7 +442,12 @@ public final class RedactorDeDocumentos {
         if (valor == null) {
             return false;
         }
-        String v = valor.strip().toUpperCase(ES).replace(".", "");
+        // Sin tildes: «Ningún» no empieza por «NINGUN» (la Ú no es U), y se
+        // tomaba como una adición o una multa que sí hubo.
+        String v = java.text.Normalizer.normalize(valor.strip(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase(ES)
+                .replace(".", "");
         return v.equals("NO") || v.equals("N/A") || v.equals("NA") || v.startsWith("NO APLICA")
                 || v.startsWith("NINGUN") || v.startsWith("NO HUBO") || v.startsWith("NO SE PRESENTARON");
     }

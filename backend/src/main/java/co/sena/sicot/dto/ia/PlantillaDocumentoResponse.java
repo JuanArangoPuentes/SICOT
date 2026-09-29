@@ -14,9 +14,14 @@ public record PlantillaDocumentoResponse(String tipo, String codigo, String nomb
                                          List<Campo> campos) {
 
     /**
-     * @param ejemplo  cómo lo escribe el formato real diligenciado.
-     * @param opcional si falta no deja nada pendiente (se deduce o no siempre aplica).
+     * @param ejemplo      cómo lo escribe el formato real diligenciado.
+     * @param opcional     si falta no deja nada pendiente (se deduce o no siempre aplica).
+     * @param dependeDe    clave del dato que lo vuelve necesario (el valor actual, si hubo
+     *                     adición), o {@code null}.
+     * @param porDocumento si es de este documento y no del contrato (la factura del
+     *                     periodo, las multas): no se ofrece ya escrito en el siguiente.
      */
-    public record Campo(String clave, String etiqueta, String ejemplo, boolean opcional) {
+    public record Campo(String clave, String etiqueta, String ejemplo, boolean opcional, String dependeDe,
+                        boolean porDocumento) {
     }
 }

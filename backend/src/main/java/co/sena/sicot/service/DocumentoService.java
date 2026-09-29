@@ -208,6 +208,16 @@ public class DocumentoService {
                     + "Un documento firmado no se reemplaza firmando otro.");
         }
         var usuario = SecurityUtils.currentUsuario();
+        // Un documento formal que genera SICOT lleva el nombre del supervisor
+        // en su bloque de firma, y la firma se estampa encima. Que la firme
+        // otra persona —un administrador con firma propia— dejaba su nombre
+        // estampado en el hueco del supervisor: un documento oficial que
+        // atribuye la firma a quien no firmó (revisión del 28-09-2026).
+        var supervisor = documento.getContrato().getSupervisor();
+        if (documento.isGeneradoPorIa() && supervisor != null && !supervisor.getId().equals(usuario.getId())) {
+            throw new BusinessException("Este documento lo firma el supervisor del contrato ("
+                    + supervisor.getNombre() + "): su nombre es el que aparece en el bloque de firma.");
+        }
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(
                         "No tiene una firma electrónica activa asignada. Solicítela al Administrador."));
