@@ -368,6 +368,35 @@ public final class FidelidadDeRedaccion {
         return true;
     }
 
+    /**
+     * Raíces de afirmaciones que comprometen al supervisor: plazos,
+     * cumplimiento, calidad, conformidad, sanciones. En la prueba en vivo del
+     * 29-09-2026, «entregó la 2da parte de los bienes» salió como «entregando
+     * la segunda parte de los bienes en el término establecido»: el Informe
+     * Final afirmaba que la entrega fue a tiempo sin que el supervisor lo
+     * dijera. No tiene cifras ni palabras parecidas, así que nada lo veía.
+     */
+    private static final List<String> AFIRMACIONES = List.of("termino", "plazo", "tiempo", "oportun", "cabalidad",
+            "satisfac", "conform", "cumpl", "especificac", "garantia", "multa", "sancion", "retras", "demora",
+            "atras", "puntual");
+
+    /**
+     * ¿Afirma la redacción algo de plazos, cumplimiento, calidad o sanciones
+     * que las notas no dicen? Si las notas usan la misma raíz («cumple» y
+     * «cumplió», «retraso» y «retrasos»), no es una afirmación nueva.
+     */
+    public static boolean sinAfirmacionesAgregadas(String redactado, String notas) {
+        Set<String> deNotas = palabrasLargas(notas);
+        for (String w : palabrasLargas(redactado)) {
+            for (String raiz : AFIRMACIONES) {
+                if (w.startsWith(raiz) && deNotas.stream().noneMatch(v -> v.startsWith(raiz))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     /** Prefijos que niegan: «incumplió», «imposible», «desorden», «disconforme». */
     private static final List<String> NEGACIONES = List.of("des", "dis", "in", "im");
 

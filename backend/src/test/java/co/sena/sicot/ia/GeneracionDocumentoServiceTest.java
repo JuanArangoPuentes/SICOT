@@ -260,6 +260,19 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).contains("mezclaba texto en otro idioma");
     }
 
+    /** Prueba en vivo del 29-09-2026: el Informe Final afirmaba que la entrega fue a tiempo. */
+    @Test
+    void siLaRedaccionAgregaQueSeCumplioElPlazoSeUsanLasNotasTalCual() {
+        given(ollamaClient.generar(anyString(), eq(false)))
+                .willReturn("Se entregó la segunda parte de los bienes en el término establecido.");
+
+        servicio.generar(1L, null, "INFORME_FINAL", "entregó la segunda parte de los bienes");
+
+        assertThat(textoDelPdf()).contains("entregó la segunda parte de los bienes")
+                .doesNotContain("en el término establecido");
+        assertThat(registro()).contains("afirmaba sobre plazos, cumplimiento o calidad");
+    }
+
     @Test
     void siLaIaNoRespondeElDocumentoSeGeneraIgualConLasNotas() {
         given(ollamaClient.generar(anyString(), anyBoolean()))

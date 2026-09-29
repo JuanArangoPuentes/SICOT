@@ -307,6 +307,8 @@ public class GeneracionDocumentoService {
                         ? "perdía cifras de sus notas"
                 : !FidelidadDeRedaccion.sinPalabrasCambiadas(corregido, recortadas, datos)
                         ? "cambiaba palabras de sus notas por otras parecidas"
+                : !FidelidadDeRedaccion.sinAfirmacionesAgregadas(corregido, recortadas)
+                        ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
                 : null;
         if (infiel != null) {
             log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);

@@ -151,7 +151,8 @@ class FidelidadDeRedaccionTest {
         return !FidelidadDeRedaccion.enOtraEscritura(redactado)
                 && FidelidadDeRedaccion.sinCifrasInventadas(redactado, notas, DATOS)
                 && FidelidadDeRedaccion.conservaLasCifras(redactado, notas, DATOS)
-                && FidelidadDeRedaccion.sinPalabrasCambiadas(redactado, notas, DATOS);
+                && FidelidadDeRedaccion.sinPalabrasCambiadas(redactado, notas, DATOS)
+                && FidelidadDeRedaccion.sinAfirmacionesAgregadas(redactado, notas);
     }
 
     @Test
@@ -194,9 +195,14 @@ class FidelidadDeRedaccionTest {
                 {"resibí a satisfacción los 10 computadores portátiles",
                         "Recibí a satisfacción los 10 computadores portátiles."},
                 {"todo llegó bien, 40 resmas", "Las 40 resmas se recibieron en buen estado."},
-                {"fui a la sede y todo bien", "Se visitó la sede; la visita ha sido satisfactoria."},
+                // «sede» sigue en el texto: «sido» no la reemplaza
+                {"fui a la sede y todo bien", "Se visitó la sede; todo ha sido normal."},
                 {"el contratista entrega las 30 mesas", "El contratista entregó las treinta mesas."},
                 {"el contrato 71204 va al día", "El contrato se encuentra al día."},
+                // la misma afirmación con otra forma de la palabra no es nueva
+                {"el contratista cumple las especificaciones y hay retraso en la pintura",
+                        "El contratista cumplió con las especificaciones técnicas; se presentan retrasos en la"
+                                + " pintura."},
                 // modelo #12: el valor en letras
                 {"recibí la factura FE-4521 por $4.500.000 del periodo de agosto",
                         "Se recibió la factura FE-4521 por un monto de cuatro millones quinientos mil pesos"
@@ -228,6 +234,11 @@ class FidelidadDeRedaccionTest {
                 // el sentido invertido, en los dos sentidos
                 {"el contratista cumplió con la entrega", "El contratista incumplió con la entrega."},
                 {"el contratista incumplió el plazo", "El contratista cumplió el plazo."},
+                // prueba en vivo: agrega que la entrega fue a tiempo
+                {"el contratista cumplió con el objeto, entregó la 2da parte de los bienes y no hubo multas",
+                        "El contratista cumplió con el objeto del contrato, entregando la segunda parte de los bienes"
+                                + " en el término establecido, sin que se hayan incurrido en ninguna multa."},
+                {"se recibieron las sillas", "Se recibieron las sillas a satisfacción y conforme a lo pactado."},
         };
         for (String[] par : alteradas) {
             assertThat(fiel(par[1], par[0])).as(par[0]).isFalse();
