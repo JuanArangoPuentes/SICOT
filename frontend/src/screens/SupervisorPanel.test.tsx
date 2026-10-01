@@ -462,7 +462,10 @@ describe('SupervisorPanel', () => {
 
     await firmarActa()
 
-    expect(screen.getByText('El contratista ha devuelto tres monitores.')).toBeInTheDocument()
+    // La redacción va completa; partida en tramos porque se marcan las
+    // palabras que no estaban en las notas.
+    expect(screen.getByTestId('redaccion-revisada')).toHaveTextContent('El contratista ha devuelto tres monitores.')
+    expect(screen.getByTestId('redaccion-revisada').querySelectorAll('mark').length).toBeGreaterThan(0)
     expect(documentos.firmarDocumento).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Revisando la redacción…' })).toBeDisabled()
 
