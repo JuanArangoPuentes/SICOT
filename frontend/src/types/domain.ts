@@ -37,4 +37,15 @@ export interface Step {
 export interface ChatMsg {
   role: 'ai' | 'user'
   text: string
+  /**
+   * De dónde sale un mensaje del Copiloto. En pantalla todos se ven igual;
+   * solo decide cuáles le llegan al modelo como conversación previa (ver
+   * services/historialCopiloto.ts).
+   *
+   * - `'modelo'`: la respuesta del modelo a una pregunta.
+   * - `'guia'`: la guía de un sub-paso, armada con el procedimiento.
+   * - sin origen: lo que SICOT escribe por su cuenta (bienvenida, avisos,
+   *   errores, cierres de paso). No es conversación y no se le manda.
+   */
+  origen?: 'modelo' | 'guia'
 }

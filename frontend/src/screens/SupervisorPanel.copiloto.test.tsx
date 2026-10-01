@@ -3,13 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
 import { preguntarCopiloto } from '@/services/documentoService'
+import { historialParaElCopiloto } from '@/services/historialCopiloto'
 import type { ChatResponse } from '@/services/api/types'
 import { contrato, sesionSupervisor } from '@/test/dobles'
 import type { Step } from '@/types/domain'
 
 /**
- * El chat del Copiloto en el panel del Supervisor cuando la petición se corta
- * a medias.
+ * El chat del Copiloto en el panel del Supervisor: qué pasa cuando la petición
+ * se corta a medias y qué parte de la conversación le llega al modelo.
  *
  * Va aparte de SupervisorPanel.test.tsx porque aquí todo gira alrededor de las
  * preguntas al Copiloto: cada prueba decide cuándo responde el modelo y, en las
@@ -232,5 +233,31 @@ describe('SupervisorPanel — Copiloto con la conexión cortada', () => {
     await act(async () => reintento.resolver({ respuesta: 'Parece completo; puede cerrar el paso.' }))
     expect(screen.getByText('Parece completo; puede cerrar el paso.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /confirmar paso 1/i })).toBeInTheDocument()
+  })
+})
+
+describe('SupervisorPanel — lo que le llega al Copiloto', () => {
+  /**
+   * El historial se filtra por el origen de cada mensaje: lo que no venga
+   * marcado como respuesta del modelo o como guía se queda fuera. Si el panel
+   * dejara de marcarlos, el Copiloto perdería la memoria sin que nada fallara a
+   * la vista; esta prueba es la que lo notaría.
+   */
+  it('recibe la guía del sub-paso y la pregunta anterior con su respuesta, no la bienvenida', async () => {
+    vi.mocked(preguntarCopiloto)
+      .mockResolvedValueOnce({ respuesta: 'Los estudios previos los elabora el área requirente.' })
+      .mockResolvedValueOnce({ respuesta: 'Sí, revíselos antes de marcar el sub-paso.' })
+    await montar()
+
+    fireEvent.click(screen.getByRole('button', { name: /iniciar paso 1/i }))
+    await escribirAlCopiloto('¿Quién hace los estudios previos?')
+    await escribirAlCopiloto('¿Los tengo que revisar yo?')
+
+    const historial = historialParaElCopiloto(vi.mocked(preguntarCopiloto).mock.calls[1][2] ?? [])
+    expect(historial.map((m) => m.text)).toEqual([
+      expect.stringMatching(/^Sub-paso 1\.1 — Revisar estudios previos/),
+      '¿Quién hace los estudios previos?',
+      'Los estudios previos los elabora el área requirente.',
+    ])
   })
 })

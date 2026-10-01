@@ -412,7 +412,7 @@ export default function SupervisorPanel({
     setExpandedSteps(new Set([stepId]))
     // La guía sale de la plantilla del procedimiento, al instante; antes era
     // una pregunta al modelo por sub-paso (ver data/guiaSubPaso.ts).
-    setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(step, primeraPendiente) }])
+    setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(step, primeraPendiente), origen: 'guia' }])
   }
 
   // Ejecuta de verdad la acción de un sub-paso (generar/firmar si aplica y
@@ -540,7 +540,7 @@ export default function SupervisorPanel({
         setActiveSubStep(next)
         const nextSub = pasoActual?.subSteps.find((ss) => ss.id === next)
         if (pasoActual && nextSub)
-          setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(pasoActual, nextSub) }])
+          setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(pasoActual, nextSub), origen: 'guia' }])
       } else {
         setActiveSubStep(null)
         setTutorialMode(false)
@@ -610,7 +610,7 @@ export default function SupervisorPanel({
         () => preguntarCopiloto(contrato.id, pregunta, chatMsgs),
         avisarQueSeRepite,
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta }])
+      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
     } catch (e) {
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
@@ -657,7 +657,7 @@ export default function SupervisorPanel({
         () => preguntarCopiloto(contrato.id, texto, chatMsgs),
         avisarQueSeRepite,
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta }])
+      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
     } catch (e) {
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
