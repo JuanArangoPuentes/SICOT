@@ -245,6 +245,30 @@ class FidelidadDeRedaccionTest {
                 {"recibí la factura FE-4521 por $4.500.000 del periodo de agosto",
                         "Se recibió la factura FE-4521 por un monto de cuatro millones quinientos mil pesos"
                                 + " correspondiente al período de agosto."},
+                // Medición del 01-10-2026: lo mismo escrito de otra forma.
+                {"a las 3 pm se hizo la entrega de los insumos en el almacén",
+                        "A las tres de la tarde se efectuó la entrega de insumos en el almacén."},
+                {"se instalaron 120 m2 de piso en el ambiente de gastronomía",
+                        "Se instalaron 120 metros cuadrados de piso en el ambiente de gastronomía."},
+                {"la factura de agosto es por $4'500.000 y está correcta",
+                        "La factura de agosto por cuatro millones quinientos mil pesos está correcta."},
+                {"se revisó el 1er piso y el 2do piso, en el 2do piso faltan 3 lámparas",
+                        "Se inspeccionaron los pisos primero y segundo. En el segundo piso faltan tres lámparas."},
+                {"están instalados: 2 hornos, 1 nevera y 4 mesones",
+                        "Se confirmó la instalación de dos hornos, una nevera y cuatro mesones."},
+                {"se revisó el 1er piso y el 2do piso, en el 2do piso faltan 3 lámparas",
+                        "Se inspeccionaron los primeros y segundos pisos. En el segundo piso faltan tres lámparas."},
+                {"el contratista no presentó reclamaciones y el saldo a liberar es 0",
+                        "El contratista no presentó reclamaciones y el saldo pendiente de liberación es cero."},
+                // «se reprograma» dicho como lo que es: una decisión, sin fecha.
+                {"no se ha podido hacer la visita porque el ambiente estaba cerrado, se reprograma",
+                        "No fue posible realizar la visita porque el ambiente estaba cerrado; se procede a"
+                                + " reprogramarla."},
+                // La calificación del estado que sí está en las notas.
+                {"se recibieron 25 sillas en la sede de Tuluá, todo en buen estado",
+                        "Se recibieron 25 sillas en buen estado en la sede de Tuluá."},
+                {"los equipos funcionan bien", "Los equipos se encuentran en buen funcionamiento."},
+                {"el informe del mes pasado está completo", "El informe del mes pasado está completo."},
         };
         for (String[] par : fieles) {
             assertThat(fiel(par[1], par[0])).as(par[0]).isTrue();
@@ -269,6 +293,41 @@ class FidelidadDeRedaccionTest {
                 {"llegaron 5 camas", "Llegaron seis camas."},
                 {"el 15/09/2026 fui a la sede", "El 16 de septiembre de 2026 se visitó la sede."},
                 {"se recibió la 1ra entrega", "Se recibió la segunda entrega."},
+                // Reprogramar habla del calendario, pero no de que se cumpliera,
+                // y una reprogramación que las notas no dicen es un hecho nuevo.
+                {"no se pudo hacer la visita, se reprograma",
+                        "No se pudo hacer la visita; se reprogramó y se cumplió el plazo previsto."},
+                {"se hizo la visita a la sede", "Se hizo la visita a la sede, que se había reprogramado."},
+                // Revisión ciega del 01-10-2026 de redacciones que pasaban: «se
+                // reprograma» no es que ya haya una fecha nueva.
+                {"no se ha podido hacer la visita porque el ambiente estaba cerrado, se reprograma",
+                        "No fue posible realizar la visita debido a que el ambiente estaba cerrado; se ha programado"
+                                + " una nueva fecha para efectuarla."},
+                // ni «todo completo», «en orden» o «vigentes» son «en buen estado»,
+                {"recibí 6 cajas de tóner y 30 resmas de papel, todo completo",
+                        "Se recibieron seis cajas de tóner y treinta resmas de papel en buen estado."},
+                {"revisé los soportes de pago de los aprendices, todo en orden",
+                        "Los soportes de pago para los aprendices se encuentran en buen estado."},
+                {"los equipos no funcionan, el contratista no ha venido a revisarlos",
+                        "Los equipos no se encuentran en buen funcionamiento y el contratista aún no ha realizado la"
+                                + " revisión."},
+                // ni una entrega es «sin incidencias» porque no hubo multas,
+                {"el contratista entregó todos los bienes y no hubo multas ni sanciones",
+                        "El contratista entregó todos los bienes sin incidencias. No hubo multas ni sanciones."},
+                // ni «la otra semana» (la próxima) es «la semana anterior».
+                {"se acordó con el contratista entregar los faltantes la otra semana",
+                        "Se acordó con el contratista la entrega de los materiales faltantes la semana anterior."},
+                // Lo que sigue siendo distinto aunque se escriba de otra forma.
+                {"a las 3 pm se hizo la entrega", "A las cuatro de la tarde se hizo la entrega."},
+                {"se instalaron 120 m2 de piso", "Se instalaron 12 metros cuadrados de piso."},
+                {"la factura es por $4'500.000", "La factura es por $4.600.000."},
+                {"llegaron 2 neveras", "Llegó una nevera."},
+                {"la factura de agosto es por $4'500.000 y está correcta",
+                        "La factura de agosto por cuatro millones quinientos mil pesos es correcta según las"
+                                + " regulaciones vigentes."},
+                // Medición del 01-10-2026: valoraciones infladas por el modelo.
+                {"se recibieron 25 sillas y 10 mesas en la sede de Tuluá, todo en buen estado",
+                        "Se recibieron 25 sillas y 10 mesas en excelente estado en la sede de Tuluá."},
                 // el sentido invertido, en los dos sentidos
                 {"el contratista cumplió con la entrega", "El contratista incumplió con la entrega."},
                 {"el contratista incumplió el plazo", "El contratista cumplió el plazo."},

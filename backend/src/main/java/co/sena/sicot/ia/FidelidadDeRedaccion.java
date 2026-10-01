@@ -170,8 +170,8 @@ public final class FidelidadDeRedaccion {
      * un dato del contrato cuenta solo como identificador completo.
      */
     public static boolean sinCifrasInventadas(String redactado, String notas, List<String> datosConocidos) {
-        String textoNotas = normalizar(notas == null ? "" : notas);
-        String textoRedactado = normalizar(redactado == null ? "" : redactado);
+        String textoNotas = normalizarCifras(notas == null ? "" : notas);
+        String textoRedactado = normalizarCifras(redactado == null ? "" : redactado);
         StringBuilder notasSinReferencias = new StringBuilder(textoNotas);
         StringBuilder redaccionSinReferencias = new StringBuilder(textoRedactado);
         taparFechasYHoras(textoNotas, notasSinReferencias, textoRedactado, redaccionSinReferencias);
@@ -417,8 +417,8 @@ public final class FidelidadDeRedaccion {
         if (notas == null || notas.isBlank()) {
             return true;
         }
-        String textoNotas = normalizar(notas);
-        String textoRedactado = redactado == null ? "" : normalizar(redactado);
+        String textoNotas = normalizarCifras(notas);
+        String textoRedactado = redactado == null ? "" : normalizarCifras(redactado);
         List<String> fichasRedaccion = fichas(redactado);
         if (!ordinalesConservados(textoNotas, textoRedactado, fichasRedaccion)) {
             return false;
@@ -451,6 +451,23 @@ public final class FidelidadDeRedaccion {
         List<String[]> conCosa = valoresConCosa(notasSinReferencias.toString()).stream()
                 .filter(v -> !identificadores.contains(v[0])).toList();
         List<String> deNotas = conCosa.stream().map(v -> v[0]).toList();
+        // «2 hornos, 1 nevera» redactado «dos hornos, una nevera»: el artículo
+        // vale por el 1 solo delante de la misma cosa que las notas cuentan
+        // con 1. En general no cuenta, porque casi siempre es un artículo
+        // (medición con qwen2.5:7b del 01-10-2026).
+        Set<String> contadasConUno = new HashSet<>();
+        conCosa.stream().filter(v -> v[0].equals("1") && v[1] != null).forEach(v -> contadasConUno.add(v[1]));
+        if (!contadasConUno.isEmpty()) {
+            Matcher articulo = Pattern.compile("(?<![\\p{L}\\d])(un[ao]?)\\s+(\\p{L}+)")
+                    .matcher(redaccionSinReferencias.toString());
+            while (articulo.find()) {
+                String cosa = articulo.group(2);
+                if (contadasConUno.stream().anyMatch(c -> mismaPalabra(c, cosa))) {
+                    redaccionSinReferencias.replace(articulo.start(1), articulo.end(1),
+                            "1" + " ".repeat(articulo.group(1).length() - 1));
+                }
+            }
+        }
         List<String> deRedaccion = new ArrayList<>(valoresEnOrden(redaccionSinReferencias.toString()));
         // «las dos corresponden a lo entregado» → «ambas corresponden…»: para
         // conservar un «dos» de las notas, «ambas» vale. Para inventar no
@@ -594,6 +611,38 @@ public final class FidelidadDeRedaccion {
                 if (i + 1 < fichasRedaccion.size() && mismaPalabra(siguiente, fichasRedaccion.get(i + 1))) {
                     return true;
                 }
+                // «los primeros y segundos pisos»: la cosa va después de una
+                // enumeración de ordinales.
+                for (int j = i + 1; j < Math.min(fichasRedaccion.size(), i + 5); j++) {
+                    String despues = fichasRedaccion.get(j);
+                    if (mismaPalabra(siguiente, despues)) {
+                        return true;
+                    }
+                    if (!despues.equals("y") && !despues.equals("e") && !esOrdinalEnLetras(despues)) {
+                        break;
+                    }
+                }
+                // «los pisos primero y segundo»: la cosa va antes, en una
+                // enumeración de ordinales (medición del 01-10-2026, donde
+                // «el 1er piso y el 2do piso» redactado así se descartaba).
+                for (int j = i - 1; j >= Math.max(0, i - 4); j--) {
+                    String antes = fichasRedaccion.get(j);
+                    if (mismaPalabra(siguiente, antes)) {
+                        return true;
+                    }
+                    if (!antes.equals("y") && !antes.equals("e") && !esOrdinalEnLetras(antes)) {
+                        break;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean esOrdinalEnLetras(String ficha) {
+        for (int n = 1; n < ORDINALES.length; n++) {
+            if (ficha.matches(ORDINALES[n])) {
+                return true;
             }
         }
         return false;
@@ -614,8 +663,8 @@ public final class FidelidadDeRedaccion {
         if (notas == null || notas.isBlank()) {
             return true;
         }
-        String textoNotas = normalizar(notas);
-        String textoRedactado = redactado == null ? "" : normalizar(redactado);
+        String textoNotas = normalizarCifras(notas);
+        String textoRedactado = redactado == null ? "" : normalizarCifras(redactado);
         int anterior = -1;
         for (Fecha f : fechas(textoNotas)) {
             int[] donde = dondeEsta(textoRedactado, f);
@@ -815,6 +864,9 @@ public final class FidelidadDeRedaccion {
         }
         v.put("un", 1L);
         v.put("una", 1L);
+        // «el saldo a liberar es 0» redactado «es cero» perdía el 0 (medición
+        // con qwen2.5:7b del 01-10-2026).
+        v.put("cero", 0L);
         v.put("veintiun", 21L);
         v.put("veintiuna", 21L);
         String[] decenas = {"treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"};
@@ -1218,6 +1270,11 @@ public final class FidelidadDeRedaccion {
     private static final List<List<String>> AFIRMACIONES = List.of(
             // plazos
             List.of("termino", "plazo", "tiempo", "oportun", "puntual", "cronograma", "previst", "programad"),
+            // «reprogramar» va aparte: «se reprograma» es una decisión sin
+            // fecha, y «se programó una nueva fecha» afirma que ya la hay. La
+            // revisión ciega del 01-10-2026 lo marcó como un cambio de estado,
+            // de pendiente a hecho, cuando las dos estaban en la misma familia.
+            List.of("reprogram"),
             // cumplimiento y conformidad con lo pactado
             List.of("cumpl", "conform", "acordad", "pactad", "estipulad", "debida"),
             // estado: «correctamente», «adecuadamente»
@@ -1231,7 +1288,31 @@ public final class FidelidadDeRedaccion {
             List.of("complet", "totalidad", "integr"),
             List.of("garantia"),
             List.of("multa", "sancion"),
-            List.of("retras", "demora", "atras"));
+            List.of("retras", "demora", "atras"),
+            // sustento normativo: «su valor es correcto según las regulaciones
+            // vigentes» convertía una factura revisada en una verificación
+            // legal que nadie hizo (medición del 01-10-2026)
+            List.of("regulac", "normativ", "reglament", "legislac"),
+            // Revisión ciega del 01-10-2026 de las redacciones aceptadas:
+            // «entregó todos los bienes» salió «sin incidencias», y «la otra
+            // semana» (la próxima) salió «la semana anterior».
+            List.of("incidenc", "contratiemp"),
+            List.of("anterior", "pasad"));
+
+    /**
+     * «en buen estado», «buen funcionamiento», «óptimas condiciones»: una
+     * calificación del estado de lo recibido. En la revisión ciega del
+     * 01-10-2026 el modelo la puso por «todo completo», «está bien», «en
+     * orden» o «están vigentes», que certifican otra cosa (la cantidad, la
+     * corrección, la vigencia), y por «no funcionan», que rebajaba un
+     * incumplimiento a «no se encuentran en buen funcionamiento».
+     */
+    private static final Pattern CALIFICACION_DEL_ESTADO = Pattern.compile("(?<!\\p{L})(?:buen[oa]?s?|perfect[oa]s?"
+            + "|optim[oa]s?|excelentes?|adecuad[oa]s?)\\s+(?:estado|funcionamiento|condicion(?:es)?|calidad)(?!\\p{L})");
+
+    /** Lo que en las notas ya califica bien el estado: «llegaron bien», «en buen estado», «óptimas». */
+    private static final List<String> CALIFICACION_EN_LAS_NOTAS = List.of("buen", "bien", "perfect", "optim",
+            "excelent", "adecuad");
 
     /**
      * Palabras de las notas que dicen que el plazo NO se cumplió: con ellas,
@@ -1239,7 +1320,10 @@ public final class FidelidadDeRedaccion {
      * («fuera del plazo» redactado como «en cumplimiento del plazo»).
      */
     private static final List<String> PLAZO_INCUMPLIDO = List.of("fuera", "vencid", "prorrog", "ampli", "retras",
-            "tarde", "atras", "demora", "incumpl");
+            "tarde", "atras", "demora", "incumpl",
+            // Reprogramar es que lo previsto no se hizo en su fecha: habla del
+            // plazo, pero no autoriza a decir que se cumplió.
+            "reprogram");
 
     /**
      * ¿Afirma la redacción algo de plazos, cumplimiento, calidad o sanciones
@@ -1254,19 +1338,40 @@ public final class FidelidadDeRedaccion {
         List<String> fs = fichas(redactado);
         for (int i = 0; i < fs.size(); i++) {
             String w = fs.get(i);
-            if (w.length() < 4 || tieneUnNegadorAntes(fs, i)) {
-                // «no encendían correctamente», «no cumplió puntualmente»: la
-                // valoración va negada, no se afirma nada nuevo.
+            if (w.length() < 4) {
                 continue;
             }
+            boolean negada = tieneUnNegadorAntes(fs, i);
             for (List<String> familia : AFIRMACIONES) {
+                // «no encendían correctamente», «no cumplió puntualmente»: la
+                // valoración va negada, no se afirma nada nuevo. Salvo donde
+                // la ausencia es lo que se afirma: «sin incidencias», «sin
+                // retrasos», «no se aplicaron multas» certifican algo que las
+                // notas no dicen (revisión ciega del 01-10-2026).
+                if (negada && !familia.contains("incidenc") && !familia.contains("retras")
+                        && !familia.contains("multa")) {
+                    continue;
+                }
                 boolean enLaRedaccion = familia.stream().anyMatch(w::startsWith);
                 if (enLaRedaccion && !familiaEnLasNotas(familia, deNotas)) {
                     return false;
                 }
             }
         }
-        return true;
+        return !CALIFICACION_DEL_ESTADO.matcher(normalizar(redactado)).find()
+                || palabrasDeTresLetrasOMas(notas).stream()
+                        .anyMatch(v -> CALIFICACION_EN_LAS_NOTAS.stream().anyMatch(v::startsWith));
+    }
+
+    /** Las palabras del texto, incluidas las cortas que {@code palabrasLargas} deja fuera («bien», «buen»). */
+    private static Set<String> palabrasDeTresLetrasOMas(String texto) {
+        Set<String> r = new HashSet<>();
+        for (String p : normalizar(texto == null ? "" : texto).split("[^a-z]+")) {
+            if (p.length() >= 3) {
+                r.add(p);
+            }
+        }
+        return r;
     }
 
     /**
@@ -1380,6 +1485,51 @@ public final class FidelidadDeRedaccion {
     static String normalizar(String s) {
         String sinTildes = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}", "");
         return sinTildes.toLowerCase(Locale.ROOT).trim();
+    }
+
+    /** «m2», «m²», «cm2», «km²»: la unidad, con su exponente pegado. */
+    private static final Pattern UNIDAD_CON_EXPONENTE = Pattern.compile("(?<!\\p{L})(k|c)?m(2|3|²|³)(?![\\p{L}\\d])");
+
+    /** «tres de la tarde», «3 y media de la mañana», «la una de la tarde». */
+    private static final Pattern HORA_EN_PALABRAS = Pattern.compile("(?<![\\p{L}\\d])(\\d{1,2}|una|dos|tres|cuatro"
+            + "|cinco|seis|siete|ocho|nueve|diez|once|doce)(?:\\s+y\\s+(media|cuarto))?\\s+de\\s+la\\s+"
+            + "(manana|tarde|noche)(?!\\p{L})");
+
+    private static final List<String> HORAS_EN_LETRAS = List.of("", "una", "dos", "tres", "cuatro", "cinco", "seis",
+            "siete", "ocho", "nueve", "diez", "once", "doce");
+
+    /**
+     * La normalización de las comprobaciones de cifras, fechas y horas, con
+     * las equivalencias de escritura que no cambian lo que se dice. En la
+     * medición con qwen2.5:7b del 01-10-2026 se descartaban redacciones
+     * fieles por escribir lo mismo de otra forma: «$4'500.000» (los millones
+     * con apóstrofo, como se escriben a mano) leído como un 4 y un 500.000,
+     * el «2» de «120 m2» tomado por una cantidad que se perdía en «120 metros
+     * cuadrados», y «a las 3 pm» redactado «a las tres de la tarde». Una hora
+     * o una unidad distinta sigue viéndose: «las cuatro de la tarde» queda
+     * como «4 pm» y no es la hora de las notas.
+     */
+    static String normalizarCifras(String s) {
+        String t = normalizar(s).replaceAll("(?<=\\d)['’](?=\\d{3}(?!\\d))", ".");
+        Matcher unidad = UNIDAD_CON_EXPONENTE.matcher(t);
+        StringBuilder conUnidades = new StringBuilder();
+        while (unidad.find()) {
+            String prefijo = unidad.group(1) == null ? "" : unidad.group(1).equals("k") ? "kilo" : "centi";
+            String potencia = unidad.group(2).equals("2") || unidad.group(2).equals("²") ? "cuadrados" : "cubicos";
+            unidad.appendReplacement(conUnidades, " " + prefijo + "metros " + potencia);
+        }
+        unidad.appendTail(conUnidades);
+        Matcher hora = HORA_EN_PALABRAS.matcher(conUnidades.toString());
+        StringBuilder conHoras = new StringBuilder();
+        while (hora.find()) {
+            int h = hora.group(1).matches("\\d+") ? Integer.parseInt(hora.group(1))
+                    : HORAS_EN_LETRAS.indexOf(hora.group(1));
+            String minutos = hora.group(2) == null ? "" : hora.group(2).equals("media") ? ":30" : ":15";
+            String meridiano = hora.group(3).equals("manana") ? " am" : " pm";
+            hora.appendReplacement(conHoras, h + minutos + meridiano);
+        }
+        hora.appendTail(conHoras);
+        return conHoras.toString();
     }
 
     static int distancia(String a, String b) {
