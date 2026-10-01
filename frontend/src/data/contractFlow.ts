@@ -294,10 +294,13 @@ export const TUTORIAL: Record<string, string> = {
 
 // Documentos formales que arma SICOT — se siguen en la pestaña Documentos
 // (GCCON-P-010 / GCCON-M-002). Claves de generación (`tipo`) coinciden con
-// PlantillaDocumentoIA.CATALOGO en el backend.
+// PlantillaDocumentoIA.CATALOGO en el backend, y `llevaObservaciones` con su
+// campo del mismo nombre: el Acta de Inicio y la Certificación no tienen
+// apartado de observaciones en el formato oficial.
 export const FORMAL_DOCS = [
   {
     subStepId: '2.7',
+    llevaObservaciones: false,
     tipo: 'ACTA_INICIO',
     name: 'Acta de Inicio',
     code: 'GCCON-F-018',
@@ -306,6 +309,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '3.4',
+    llevaObservaciones: true,
     tipo: 'INFORME_SUPERVISION',
     name: 'Informe de Supervisión',
     code: 'GCCON-F-031',
@@ -314,6 +318,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '4.3',
+    llevaObservaciones: true,
     tipo: 'ACTA_RECIBO',
     name: 'Acta de Recibo a Satisfacción',
     code: 'GIL-F-010',
@@ -322,6 +327,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '5.3',
+    llevaObservaciones: false,
     tipo: 'CERTIFICACION_CUMPLIMIENTO',
     name: 'Certificación de cumplimiento',
     code: 'PENDIENTE_DE_DEFINIR',
@@ -330,6 +336,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '6.3',
+    llevaObservaciones: true,
     tipo: 'INFORME_FINAL',
     name: 'Informe Final de Supervisión',
     code: 'GCCON-F-030',
