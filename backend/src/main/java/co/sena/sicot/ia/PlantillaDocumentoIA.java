@@ -33,18 +33,34 @@ import java.util.Map;
  * @param llevaObservaciones si el formato tiene un apartado donde van las notas
  *                           del supervisor. El Acta de Inicio y el certificado no
  *                           lo tienen: ahí las notas no se piden al modelo.
+ * @param tablas             tablas del formato que se diligencian fila por fila
+ *                           (obligaciones, amparos, órdenes de pago). Las filas
+ *                           que el supervisor no dé salen como «[dato pendiente…]».
  */
 public record PlantillaDocumentoIA(String clave, String codigo, String nombre, FormatoInstitucional formato,
-                                   List<CampoDelDocumento> campos, boolean llevaObservaciones) {
+                                   List<CampoDelDocumento> campos, boolean llevaObservaciones,
+                                   List<TablaDelDocumento> tablas) {
+
+    public PlantillaDocumentoIA(String clave, String codigo, String nombre, FormatoInstitucional formato,
+                                List<CampoDelDocumento> campos, boolean llevaObservaciones) {
+        this(clave, codigo, nombre, formato, campos, llevaObservaciones, List.of());
+    }
 
     /**
      * Un dato del documento que no sale del contrato.
      *
      * @param ejemplo cómo lo escribe el formato real, para quien lo diligencia.
+     * @param largo   si es un párrafo y no un dato de una línea (el cumplimiento
+     *                del SIGA): el formulario le da un área de texto y admite
+     *                hasta {@link #MAX_LARGO} caracteres en vez de 600.
      */
-    public record CampoDelDocumento(String clave, String etiqueta, String ejemplo, boolean opcional) {
+    public record CampoDelDocumento(String clave, String etiqueta, String ejemplo, boolean opcional, boolean largo) {
         public CampoDelDocumento(String clave, String etiqueta, String ejemplo) {
-            this(clave, etiqueta, ejemplo, false);
+            this(clave, etiqueta, ejemplo, false, false);
+        }
+
+        public CampoDelDocumento(String clave, String etiqueta, String ejemplo, boolean opcional) {
+            this(clave, etiqueta, ejemplo, opcional, false);
         }
 
         /**
@@ -56,6 +72,36 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
         static CampoDelDocumento opcional(String clave, String etiqueta, String ejemplo) {
             return new CampoDelDocumento(clave, etiqueta, ejemplo, true);
         }
+    }
+
+    /** Largo máximo de un campo de párrafo; los de una línea admiten 600. */
+    public static final int MAX_LARGO = 2000;
+
+    /**
+     * Una tabla del formato que se llena fila por fila.
+     *
+     * <p>Existe porque en el Informe Final real (CO1.PCCNTR.8426076) las
+     * obligaciones ocupan diez páginas —catorce generales y dieciséis
+     * específicas, cada una con su cumplimiento y su evidencia—, y SICOT solo
+     * tenía una fila con «[dato pendiente]»: el documento no se podía
+     * presentar tal como salía, por más datos que diera el supervisor
+     * (revisión del 30-09-2026). Las obligaciones son del contrato y SICOT no
+     * las registra; las escribe el supervisor, tal como están en el contrato.
+     *
+     * @param ayuda qué va en la tabla, para quien la diligencia.
+     */
+    public record TablaDelDocumento(String clave, String etiqueta, String ayuda, List<ColumnaDeTabla> columnas) {
+    }
+
+    /**
+     * @param delContrato si lo que se escribe en esta columna es del contrato y
+     *                    se ofrece ya escrito en el siguiente documento (el
+     *                    texto de la obligación), o de este documento (lo que
+     *                    se hizo en el periodo, su evidencia), que no se
+     *                    arrastra al siguiente: arrastrarlo es firmar el
+     *                    periodo pasado como si fuera este.
+     */
+    public record ColumnaDeTabla(String etiqueta, String ejemplo, boolean delContrato) {
     }
 
     /**
@@ -71,7 +117,7 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
             "multas", "actaNumero", "cantidadDevolutivos", "cantidadConsumo", "saldoPorEjecutar", "valorAObligar",
             "valorTotalPagado", "valorTotalEjecutado", "cumplimientoObjeto", "mantenimiento",
             "fechaCertificadoPagos", "terminacionAnticipada", "valorFinal", "fechaTerminacionFinal", "valorActual",
-            "fechaTerminacionActual", "prorroga", "adicion");
+            "fechaTerminacionActual", "prorroga", "adicion", "siga");
 
     /**
      * Un dato opcional que pasa a ser necesario según otro: el valor actual
@@ -124,6 +170,46 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
     private static final CampoDelDocumento FORMA_DE_PAGO = new CampoDelDocumento("formaDePago", "Forma de pago",
             "El valor del contrato será cancelado mediante único pago según lo facturado…");
 
+    // Las tablas comparten clave entre formatos cuando son lo mismo: las
+    // obligaciones específicas del Informe de Supervisión son las del Informe
+    // Final, y la póliza es una sola. Así lo escrito en un documento se ofrece
+    // en el otro. Los ejemplos salen del Informe Final real del Centro.
+
+    private static final ColumnaDeTabla EVIDENCIA = new ColumnaDeTabla("Producto o evidencia",
+            "Acta de recibo del 15/09/2026 publicada en SECOP II", false);
+
+    /** Obligaciones específicas del contrato: las del Informe de Supervisión y las del Informe Final. */
+    private static final TablaDelDocumento OBLIGACIONES_ESPECIFICAS = new TablaDelDocumento("obligacionesEspecificas",
+            "Obligaciones específicas del contratista",
+            "Una fila por obligación específica, copiada del contrato. Las obligaciones se ofrecen ya escritas en el"
+                    + " siguiente documento; las actividades y la evidencia son de este.",
+            List.of(new ColumnaDeTabla("Obligación", "Proveer los bienes nuevos, libres de defectos…", true),
+                    new ColumnaDeTabla("Actividades realizadas",
+                            "Se verificó que los bienes entregados no tuvieran defectos ni estuvieran vencidos.", false),
+                    EVIDENCIA));
+
+    /**
+     * Amparos de la garantía única. Los formatos traen una lista fija de
+     * amparos, pero el Informe Final real solo relaciona los que tiene la
+     * póliza: el supervisor escribe los suyos.
+     */
+    private static final TablaDelDocumento AMPAROS = new TablaDelDocumento("amparos",
+            "Amparos de la garantía única",
+            "Una fila por amparo de la póliza, con su vigencia y su valor.",
+            List.of(new ColumnaDeTabla("Amparo", "Cumplimiento - Cumplimiento del contrato", true),
+                    new ColumnaDeTabla("Vigencia desde", "14/10/2025", true),
+                    new ColumnaDeTabla("Vigencia hasta", "16/06/2026", true),
+                    new ColumnaDeTabla("Valor", "$4.000.000,00", true)));
+
+    private static TablaDelDocumento obligacionesSiga(String clave, String etiqueta, String ejemplo,
+                                                      String cumplimiento) {
+        return new TablaDelDocumento(clave, etiqueta,
+                "Una fila por obligación, como está en el contrato (anexo GCCON-AN-001), con cómo se cumplió.",
+                List.of(new ColumnaDeTabla("Obligación", ejemplo, true),
+                        new ColumnaDeTabla("Cumplimiento", cumplimiento, false),
+                        new ColumnaDeTabla("Evidencia", "Planillas de seguridad social publicadas en SECOP II", false)));
+    }
+
     public static final Map<String, PlantillaDocumentoIA> CATALOGO = Map.of(
             "ACTA_INICIO", new PlantillaDocumentoIA(
                     "ACTA_INICIO", "GCCON-F-018", "Acta de Inicio",
@@ -172,8 +258,16 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                             new CampoDelDocumento("numeroPlanilla", "Número de la planilla de seguridad social",
                                     "9471802315"),
                             new CampoDelDocumento("fechaPlanilla", "Fecha de pago de la planilla", "10/09/2026"),
-                            MULTAS),
-                    true),
+                            MULTAS,
+                            // El formato deja un espacio libre para relacionarlo y
+                            // pide «No aplica» si el contrato no tiene esas obligaciones.
+                            new CampoDelDocumento("siga",
+                                    "Cumplimiento de las obligaciones SIGA en el periodo (ambientales, de seguridad y"
+                                            + " salud en el trabajo, energéticas), o «No aplica»",
+                                    "El contratista entregó la planilla de seguridad social del personal que ingresó"
+                                            + " al Centro.", false, true)),
+                    true,
+                    List.of(AMPAROS, OBLIGACIONES_ESPECIFICAS)),
             "ACTA_RECIBO", new PlantillaDocumentoIA(
                     "ACTA_RECIBO", "GIL-F-010", "Acta de Recibo a Satisfacción de Bienes",
                     new FormatoInstitucional("GIL-F-010", "08", null,
@@ -258,5 +352,30 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                             MULTAS,
                             new CampoDelDocumento("mantenimiento",
                                     "¿Los bienes requieren revisiones o mantenimientos periódicos? (SI / NO)", "NO")),
-                    true));
+                    true,
+                    List.of(new TablaDelDocumento("obligacionesGenerales", "Obligaciones del contrato",
+                                    "Una fila por obligación general del contrato, copiada del contrato, con si se"
+                                            + " cumplió y su evidencia.",
+                                    List.of(new ColumnaDeTabla("Obligación",
+                                                    "Ejecutar el objeto del contrato bajo las condiciones de calidad,"
+                                                            + " oportunidad y obligaciones definidas en el proceso de"
+                                                            + " contratación.", true),
+                                            new ColumnaDeTabla("¿Cumplió? (SI CUMPLIO / NO / PARCIALMENTE / NO SE"
+                                                    + " REQUIRIÓ EL CUMPLIMIENTO)", "SI CUMPLIO", false),
+                                            EVIDENCIA)),
+                            OBLIGACIONES_ESPECIFICAS,
+                            obligacionesSiga("sigaSst", "Obligaciones de seguridad y salud en el trabajo (SIGA)",
+                                    "Relación del personal que ingresa a las instalaciones con su pago de seguridad"
+                                            + " social.", "El contratista suministró el pago de la seguridad social."),
+                            obligacionesSiga("sigaAmbiental", "Obligaciones ambientales (SIGA)",
+                                    "Acreditar un programa de recolección y gestión de residuos de los productos"
+                                            + " suministrados.", "El contratista acreditó el programa en la etapa"
+                                            + " precontractual."),
+                            AMPAROS,
+                            new TablaDelDocumento("ordenesDePago", "Órdenes de pago",
+                                    "Una fila por orden de pago del certificado de desembolsos del SIIF. Deben sumar"
+                                            + " el valor total pagado.",
+                                    List.of(new ColumnaDeTabla("Número de orden de pago", "70614726", false),
+                                            new ColumnaDeTabla("Fecha de pago", "11/03/2026", false),
+                                            new ColumnaDeTabla("Valor de pago", "$16.798.000,00", false))))));
 }

@@ -60,8 +60,9 @@ public class IAController {
 
     @Operation(summary = "Documentos formales que SICOT arma y los datos que pide cada uno",
             description = "Los datos listados no están en el contrato (factura, póliza, cédulas…). El supervisor "
-                    + "los envía en POST /api/contratos/{id}/documentos/generar, campo «datos»; los que falten "
-                    + "salen en el PDF como «[dato pendiente…]».")
+                    + "los envía en POST /api/contratos/{id}/documentos/generar, campo «datos»; las tablas que se "
+                    + "llenan fila por fila (obligaciones, amparos, órdenes de pago), en el campo «tablas». Lo que "
+                    + "falte sale en el PDF como «[dato pendiente…]».")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Catálogo de documentos"),
             @ApiResponse(responseCode = "401", description = "No autenticado",
@@ -75,7 +76,14 @@ public class IAController {
                         p.campos().stream()
                                 .map(c -> new PlantillaDocumentoResponse.Campo(c.clave(), c.etiqueta(), c.ejemplo(),
                                         c.opcional(), PlantillaDocumentoIA.dependeDe(c.clave()),
-                                        PlantillaDocumentoIA.esPorDocumento(c.clave())))
+                                        PlantillaDocumentoIA.esPorDocumento(c.clave()), c.largo()))
+                                .toList(),
+                        p.tablas().stream()
+                                .map(t -> new PlantillaDocumentoResponse.Tabla(t.clave(), t.etiqueta(), t.ayuda(),
+                                        t.columnas().stream()
+                                                .map(col -> new PlantillaDocumentoResponse.Columna(col.etiqueta(),
+                                                        col.ejemplo(), col.delContrato()))
+                                                .toList()))
                                 .toList()))
                 .toList();
     }

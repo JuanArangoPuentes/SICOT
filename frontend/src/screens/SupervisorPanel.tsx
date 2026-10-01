@@ -45,7 +45,12 @@ import {
 } from '@/components/icons'
 import { AI_GENERATED_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
-import DatosDelDocumento, { soloLoDelDocumento } from '@/components/supervisor/DatosDelDocumento'
+import DatosDelDocumento, {
+  guardarTablasDelContrato,
+  leerTablasDelContrato,
+  soloLoDelDocumento,
+  tablasDelContrato,
+} from '@/components/supervisor/DatosDelDocumento'
 import RevisarRedaccion from '@/components/supervisor/RevisarRedaccion'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
@@ -55,6 +60,7 @@ import type {
   DocumentoResponse,
   CronogramaResponse,
   PlantillaDocumento,
+  TablasDelDocumento,
 } from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
@@ -247,6 +253,9 @@ function ProgressBar({ pct }: { pct: number }) {
   )
 }
 
+/** Lo que el supervisor dio en el formulario de datos: los datos sueltos y las filas de las tablas. */
+type DatosParaGenerar = { campos: Record<string, string>; tablas: TablasDelDocumento }
+
 export default function SupervisorPanel({
   vista,
   onCambiarVista,
@@ -309,7 +318,7 @@ export default function SupervisorPanel({
     stepId: number
     subStepId: string
     notas: string
-    datos: Record<string, string>
+    datos: DatosParaGenerar
     revision?: RevisionPaso
     documentoId: number
     huella: string
@@ -346,11 +355,37 @@ export default function SupervisorPanel({
   const [borradores, setBorradores] = useState<Record<string, Record<string, string>>>({})
   const guardarBorrador = (subStepId: string, plantilla: PlantillaDocumento, valores: Record<string, string>) =>
     setBorradores((prev) => ({ ...prev, [subStepId]: soloLoDelDocumento(plantilla, valores) }))
-  // Lo recordado es de UN contrato: al cambiar de contrato se olvida.
+  // Las tablas (obligaciones, amparos, órdenes de pago) se recuerdan igual que
+  // los datos: del contrato, solo las columnas que son del contrato —el texto
+  // de cada obligación—, para no volver a copiarlas en cada informe; y por
+  // sub-paso, las filas completas de un formulario que se canceló. Ahí sí van
+  // completas: la tabla entera queda a la vista en el formulario antes de
+  // firmar, a diferencia de un dato suelto que podía pasar inadvertido.
+  //
+  // A diferencia de la cédula, lo del contrato en las tablas sí se guarda en
+  // el equipo: son cláusulas y amparos públicos del contrato en SECOP II, no
+  // datos personales, y copiar quince obligaciones en cada informe porque se
+  // cerró SICOT era justo lo que la tabla prometía evitar (revisión del
+  // 01-10-2026).
+  const [tablasRecordadas, setTablasRecordadas] = useState<TablasDelDocumento>({})
+  const [borradoresTablas, setBorradoresTablas] = useState<Record<string, TablasDelDocumento>>({})
+  const recordarTablas = (plantilla: PlantillaDocumento, tablas: TablasDelDocumento) =>
+    setTablasRecordadas((prev) => {
+      const siguiente = { ...prev, ...tablasDelContrato(plantilla, tablas) }
+      if (contrato) guardarTablasDelContrato(contrato.id, siguiente)
+      return siguiente
+    })
+  const guardarBorradorTablas = (subStepId: string, tablas: TablasDelDocumento) =>
+    setBorradoresTablas((prev) => ({ ...prev, [subStepId]: tablas }))
+  // Lo recordado es de UN contrato: al cambiar de contrato se olvida, salvo
+  // las tablas del contrato guardadas en el equipo, que se cargan de ese.
   useEffect(() => {
     setDatosRecordados({})
     setBorradores({})
+    setTablasRecordadas(contrato ? leerTablasDelContrato(contrato.id) : {})
+    setBorradoresTablas({})
     setRevisionRedaccion(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- se recarga al cambiar de contrato, no con cada copia del objeto
   }, [contrato?.id])
   // Firma electrónica real de la cuenta — si el Administrador no la asignó
   // aún, se muestra honestamente en vez de dejar que el intento de firmar falle.
@@ -482,7 +517,7 @@ export default function SupervisorPanel({
     stepId: number,
     subStepId: string,
     notas?: string,
-    datos?: Record<string, string>,
+    datos?: DatosParaGenerar,
     revision?: RevisionPaso,
     /**
      * firmarId: el supervisor ya leyó la redacción de ese borrador y lo firma
@@ -541,7 +576,11 @@ export default function SupervisorPanel({
             ])
             return
           }
-          if (datos === undefined && plantilla && plantilla.campos.length > 0) {
+          if (
+            datos === undefined &&
+            plantilla &&
+            (plantilla.campos.length > 0 || (plantilla.tablas?.length ?? 0) > 0)
+          ) {
             // El sub-paso sigue ocupado mientras el formulario esté abierto.
             setDatosDocumento({ stepId, subStepId, notas, plantilla, revision })
             return
@@ -556,7 +595,8 @@ export default function SupervisorPanel({
               tipo: doc.tipo,
               subetapaId: sub?.apiId ?? null,
               notas: notas ?? null,
-              datos: datos ?? {},
+              datos: datos?.campos ?? {},
+              tablas: datos?.tablas ?? {},
               redactarConIa: opciones?.redactarConIa ?? true,
             })
             if (generado.observacionesRedactadasConIa && generado.observaciones) {
@@ -567,7 +607,7 @@ export default function SupervisorPanel({
                 stepId,
                 subStepId,
                 notas: notas ?? '',
-                datos: datos ?? {},
+                datos: datos ?? { campos: {}, tablas: {} },
                 revision,
                 documentoId: generado.id,
                 huella: generado.huellaDelBorrador,
@@ -581,6 +621,11 @@ export default function SupervisorPanel({
           }
           await firmarDocumento(contrato.id, documentoId, opciones?.huellaRevisada)
           setBorradores((prev) => {
+            const resto = { ...prev }
+            delete resto[subStepId]
+            return resto
+          })
+          setBorradoresTablas((prev) => {
             const resto = { ...prev }
             delete resto[subStepId]
             return resto
@@ -1532,22 +1577,27 @@ export default function SupervisorPanel({
         <DatosDelDocumento
           plantilla={datosDocumento.plantilla}
           iniciales={{ ...datosRecordados, ...borradores[datosDocumento.subStepId] }}
-          onCancelar={(valores) => {
+          tablasIniciales={{ ...tablasRecordadas, ...borradoresTablas[datosDocumento.subStepId] }}
+          onCancelar={(valores, tablas) => {
             const d = datosDocumento
             recordarDatos(d.plantilla, valores)
             guardarBorrador(d.subStepId, d.plantilla, valores)
+            recordarTablas(d.plantilla, tablas)
+            guardarBorradorTablas(d.subStepId, tablas)
             setDatosDocumento(null)
             setProcesandoFirma(null)
             if (d.revision) setRevisionPaso(d.revision)
           }}
-          onConfirmar={(datos) => {
+          onConfirmar={(datos, tablas) => {
             const d = datosDocumento
             recordarDatos(d.plantilla, datos)
+            recordarTablas(d.plantilla, tablas)
             // Se guarda también aquí: si la generación falla, el siguiente
             // intento vuelve a traer la factura y el periodo. Se borra al firmar.
             guardarBorrador(d.subStepId, d.plantilla, datos)
+            guardarBorradorTablas(d.subStepId, tablas)
             setDatosDocumento(null)
-            ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, datos, d.revision)
+            ejecutarAccionSubPaso(d.stepId, d.subStepId, d.notas, { campos: datos, tablas }, d.revision)
           }}
         />
       )}

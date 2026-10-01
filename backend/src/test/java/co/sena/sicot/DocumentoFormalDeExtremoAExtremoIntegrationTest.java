@@ -183,6 +183,61 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(camposDelInforme.get("aseguradora").get("dependeDe").isNull()).isTrue();
     }
 
+    /**
+     * Las tablas que se llenan fila por fila (30-09-2026): el catálogo dice
+     * cuáles pide cada formato y qué columnas son del contrato, y la
+     * generación las recibe en el campo «tablas» del JSON. Antes, el Informe
+     * Final salía con una sola fila pendiente donde el real relaciona treinta
+     * obligaciones.
+     */
+    @Test
+    void elInformeFinalSeGeneraConLasTablasQueDaElSupervisorPorHttp() throws Exception {
+        JsonNode plantillas = objectMapper.readTree(mockMvc.perform(get("/api/ia/plantillas")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        JsonNode informeFinal = null;
+        for (JsonNode p : plantillas) {
+            if (p.get("tipo").asText().equals("INFORME_FINAL")) {
+                informeFinal = p;
+            }
+        }
+        assertThat(informeFinal).isNotNull();
+        assertThat(informeFinal.get("tablas").toString())
+                .contains("obligacionesGenerales").contains("obligacionesEspecificas").contains("ordenesDePago");
+        JsonNode generales = informeFinal.get("tablas").get(0);
+        assertThat(generales.get("columnas").get(0).get("delContrato").asBoolean()).isTrue();
+        assertThat(generales.get("columnas").get(1).get("delContrato").asBoolean()).isFalse();
+
+        String generado = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tipo":"INFORME_FINAL","datos":{"valorTotalPagado":"$19.989.620,00"},
+                                 "tablas":{"obligacionesGenerales":[["Obrar con lealtad y buena fe","si cumplio",
+                                   "Sin dilataciones en el proceso"]],
+                                  "ordenesDePago":[["70614726","11/03/2026","16798000"],
+                                   ["70614826","11/03/2026","$ 3.191.620,00"]]}}"""))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        long id = objectMapper.readTree(generado).get("id").asLong();
+
+        String texto = new PdfTextExtractor().extraerTexto(documentoRepository.findById(id).orElseThrow()
+                .getContenido());
+        assertThat(texto).contains("Obrar con lealtad y buena fe").contains("SI CUMPLIO")
+                .contains("70614826").contains("$3.191.620,00");
+
+        // Si las órdenes no suman el total pagado, 400 con el motivo.
+        mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"tipo":"INFORME_FINAL","datos":{"valorTotalPagado":"$20.000.000,00"},
+                                 "tablas":{"ordenesDePago":[["70614726","11/03/2026","16798000"]]}}"""))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("suman $16.798.000,00")));
+    }
+
     /** Así bajaban los documentos de demostración sin archivo: 200 con cero bytes, un «.pdf» dañado. */
     @Test
     void unDocumentoSinArchivoRespondeNoEncontradoConElMotivo() throws Exception {

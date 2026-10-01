@@ -518,4 +518,108 @@ class GeneracionDocumentoServiceTest {
         assertThat(textoDelPdf()).contains("43.512.887");
         assertThat(registro()).startsWith("Acta de Inicio (GCCON-F-018) regenerado por SICOT");
     }
+
+    // ── Tablas fila por fila (30-09-2026) ───────────────────────────────────
+
+    private static final PlantillaDocumentoIA F031 = PlantillaDocumentoIA.CATALOGO.get("INFORME_SUPERVISION");
+
+    @Test
+    void lasFilasDeLasTablasLleganAlDocumentoYAlRegistroYLasAjenasNo() {
+        servicio.generar(1L, null, "INFORME_FINAL", null, java.util.Map.of("valorTotalPagado", "$16.798.000,00"),
+                java.util.Map.of("ordenesDePago", java.util.List.of(
+                                java.util.List.of("70614726", "11/03/2026", "$16.798.000,00")),
+                        "tablaInventada", java.util.List.of(java.util.List.of("no va"))), true);
+
+        assertThat(textoDelPdf()).contains("70614726").doesNotContain("no va");
+        assertThat(registro()).contains("1 dato y 1 fila de tablas aportados por el supervisor");
+    }
+
+    @Test
+    void lasFilasVaciasSeDescartanYLasCeldasConservanSusSaltosDeLinea() {
+        var tablas = GeneracionDocumentoService.tablasDeLaPlantilla(F031, java.util.Map.of("obligacionesEspecificas",
+                java.util.List.of(java.util.List.of("", " ", ""),
+                        java.util.List.of("-Entregar las fichas\r\n-Entregar\tlos bienes", "Se entregaron"))));
+
+        assertThat(tablas.get("obligacionesEspecificas"))
+                .containsExactly(java.util.List.of("-Entregar las fichas\n-Entregar los bienes", "Se entregaron", ""));
+    }
+
+    @Test
+    void unaFilaConMasCeldasQueColumnasUnaCeldaEnormeODemasiadasFilasSeRechazan() {
+        assertThatThrownBy(() -> GeneracionDocumentoService.tablasDeLaPlantilla(F031, java.util.Map.of(
+                "obligacionesEspecificas", java.util.List.of(java.util.List.of("a", "b", "c", "d")))))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("3 columnas");
+        assertThatThrownBy(() -> GeneracionDocumentoService.tablasDeLaPlantilla(F031, java.util.Map.of(
+                "obligacionesEspecificas", java.util.List.of(java.util.List.of(
+                        "x".repeat(GeneracionDocumentoService.MAX_CELDA + 1))))))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("supera");
+        java.util.List<java.util.List<String>> muchas = java.util.Collections.nCopies(
+                GeneracionDocumentoService.MAX_FILAS + 1, java.util.List.of("Obligación"));
+        assertThatThrownBy(() -> GeneracionDocumentoService.tablasDeLaPlantilla(F031, java.util.Map.of(
+                "obligacionesEspecificas", muchas)))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("admite hasta");
+    }
+
+    /** Un error de los datos se dice antes de redactar: esperar minutos al modelo para enterarse era peor. */
+    @Test
+    void siLasOrdenesDePagoNoSumanElTotalNoSeGeneraNiSeLlamaAlModelo() {
+        assertThatThrownBy(() -> servicio.generar(1L, null, "INFORME_FINAL", "Se recibieron los bienes.",
+                java.util.Map.of("valorTotalPagado", "$20.000.000,00"),
+                java.util.Map.of("ordenesDePago", java.util.List.of(
+                        java.util.List.of("70614726", "11/03/2026", "$16.798.000,00"))), true))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("suman $16.798.000,00");
+
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+        verify(documentoRepository, never()).save(any(Documento.class));
+    }
+
+    @Test
+    void unCampoDeParrafoAdmiteMasTextoYConservaSusSaltosDeLinea() {
+        String largo = "Se entregó la planilla de seguridad social.\r\nNo se generaron residuos. " + "x".repeat(900);
+
+        assertThat(GeneracionDocumentoService.datosDeLaPlantilla(F031, java.util.Map.of("siga", largo)).get("siga"))
+                .startsWith("Se entregó la planilla de seguridad social.\nNo se generaron residuos.");
+        assertThatThrownBy(() -> GeneracionDocumentoService.datosDeLaPlantilla(F031,
+                java.util.Map.of("siga", "x".repeat(PlantillaDocumentoIA.MAX_LARGO + 1))))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("2000");
+        // Un dato de una línea sigue limitado a 600 y sin saltos.
+        assertThat(GeneracionDocumentoService.datosDeLaPlantilla(F031, java.util.Map.of("formaDePago",
+                "Único pago\r\ncontra entrega")).get("formaDePago")).isEqualTo("Único pago  contra entrega");
+    }
+
+    // ── Revisión del 01-10-2026 ─────────────────────────────────────────────
+
+    /** Una obligación copiada de un PDF trae un salto donde el PDF partía el renglón. */
+    @Test
+    void losCortesDeRenglonDeUnTextoCopiadoDeUnPdfSeUnenYLasVinetasNo() {
+        assertThat(GeneracionDocumentoService.celdaLimpia(
+                "Proveer los bienes nuevos,\nlibres de defectos e\nimperfecciones."))
+                .isEqualTo("Proveer los bienes nuevos, libres de defectos e imperfecciones.");
+        assertThat(GeneracionDocumentoService.celdaLimpia("-Certificado del SG-SST\n\n\n-Fotocopia de cédula"))
+                .isEqualTo("-Certificado del SG-SST\n-Fotocopia de cédula");
+        assertThat(GeneracionDocumentoService.celdaLimpia("Entregó las sillas.\nfalta la mesa"))
+                .isEqualTo("Entregó las sillas.\nfalta la mesa");
+    }
+
+    @Test
+    void elRegistroConcuerdaEnNumeroYGenero() {
+        java.util.Map<String, java.util.List<java.util.List<String>>> unaFila =
+                java.util.Map.of("t", java.util.List.of(java.util.List.of("x")));
+        assertThat(GeneracionDocumentoService.aportes(java.util.Map.of("a", "1"), java.util.Map.of()))
+                .isEqualTo(" y 1 dato aportado por el supervisor");
+        assertThat(GeneracionDocumentoService.aportes(java.util.Map.of(), unaFila))
+                .isEqualTo(" y 1 fila de tablas aportada por el supervisor");
+        assertThat(GeneracionDocumentoService.aportes(java.util.Map.of("a", "1", "b", "2"), unaFila))
+                .isEqualTo(" y 2 datos y 1 fila de tablas aportados por el supervisor");
+    }
+
+    @Test
+    void lasFilasVaciasTambienCuentanParaElTope() {
+        java.util.List<java.util.List<String>> vacias = java.util.Collections.nCopies(
+                2 * GeneracionDocumentoService.MAX_FILAS + 1, java.util.List.of(""));
+        assertThatThrownBy(() -> GeneracionDocumentoService.tablasDeLaPlantilla(F031,
+                java.util.Map.of("obligacionesEspecificas", vacias)))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("admite hasta");
+    }
 }

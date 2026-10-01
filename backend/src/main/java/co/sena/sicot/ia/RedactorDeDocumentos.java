@@ -109,7 +109,18 @@ public final class RedactorDeDocumentos {
      */
     public static List<BloqueDocumento> componer(PlantillaDocumentoIA plantilla, Contrato c, LocalDate hoy,
                                                  String observaciones, Map<String, String> datos) {
-        Datos d = new Datos(plantilla, datos == null ? Map.of() : datos);
+        return componer(plantilla, c, hoy, observaciones, datos, Map.of());
+    }
+
+    /**
+     * @param tablas filas de las tablas del formato que dio el supervisor, por
+     *               clave (ver {@link PlantillaDocumentoIA#tablas}), cada una con
+     *               tantas celdas como columnas.
+     */
+    public static List<BloqueDocumento> componer(PlantillaDocumentoIA plantilla, Contrato c, LocalDate hoy,
+                                                 String observaciones, Map<String, String> datos,
+                                                 Map<String, List<List<String>>> tablas) {
+        Datos d = new Datos(plantilla, datos == null ? Map.of() : datos, tablas == null ? Map.of() : tablas);
         String obs = observaciones == null || observaciones.isBlank() ? null : observaciones.strip();
         return switch (plantilla.clave()) {
             case "ACTA_INICIO" -> actaDeInicio(c, hoy, d);
@@ -223,19 +234,34 @@ public final class RedactorDeDocumentos {
         b.add(new LineasEnBlanco(2));
         seccion(b, "2.", "EJECUCIÓN CONTRACTUAL");
         b.add(new Letra(10f));
-        b.add(new Tabla(List.of(156.6f, 156.6f, 156.6f), List.of(
-                Fila.de(Celda.encabezado("OBLIGACIONES"), Celda.encabezado("ACTIVIDADES REALIZADAS"),
-                        Celda.encabezado("PRODUCTO O EVIDENCIA")),
-                Fila.de(new Celda(List.of(Tramo.negrita("1. "),
-                                Tramo.normal("[dato pendiente: obligaciones específicas del contrato]")),
-                                1, 1, Alineacion.JUSTIFICADO, false, false),
-                        Celda.de("[dato pendiente: actividades realizadas en el periodo]"),
-                        Celda.de("[dato pendiente: producto o evidencia]"))), 1, false, 5.4f));
+        // Una fila por obligación específica, como pide el formato
+        // («Relacionar cada una de las obligaciones específicas»).
+        List<Fila> ejecucion = new ArrayList<>();
+        ejecucion.add(Fila.de(Celda.encabezado("OBLIGACIONES"), Celda.encabezado("ACTIVIDADES REALIZADAS"),
+                Celda.encabezado("PRODUCTO O EVIDENCIA")));
+        List<List<String>> especificas = d.filas("obligacionesEspecificas");
+        if (especificas.isEmpty()) {
+            ejecucion.add(Fila.de(new Celda(List.of(Tramo.negrita("1. "),
+                            Tramo.normal("[dato pendiente: obligaciones específicas del contrato]")),
+                            1, 1, Alineacion.JUSTIFICADO, false, false),
+                    Celda.de("[dato pendiente: actividades realizadas en el periodo]"),
+                    Celda.de("[dato pendiente: producto o evidencia]")));
+        }
+        for (int i = 0; i < especificas.size(); i++) {
+            List<String> fila = especificas.get(i);
+            ejecucion.add(Fila.de(new Celda(List.of(Tramo.negrita((i + 1) + ". "), Tramo.normal(obligacion(fila))),
+                            1, 1, Alineacion.JUSTIFICADO, false, false),
+                    Celda.de(celda(fila, 1)), Celda.de(celda(fila, 2))));
+        }
+        b.add(new Tabla(List.of(156.6f, 156.6f, 156.6f), ejecucion, 1, false, 5.4f));
         b.add(new Letra(11f));
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.1.", "Cumplimiento de obligaciones referentes al Sistema Integrado de Gestión y Autocontrol – SIGA");
-        b.add(new Parrafo("[dato pendiente: cumplimiento de las obligaciones ambientales, de seguridad y salud en el"
-                + " trabajo y de gestión energética, o «No aplica.»]"));
+        // El formato pide digitar «No aplica» si el contrato no tiene estas obligaciones.
+        b.add(new Parrafo(!d.tiene("siga")
+                ? "[dato pendiente: cumplimiento de las obligaciones ambientales, de seguridad y salud en el trabajo y"
+                        + " de gestión energética, o «No aplica.»]"
+                : esSoloNo(d.valor("siga")) ? "No aplica." : d.valor("siga")));
         b.add(new LineasEnBlanco(2));
         seccion(b, "3.", "AVANCE FINANCIERO DEL CONTRATO");
         b.add(new Letra(10f));
@@ -327,9 +353,27 @@ public final class RedactorDeDocumentos {
         filas.add(Fila.de(Celda.encabezado("AMPARO").abarcando(1, 2), Celda.encabezado("VIGENCIA").abarcando(2, 1),
                 Celda.encabezado("VALOR").abarcando(1, 2)));
         filas.add(Fila.de(Celda.encabezado("DESDE"), Celda.encabezado("HASTA")));
-        for (String amparo : amparos) {
-            filas.add(Fila.de(Celda.de(amparo).alineada(Alineacion.CENTRO), Celda.de(""), Celda.de(""),
-                    Celda.de("")));
+        List<List<String>> dados = d.filas("amparos");
+        if (!dados.isEmpty()) {
+            // Los amparos de la póliza, como en el Informe Final real: solo los
+            // que tiene, con su vigencia y su valor.
+            for (List<String> fila : dados) {
+                filas.add(Fila.de(Celda.de(celda(fila, 0)).alineada(Alineacion.CENTRO),
+                        Celda.de(fechaDeCelda(celda(fila, 1))).alineada(Alineacion.CENTRO),
+                        Celda.de(fechaDeCelda(celda(fila, 2))).alineada(Alineacion.CENTRO),
+                        Celda.de(pesosDeCelda(celda(fila, 3), true)).alineada(Alineacion.CENTRO)));
+            }
+        } else {
+            // Sin amparos, la lista del formato. Hasta el 30-09-2026 sus celdas
+            // salían en blanco, y un documento firmado con la vigencia y el
+            // valor vacíos no dice que falten: ahora dice que están pendientes,
+            // o «No aplica» si el supervisor declaró que no hay póliza.
+            String vacio = d.tiene("aseguradora") && esNo(d.valor("aseguradora")) ? "No aplica"
+                    : "[dato pendiente: vigencia y valor]";
+            for (String amparo : amparos) {
+                filas.add(Fila.de(Celda.de(amparo).alineada(Alineacion.CENTRO),
+                        Celda.de(vacio).abarcando(3, 1).alineada(Alineacion.CENTRO)));
+            }
         }
         return new Tabla(List.of(135.6f, 128.0f, 95.5f, 110.8f), filas, 1, false, 5.75f);
     }
@@ -512,17 +556,45 @@ public final class RedactorDeDocumentos {
         b.add(new Parrafo(Alineacion.JUSTIFICADO, Tramo.normal("En virtud de la suscripción del contrato "),
                 Tramo.negrita(numero), Tramo.normal(", el contratista adquirió las siguientes obligaciones:")));
         b.add(new LineasEnBlanco(1));
-        b.add(new Tabla(List.of(148.7f, 127.6f, 193.5f), List.of(
-                Fila.de(Celda.encabezado("OBLIGACIONES"),
-                        new Celda(List.of(Tramo.negrita("¿CUMPLIÓ?\n"), Tramo.normal("[Seleccione: "),
-                                Tramo.negrita("SI / NO / Parcialmente / No se requirió el cumplimiento]")),
-                                1, 1, Alineacion.CENTRO, true, true),
-                        Celda.encabezado("PRODUCTO O EVIDENCIA")),
-                Fila.de(new Celda(List.of(Tramo.normal("1. [dato pendiente: obligaciones del contrato]")), 1, 1,
-                                Alineacion.IZQUIERDA, false, true),
-                        Celda.de("[dato pendiente: SI CUMPLIO / NO / PARCIALMENTE]").alineada(Alineacion.JUSTIFICADO),
-                        Celda.de("[dato pendiente: producto o evidencia]").alineada(Alineacion.JUSTIFICADO))),
-                1, false, 5.4f));
+        List<Fila> generales = new ArrayList<>();
+        generales.add(Fila.de(Celda.encabezado("OBLIGACIONES"),
+                new Celda(List.of(Tramo.negrita("¿CUMPLIÓ?\n"), Tramo.normal("[Seleccione: "),
+                        Tramo.negrita("SI / NO / Parcialmente / No se requirió el cumplimiento]")),
+                        1, 1, Alineacion.CENTRO, true, true),
+                Celda.encabezado("PRODUCTO O EVIDENCIA")));
+        List<List<String>> generalesDadas = d.filas("obligacionesGenerales");
+        if (generalesDadas.isEmpty()) {
+            generales.add(Fila.de(new Celda(List.of(Tramo.normal("1. [dato pendiente: obligaciones del contrato]")), 1, 1,
+                            Alineacion.IZQUIERDA, false, true),
+                    Celda.de("[dato pendiente: SI CUMPLIO / NO / PARCIALMENTE]").alineada(Alineacion.JUSTIFICADO),
+                    Celda.de("[dato pendiente: producto o evidencia]").alineada(Alineacion.JUSTIFICADO)));
+        }
+        for (int i = 0; i < generalesDadas.size(); i++) {
+            List<String> fila = generalesDadas.get(i);
+            generales.add(Fila.de(new Celda(List.of(Tramo.normal((i + 1) + ". " + obligacion(fila))), 1, 1,
+                            Alineacion.IZQUIERDA, false, true),
+                    new Celda(veredicto(celda(fila, 1)), 1, 1, Alineacion.JUSTIFICADO, false, true),
+                    Celda.de(celda(fila, 2)).alineada(Alineacion.JUSTIFICADO)));
+        }
+        b.add(new Tabla(List.of(148.7f, 127.6f, 193.5f), generales, 1, false, 5.4f));
+        // Las específicas van a continuación, con su propio encabezado, como en
+        // el Informe Final real: son las del Informe de Supervisión.
+        List<Fila> especificas = new ArrayList<>();
+        especificas.add(Fila.de(Celda.encabezado("OBLIGACIONES ESPECIFICAS DEL CONTRATISTA."),
+                Celda.encabezado("ACTIVIDADES REALIZADAS"), Celda.encabezado("PRODUCTO O EVIDENCIA")));
+        List<List<String>> dadas = d.filas("obligacionesEspecificas");
+        if (dadas.isEmpty()) {
+            especificas.add(Fila.de(Celda.de("1. [dato pendiente: obligaciones específicas del contrato]"),
+                    Celda.de("[dato pendiente: actividades realizadas]").alineada(Alineacion.JUSTIFICADO),
+                    Celda.de("[dato pendiente: producto o evidencia]").alineada(Alineacion.JUSTIFICADO)));
+        }
+        for (int i = 0; i < dadas.size(); i++) {
+            List<String> fila = dadas.get(i);
+            especificas.add(Fila.de(Celda.de((i + 1) + ". " + obligacion(fila)),
+                    Celda.de(celda(fila, 1)).alineada(Alineacion.JUSTIFICADO),
+                    Celda.de(celda(fila, 2)).alineada(Alineacion.JUSTIFICADO)));
+        }
+        b.add(new Tabla(List.of(148.7f, 127.6f, 193.5f), especificas, 1, false, 5.4f));
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.2", "Cumplimiento del objeto");
         // Las conclusiones del informe (cumplimiento, multas, mantenimiento) no
@@ -561,14 +633,13 @@ public final class RedactorDeDocumentos {
         }
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.3", "Cumplimiento de los aspectos del Sistema Integrado de Gestión y Autocontrol – SIGA");
-        b.add(new Tabla(List.of(162.9f, 85.0f, 221.9f), List.of(
-                Fila.de(Celda.de("Obligaciones Seguridad y Salud en el Trabajo del Contratista.").enNegrita()
-                        .abarcando(3, 1)),
-                Fila.de(Celda.de("[dato pendiente: obligación]"), Celda.de("[dato pendiente]"),
-                        Celda.de("[dato pendiente: evidencia]")),
-                Fila.de(Celda.de("Obligaciones ambientales del contratista.").enNegrita().abarcando(3, 1)),
-                Fila.de(Celda.de("[dato pendiente: obligación]"), Celda.de("[dato pendiente]"),
-                        Celda.de("[dato pendiente: evidencia]"))), 0, false, 5.4f));
+        List<Fila> siga = new ArrayList<>();
+        siga.add(Fila.de(Celda.de("Obligaciones Seguridad y Salud en el Trabajo del Contratista.").enNegrita()
+                .abarcando(3, 1)));
+        siga.addAll(filasSiga(d.filas("sigaSst")));
+        siga.add(Fila.de(Celda.de("Obligaciones ambientales del contratista.").enNegrita().abarcando(3, 1)));
+        siga.addAll(filasSiga(d.filas("sigaAmbiental")));
+        b.add(new Tabla(List.of(162.9f, 85.0f, 221.9f), siga, 0, false, 5.4f));
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.4", "Multas y sanciones");
         if (sinMultas) {
@@ -640,12 +711,21 @@ public final class RedactorDeDocumentos {
                         + " Relación de pago de SIIF del Contrato nro. " + numero + ", cuyo valor total pagado es de "),
                 Tramo.negrita(d.pesosTexto("valorTotalPagado")), Tramo.normal(".")));
         b.add(new LineasEnBlanco(1));
-        b.add(new Tabla(List.of(161.8f, 107.8f, 113.4f), List.of(
-                Fila.de(Celda.encabezado("NÚMERO DE ORDEN DE PAGO"), Celda.encabezado("FECHA DE PAGO"),
-                        Celda.encabezado("VALOR DE PAGO")),
-                Fila.de(Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO),
-                        Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO),
-                        Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO))), 1, true, 5.4f));
+        List<Fila> pagos = new ArrayList<>();
+        pagos.add(Fila.de(Celda.encabezado("NÚMERO DE ORDEN DE PAGO"), Celda.encabezado("FECHA DE PAGO"),
+                Celda.encabezado("VALOR DE PAGO")));
+        List<List<String>> ordenes = d.filas("ordenesDePago");
+        if (ordenes.isEmpty()) {
+            pagos.add(Fila.de(Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO),
+                    Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO),
+                    Celda.de("[dato pendiente]").alineada(Alineacion.CENTRO)));
+        }
+        for (List<String> fila : ordenes) {
+            pagos.add(Fila.de(Celda.de(celda(fila, 0)).alineada(Alineacion.CENTRO),
+                    Celda.de(fechaDeCelda(celda(fila, 1))).alineada(Alineacion.CENTRO),
+                    Celda.de(pesosDeCelda(celda(fila, 2), false)).alineada(Alineacion.CENTRO)));
+        }
+        b.add(new Tabla(List.of(161.8f, 107.8f, 113.4f), pagos, 1, true, 5.4f));
         b.add(new LineasEnBlanco(1));
         seccion(b, "5.2", "Estado financiero");
         String adiciones = "[dato pendiente]";
@@ -712,6 +792,136 @@ public final class RedactorDeDocumentos {
         return t.toString().split(java.util.regex.Pattern.quote("[dato pendiente"), -1).length - 1;
     }
 
+    /**
+     * Lo que haría inválido el documento aunque cada dato esté bien escrito,
+     * para rechazarlo antes de generarlo; {@code null} si no hay nada.
+     *
+     * <p>Hoy, una sola regla: en el Informe Final, las órdenes de pago tienen
+     * que sumar el valor total pagado. En el real suman exacto (16.798.000 +
+     * 3.191.620 = 19.989.620); un informe firmado con otra suma es un
+     * documento que se contradice en la misma página, y la tabla de estado
+     * financiero calcula el valor por pagar con el total. Solo se compara
+     * cuando todas las órdenes y el total se leen como cifras: si alguna no,
+     * se escribe tal cual y la suma queda para quien revisa el documento.
+     */
+    public static String incoherencia(PlantillaDocumentoIA plantilla, Map<String, String> datos,
+                                      Map<String, List<List<String>>> tablas) {
+        if (!"INFORME_FINAL".equals(plantilla.clave()) || datos == null || tablas == null) {
+            return null;
+        }
+        List<List<String>> ordenes = tablas.getOrDefault("ordenesDePago", List.of());
+        BigDecimal total = leerPesos(datos.get("valorTotalPagado"));
+        if (ordenes.isEmpty() || total == null) {
+            return null;
+        }
+        BigDecimal suma = BigDecimal.ZERO;
+        for (List<String> orden : ordenes) {
+            BigDecimal valor = orden.size() > 2 ? leerPesos(orden.get(2)) : null;
+            if (valor == null) {
+                return null;
+            }
+            suma = suma.add(valor);
+        }
+        if (suma.compareTo(total) != 0) {
+            return "Las órdenes de pago suman " + pesos(suma, false) + " y el valor total pagado es "
+                    + pesos(total, false) + ". Corrija una de las dos cosas antes de generar el Informe Final:"
+                    + " firmado así, el documento se contradice.";
+        }
+        return null;
+    }
+
+    /** «1. », «2) », «3 - » al principio de una obligación copiada del contrato con su número. */
+    private static final Pattern NUMERO_INICIAL = Pattern.compile("^\\s*\\d{1,3}\\s*(?:\\.(?=\\s*\\p{L})|\\)|-|–)\\s*");
+
+    /**
+     * El texto de la obligación sin el número con que viene en el contrato:
+     * la tabla ya numera sus filas, y pegarla tal cual daba «1. 1. Proveer…»
+     * o, si se pegaba desde la tercera, «1. 3. Entregar…» (revisión del
+     * 01-10-2026). «1.5 toneladas» no es un número de lista y se conserva.
+     */
+    private static String obligacion(List<String> fila) {
+        String texto = celda(fila, 0);
+        String sinNumero = NUMERO_INICIAL.matcher(texto).replaceFirst("");
+        return sinNumero.isBlank() ? texto : sinNumero;
+    }
+
+    /** Las respuestas de la columna «¿CUMPLIÓ?», de la más larga a la más corta. */
+    private static final List<String> VEREDICTOS = List.of("NO SE REQUIRIO EL CUMPLIMIENTO", "SI CUMPLIO",
+            "NO CUMPLIO", "PARCIALMENTE", "SI", "NO");
+
+    /**
+     * La celda «¿CUMPLIÓ?» como en el Informe Final real: la respuesta en
+     * mayúsculas y negrita («SI CUMPLIO») y lo que el supervisor escriba
+     * después, tal cual. Hasta el 01-10-2026 la celda entera pasaba a
+     * mayúsculas: una explicación o un enlace de SECOP II salían cambiados.
+     */
+    private static List<Tramo> veredicto(String texto) {
+        if (texto.startsWith("[dato")) {
+            return List.of(Tramo.normal(texto));
+        }
+        String comparable = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toUpperCase(ES);
+        for (String v : VEREDICTOS) {
+            if (comparable.startsWith(v) && (comparable.length() == v.length()
+                    || !Character.isLetter(comparable.charAt(v.length())))) {
+                String resto = texto.substring(v.length());
+                return resto.isBlank() ? List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)))
+                        : List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)), Tramo.normal(resto));
+            }
+        }
+        return List.of(Tramo.normal(texto));
+    }
+
+    /**
+     * Solo una respuesta negativa y nada más: «No», «N/A», «No aplica.». Un
+     * párrafo que empieza así y sigue («No se presentaron incidentes; el
+     * contratista entregó la planilla…») no lo es: con {@link #esNo}, el
+     * cumplimiento del SIGA que escribió el supervisor se cambiaba por «No
+     * aplica.», que en el formato quiere decir que el contrato no tiene esas
+     * obligaciones (revisión del 01-10-2026).
+     */
+    static boolean esSoloNo(String valor) {
+        if (valor == null) {
+            return false;
+        }
+        String v = java.text.Normalizer.normalize(valor.strip(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toUpperCase(ES).replaceAll("[.\\s]+$", "").replace(".", "");
+        return v.equals("NO") || v.equals("N/A") || v.equals("NA") || v.equals("NO APLICA");
+    }
+
+    /** La celda de una fila dada, o «[dato pendiente]» si quedó vacía. */
+    private static String celda(List<String> fila, int columna) {
+        String v = columna < fila.size() ? fila.get(columna) : null;
+        return v == null || v.isBlank() ? "[dato pendiente]" : v;
+    }
+
+    /** Una fecha escrita en una celda, como la escriben las tablas del formato; si no se entiende, tal cual. */
+    private static String fechaDeCelda(String texto) {
+        LocalDate f = texto.startsWith("[dato") ? null : leerFecha(texto);
+        return f != null ? f.format(CORTA) : texto;
+    }
+
+    /** Un valor escrito en una celda con el formato de pesos; si no se entiende como cifra, tal cual. */
+    private static String pesosDeCelda(String texto, boolean conEspacio) {
+        BigDecimal v = leerPesos(texto);
+        return v != null ? pesos(v, conEspacio) : texto;
+    }
+
+    /** Filas «1. obligación | cumplimiento | evidencia» de una parte del SIGA del Informe Final. */
+    private static List<Fila> filasSiga(List<List<String>> dadas) {
+        if (dadas.isEmpty()) {
+            return List.of(Fila.de(Celda.de("[dato pendiente: obligación]"), Celda.de("[dato pendiente]"),
+                    Celda.de("[dato pendiente: evidencia]")));
+        }
+        List<Fila> filas = new ArrayList<>();
+        for (int i = 0; i < dadas.size(); i++) {
+            List<String> fila = dadas.get(i);
+            filas.add(Fila.de(Celda.de((i + 1) + ". " + obligacion(fila)), Celda.de(celda(fila, 1)),
+                    Celda.de(celda(fila, 2))));
+        }
+        return filas;
+    }
+
     /** Título de apartado con la línea en blanco que lo sigue en los formatos. */
     private static void seccion(List<BloqueDocumento> b, String numero, String titulo) {
         b.add(new Seccion(numero, titulo));
@@ -725,10 +935,27 @@ public final class RedactorDeDocumentos {
     private static final class Datos {
         private final PlantillaDocumentoIA plantilla;
         private final Map<String, String> valores;
+        private final Map<String, List<List<String>>> tablas;
 
-        Datos(PlantillaDocumentoIA plantilla, Map<String, String> valores) {
+        Datos(PlantillaDocumentoIA plantilla, Map<String, String> valores, Map<String, List<List<String>>> tablas) {
             this.plantilla = plantilla;
             this.valores = valores;
+            this.tablas = tablas;
+        }
+
+        /**
+         * Las filas que dio el supervisor para una tabla que el formato
+         * declara, sin las vacías; una tabla que el formato no declara no llega.
+         */
+        List<List<String>> filas(String clave) {
+            boolean declarada = plantilla.tablas().stream().anyMatch(t -> t.clave().equals(clave));
+            List<List<String>> filas = declarada ? tablas.get(clave) : null;
+            if (filas == null) {
+                return List.of();
+            }
+            return filas.stream()
+                    .filter(f -> f != null && f.stream().anyMatch(v -> v != null && !v.isBlank()))
+                    .toList();
         }
 
         boolean tiene(String clave) {

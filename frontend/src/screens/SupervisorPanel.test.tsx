@@ -377,6 +377,55 @@ describe('SupervisorPanel', () => {
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
 
+  // Un formato cuyos datos son solo tablas (las obligaciones) también se
+  // pregunta antes de firmar, y las filas llegan a la generación.
+  it('pide las tablas del formato aunque no tenga datos sueltos y las envía al generar', async () => {
+    const { documentos, etapas } = await servicios()
+    documentos.getPlantillasDocumento.mockResolvedValue([
+      {
+        ...plantillaActa,
+        campos: [],
+        tablas: [
+          {
+            clave: 'obligacionesEspecificas',
+            etiqueta: 'Obligaciones específicas del contratista',
+            ayuda: 'Una fila por obligación.',
+            columnas: [
+              { etiqueta: 'Obligación', ejemplo: 'Proveer los bienes', delContrato: true },
+              { etiqueta: 'Actividades realizadas', ejemplo: 'Se verificó', delContrato: false },
+            ],
+          },
+        ],
+      },
+    ])
+    documentos.generarDocumento.mockResolvedValue(generado())
+    documentos.firmarDocumento.mockResolvedValue(documento({ id: 9, generadoPorIa: true, firmaId: 'FIRMA-TEST' }))
+    etapas.cambiarEstadoSubetapa.mockResolvedValue(undefined as never)
+    etapas.getEtapasContrato.mockResolvedValue([])
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+    expect(documentos.generarDocumento).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByLabelText('Obligación (fila 1) de Obligaciones específicas del contratista'), {
+      target: { value: 'Proveer los bienes nuevos' },
+    })
+    fireEvent.change(
+      screen.getByLabelText('Actividades realizadas (fila 1) de Obligaciones específicas del contratista'),
+      { target: { value: 'Se verificó' } },
+    )
+    await act(async () => fireEvent.click(screen.getByText('Generar y firmar')))
+
+    expect(documentos.generarDocumento).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        tipo: 'ACTA_INICIO',
+        datos: {},
+        tablas: { obligacionesEspecificas: [['Proveer los bienes nuevos', 'Se verificó']] },
+      }),
+    )
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
+  })
+
   // ── La redacción del Copiloto se lee antes de firmar ────────────────────
   //
   // Hasta el 29-09-2026 el panel generaba y firmaba de un golpe: en la prueba

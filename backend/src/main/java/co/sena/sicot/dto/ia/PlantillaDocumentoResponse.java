@@ -9,9 +9,11 @@ import java.util.List;
  *
  * @param llevaObservaciones si el formato tiene un apartado donde van las notas
  *                           del supervisor.
+ * @param tablas             tablas del formato que se llenan fila por fila
+ *                           (obligaciones, amparos, órdenes de pago).
  */
 public record PlantillaDocumentoResponse(String tipo, String codigo, String nombre, boolean llevaObservaciones,
-                                         List<Campo> campos) {
+                                         List<Campo> campos, List<Tabla> tablas) {
 
     /**
      * @param ejemplo      cómo lo escribe el formato real diligenciado.
@@ -20,8 +22,22 @@ public record PlantillaDocumentoResponse(String tipo, String codigo, String nomb
      *                     adición), o {@code null}.
      * @param porDocumento si es de este documento y no del contrato (la factura del
      *                     periodo, las multas): no se ofrece ya escrito en el siguiente.
+     * @param largo        si es un párrafo (área de texto, hasta 2000 caracteres) y no un
+     *                     dato de una línea (hasta 600).
      */
     public record Campo(String clave, String etiqueta, String ejemplo, boolean opcional, String dependeDe,
-                        boolean porDocumento) {
+                        boolean porDocumento, boolean largo) {
+    }
+
+    /** @param ayuda qué va en la tabla, para quien la diligencia. */
+    public record Tabla(String clave, String etiqueta, String ayuda, List<Columna> columnas) {
+    }
+
+    /**
+     * @param delContrato si lo escrito en la columna es del contrato (el texto de la
+     *                    obligación) y se ofrece ya escrito en el siguiente documento, o de
+     *                    este documento (lo hecho en el periodo) y no se arrastra.
+     */
+    public record Columna(String etiqueta, String ejemplo, boolean delContrato) {
     }
 }

@@ -169,7 +169,9 @@ public class DocumentoController {
             @ApiResponse(responseCode = "200", description = "Documento generado, con cómo quedaron sus observaciones",
                     content = @Content(schema = @Schema(
                             implementation = co.sena.sicot.dto.documento.DocumentoGeneradoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Datos inválidos",
+            @ApiResponse(responseCode = "400", description = "Datos inválidos: un dato o una celda demasiado largos, "
+                    + "una tabla con más filas o columnas de las que admite, o, en el Informe Final, órdenes de pago "
+                    + "que no suman el valor total pagado (cuando todas se leen como cifras)",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
@@ -187,7 +189,7 @@ public class DocumentoController {
     public ResponseEntity<co.sena.sicot.dto.documento.DocumentoGeneradoResponse> generar(
             @PathVariable Long contratoId, @Valid @RequestBody GenerarDocumentoRequest request) {
         return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(),
-                request.notas(), request.datos(), !Boolean.FALSE.equals(request.redactarConIa())));
+                request.notas(), request.datos(), request.tablas(), !Boolean.FALSE.equals(request.redactarConIa())));
     }
 
     @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual",

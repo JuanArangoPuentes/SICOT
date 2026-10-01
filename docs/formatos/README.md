@@ -81,6 +81,46 @@ financiero conserva su ancho total, pero la columna VALOR es un poco más ancha
 para que «$20.000.000,00» en negrita quepa en un renglón. El apartado
 «CONCLUSIÓN» que SICOT inventaba antes no existe en el formato y se quitó.
 
+## Tablas que se llenan fila por fila
+
+Desde el 30-09-2026 las tablas del Informe de Supervisión y del Informe Final
+se llenan con una fila por obligación, amparo u orden de pago, como en el
+Informe Final real CO1.PCCNTR.8426076 (15 obligaciones generales, 16
+específicas, 3 de SST, 3 ambientales, 3 amparos y 2 órdenes de pago). Antes
+cada una tenía una sola fila «[dato pendiente]» y el documento no se podía
+presentar tal como salía. Qué tablas pide cada formato está en
+`PlantillaDocumentoIA` (`tablas`) y lo publica `GET /api/ia/plantillas`.
+
+- **GCCON-F-031:** amparos de la garantía única y obligaciones específicas
+  (obligación, actividades realizadas, producto o evidencia). El SIGA es un
+  párrafo, como deja el formato; si el supervisor responde solo «No» o «No
+  aplica», se escribe «No aplica.», que es lo que pide su orientación. Un
+  párrafo que empieza por «No se presentaron…» y sigue se escribe tal cual.
+- **GCCON-F-030:** obligaciones generales (con «¿CUMPLIÓ?» en mayúsculas, como
+  el real), obligaciones específicas a continuación con su propio encabezado,
+  SIGA de SST y ambiental, amparos y órdenes de pago. En «¿CUMPLIÓ?» la
+  respuesta va en mayúsculas y negrita («SI CUMPLIO») y lo que el supervisor
+  escriba después queda como lo escribió, igual que en el real. Las órdenes de
+  pago tienen que sumar el valor total pagado: si todas se leen como cifras y
+  no suman, la generación se rechaza antes de llamar al modelo, porque el
+  documento se contradiría.
+- **Amparos:** si el supervisor los da, van solo los de su póliza, con la
+  fecha y el valor en el formato de la tabla («$ 4.000.000,00»). Si no, la
+  lista fija del formato con «[dato pendiente: vigencia y valor]»; antes esas
+  celdas salían en blanco, y un documento firmado con huecos no dice que
+  falte nada. Si la aseguradora es «No aplica», dicen «No aplica».
+- Una celda vacía en una fila con datos sale «[dato pendiente]». Los saltos de
+  línea que separan viñetas se respetan; los cortes de renglón de un texto
+  copiado de un PDF (un salto seguido de minúscula) se unen. El número con
+  que la obligación viene en el contrato («3. Entregar…») se quita, porque la
+  tabla ya numera sus filas.
+- El texto de cada obligación es del contrato: el panel lo ofrece ya escrito
+  en el siguiente documento de ese contrato, también después de cerrar
+  SICOT (se guarda en el equipo, porque son cláusulas públicas del contrato
+  en SECOP II, no datos personales). Lo hecho en el periodo y su evidencia
+  no: ofrecer la evidencia del mes pasado invita a firmarla como si fuera de
+  este.
+
 ## Lo que SICOT añade, y lo dice
 
 - Una línea pequeña y gris al pie, «Generado en SICOT el dd/mm/aaaa». Si el

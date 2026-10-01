@@ -261,6 +261,11 @@ export interface GenerarDocumentoRequest {
    * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
    */
   redactarConIa?: boolean
+  /**
+   * Filas de las tablas del formato (ver `PlantillaDocumento.tablas`). Una
+   * tabla sin filas sale en el PDF como «[dato pendiente…]».
+   */
+  tablas?: TablasDelDocumento
 }
 
 /**
@@ -443,7 +448,8 @@ export interface PlantillaDocumento {
    * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
    * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
    * cambia en cada documento (número de informe, factura…), así que no se
-   * recuerda para el siguiente.
+   * recuerda para el siguiente. `largo`: es un párrafo (el cumplimiento del
+   * SIGA), no un dato de una línea.
    */
   campos: Array<{
     clave: string
@@ -452,5 +458,22 @@ export interface PlantillaDocumento {
     opcional: boolean
     dependeDe: string | null
     porDocumento: boolean
+    largo?: boolean
+  }>
+  /**
+   * Tablas del formato que se llenan fila por fila (obligaciones, amparos,
+   * órdenes de pago). En cada columna, `delContrato` dice si lo escrito es del
+   * contrato (el texto de la obligación) y se ofrece en el siguiente documento,
+   * o de este (lo hecho en el periodo) y no se arrastra. Opcional para tolerar
+   * un backend anterior al 30-09-2026, que no las enviaba.
+   */
+  tablas?: Array<{
+    clave: string
+    etiqueta: string
+    ayuda: string
+    columnas: Array<{ etiqueta: string; ejemplo: string; delContrato: boolean }>
   }>
 }
+
+/** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
+export type TablasDelDocumento = Record<string, string[][]>

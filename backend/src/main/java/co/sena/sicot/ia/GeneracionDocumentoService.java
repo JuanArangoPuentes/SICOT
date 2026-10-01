@@ -19,11 +19,10 @@ import org.springframework.stereotype.Service;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Genera el borrador (estado PENDIENTE) de un documento formal del supervisor.
@@ -103,11 +102,28 @@ public class GeneracionDocumentoService {
      */
     public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
                                              Map<String, String> datos, boolean redactarConIa) {
+        return generar(contratoId, subetapaId, tipoClave, notas, datos, null, redactarConIa);
+    }
+
+    /**
+     * @param tablas filas de las tablas del formato (obligaciones, amparos,
+     *               órdenes de pago), por clave de {@link PlantillaDocumentoIA#tablas}.
+     */
+    public DocumentoGeneradoResponse generar(Long contratoId, Long subetapaId, String tipoClave, String notas,
+                                             Map<String, String> datos, Map<String, List<List<String>>> tablas,
+                                             boolean redactarConIa) {
         PlantillaDocumentoIA plantilla = PlantillaDocumentoIA.CATALOGO.get(tipoClave);
         if (plantilla == null) {
             throw new BusinessException("Tipo de documento no reconocido: " + tipoClave);
         }
         Map<String, String> datosValidos = datosDeLaPlantilla(plantilla, datos);
+        Map<String, List<List<String>>> tablasValidas = tablasDeLaPlantilla(plantilla, tablas);
+        // Antes de llamar al modelo: un error de los datos se corrige en el
+        // formulario, y esperar minutos la redacción para enterarse era peor.
+        String incoherencia = RedactorDeDocumentos.incoherencia(plantilla, datosValidos, tablasValidas);
+        if (incoherencia != null) {
+            throw new BusinessException(incoherencia);
+        }
         Contrato contrato = contratoService.buscar(contratoId);
 
         // La consulta exige que la subetapa sea de ESTE contrato: sin esa
@@ -133,7 +149,7 @@ public class GeneracionDocumentoService {
         Observaciones obs = observaciones(plantilla, contrato, notas, redactarConIa);
         LocalDate hoy = LocalDate.now(reloj);
         List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(plantilla, contrato, hoy, obs.texto(),
-                datosValidos);
+                datosValidos, tablasValidas);
 
         String firmante = contrato.getSupervisor() != null ? contrato.getSupervisor().getNombre() : null;
         String origen = obs.conIa() ? "Generado en SICOT con apoyo del Copiloto IA" : "Generado en SICOT";
@@ -189,7 +205,7 @@ public class GeneracionDocumentoService {
         registroService.registrar(contrato, "DOCUMENTO_GENERADO",
                 plantilla.nombre() + " (" + plantilla.codigo() + ") " + (reutilizado ? "regenerado" : "generado")
                         + " por SICOT con los datos del contrato"
-                        + (datosValidos.isEmpty() ? "" : " y " + datosValidos.size() + " datos aportados por el supervisor")
+                        + aportes(datosValidos, tablasValidas)
                         + obs.descripcion()
                         + (subetapa != null ? " en la subetapa " + subetapa.getCodigo() : "")
                         + "; queda pendiente de firma"
@@ -201,6 +217,110 @@ public class GeneracionDocumentoService {
 
     /** Longitud máxima de un dato complementario: una forma de pago o un rubro caben de sobra. */
     static final int MAX_DATO = 600;
+    /**
+     * Filas por tabla. El Informe Final real tiene 16 obligaciones específicas
+     * y 15 generales; 60 deja margen sin permitir un documento de cientos de
+     * páginas por error.
+     */
+    static final int MAX_FILAS = 60;
+    /** Una obligación larga del Informe Final real ronda los 600 caracteres. */
+    static final int MAX_CELDA = 1500;
+
+    /** Saltos de línea normalizados a «\n» y los demás caracteres de control a espacio. */
+    private static String conSaltosDeLinea(String v) {
+        return v.replace("\r\n", "\n").replace('\r', '\n').replaceAll("[\\p{Cntrl}&&[^\\n]]", " ");
+    }
+
+    /**
+     * Una celda como se dibuja: sin los cortes de renglón de un texto copiado
+     * de un PDF (una obligación pegada desde el contrato traía un salto donde
+     * el PDF partía el renglón, y en la celda salían renglones cortados), pero
+     * con los saltos que separan viñetas o frases. Un salto seguido de una
+     * minúscula y precedido de algo que no cierra la frase es un corte de
+     * renglón; las líneas en blanco se juntan.
+     */
+    static String celdaLimpia(String v) {
+        return conSaltosDeLinea(v).replaceAll("[ \\t]*\\n[ \\t]*", "\n")
+                .replaceAll("\\n{2,}", "\n")
+                .replaceAll("(?<![.:;])\\n(?=\\p{Ll})", " ")
+                .strip();
+    }
+
+    /**
+     * «y 5 datos aportados por el supervisor», «y 1 fila de tablas aportada…»,
+     * «y 1 dato y 3 filas de tablas aportados…», o nada. El registro es la
+     * trazabilidad del documento y se lee: «1 fila aportados» se notaba.
+     */
+    static String aportes(Map<String, String> datos, Map<String, List<List<String>>> tablas) {
+        int filas = tablas.values().stream().mapToInt(List::size).sum();
+        if (datos.isEmpty() && filas == 0) {
+            return "";
+        }
+        String deDatos = datos.size() + (datos.size() == 1 ? " dato" : " datos");
+        String deFilas = filas + (filas == 1 ? " fila" : " filas") + " de tablas";
+        String aportados = datos.isEmpty() ? deFilas + (filas == 1 ? " aportada" : " aportadas")
+                : filas == 0 ? deDatos + (datos.size() == 1 ? " aportado" : " aportados")
+                : deDatos + " y " + deFilas + " aportados";
+        return " y " + aportados + " por el supervisor";
+    }
+
+    /**
+     * Solo pasan las tablas que el formato declara, con tantas celdas por fila
+     * como columnas tiene. Las filas vacías se descartan; una celda vacía en
+     * una fila con datos queda como «[dato pendiente]» en el PDF. Los saltos
+     * de línea se conservan (una obligación con viñetas) y los demás
+     * caracteres de control pasan a espacio.
+     */
+    static Map<String, List<List<String>>> tablasDeLaPlantilla(PlantillaDocumentoIA plantilla,
+                                                                Map<String, List<List<String>>> tablas) {
+        Map<String, List<List<String>>> validas = new LinkedHashMap<>();
+        if (tablas == null) {
+            return validas;
+        }
+        for (PlantillaDocumentoIA.TablaDelDocumento t : plantilla.tablas()) {
+            List<List<String>> filas = tablas.get(t.clave());
+            if (filas == null) {
+                continue;
+            }
+            // Antes de limpiar: las filas vacías también ocupan la petición, y
+            // contarlas solo después dejaba mandar miles de ellas.
+            if (filas.size() > 2 * MAX_FILAS) {
+                throw new BusinessException("La tabla «" + t.etiqueta() + "» admite hasta " + MAX_FILAS + " filas.");
+            }
+            int columnas = t.columnas().size();
+            List<List<String>> limpias = new ArrayList<>();
+            for (List<String> fila : filas) {
+                if (fila == null) {
+                    continue;
+                }
+                for (int i = columnas; i < fila.size(); i++) {
+                    if (fila.get(i) != null && !fila.get(i).isBlank()) {
+                        throw new BusinessException("La tabla «" + t.etiqueta() + "» tiene " + columnas
+                                + " columnas y una de sus filas trae " + fila.size() + ".");
+                    }
+                }
+                List<String> celdas = new ArrayList<>();
+                for (int i = 0; i < columnas; i++) {
+                    String v = i < fila.size() && fila.get(i) != null ? celdaLimpia(fila.get(i)) : "";
+                    if (v.length() > MAX_CELDA) {
+                        throw new BusinessException("Una celda de «" + t.etiqueta() + "» supera " + MAX_CELDA
+                                + " caracteres.");
+                    }
+                    celdas.add(v);
+                }
+                if (celdas.stream().anyMatch(c -> !c.isEmpty())) {
+                    limpias.add(List.copyOf(celdas));
+                }
+            }
+            if (limpias.size() > MAX_FILAS) {
+                throw new BusinessException("La tabla «" + t.etiqueta() + "» admite hasta " + MAX_FILAS + " filas.");
+            }
+            if (!limpias.isEmpty()) {
+                validas.put(t.clave(), List.copyOf(limpias));
+            }
+        }
+        return validas;
+    }
 
     /**
      * Solo pasan las claves que el formato declara: una clave desconocida no
@@ -213,17 +333,21 @@ public class GeneracionDocumentoService {
         if (datos == null) {
             return validos;
         }
-        Set<String> claves = new HashSet<>();
-        plantilla.campos().forEach(cd -> claves.add(cd.clave()));
+        Map<String, PlantillaDocumentoIA.CampoDelDocumento> campos = new HashMap<>();
+        plantilla.campos().forEach(cd -> campos.put(cd.clave(), cd));
         for (Map.Entry<String, String> e : datos.entrySet()) {
             String valor = e.getValue() == null ? "" : e.getValue().strip();
-            if (valor.isEmpty() || !claves.contains(e.getKey())) {
+            PlantillaDocumentoIA.CampoDelDocumento campo = campos.get(e.getKey());
+            if (valor.isEmpty() || campo == null) {
                 continue;
             }
-            if (valor.length() > MAX_DATO) {
-                throw new BusinessException("El dato «" + e.getKey() + "» supera " + MAX_DATO + " caracteres.");
+            // Un párrafo (el cumplimiento del SIGA) admite más y conserva sus
+            // saltos de línea; un dato de una línea no.
+            int maximo = campo.largo() ? PlantillaDocumentoIA.MAX_LARGO : MAX_DATO;
+            if (valor.length() > maximo) {
+                throw new BusinessException("El dato «" + e.getKey() + "» supera " + maximo + " caracteres.");
             }
-            validos.put(e.getKey(), valor.replaceAll("\\p{Cntrl}", " "));
+            validos.put(e.getKey(), campo.largo() ? conSaltosDeLinea(valor) : valor.replaceAll("\\p{Cntrl}", " "));
         }
         return validos;
     }

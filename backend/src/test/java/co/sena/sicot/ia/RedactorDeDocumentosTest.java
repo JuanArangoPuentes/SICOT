@@ -56,15 +56,24 @@ class RedactorDeDocumentosTest {
     }
 
     private static String pdf(String tipo, Contrato c, String obs, Map<String, String> datos) {
+        return pdf(tipo, c, obs, datos, Map.of());
+    }
+
+    private static String pdf(String tipo, Contrato c, String obs, Map<String, String> datos,
+                              Map<String, List<List<String>>> tablas) {
+        return new PdfTextExtractor().extraerTexto(bytes(tipo, c, obs, datos, tablas)).lines().map(String::strip)
+                .collect(Collectors.joining(" ")).replaceAll("\\s+", " ");
+    }
+
+    private static byte[] bytes(String tipo, Contrato c, String obs, Map<String, String> datos,
+                                Map<String, List<List<String>>> tablas) {
         PlantillaDocumentoIA p = PlantillaDocumentoIA.CATALOGO.get(tipo);
-        List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(p, c, HOY, obs, datos);
-        byte[] bytes = new PdfInstitucional(Clock.fixed(Instant.parse("2026-09-28T15:00:00Z"),
+        List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(p, c, HOY, obs, datos, tablas);
+        // El texto extraído parte las líneas largas; quien lo lee normaliza
+        // los espacios para comprobar frases completas.
+        return new PdfInstitucional(Clock.fixed(Instant.parse("2026-09-28T15:00:00Z"),
                 ZoneId.of("America/Bogota"))).generar(new DocumentoFormal(p.formato(), p.nombre(),
                 c.getNumeroContrato(), "Laura", "Generado en SICOT", bloques));
-        // El texto extraído parte las líneas largas; se normalizan los espacios
-        // para comprobar frases completas.
-        return new PdfTextExtractor().extraerTexto(bytes).lines().map(String::strip)
-                .collect(Collectors.joining(" ")).replaceAll("\\s+", " ");
     }
 
     @ParameterizedTest
@@ -436,5 +445,230 @@ class RedactorDeDocumentosTest {
         assertThat(RedactorDeDocumentos.esNo("Otrosí No. 1 del 15/08/2025")).isFalse();
         assertThat(RedactorDeDocumentos.esNo("$ 5.000.000")).isFalse();
         assertThat(RedactorDeDocumentos.esNo(null)).isFalse();
+    }
+
+    // ── Tablas que se llenan fila por fila ──────────────────────────────────
+    //
+    // Hasta el 30-09-2026 cada tabla tenía una sola fila con «[dato
+    // pendiente]»: el Informe Final real (CO1.PCCNTR.8426076) relaciona 15
+    // obligaciones generales, 16 específicas, 3 del SIGA de SST, 3 ambientales,
+    // 3 amparos y 2 órdenes de pago, y SICOT no podía escribir ninguna.
+    // Los textos de estas pruebas son los de ese informe.
+
+    private static final List<String> EJECUTAR = List.of(
+            "Ejecutar el objeto del contrato bajo las condiciones de calidad, oportunidad y obligaciones definidas en"
+                    + " el proceso de contratación.",
+            "si cumplio",
+            "Se ejecuta el suministro de materiales para la formación con los parámetros de planeación, calidades"
+                    + " definidas en el contrato.");
+
+    private static final List<String> FUERZA_MAYOR = List.of(
+            "Informar, por escrito y dentro de los 3 días hábiles siguientes a su materialización, cualquier"
+                    + " eventualidad de fuerza mayor o caso fortuito que afecte la normal y correcta ejecución del"
+                    + " contrato",
+            "No se requirió el cumplimiento",
+            "A la fecha no se han presentado eventualidades o casos fortuito que afecte la ejecución del contrato.");
+
+    private static final List<String> PROVEER = List.of(
+            "Proveer los bienes nuevos, libres de defectos, vencimientos e imperfecciones.",
+            "Se verificó que los tóner y tintas suministrados no tuvieran defectos ni estuvieran vencidos.",
+            "Acta de recibo publicada en SECOP II");
+
+    private static final Map<String, List<List<String>>> TABLAS_DEL_INFORME_FINAL = Map.of(
+            "obligacionesGenerales", List.of(EJECUTAR, FUERZA_MAYOR),
+            "obligacionesEspecificas", List.of(PROVEER),
+            "sigaSst", List.of(List.of("Relación del personal que ingresa a las instalaciones con su respectivo pago"
+                    + " de seguridad social.", "El contratista suministra el pago de la seguridad social.",
+                    "Planillas en SECOP II")),
+            "sigaAmbiental", List.of(List.of("Acreditar que cuenta con un programa de Recolección y Gestión de"
+                    + " residuos.", "El contratista acreditó el programa en la etapa precontractual.",
+                    "El contratista entrega acta de disposición final de los productos")),
+            "amparos", List.of(
+                    List.of("Cumplimiento - Cumplimiento del contrato", "14/10/2025", "2026-06-16", "4000000"),
+                    List.of("Calidad de los bienes solicitados", "14/10/2025", "16/06/2026", "$ 4.000.000,00")),
+            "ordenesDePago", List.of(List.of("70614726", "11/03/2026", "16798000"),
+                    List.of("70614826", "2026-03-11", "$ 3.191.620,00")));
+
+    /** El texto de cada celda de las tablas del documento, tal como se va a dibujar. */
+    private static List<String> celdas(String tipo, Map<String, String> datos, Map<String, List<List<String>>> tablas) {
+        return RedactorDeDocumentos.componer(PlantillaDocumentoIA.CATALOGO.get(tipo), contrato(), HOY, null, datos,
+                        tablas).stream()
+                .filter(b -> b instanceof BloqueDocumento.Tabla)
+                .flatMap(b -> ((BloqueDocumento.Tabla) b).filas().stream())
+                .flatMap(f -> f.celdas().stream())
+                .map(c -> c.tramos().stream().map(BloqueDocumento.Tramo::texto).collect(Collectors.joining()))
+                .toList();
+    }
+
+    @Test
+    void elInformeFinalLlevaCadaObligacionAmparoYOrdenDePagoQueDaElSupervisor() {
+        List<String> c = celdas("INFORME_FINAL", Map.of("valorTotalPagado", "$19.989.620,00"),
+                TABLAS_DEL_INFORME_FINAL);
+
+        assertThat(c)
+                .contains("1. " + EJECUTAR.get(0), "SI CUMPLIO", EJECUTAR.get(2))
+                // En mayúsculas, como las escribe el informe real.
+                .contains("2. " + FUERZA_MAYOR.get(0), "NO SE REQUIRIÓ EL CUMPLIMIENTO")
+                .contains("OBLIGACIONES ESPECIFICAS DEL CONTRATISTA.", "1. " + PROVEER.get(0), PROVEER.get(1))
+                .contains("1. Relación del personal que ingresa a las instalaciones con su respectivo pago de"
+                        + " seguridad social.", "El contratista acreditó el programa en la etapa precontractual.")
+                // Fechas y valores con el formato de la tabla, se escriban como se escriban.
+                .containsSequence("Cumplimiento - Cumplimiento del contrato", "14/10/2025", "16/06/2026",
+                        "$ 4.000.000,00")
+                .containsSequence("Calidad de los bienes solicitados", "14/10/2025", "16/06/2026", "$ 4.000.000,00")
+                .containsSequence("70614726", "11/03/2026", "$16.798.000,00")
+                .containsSequence("70614826", "11/03/2026", "$3.191.620,00")
+                // Lo que queda pendiente es solo lo que no se dio (la póliza, el
+                // estado financiero), no las filas que el supervisor escribió.
+                .doesNotContain("1. [dato pendiente: obligaciones del contrato]",
+                        "[dato pendiente: SI CUMPLIO / NO / PARCIALMENTE]",
+                        "1. [dato pendiente: obligaciones específicas del contrato]", "[dato pendiente: obligación]",
+                        "[dato pendiente: vigencia y valor]");
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of(), TABLAS_DEL_INFORME_FINAL))
+                .contains("SI CUMPLIO").contains("$16.798.000,00").contains("$3.191.620,00");
+    }
+
+    @Test
+    void elInformeDeSupervisionRelacionaCadaObligacionEspecificaYElSiga() {
+        Map<String, List<List<String>>> tablas = Map.of("obligacionesEspecificas", List.of(PROVEER,
+                        List.of("Entregar las fichas técnicas de los productos.", "Se revisaron en SECOP II.",
+                                "Fichas técnicas aprobadas")),
+                "amparos", List.of(List.of("Cumplimiento", "14/10/2025", "16/06/2026", "$4.000.000,00")));
+
+        assertThat(celdas("INFORME_SUPERVISION", Map.of(), tablas))
+                .containsSequence("1. " + PROVEER.get(0), PROVEER.get(1), PROVEER.get(2))
+                .containsSequence("2. Entregar las fichas técnicas de los productos.", "Se revisaron en SECOP II.",
+                        "Fichas técnicas aprobadas")
+                .containsSequence("Cumplimiento", "14/10/2025", "16/06/2026", "$ 4.000.000,00")
+                .noneMatch(t -> t.contains("[dato pendiente: obligaciones específicas"));
+        assertThat(pdf("INFORME_SUPERVISION", contrato(), null, Map.of("siga", "No aplica"), tablas))
+                .contains("SIGA No aplica.")
+                .doesNotContain("[dato pendiente: cumplimiento de las obligaciones ambientales");
+    }
+
+    @Test
+    void unaCeldaVaciaQuedaPendienteYUnaTablaQueElFormatoNoTieneNoLlega() {
+        List<String> c = celdas("INFORME_SUPERVISION", Map.of(),
+                Map.of("obligacionesEspecificas", List.of(List.of("Entregar los bienes.", "", "")),
+                        // El Informe de Supervisión no tiene órdenes de pago.
+                        "ordenesDePago", List.of(List.of("70614726", "11/03/2026", "16798000"))));
+
+        assertThat(c).containsSequence("1. Entregar los bienes.", "[dato pendiente]", "[dato pendiente]")
+                .doesNotContain("70614726");
+    }
+
+    @Test
+    void sinAmparosLaGarantiaLosDejaPendientesYSinPolizaDiceNoAplica() {
+        assertThat(celdas("INFORME_SUPERVISION", Map.of(), Map.of()))
+                .containsSequence("Cumplimiento", "[dato pendiente: vigencia y valor]")
+                .containsSequence("Calidad del servicio", "[dato pendiente: vigencia y valor]");
+        assertThat(celdas("INFORME_FINAL", Map.of("aseguradora", "No aplica"), Map.of()))
+                .containsSequence("Cumplimiento - Cumplimiento del contrato", "No aplica")
+                .doesNotContain("[dato pendiente: vigencia y valor]");
+    }
+
+    /** Las 31 obligaciones del informe real no caben en una página: la tabla sigue en la siguiente con su encabezado. */
+    @Test
+    void unaTablaLargaSigueEnLaPaginaSiguienteSinPerderFilas() throws Exception {
+        List<List<String>> muchas = new java.util.ArrayList<>();
+        for (int i = 1; i <= 30; i++) {
+            muchas.add(List.of("Obligación número " + i + " del contrato, copiada tal como está en el contrato"
+                    + " suscrito por las partes.", "SI CUMPLIO", "Evidencia " + i + " publicada en SECOP II."));
+        }
+        byte[] pdf = bytes("INFORME_FINAL", contrato(), null, Map.of(), Map.of("obligacionesGenerales", muchas));
+
+        // La evidencia cabe en un renglón de su columna: se lee entera en el texto del PDF.
+        String t = new PdfTextExtractor().extraerTexto(pdf).replaceAll("\\s+", " ");
+        for (int i = 1; i <= 30; i++) {
+            assertThat(t).contains("Evidencia " + i + " publicada en SECOP II.");
+        }
+        try (var documento = org.apache.pdfbox.Loader.loadPDF(pdf)) {
+            assertThat(documento.getNumberOfPages()).isGreaterThan(5);
+        }
+        // El encabezado se repite en cada página que ocupa la tabla.
+        assertThat(t.split("PRODUCTO O EVIDENCIA", -1).length - 1).isGreaterThan(3);
+    }
+
+    @Test
+    void lasOrdenesDePagoTienenQueSumarElValorTotalPagado() {
+        PlantillaDocumentoIA fin = PlantillaDocumentoIA.CATALOGO.get("INFORME_FINAL");
+        Map<String, List<List<String>>> ordenes = Map.of("ordenesDePago", List.of(
+                List.of("70614726", "11/03/2026", "$16.798.000,00"), List.of("70614826", "11/03/2026", "3191620")));
+
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("valorTotalPagado", "$19.989.620,00"), ordenes))
+                .isNull();
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("valorTotalPagado", "$20.000.000,00"), ordenes))
+                .contains("suman $19.989.620,00").contains("$20.000.000,00");
+        // Una orden que no se lee como cifra no se compara: va tal cual.
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("valorTotalPagado", "$20.000.000,00"),
+                Map.of("ordenesDePago", List.of(List.of("1", "11/03/2026", "diecinueve millones"))))).isNull();
+        // Los demás formatos no tienen esa regla.
+        assertThat(RedactorDeDocumentos.incoherencia(PlantillaDocumentoIA.CATALOGO.get("INFORME_SUPERVISION"),
+                Map.of("valorTotalPagado", "$1,00"), ordenes)).isNull();
+    }
+
+    @Test
+    void conTodasLasTablasElInformeFinalSoloDejaPendienteLoQueNoSeDio() {
+        List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(PlantillaDocumentoIA.CATALOGO.get("INFORME_FINAL"),
+                contrato(), HOY, null, Map.of(), TABLAS_DEL_INFORME_FINAL);
+        List<BloqueDocumento> sinTablas = RedactorDeDocumentos.componer(
+                PlantillaDocumentoIA.CATALOGO.get("INFORME_FINAL"), contrato(), HOY, null, Map.of());
+
+        // Generales (3), específicas (3), SIGA (3 + 3), amparos (3) y órdenes de pago (3).
+        assertThat(RedactorDeDocumentos.contarPendientes(sinTablas)
+                - RedactorDeDocumentos.contarPendientes(bloques)).isEqualTo(18);
+    }
+
+    // ── Revisión del 01-10-2026 ─────────────────────────────────────────────
+
+    /** Los tramos de la celda de la tabla que contiene ese texto. */
+    private static List<BloqueDocumento.Tramo> tramosDeLaCelda(String tipo, Map<String, String> datos,
+                                                               Map<String, List<List<String>>> tablas, String contiene) {
+        return RedactorDeDocumentos.componer(PlantillaDocumentoIA.CATALOGO.get(tipo), contrato(), HOY, null, datos,
+                        tablas).stream()
+                .filter(b -> b instanceof BloqueDocumento.Tabla)
+                .flatMap(b -> ((BloqueDocumento.Tabla) b).filas().stream())
+                .flatMap(f -> f.celdas().stream())
+                .filter(c -> c.tramos().stream().map(BloqueDocumento.Tramo::texto).collect(Collectors.joining())
+                        .contains(contiene))
+                .findFirst().orElseThrow().tramos();
+    }
+
+    @Test
+    void enCumplioSoloLaRespuestaVaEnMayusculasYNegritaYLoDemasComoLoEscribio() {
+        String explicacion = " Se verifican las especificaciones en https://community.secop.gov.co/Public/Index";
+        List<BloqueDocumento.Tramo> t = tramosDeLaCelda("INFORME_FINAL", Map.of(),
+                Map.of("obligacionesGenerales", List.of(List.of("Cumplir la oferta.", "si cumplio" + explicacion, ""))),
+                "SI CUMPLIO");
+
+        assertThat(t.get(0).texto()).isEqualTo("SI CUMPLIO");
+        assertThat(t.get(0).estilo()).isEqualTo(BloqueDocumento.Estilo.NEGRITA);
+        assertThat(t.get(1).texto()).isEqualTo(explicacion);
+        // Una respuesta que no es una de las opciones va tal cual.
+        assertThat(tramosDeLaCelda("INFORME_FINAL", Map.of(),
+                Map.of("obligacionesGenerales", List.of(List.of("Cumplir la oferta.", "Cumplió en octubre", "")))
+                , "en octubre").get(0).texto()).isEqualTo("Cumplió en octubre");
+    }
+
+    @Test
+    void laObligacionCopiadaConSuNumeroNoSaleNumeradaDosVeces() {
+        List<String> c = celdas("INFORME_FINAL", Map.of(), Map.of(
+                "obligacionesGenerales", List.of(List.of("3. entregar las garantías", "SI CUMPLIO", "")),
+                "obligacionesEspecificas", List.of(List.of("1) Proveer los bienes nuevos", "", ""),
+                        List.of("2 - Entregar las fichas", "", ""), List.of("1.5 toneladas de arena", "", ""))));
+
+        assertThat(c).contains("1. entregar las garantías", "1. Proveer los bienes nuevos", "2. Entregar las fichas",
+                "3. 1.5 toneladas de arena");
+    }
+
+    @Test
+    void unParrafoDelSigaQueEmpiezaPorNoSeEscribeEnteroYSoloElNoSoloDiceNoAplica() {
+        String parrafo = "No se presentaron incidentes de SST. El contratista entregó la planilla del personal.";
+        assertThat(pdf("INFORME_SUPERVISION", contrato(), null, Map.of("siga", parrafo))).contains(parrafo)
+                .doesNotContain("SIGA No aplica.");
+        assertThat(pdf("INFORME_SUPERVISION", contrato(), null, Map.of("siga", "no aplica.")))
+                .contains("SIGA No aplica.");
+        assertThat(RedactorDeDocumentos.esSoloNo("N/A")).isTrue();
+        assertThat(RedactorDeDocumentos.esSoloNo("Ninguna novedad ambiental")).isFalse();
     }
 }
