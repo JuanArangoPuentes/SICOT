@@ -4,6 +4,7 @@
 
 import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
+import { historialParaElCopiloto } from './historialCopiloto'
 import type {
   ChatResponse,
   DocumentoResponse,
@@ -102,16 +103,19 @@ export function precalentarCopiloto(contratoId: number): void {
 // Chat real del Copiloto IA (Ollama) — reemplaza el antiguo CHAT_RESPONSES por
 // coincidencia de palabras clave. La respuesta viene anclada a los datos
 // reales del contrato y al estado real de sus etapas (ver CopilotoChatService).
-// `historial` son los turnos previos de esta conversación (opcional) — le dan
-// memoria real al Copiloto para que las preguntas de seguimiento tengan
-// sentido en vez de responderse como si la conversación empezara de cero.
+// `historial` es el chat tal como se ve (opcional) — le da memoria real al
+// Copiloto para que las preguntas de seguimiento tengan sentido en vez de
+// responderse como si la conversación empezara de cero. Se recorta aquí, y no
+// en quien llama, porque el tope lo pone el backend: ver historialCopiloto.ts.
 export function preguntarCopiloto(contratoId: number, pregunta: string, historial?: ChatMsg[]): Promise<ChatResponse> {
   return apiFetch<ChatResponse>(`/api/contratos/${contratoId}/copiloto/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       pregunta,
-      historial: historial?.map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
+      historial:
+        historial &&
+        historialParaElCopiloto(historial).map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
     }),
   })
 }
