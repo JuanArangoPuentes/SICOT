@@ -25,6 +25,8 @@
 // la recoja al volver. Eso toca el backend y queda como siguiente paso escrito;
 // esto es lo que se puede hacer sin él.
 
+import { ApiError } from './api/client'
+
 /** Vigila si la página se oculta mientras dura una operación. */
 export function vigilarSegundoPlano() {
   let seOculto = document.visibilityState === 'hidden'
@@ -50,4 +52,53 @@ export function esperarPrimerPlano(): Promise<void> {
     }
     document.addEventListener('visibilitychange', alCambiar)
   })
+}
+
+/** Una petición repetible se cortó otra vez, en el reintento, por pasar a segundo plano. */
+export class CortadaPorSegundoPlano extends Error {
+  constructor() {
+    super('La conexión se volvió a cortar porque SICOT pasó a segundo plano.')
+    this.name = 'CortadaPorSegundoPlano'
+  }
+}
+
+/**
+ * Hace una petición que se puede repetir sin consecuencias —una pregunta al
+ * copiloto; generar un documento NO, porque crearía dos actas— y, si se corta
+ * porque la página pasó a segundo plano, llama a `alCortarse`, espera a que el
+ * supervisor vuelva y la repite una sola vez. Si el reintento también se corta
+ * por lo mismo, lanza {@link CortadaPorSegundoPlano}, para que quien llama no
+ * le eche la culpa a Ollama. Cualquier otro fallo sale tal cual.
+ *
+ * La promesa no se resuelve hasta que termina el reintento, y eso es lo que
+ * importa. Antes el chat lo hacía a mano con `return pregunta(…)` dentro de un
+ * `catch`: el `finally` del primer intento corría en cuanto arrancaba el
+ * segundo, apagaba «Pensando…» y dejaba al supervisor lanzar otra pregunta
+ * mientras el reintento seguía minutos en el servidor. Y la revisión del paso
+ * ni siquiera vigilaba: un corte del teléfono salía como «no se pudo conectar
+ * con Ollama».
+ */
+export async function repetirAlVolverSiSeCorta<T>(peticion: () => Promise<T>, alCortarse: () => void): Promise<T> {
+  try {
+    return await vigilada(peticion)
+  } catch (e) {
+    if (!(e instanceof CortadaPorSegundoPlano)) throw e
+  }
+  alCortarse()
+  await esperarPrimerPlano()
+  return await vigilada(peticion)
+}
+
+/** La petición, pero si falla sin respuesta del servidor después de ocultarse la página, lanza CortadaPorSegundoPlano. */
+async function vigilada<T>(peticion: () => Promise<T>): Promise<T> {
+  const vigia = vigilarSegundoPlano()
+  try {
+    return await peticion()
+  } catch (e) {
+    // Un ApiError es una respuesta del servidor: a esa no la cortó el teléfono.
+    if (!(e instanceof ApiError) && vigia.seOculto()) throw new CortadaPorSegundoPlano()
+    throw e
+  } finally {
+    vigia.terminar()
+  }
 }
