@@ -6,7 +6,8 @@ import { getEtapasContrato } from '@/services/etapaService'
 import { getAlertasContrato } from '@/services/alertaService'
 import { getDocumentosContrato } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
-import { contrato, sesionSupervisor } from '@/test/dobles'
+import { alerta, contrato, sesionSupervisor } from '@/test/dobles'
+import type { TipoAlerta } from '@/services/api/types'
 import type { Step } from '@/types/domain'
 
 /**
@@ -100,5 +101,46 @@ describe('el avatar flotante', () => {
     rerender(panel({ pedidosCopiloto: 1 }))
 
     expect(screen.getByRole('button', { name: /ocultar copiloto/i })).toBeInTheDocument()
+  })
+})
+
+describe('el botón de una alerta', () => {
+  async function conAlerta(tipo: TipoAlerta, vista: 'alertas' | 'bandeja') {
+    vi.mocked(getAlertasContrato).mockResolvedValue([alerta({ tipo })])
+    const onCambiarVista = vi.fn()
+    render(panel({ vista, onCambiarVista }))
+    await act(async () => {})
+    return onCambiarVista
+  }
+
+  it('el cronograma atrasado lleva al paso en curso, no al Cierre', async () => {
+    const onCambiarVista = await conAlerta('CRONOGRAMA', 'alertas')
+
+    fireEvent.click(screen.getByRole('button', { name: /ir al paso 2/i }))
+
+    expect(onCambiarVista).toHaveBeenCalledWith('contrato')
+  })
+
+  it('desde la bandeja, la asignación de supervisión lleva al paso en curso', async () => {
+    const onCambiarVista = await conAlerta('SOLICITUD', 'bandeja')
+
+    fireEvent.click(screen.getByRole('button', { name: /ir al paso 2/i }))
+
+    expect(onCambiarVista).toHaveBeenCalledWith('contrato')
+  })
+
+  it('la integridad de un documento lleva a Documentos', async () => {
+    const onCambiarVista = await conAlerta('DOCUMENTO', 'alertas')
+
+    fireEvent.click(screen.getByRole('button', { name: /ver los documentos/i }))
+
+    expect(onCambiarVista).toHaveBeenCalledWith('documentos')
+  })
+
+  it('una alerta sin sitio relacionado se muestra sin botón', async () => {
+    await conAlerta('FACTURA', 'alertas')
+
+    expect(screen.getByText('El paso en curso está atrasado.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ir al paso|ver los documentos/i })).not.toBeInTheDocument()
   })
 })
