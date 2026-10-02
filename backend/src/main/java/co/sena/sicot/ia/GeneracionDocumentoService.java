@@ -496,9 +496,13 @@ public class GeneracionDocumentoService {
      * equipo sin GPU (auditoría del 02-10-2026). Pide conservar justo lo que
      * {@link FidelidadDeRedaccion} comprueba (cada número, fecha y hora tal
      * como está, sin completar el año, y cada «no»), que es lo que el modelo
-     * cambiaba y por lo que casi toda redacción se descartaba. Ya no pide
-     * omitir las «fechas» del contrato: el modelo leía ahí que debía quitar
-     * las fechas de las notas. No usa {@link EntradaNoConfiable#INSTRUCCION},
+     * cambiaba y por lo que casi toda redacción se descartaba, y no omitir
+     * ningún hecho. En la medición del 02-10-2026 el modelo dejaba por el
+     * camino al almacenista, el «bien liquidada» de una factura o cambiaba
+     * «cambiarlas» por «repararlas»; pedirlo ayuda poco (con la regla, el
+     * «repararlas» bajó de dos de dos rondas a una de dos, y lo demás siguió
+     * igual), así que lo que lo detiene es la comprobación. Ya no pide omitir las «fechas» del contrato: el modelo leía ahí que
+     * debía quitar las fechas de las notas. No usa {@link EntradaNoConfiable#INSTRUCCION},
      * pensada para documentos subidos, que pide advertir al funcionario: ese
      * aviso acababa dentro del apartado de observaciones. Tampoco pide
      * escribir en primera persona, ni lleva ejemplos de redacción: el modelo
@@ -512,8 +516,8 @@ public class GeneracionDocumentoService {
 
                 Reglas obligatorias:
                 - Escribe uno o dos párrafos en español formal y en forma impersonal.
-                - Usa solo los hechos de las notas. No agregues nombres, entidades, cifras, fechas, \
-                valoraciones ni verificaciones que no estén en ellas.
+                - Usa solo los hechos de las notas, sin omitir ninguno. No agregues nombres, entidades, cifras, \
+                fechas, valoraciones ni verificaciones que no estén en ellas.
                 - Copia cada número, fecha y hora tal como está escrito. Si una fecha no lleva año, no se lo pongas.
                 - Conserva cada negación: donde las notas dicen «no», escribe «no».
                 - No repitas los datos del contrato (número, valor, contratista): ya van en la ficha.

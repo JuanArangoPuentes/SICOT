@@ -230,6 +230,7 @@ class GeneracionDocumentoServiceTest {
                 PlantillaDocumentoIA.CATALOGO.get("INFORME_SUPERVISION"), "visité la obra el 20 de octubre");
 
         assertThat(prompt)
+                .contains("Usa solo los hechos de las notas, sin omitir ninguno")
                 .contains("Copia cada número, fecha y hora tal como está escrito")
                 .contains("Si una fecha no lleva año, no se lo pongas")
                 .contains("donde las notas dicen «no», escribe «no»")
