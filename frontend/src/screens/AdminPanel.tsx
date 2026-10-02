@@ -27,6 +27,8 @@ import { FormatoModal } from '@/components/admin/FormatoModal'
 import { ResetPasswordModal } from '@/components/admin/ResetPasswordModal'
 import { NewUserModal } from '@/components/admin/NewUserModal'
 import { NewFirmaModal } from '@/components/admin/NewFirmaModal'
+import AvisoDeGuardado from '@/components/AvisoDeGuardado'
+import { useGuardadoDeArchivo } from '@/hooks/useGuardadoDeArchivo'
 import { FORMATO_CHIP, mapFirma, mapUser, type FirmaRow, type UserRow } from '@/components/admin/tipos'
 
 export default function AdminPanel({
@@ -68,6 +70,7 @@ export default function AdminPanel({
   // eliminar formato). Antes se tragaban en silencio: se hacía clic y no pasaba
   // absolutamente nada, sin explicación.
   const [errorAccion, setErrorAccion] = useState('')
+  const descarga = useGuardadoDeArchivo()
 
   const [seguimiento, setSeguimiento] = useState<SeguimientoResponse | null>(null)
   const [errorSeguimiento, setErrorSeguimiento] = useState('')
@@ -357,6 +360,7 @@ export default function AdminPanel({
                 </button>
               }
             />
+            <AvisoDeGuardado aviso={descarga.aviso} error={descarga.error} />
             <div className="card" style={{ overflow: 'hidden' }}>
               <GridRow header cols="140px 1fr 80px 150px 150px 250px">
                 <span>CÓDIGO</span>
@@ -395,7 +399,11 @@ export default function AdminPanel({
                   </span>
                   <Chip text={FORMATO_CHIP[f.estado].label} type={FORMATO_CHIP[f.estado].type} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <MiniBtn onClick={() => descargarFormato(f.id, f.nombreArchivo).catch(() => {})}>
+                    <MiniBtn
+                      onClick={() =>
+                        void descarga.guardar(f.nombreArchivo, () => descargarFormato(f.id, f.nombreArchivo))
+                      }
+                    >
                       <IconDownload size={11} /> Descargar
                     </MiniBtn>
                     <MiniBtn
