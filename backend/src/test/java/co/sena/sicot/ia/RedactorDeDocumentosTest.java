@@ -178,7 +178,8 @@ class RedactorDeDocumentosTest {
     @Test
     void elActaDeReciboEsLaHojaGilF010() {
         String t = pdf("ACTA_RECIBO", contrato(), "Se reciben los 26 ítems solicitados en sus respectivas cantidades.",
-                Map.of("actaNumero", "1", "cantidadConsumo", "26", "tipoEntrega", "suministro"));
+                Map.of("actaNumero", "1", "cantidadConsumo", "26", "tipoEntrega", "suministro", "adicion", "N/A",
+                        "prorroga", "N/A"));
         assertThat(t)
                 .contains("Versión: 08")
                 .contains("Código: GIL-F-010")
@@ -193,6 +194,41 @@ class RedactorDeDocumentosTest {
                 .contains("Se reciben los 26 ítems")
                 .contains("lcrestrepo@sena.edu.co")
                 .contains("3042713044");
+    }
+
+    /**
+     * Auditoría del 02-10-2026: el acta imprimía el valor y la fecha iniciales
+     * aunque el contrato tuviera adiciones o prórrogas, y contradecía al
+     * Informe de Supervisión del mismo contrato. Como el acta no tiene casilla
+     * para declararlas, sin ese dato tampoco afirma los iniciales.
+     */
+    @Test
+    void elActaDeReciboLlevaElValorYLaFechaActuales() {
+        BloqueDocumento.DatosActaDeRecibo sinDeclarar = datosDelActa(Map.of());
+        assertThat(sinDeclarar.valorTotal()).isEqualTo("[dato pendiente]");
+        assertThat(sinDeclarar.fechaVencimiento()).isEqualTo("[dato pendiente]");
+
+        BloqueDocumento.DatosActaDeRecibo sinCambios = datosDelActa(Map.of("adicion", "N/A", "prorroga", "No"));
+        assertThat(sinCambios.valorTotal()).isEqualTo("10.000.000");
+        assertThat(sinCambios.fechaVencimiento()).isEqualTo("17/12/2025");
+
+        BloqueDocumento.DatosActaDeRecibo conCambios = datosDelActa(Map.of(
+                "adicion", "ADICIÓN 1 por $5.000.000,00", "prorroga", "PRÓRROGA 1 de un mes"));
+        assertThat(conCambios.valorTotal()).isEqualTo("[dato pendiente]");
+        assertThat(conCambios.fechaVencimiento()).isEqualTo("[dato pendiente]");
+
+        BloqueDocumento.DatosActaDeRecibo actuales = datosDelActa(Map.of("adicion", "ADICIÓN 1",
+                "valorActual", "$15.000.000,00", "prorroga", "PRÓRROGA 1", "fechaTerminacionActual", "17-01-2026"));
+        assertThat(actuales.valorTotal()).isEqualTo("15.000.000");
+        assertThat(actuales.fechaVencimiento()).isEqualTo("17/01/2026");
+    }
+
+    private static BloqueDocumento.DatosActaDeRecibo datosDelActa(Map<String, String> datos) {
+        return RedactorDeDocumentos.componer(PlantillaDocumentoIA.CATALOGO.get("ACTA_RECIBO"), contrato(), HOY, null,
+                        datos).stream()
+                .filter(b -> b instanceof BloqueDocumento.HojaDeRecibo)
+                .map(b -> ((BloqueDocumento.HojaDeRecibo) b).datos())
+                .findFirst().orElseThrow();
     }
 
     // ── Certificado del supervisor ──────────────────────────────────────────
@@ -348,8 +384,8 @@ class RedactorDeDocumentosTest {
                 .doesNotContain("cumplió a cabalidad")
                 .doesNotContain("NO se presentaron multas");
 
-        String con = pdf("INFORME_FINAL", contrato(), null,
-                Map.of("cumplimientoObjeto", "sí", "multas", "No", "mantenimiento", "NO"));
+        String con = pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "sí", "multas", "No",
+                "mantenimiento", "NO", "pagosSeguridadSocial", "SI"));
         assertThat(con)
                 .contains("se dio cumplimiento a satisfacción de los bienes y/o servicios requeridos")
                 .contains("no se generaron incumplimientos")
@@ -363,6 +399,79 @@ class RedactorDeDocumentosTest {
                 .contains("se presentaron las siguientes multas y/o sanciones: Multa del 5 %")
                 .contains("los bienes recibidos requieren revisiones")
                 .doesNotContain("cumplió a cabalidad");
+    }
+
+    /**
+     * Auditoría del 02-10-2026: con solo responder SI al objeto, el 2.5
+     * certificaba los pagos de seguridad social y que el contratista «cumplió
+     * a cabalidad con el objeto y las obligaciones contractuales», aunque
+     * nadie hubiera declarado los pagos.
+     */
+    @Test
+    void losPagosDeSeguridadSocialSoloSeCertificanSiElSupervisorLosDeclara() {
+        String soloObjeto = pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "SI"));
+        assertThat(soloObjeto)
+                .contains("[dato pendiente: certificación de los pagos de seguridad social")
+                .doesNotContain("cumplió a cabalidad");
+
+        assertThat(pdf("INFORME_FINAL", contrato(), null,
+                Map.of("cumplimientoObjeto", "SI", "pagosSeguridadSocial", "Sí.")))
+                .contains("se evidenció que el contratista cumplió a cabalidad con el objeto y las obligaciones"
+                        + " contractuales.");
+        // Sin el objeto cumplido a satisfacción, la frase del informe real
+        // afirmaría lo que el supervisor no dijo: solo se certifican los pagos.
+        assertThat(pdf("INFORME_FINAL", contrato(), null,
+                Map.of("cumplimientoObjeto", "PARCIALMENTE", "pagosSeguridadSocial", "si")))
+                .contains("se evidenció que el contratista cumplió con los pagos de seguridad social.")
+                .doesNotContain("cumplió a cabalidad");
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("pagosSeguridadSocial", "NO")))
+                .contains("se evidenció que el contratista no cumplió con los pagos de seguridad social.");
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "SI",
+                "pagosSeguridadSocial", "Se verificaron las planillas de los cuatro meses de ejecución.")))
+                .contains("Se verificaron las planillas de los cuatro meses de ejecución.")
+                .doesNotContain("cumplió a cabalidad");
+    }
+
+    /** «Sin cumplir» empezaba por «SI» y el informe certificaba el cumplimiento a satisfacción. */
+    @Test
+    void laRespuestaSobreElObjetoSeLeeComoPalabraCompleta() {
+        assertThat(RedactorDeDocumentos.respuesta("Sí, a satisfacción")).isEqualTo("SI");
+        assertThat(RedactorDeDocumentos.respuesta("NO CUMPLIÓ")).isEqualTo("NO");
+        assertThat(RedactorDeDocumentos.respuesta("Parcial")).isEqualTo("PARCIALMENTE");
+        assertThat(RedactorDeDocumentos.respuesta("Sin cumplir")).isNull();
+        assertThat(RedactorDeDocumentos.respuesta("Novedades en la entrega")).isNull();
+
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "Sin entregar")))
+                .contains("[dato pendiente: declaración sobre el cumplimiento del objeto")
+                .doesNotContain("se dio cumplimiento a satisfacción");
+    }
+
+    /**
+     * El objeto cumplido a satisfacción y una obligación que no se cumplió
+     * firmaban un informe que se contradice: se rechaza antes de generarlo.
+     */
+    @Test
+    void elObjetoCumplidoNoConviveConUnaObligacionIncumplida() {
+        PlantillaDocumentoIA fin = PlantillaDocumentoIA.CATALOGO.get("INFORME_FINAL");
+        List<String> vacia = java.util.Arrays.asList("", null, " ");
+        java.util.function.Function<String, Map<String, List<List<String>>>> conSegunda = cumplio -> Map.of(
+                "obligacionesGenerales", List.of(List.of("Cumplir la oferta.", "SI CUMPLIO", ""), vacia,
+                        List.of("Entregar las garantías.", cumplio, "")));
+
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("no cumplió: entregó la póliza tarde")))
+                .contains("en la obligación 2 respondió «NO CUMPLIO»");
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "Sí"),
+                conSegunda.apply("Parcialmente"))).contains("«PARCIALMENTE»");
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("NO"))).contains("«NO»");
+        // Lo que no contradice al objeto cumplido pasa.
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("No se requirió el cumplimiento"))).isNull();
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("Novedad resuelta en octubre"))).isNull();
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "PARCIALMENTE"),
+                conSegunda.apply("NO CUMPLIO"))).isNull();
     }
 
     @Test

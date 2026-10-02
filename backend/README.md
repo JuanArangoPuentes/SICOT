@@ -155,7 +155,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 | POST | `/api/contratos/{id}/documentos` (multipart, carga real) | GESTION, ADMINISTRADOR |
 | GET | `/api/contratos/{id}/documentos/{docId}/archivo` (descarga real) | autenticados |
 | POST | `/api/contratos/{id}/documentos/generar` (redacta el documento con IA) | SUPERVISOR, ADMINISTRADOR |
-| POST | `/api/contratos/{id}/documentos/{docId}/firmar` | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/documentos/{docId}/firmar` (lo generado exige `?huellaRevisada=`) | SUPERVISOR asignado |
 | POST | `/api/contratos/{id}/copiloto/chat` (chat real sobre Ollama) | SUPERVISOR asignado, ADMINISTRADOR |
 | POST | `/api/ia/extraer-contrato` (multipart PDF; propone campos, **no persiste**) | GESTION, ADMINISTRADOR |
 | GET/PATCH | `/api/contratos/{id}/alertas`, `/api/alertas/{id}/leida` | autenticados |

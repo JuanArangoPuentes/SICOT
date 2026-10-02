@@ -114,8 +114,13 @@ public class SecurityConfig {
                             .hasAnyRole("SUPERVISOR", "GESTION", "ADMINISTRADOR");
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/documentos/generar")
                             .hasAnyRole("SUPERVISOR", "ADMINISTRADOR");
+                    // Firmar es solo del SUPERVISOR: los documentos de un contrato
+                    // los firma su supervisor asignado (DocumentoService.firmar lo
+                    // comprueba contra el contrato). Hasta la auditoría del
+                    // 02-10-2026 entraba también el ADMINISTRADOR, y podía firmar
+                    // un acta cargada de cualquier contrato.
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/documentos/*/firmar")
-                            .hasAnyRole("SUPERVISOR", "ADMINISTRADOR");
+                            .hasRole("SUPERVISOR");
                     auth.requestMatchers(HttpMethod.POST, "/api/contratos/*/copiloto/chat")
                             .hasAnyRole("SUPERVISOR", "ADMINISTRADOR");
 

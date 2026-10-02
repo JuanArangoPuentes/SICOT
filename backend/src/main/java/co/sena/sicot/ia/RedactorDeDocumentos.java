@@ -382,6 +382,22 @@ public final class RedactorDeDocumentos {
 
     private static List<BloqueDocumento> actaDeRecibo(Contrato c, LocalDate hoy, String obs, Datos d) {
         String corto = "[dato pendiente]";
+        // El valor total y la fecha de vencimiento son los actuales, como en el
+        // Informe de Supervisión: con una adición o una prórroga declaradas,
+        // los que dé el supervisor o pendientes. Aquí además el acta no tiene
+        // casilla para la adición ni la prórroga, así que si no se declaran
+        // tampoco se afirman los iniciales: hasta la auditoría del 02-10-2026
+        // el acta imprimía el valor y la fecha registrados aunque el contrato
+        // tuviera adiciones, y contradecía al informe del mismo contrato.
+        String valorTotal;
+        if (d.tiene("valorActual")) {
+            BigDecimal v = d.pesos("valorActual");
+            valorTotal = v != null ? entero(v) : d.valor("valorActual");
+        } else {
+            valorTotal = esNo(d.valor("adicion")) && c.getValor() != null ? entero(c.getValor()) : corto;
+        }
+        String fechaVencimiento = d.tiene("fechaTerminacionActual") ? d.fecha("fechaTerminacionActual", CORTA)
+                : esNo(d.valor("prorroga")) && c.getFechaFin() != null ? c.getFechaFin().format(CORTA) : corto;
         DatosActaDeRecibo datos = new DatosActaDeRecibo(
                 d.o("actaNumero", corto),
                 hoy.format(DateTimeFormatter.ofPattern("dd 'de' MMMM yyyy", ES)),
@@ -398,8 +414,8 @@ public final class RedactorDeDocumentos {
                 c.getContratista() != null ? mayusculas(c.getContratista()) : corto,
                 c.getContratistaNit() != null && !c.getContratistaNit().isBlank()
                         ? soloDigitosSinVerificacion(c.getContratistaNit()) : corto,
-                c.getValor() != null ? entero(c.getValor()) : corto,
-                c.getFechaFin() != null ? c.getFechaFin().format(CORTA) : corto,
+                valorTotal,
+                fechaVencimiento,
                 c.getObjeto() != null ? mayusculas(c.getObjeto()) : corto,
                 d.o("cantidadDevolutivos", corto),
                 d.o("cantidadConsumo", corto),
@@ -494,6 +510,73 @@ public final class RedactorDeDocumentos {
                 .replace(".", "");
         return v.equals("NO") || v.equals("N/A") || v.equals("NA") || v.startsWith("NO APLICA")
                 || v.startsWith("NINGUN") || v.startsWith("NO HUBO") || v.startsWith("NO SE PRESENTARON");
+    }
+
+    /**
+     * La respuesta SI, NO o PARCIALMENTE con que empieza lo que escribió el
+     * supervisor, como palabra completa («Sí, a satisfacción», «NO CUMPLIÓ»,
+     * «Parcial»); {@code null} si no empieza por una de ellas. Hasta la
+     * auditoría del 02-10-2026 se miraba con startsWith: «Sin cumplir» o «Sin
+     * entregar» se tomaban por un SI y el Informe Final certificaba el
+     * cumplimiento a satisfacción.
+     */
+    static String respuesta(String valor) {
+        if (valor == null) {
+            return null;
+        }
+        String v = comparable(valor);
+        for (String r : List.of("PARCIALMENTE", "PARCIAL", "SI", "NO")) {
+            if (empiezaPorPalabra(v, r)) {
+                return r.startsWith("PARCIAL") ? "PARCIALMENTE" : r;
+            }
+        }
+        return null;
+    }
+
+    /** Sin tildes y en mayúsculas, para comparar respuestas: «Sí» es «SI». */
+    private static String comparable(String valor) {
+        return java.text.Normalizer.normalize(valor.strip(), java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "").toUpperCase(ES);
+    }
+
+    /** Si el texto empieza por esa palabra (o frase) completa, no por otra más larga que la contiene. */
+    private static boolean empiezaPorPalabra(String texto, String palabra) {
+        return texto.startsWith(palabra)
+                && (texto.length() == palabra.length() || !Character.isLetter(texto.charAt(palabra.length())));
+    }
+
+    /** Solo la respuesta y nada más: «SI», «Sí.», «no». */
+    private static boolean esSoloLaRespuesta(String valor, String respuesta) {
+        return comparable(valor).replaceAll("[.\\s]+$", "").equals(respuesta);
+    }
+
+    /**
+     * El 2.5 del Informe Final: una certificación del supervisor sobre los
+     * pagos de seguridad social, con su propio dato. Hasta la auditoría del
+     * 02-10-2026 se escribía con solo responder SI al cumplimiento del objeto,
+     * aunque nadie hubiera certificado los pagos. La frase del informe real
+     * («cumplió a cabalidad con el objeto y las obligaciones contractuales»)
+     * solo va si el supervisor declaró las dos cosas; {@link #incoherencia}
+     * impide además que la tabla de obligaciones diga lo contrario. Cualquier
+     * otra respuesta va tal como la escribió.
+     */
+    private static String pagosDeSeguridadSocial(Datos d, String cumplimiento) {
+        if (!d.tiene("pagosSeguridadSocial")) {
+            return "[dato pendiente: certificación de los pagos de seguridad social del contratista durante la"
+                    + " ejecución]";
+        }
+        String dado = d.valor("pagosSeguridadSocial");
+        String informes = "Mediante los informes presentados por la supervisión durante la ejecución del contrato, los"
+                + " cuales fueron entregados para el proceso de pago, se evidenció que el contratista";
+        if (esSoloLaRespuesta(dado, "SI")) {
+            return informes + ("SI".equals(cumplimiento)
+                    ? " cumplió a cabalidad con el objeto y las obligaciones contractuales."
+                    : " cumplió con los pagos de seguridad social.");
+        }
+        if (esSoloLaRespuesta(dado, "NO")) {
+            return informes + " no cumplió con los pagos de seguridad social.";
+        }
+        return dado;
     }
 
     private static String noNegativo(BigDecimal v, String siNegativo) {
@@ -602,21 +685,20 @@ public final class RedactorDeDocumentos {
         // y esas frases eran las conclusiones de ESE contrato. Se escriben solo
         // si el supervisor las declara; si no, quedan pendientes (revisión del
         // 28-09-2026).
-        String cumplimiento = d.valor("cumplimientoObjeto") == null ? null
-                : d.valor("cumplimientoObjeto").toUpperCase(ES).replace("SÍ", "SI");
+        String cumplimiento = respuesta(d.valor("cumplimientoObjeto"));
         boolean sinMultas = d.tiene("multas") && esNo(d.valor("multas"));
         List<Tramo> objeto = new ArrayList<>(List.of(Tramo.normal("En calidad de supervisor del contrato "),
                 Tramo.negrita(numero)));
-        if (cumplimiento != null && cumplimiento.startsWith("SI")) {
+        if ("SI".equals(cumplimiento)) {
             objeto.add(Tramo.normal(" se dio cumplimiento a satisfacción de los bienes y/o servicios requeridos en el"
                     + " contrato con el objeto: "));
             objeto.add(Tramo.italica(o(c.getObjeto()) + "." + (sinMultas ? " En el proceso contractual no se generaron"
                     + " incumplimientos, procesos de multas u otras sanciones." : "")));
-        } else if (cumplimiento != null && cumplimiento.startsWith("PARCIAL")) {
+        } else if ("PARCIALMENTE".equals(cumplimiento)) {
             objeto.add(Tramo.normal(" certifico que el objeto del contrato, "));
             objeto.add(Tramo.italica(o(c.getObjeto())));
             objeto.add(Tramo.normal(", se cumplió parcialmente, según se detalla en este informe."));
-        } else if (cumplimiento != null && cumplimiento.startsWith("NO")) {
+        } else if ("NO".equals(cumplimiento)) {
             objeto.add(Tramo.normal(" certifico que el objeto del contrato, "));
             objeto.add(Tramo.italica(o(c.getObjeto())));
             objeto.add(Tramo.normal(", no se cumplió, según se detalla en este informe."));
@@ -653,12 +735,7 @@ public final class RedactorDeDocumentos {
         }
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.5", "Certificado de pagos de seguridad social");
-        b.add(new Parrafo(cumplimiento != null && cumplimiento.startsWith("SI")
-                ? "Mediante los informes presentados por la supervisión durante la ejecución del contrato, los"
-                        + " cuales fueron entregados para el proceso de pago, se evidenció que el contratista cumplió a"
-                        + " cabalidad con el objeto y las obligaciones contractuales."
-                : "[dato pendiente: certificación de los pagos de seguridad social del contratista durante la"
-                        + " ejecución]"));
+        b.add(new Parrafo(pagosDeSeguridadSocial(d, cumplimiento)));
         b.add(new LineasEnBlanco(1));
         seccion(b, "2.6", "Designación de la supervisión");
         b.add(new Parrafo("Que el ordenador del gasto realizó la designación de supervisión el "
@@ -796,18 +873,37 @@ public final class RedactorDeDocumentos {
      * Lo que haría inválido el documento aunque cada dato esté bien escrito,
      * para rechazarlo antes de generarlo; {@code null} si no hay nada.
      *
-     * <p>Hoy, una sola regla: en el Informe Final, las órdenes de pago tienen
-     * que sumar el valor total pagado. En el real suman exacto (16.798.000 +
-     * 3.191.620 = 19.989.620); un informe firmado con otra suma es un
-     * documento que se contradice en la misma página, y la tabla de estado
-     * financiero calcula el valor por pagar con el total. Solo se compara
-     * cuando todas las órdenes y el total se leen como cifras: si alguna no,
-     * se escribe tal cual y la suma queda para quien revisa el documento.
+     * <p>Dos reglas, las dos del Informe Final. La primera: si el supervisor
+     * declara cumplido el objeto a satisfacción, ninguna obligación general
+     * puede decir NO o PARCIALMENTE en «¿CUMPLIÓ?». Firmado así, el 2.2 y el
+     * 2.5 afirmaban lo que la tabla del mismo documento negaba (auditoría del
+     * 02-10-2026).
+     *
+     * <p>La segunda: las órdenes de pago tienen que sumar el valor total
+     * pagado. En el real suman exacto (16.798.000 + 3.191.620 = 19.989.620);
+     * un informe firmado con otra suma es un documento que se contradice en la
+     * misma página, y la tabla de estado financiero calcula el valor por pagar
+     * con el total. Solo se compara cuando todas las órdenes y el total se
+     * leen como cifras: si alguna no, se escribe tal cual y la suma queda para
+     * quien revisa el documento.
      */
     public static String incoherencia(PlantillaDocumentoIA plantilla, Map<String, String> datos,
                                       Map<String, List<List<String>>> tablas) {
         if (!"INFORME_FINAL".equals(plantilla.clave()) || datos == null || tablas == null) {
             return null;
+        }
+        if ("SI".equals(respuesta(datos.get("cumplimientoObjeto")))) {
+            // Numeradas como en el documento, que no cuenta las filas vacías.
+            List<List<String>> generales = sinFilasVacias(tablas.get("obligacionesGenerales"));
+            for (int i = 0; i < generales.size(); i++) {
+                List<String> fila = generales.get(i);
+                String cumplio = veredictoDe(fila.size() > 1 && fila.get(1) != null ? fila.get(1).strip() : "");
+                if ("NO CUMPLIO".equals(cumplio) || "NO".equals(cumplio) || "PARCIALMENTE".equals(cumplio)) {
+                    return "Declaró que el contratista cumplió el objeto a satisfacción, pero en la obligación "
+                            + (i + 1) + " respondió «" + cumplio + "». Corrija una de las dos cosas antes de generar"
+                            + " el Informe Final: firmado así, el documento se contradice.";
+                }
+            }
         }
         List<List<String>> ordenes = tablas.getOrDefault("ordenesDePago", List.of());
         BigDecimal total = leerPesos(datos.get("valorTotalPagado"));
@@ -856,20 +952,20 @@ public final class RedactorDeDocumentos {
      * mayúsculas: una explicación o un enlace de SECOP II salían cambiados.
      */
     private static List<Tramo> veredicto(String texto) {
-        if (texto.startsWith("[dato")) {
+        String v = texto.startsWith("[dato") ? null : veredictoDe(texto);
+        if (v == null) {
             return List.of(Tramo.normal(texto));
         }
+        String resto = texto.substring(v.length());
+        return resto.isBlank() ? List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)))
+                : List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)), Tramo.normal(resto));
+    }
+
+    /** La respuesta de {@link #VEREDICTOS} con que empieza la celda, como palabra completa, o {@code null}. */
+    private static String veredictoDe(String texto) {
         String comparable = java.text.Normalizer.normalize(texto, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "").toUpperCase(ES);
-        for (String v : VEREDICTOS) {
-            if (comparable.startsWith(v) && (comparable.length() == v.length()
-                    || !Character.isLetter(comparable.charAt(v.length())))) {
-                String resto = texto.substring(v.length());
-                return resto.isBlank() ? List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)))
-                        : List.of(Tramo.negrita(texto.substring(0, v.length()).toUpperCase(ES)), Tramo.normal(resto));
-            }
-        }
-        return List.of(Tramo.normal(texto));
+        return VEREDICTOS.stream().filter(v -> empiezaPorPalabra(comparable, v)).findFirst().orElse(null);
     }
 
     /**
@@ -922,6 +1018,16 @@ public final class RedactorDeDocumentos {
         return filas;
     }
 
+    /** Las filas con algo escrito: una fila vacía no sale en el documento ni se numera. */
+    private static List<List<String>> sinFilasVacias(List<List<String>> filas) {
+        if (filas == null) {
+            return List.of();
+        }
+        return filas.stream()
+                .filter(f -> f != null && f.stream().anyMatch(v -> v != null && !v.isBlank()))
+                .toList();
+    }
+
     /** Título de apartado con la línea en blanco que lo sigue en los formatos. */
     private static void seccion(List<BloqueDocumento> b, String numero, String titulo) {
         b.add(new Seccion(numero, titulo));
@@ -949,13 +1055,7 @@ public final class RedactorDeDocumentos {
          */
         List<List<String>> filas(String clave) {
             boolean declarada = plantilla.tablas().stream().anyMatch(t -> t.clave().equals(clave));
-            List<List<String>> filas = declarada ? tablas.get(clave) : null;
-            if (filas == null) {
-                return List.of();
-            }
-            return filas.stream()
-                    .filter(f -> f != null && f.stream().anyMatch(v -> v != null && !v.isBlank()))
-                    .toList();
+            return sinFilasVacias(declarada ? tablas.get(clave) : null);
         }
 
         boolean tiene(String clave) {

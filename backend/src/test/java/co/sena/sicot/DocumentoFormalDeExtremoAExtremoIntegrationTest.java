@@ -112,6 +112,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         long id = objectMapper.readTree(generado).get("id").asLong();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", objectMapper.readTree(generado).get("huellaDelBorrador").asText())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 
@@ -267,13 +268,51 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     }
 
     private long generarActa(long subetapa) throws Exception {
-        String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+        return generarActaConHuella(subetapa).get("id").asLong();
+    }
+
+    /** La respuesta de la generación: el id y la huella del borrador que se firma. */
+    private JsonNode generarActaConHuella(long subetapa) throws Exception {
+        return objectMapper.readTree(mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
                 .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+    }
+
+    /** Un PDF cargado a mano en el contrato, pendiente de firma. */
+    private long cargarPdf(String nombre) {
+        byte[] contenido = "%PDF-1.4 acta cargada".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Documento cargado = new Documento();
+        cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        cargado.setNombre(nombre);
+        cargado.setTipo(TipoDocumento.PDF);
+        cargado.setContentType("application/pdf");
+        cargado.setContenido(contenido);
+        cargado.setTamanioBytes((long) contenido.length);
+        cargado.setEstado(EstadoDocumento.PENDIENTE);
+        return documentoRepository.save(cargado).getId();
+    }
+
+    private static final String EMAIL_SUPERVISOR_NUEVO = "supervisor.nuevo.e2e@soy.sena.edu.co";
+
+    /** Otro supervisor, con su firma electrónica, para reasignarle el contrato. */
+    private String supervisorNuevoConFirma() throws Exception {
+        String creado = mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Supervisor Nuevo","email":"%s","password":"Reasignado123",
+                                 "telefono":"3000000000","rol":"SUPERVISOR"}""".formatted(EMAIL_SUPERVISOR_NUEVO)))
+                .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(r).get("id").asLong();
+        mockMvc.perform(post("/api/firmas")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"usuarioId\":" + objectMapper.readTree(creado).get("id").asLong() + "}"))
+                .andExpect(status().isCreated());
+        return login(EMAIL_SUPERVISOR_NUEVO, "Reasignado123");
     }
 
     /**
@@ -302,27 +341,100 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(documentoRepository.findById(idCargado).orElseThrow().getContenido()).isEqualTo(escaneado);
     }
 
-    /** El nombre estampado en el hueco del supervisor tiene que ser el del supervisor. */
+    /**
+     * El nombre estampado en el hueco del supervisor tiene que ser el del
+     * supervisor: un administrador con firma propia no firma, ni siquiera con
+     * la huella del borrador.
+     */
     @Test
     void unDocumentoGeneradoSoloLoFirmaElSupervisorDelContrato() throws Exception {
-        long id = generarActa(subetapa27());
-        String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + admin))
-                .andReturn().getResponse().getContentAsString();
-        if (!objectMapper.readTree(miFirma).get("tieneFirmaActiva").asBoolean()) {
-            long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
-                    .get("usuarioId").asLong();
-            mockMvc.perform(post("/api/firmas")
-                            .header("Authorization", "Bearer " + admin)
-                            .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"usuarioId\":" + idAdmin + "}"))
-                    .andExpect(status().isCreated());
-        }
+        asegurarFirmaDelAdministrador();
+        JsonNode generado = generarActaConHuella(subetapa27());
+        long id = generado.get("id").asLong();
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
+                        .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isForbidden());
+        assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
+    }
+
+    /**
+     * Auditoría del 02-10-2026: la regla del supervisor asignado valía solo
+     * para lo generado. Un acta cargada por Gestión la firmaba cualquier
+     * administrador, y quedaba aprobada e inmutable sin que el supervisor del
+     * contrato la viera.
+     */
+    @Test
+    void unDocumentoCargadoTampocoLoFirmaUnAdministrador() throws Exception {
+        asegurarFirmaDelAdministrador();
+        long id = cargarPdf("Acta firmada por el contratista");
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
                         .header("Authorization", "Bearer " + admin))
+                .andExpect(status().isForbidden());
+        Documento documento = documentoRepository.findById(id).orElseThrow();
+        assertThat(documento.getFirmaId()).isNull();
+        assertThat(documento.getEstado()).isEqualTo(EstadoDocumento.PENDIENTE);
+
+        // El supervisor asignado sí, y sin huella: un documento cargado no se
+        // regenera, así que no hay otro contenido que pudiera firmar sin verlo.
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Un borrador generado se regenera sobre la misma fila: sin la huella de lo
+     * que se revisó, se firmaba lo que hubiera en ella en ese instante, quizá
+     * los datos de otra pestaña (auditoría del 02-10-2026).
+     */
+    @Test
+    void unDocumentoGeneradoNoSeFirmaSinLaHuellaDelBorradorRevisado() throws Exception {
+        long id = generarActa(subetapa27());
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("lo firma el supervisor del contrato")));
+                .andExpect(jsonPath("$.message", containsString("Falta indicar qué borrador revisó")));
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", " ")
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("Falta indicar qué borrador revisó")));
         assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
+    }
+
+    /**
+     * Si la firma visible no se puede estampar, el documento no se firma:
+     * antes quedaba firmado e íntegro con el hueco de la firma vacío, y ya no
+     * se podía volver a estampar (auditoría del 02-10-2026).
+     */
+    @Test
+    void siNoSePuedeEstamparLaFirmaElDocumentoNoQuedaFirmado() throws Exception {
+        long id = generarActa(subetapa27());
+        Documento documento = documentoRepository.findById(id).orElseThrow();
+        byte[] danado;
+        try (PDDocument pdf = Loader.loadPDF(documento.getContenido())) {
+            // El hueco apunta a una página que el documento no tiene.
+            pdf.getDocumentInformation().setCustomMetadataValue("SICOT-AnclaFirma", "99;70;100;200;60");
+            var salida = new java.io.ByteArrayOutputStream();
+            pdf.save(salida);
+            danado = salida.toByteArray();
+        }
+        documento.setContenido(danado);
+        documentoRepository.save(documento);
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", HexFormat.of().formatHex(
+                                MessageDigest.getInstance("SHA-256").digest(danado)))
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("No se pudo poner la firma visible")));
+        Documento sinFirmar = documentoRepository.findById(id).orElseThrow();
+        assertThat(sinFirmar.getFirmaId()).isNull();
+        assertThat(sinFirmar.getFirmaHashSha256()).isNull();
+        assertThat(sinFirmar.getContenido()).isEqualTo(danado);
     }
 
     /** Si Gestión corrige el número del contrato, el borrador regenerado lleva el nombre nuevo. */
@@ -364,33 +476,39 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void trasReasignarElContratoElBorradorDelSupervisorAnteriorNoSeFirmaSinRegenerarlo() throws Exception {
-        asegurarFirmaDelAdministrador();
         long subetapa = subetapa27();
-        long id = generarActa(subetapa);
+        JsonNode generado = generarActaConHuella(subetapa);
+        long id = generado.get("id").asLong();
+        String nuevo = supervisorNuevoConFirma();
         var contrato = contratoRepository.findById(contratoId).orElseThrow();
-        long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
-                .get("usuarioId").asLong();
-        contrato.setSupervisor(usuarioRepository.findById(idAdmin).orElseThrow());
+        contrato.setSupervisor(usuarioRepository.findByEmail(EMAIL_SUPERVISOR_NUEVO).orElseThrow());
         contratoRepository.save(contrato);
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .header("Authorization", "Bearer " + admin))
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
+                        .header("Authorization", "Bearer " + nuevo))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("era otra persona")));
 
-        String regenerado = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
-                        .header("Authorization", "Bearer " + admin)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+        JsonNode regenerado = objectMapper.readTree(mockMvc.perform(
+                        post("/api/contratos/{c}/documentos/generar", contratoId)
+                                .header("Authorization", "Bearer " + nuevo)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString();
-        assertThat(objectMapper.readTree(regenerado).get("id").asLong()).isEqualTo(id);
+                .andReturn().getResponse().getContentAsString());
+        assertThat(regenerado.get("id").asLong()).isEqualTo(id);
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .header("Authorization", "Bearer " + admin))
+                        .param("huellaRevisada", regenerado.get("huellaDelBorrador").asText())
+                        .header("Authorization", "Bearer " + nuevo))
                 .andExpect(status().isOk());
     }
 
-    /** Sin supervisor, el administrador firmaba sobre «[dato pendiente: supervisor sin asignar]». */
+    /**
+     * Sin supervisor, el administrador firmaba sobre «[dato pendiente:
+     * supervisor sin asignar]». Ahora ningún documento lo firma un
+     * administrador, y un supervisor no ve un contrato que no tiene asignado.
+     */
     @Test
     void unDocumentoGeneradoDeUnContratoSinSupervisorNoSeFirma() throws Exception {
         asegurarFirmaDelAdministrador();
@@ -404,11 +522,17 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(generado).get("id").asLong();
+        String huella = objectMapper.readTree(generado).get("huellaDelBorrador").asText();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", huella)
                         .header("Authorization", "Bearer " + admin))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("no tiene supervisor asignado")));
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", huella)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isNotFound());
+        assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
     }
 
     /**
