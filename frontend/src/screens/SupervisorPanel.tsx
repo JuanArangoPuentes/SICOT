@@ -76,7 +76,12 @@ import {
   preguntarCopiloto,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
-import { esperarPrimerPlano, vigilarSegundoPlano } from '@/services/segundoPlano'
+import {
+  CortadaPorSegundoPlano,
+  esperarPrimerPlano,
+  repetirAlVolverSiSeCorta,
+  vigilarSegundoPlano,
+} from '@/services/segundoPlano'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
@@ -506,7 +511,7 @@ export default function SupervisorPanel({
     setExpandedSteps(new Set([stepId]))
     // La guía sale de la plantilla del procedimiento, al instante; antes era
     // una pregunta al modelo por sub-paso (ver data/guiaSubPaso.ts).
-    setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(step, primeraPendiente) }])
+    setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(step, primeraPendiente), origen: 'guia' }])
   }
 
   // Ejecuta de verdad la acción de un sub-paso (generar/firmar si aplica y
@@ -747,7 +752,7 @@ export default function SupervisorPanel({
         setActiveSubStep(next)
         const nextSub = pasoActual?.subSteps.find((ss) => ss.id === next)
         if (pasoActual && nextSub)
-          setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(pasoActual, nextSub) }])
+          setChatMsgs((prev) => [...prev, { role: 'ai', text: guiaDelSubPaso(pasoActual, nextSub), origen: 'guia' }])
       } else {
         setActiveSubStep(null)
         setTutorialMode(false)
@@ -809,15 +814,28 @@ export default function SupervisorPanel({
         `se esperaba en cada punto, o si detecta algo que probablemente falte o sea insuficiente. Sea claro y ` +
         `directo: diga si le parece que se puede marcar el paso como completado o si recomienda revisar algo ` +
         `antes. Aclare que esta es una revisión de apoyo, no una aprobación oficial — la decisión final es del supervisor.`
-      const { respuesta } = await preguntarCopiloto(contrato.id, pregunta, chatMsgs)
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta }])
+      // Igual que una pregunta suelta: la revisión no cambia nada en el
+      // servidor, así que si el teléfono la corta se repite al volver. Hasta
+      // que termine, el paso no queda listo para confirmar (eso lo hace el
+      // finally, que ahora espera al reintento).
+      const { respuesta } = await repetirAlVolverSiSeCorta(
+        () => preguntarCopiloto(contrato.id, pregunta, chatMsgs),
+        avisarQueSeRepite,
+      )
+      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
     } catch (e) {
-      const mensaje = e instanceof ApiError ? e.message : 'No se pudo conectar con el Copiloto IA (Ollama).'
+      const mensaje =
+        e instanceof ApiError || e instanceof CortadaPorSegundoPlano
+          ? e.message
+          : 'No se pudo conectar con el Copiloto IA (Ollama).'
+      // Unos mensajes traen su punto final y otros no; pegarle siempre uno
+      // dejaba «(Ollama).. Puede confirmar».
+      const frase = /[.!?]$/.test(mensaje) ? mensaje : `${mensaje}.`
       setChatMsgs((prev) => [
         ...prev,
         {
           role: 'ai',
-          text: `No pude revisar su descripción: ${mensaje}. Puede confirmar de todas formas si está seguro, o volver a intentarlo.`,
+          text: `No pude revisar su descripción: ${frase} Puede confirmar de todas formas si está seguro, o volver a intentarlo.`,
         },
       ])
     } finally {
@@ -826,43 +844,39 @@ export default function SupervisorPanel({
     }
   }
 
+  // Si el teléfono cortó la pregunta porque SICOT pasó a segundo plano, el
+  // motivo no es Ollama y decirlo sería mentir: en el APK de Android el sistema
+  // destruye las conexiones de la aplicación a los pocos segundos de salir de
+  // ella, y una pregunta al copiloto sobre CPU dura minutos (ver
+  // services/segundoPlano.ts). Se avisa y se repite al volver.
+  const avisarQueSeRepite = () =>
+    setChatMsgs((prev) => [
+      ...prev,
+      {
+        role: 'ai',
+        text: 'La respuesta se cortó porque SICOT pasó a segundo plano: el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. La vuelvo a pedir ahora; mantenga SICOT abierto hasta que responda.',
+      },
+    ])
+
   // Pregunta real al Copiloto IA (Ollama, vía CopilotoChatService en el
   // backend) — anclada a los datos reales del contrato y al estado real de
   // sus etapas. Ya no hay coincidencia de palabras clave local.
-  const preguntarAlCopiloto = async (texto: string, esReintento = false) => {
-    if (!contrato || (pensando && !esReintento)) return
+  const preguntarAlCopiloto = async (texto: string) => {
+    if (!contrato || pensando) return
     setPensando(true)
-    const vigia = vigilarSegundoPlano()
     try {
-      const { respuesta } = await preguntarCopiloto(contrato.id, texto, chatMsgs)
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta }])
+      const { respuesta } = await repetirAlVolverSiSeCorta(
+        () => preguntarCopiloto(contrato.id, texto, chatMsgs),
+        avisarQueSeRepite,
+      )
+      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
     } catch (e) {
-      // Si la conexión se cortó porque SICOT pasó a segundo plano, el motivo no
-      // es Ollama y decirlo sería mentir: en el APK de Android el sistema
-      // destruye las conexiones de la aplicación a los pocos segundos de salir
-      // de ella, y una pregunta al copiloto sobre CPU dura minutos (ver
-      // services/segundoPlano.ts). Una pregunta no cambia nada en el servidor,
-      // así que se puede repetir sin consecuencias: se vuelve a pedir una sola
-      // vez, en cuanto el supervisor vuelve a la aplicación.
-      if (!(e instanceof ApiError) && vigia.seOculto() && !esReintento) {
-        setChatMsgs((prev) => [
-          ...prev,
-          {
-            role: 'ai',
-            text: 'La respuesta se cortó porque SICOT pasó a segundo plano: el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. La vuelvo a pedir ahora; mantenga SICOT abierto hasta que responda.',
-          },
-        ])
-        vigia.terminar()
-        await esperarPrimerPlano()
-        return preguntarAlCopiloto(texto, true)
-      }
       const mensaje =
-        e instanceof ApiError
+        e instanceof ApiError || e instanceof CortadaPorSegundoPlano
           ? e.message
           : 'No se pudo conectar con el Copiloto IA (Ollama). Verifique que esté disponible e inténtelo de nuevo.'
       setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude responder: ${mensaje}` }])
     } finally {
-      vigia.terminar()
       setPensando(false)
     }
   }
