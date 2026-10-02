@@ -260,6 +260,28 @@ describe('SupervisorPanel', () => {
     }
   })
 
+  // Con la lista de documentos vacía por un fallo, Documentos decía «Sin
+  // generar aún» en los cinco formatos y la bandeja callaba los borradores sin
+  // firmar (auditoría del 02-10-2026).
+  it('si no puede consultar los documentos, lo dice en vez de darlos por no generados', async () => {
+    vi.mocked((await import('@/services/documentoService')).getDocumentosContrato).mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    )
+    await montar({ vista: 'documentos', contrato: contrato() })
+
+    expect(screen.queryByText('Sin generar aún')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/no se pudieron consultar los documentos del contrato/i)
+  })
+
+  it('si no puede consultar los documentos, la bandeja lo avisa en vez de callar los borradores', async () => {
+    vi.mocked((await import('@/services/documentoService')).getDocumentosContrato).mockRejectedValue(
+      new TypeError('Failed to fetch'),
+    )
+    await montar({ vista: 'bandeja', contrato: contrato() })
+
+    expect(screen.getByText('No se pudieron consultar los documentos del contrato')).toBeInTheDocument()
+  })
+
   // ──────────────────────────────────────────────────────────────────────────
   // Generar y firmar un documento formal
   //

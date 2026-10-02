@@ -45,9 +45,27 @@ const FILTROS: Record<string, { name: string; extensions: string[] }> = {
   png: { name: 'Imagen PNG', extensions: ['png'] },
 }
 
+/**
+ * El teléfono no dejó escribir el archivo: sin espacio, una ubicación que no
+ * admite escritura… Es distinto de que no llegara del servidor: intentarlo de
+ * nuevo en un momento no lo arregla, y decir eso sería engañar. Los plugins de
+ * Tauri rechazan con un texto, no con un Error, así que el motivo se conserva
+ * aquí para mostrarlo tal cual.
+ */
+export class ErrorAlGuardar extends Error {
+  constructor(motivo: string) {
+    super(motivo)
+    this.name = 'ErrorAlGuardar'
+  }
+}
+
 export async function guardarArchivo(contenido: Blob, nombreArchivo: string): Promise<ResultadoGuardado> {
   if (enAplicacionEmpaquetada() && enAndroid()) {
-    return guardarEnAndroid(contenido, nombreArchivo)
+    try {
+      return await guardarEnAndroid(contenido, nombreArchivo)
+    } catch (e) {
+      throw new ErrorAlGuardar(typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))
+    }
   }
   descargarComoNavegador(contenido, nombreArchivo)
   return 'navegador'

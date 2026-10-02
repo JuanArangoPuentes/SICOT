@@ -17,6 +17,7 @@ import { useState, useRef, useEffect } from 'react'
 // Referencia estable: pasar `[]` en línea crearía un array nuevo en cada render
 // y el hook volvería a fijar el estado sin parar.
 const SIN_ALERTAS: never[] = []
+const SIN_DOCUMENTOS: never[] = []
 import { usePrefs } from '@/prefs'
 import AppShell, { type NavGroup } from '@/components/AppShell'
 import Registros, { type Registro } from '@/components/Registros'
@@ -469,23 +470,16 @@ export default function SupervisorPanel({
     setAlertasApi(alertasCargadas)
   }, [alertasCargadas])
 
-  // Documentos reales del contrato
-  const [docsContrato, setDocsContrato] = useState<DocumentoResponse[]>([])
-  useEffect(() => {
-    if (!contrato) {
-      setDocsContrato([])
-      return
-    }
-    let cancelado = false
-    getDocumentosContrato(contrato.id)
-      .then((lista) => {
-        if (!cancelado) setDocsContrato(lista)
-      })
-      .catch((err) => console.error('No se pudieron cargar los documentos del contrato:', err))
-    return () => {
-      cancelado = true
-    }
-  }, [contrato])
+  // Documentos reales del contrato, con su carga y su error, por la misma razón
+  // que las alertas: si fallaba la consulta, la lista quedaba vacía y la vista
+  // Documentos decía «Sin generar aún» en los cinco formatos a un supervisor
+  // que ya había firmado el Acta de Inicio (auditoría del 02-10-2026).
+  const {
+    datos: docsContrato,
+    cargando: cargandoDocumentos,
+    error: errorDocumentos,
+    recargar: recargarDocumentos,
+  } = useRecursoDelContrato<DocumentoResponse[]>(contrato?.id ?? null, getDocumentosContrato, SIN_DOCUMENTOS)
 
   const toggleStep = (id: number) => {
     setExpandedSteps((prev) => {
@@ -674,12 +668,8 @@ export default function SupervisorPanel({
           // La lista de documentos se refresca (al volver, si se cortó por
           // segundo plano): si el documento llegó a firmarse, el siguiente
           // intento lo encuentra y cierra el sub-paso en vez de chocar.
-          const refrescar = () =>
-            getDocumentosContrato(contrato.id)
-              .then(setDocsContrato)
-              .catch(() => {})
-          if (cortadoPorSegundoPlano) void esperarPrimerPlano().then(refrescar)
-          else void refrescar()
+          if (cortadoPorSegundoPlano) void esperarPrimerPlano().then(recargarDocumentos)
+          else recargarDocumentos()
           return
         } finally {
           vigia.terminar()
@@ -698,9 +688,7 @@ export default function SupervisorPanel({
       // se hizo, y decir «no pude completar la firma» era falso y dejaba el
       // sub-paso sin cerrar.
       void onRefreshRegistros().catch(() => {})
-      getDocumentosContrato(contrato.id)
-        .then(setDocsContrato)
-        .catch(() => {})
+      recargarDocumentos()
     }
     const previo = steps
     const updated = steps.map((s) =>
@@ -1102,6 +1090,19 @@ export default function SupervisorPanel({
         fecha: fechaDelCentro(doc.fechaSubida),
         accionLabel: formal ? 'Ir a firmar' : undefined,
         onAccion: formal ? () => goToSubStep(formal.subStepId, formal.step) : undefined,
+      })
+    }
+    // Sin la lista, la bandeja no puede decir qué borradores siguen sin firmar:
+    // callarlo sería dar a entender que no queda ninguno.
+    if (errorDocumentos) {
+      items.push({
+        id: 'documentos-sin-consultar',
+        severidad: 'leve',
+        categoria: 'Documento',
+        titulo: 'No se pudieron consultar los documentos del contrato',
+        detalle: 'Hasta que el servidor responda, esta bandeja no puede mostrar los documentos que siguen sin firmar.',
+        accionLabel: 'Reintentar',
+        onAccion: recargarDocumentos,
       })
     }
 
@@ -1510,9 +1511,7 @@ export default function SupervisorPanel({
                                   codigoSubetapa={ss.id}
                                   onCargada={() => {
                                     void onRefreshRegistros()
-                                    getDocumentosContrato(contrato.id)
-                                      .then(setDocsContrato)
-                                      .catch(() => {})
+                                    recargarDocumentos()
                                   }}
                                 />
                               )}
@@ -1582,6 +1581,9 @@ export default function SupervisorPanel({
         <VistaDocumentos
           contrato={contrato}
           docsContrato={docsContrato}
+          cargando={cargandoDocumentos}
+          error={errorDocumentos}
+          onReintentar={recargarDocumentos}
           tieneFirma={tieneFirma}
           onIrASubPaso={goToSubStep}
         />
@@ -1649,10 +1651,7 @@ export default function SupervisorPanel({
                 text: `No firmé «${r.documento}»: quedó como borrador sin firmar en Documentos. Cuando vuelva a firmar el paso, se genera de nuevo.`,
               },
             ])
-            if (contrato)
-              getDocumentosContrato(contrato.id)
-                .then(setDocsContrato)
-                .catch(() => {})
+            recargarDocumentos()
           }}
         />
       )}

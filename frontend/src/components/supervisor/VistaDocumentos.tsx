@@ -15,6 +15,7 @@ import { Chip, SectionHeader } from '@/components/ui'
 import { FORMAL_DOCS } from '@/data/contractFlow'
 import { descargarDocumento, verificarIntegridad } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
+import { ErrorAlGuardar } from '@/services/guardarArchivo'
 import { describirCaptura, fechaDelCentro } from '@/services/format'
 import type { ContratoResponse, DocumentoResponse, EstadoIntegridad } from '@/services/api/types'
 
@@ -39,17 +40,40 @@ const BOTON: React.CSSProperties = {
 }
 
 /**
+ * Lo que la vista sabe de la integridad de un documento firmado: el veredicto
+ * del servidor, que la consulta sigue en curso, o que no se pudo consultar.
+ */
+type Integridad = EstadoIntegridad | 'CONSULTANDO' | 'NO_CONSULTADO'
+
+/**
  * Sello de integridad de un documento firmado.
  *
- * Los cuatro estados dicen cosas distintas y ninguno se puede confundir con
- * otro. En particular, NO_VERIFICABLE no significa "está bien": son documentos
- * firmados antes de que el sistema registrara la huella, y afirmar integridad
- * sobre ellos sería exactamente la clase de mentira que esta función existe
- * para evitar.
+ * Los estados dicen cosas distintas y ninguno se puede confundir con otro. En
+ * particular, NO_VERIFICABLE no significa "está bien": son documentos firmados
+ * antes de que el sistema registrara la huella, y afirmar integridad sobre
+ * ellos sería exactamente la clase de mentira que esta función existe para
+ * evitar. Y NO_CONSULTADO no es «Verificando…»: hasta la auditoría del
+ * 02-10-2026 un fallo de red dejaba ese rótulo para siempre, diciendo que se
+ * comprobaba algo que ya nadie estaba comprobando.
  */
-function SelloIntegridad({ estado }: { estado: EstadoIntegridad | 'CONSULTANDO' }) {
+function SelloIntegridad({ estado, onReintentar }: { estado: Integridad; onReintentar: () => void }) {
   if (estado === 'CONSULTANDO') {
     return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Verificando…</span>
+  }
+  if (estado === 'NO_CONSULTADO') {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <span
+          title="El servidor no respondió a la verificación. No es un veredicto sobre el documento."
+          style={{ fontSize: 11, color: 'var(--alert-leve)' }}
+        >
+          No se pudo verificar
+        </span>
+        <button onClick={onReintentar} aria-label="Reintentar la verificación" style={BOTON}>
+          Reintentar
+        </button>
+      </span>
+    )
   }
   if (estado === 'INTEGRO') {
     return <Chip text="Íntegro" type="signed" />
@@ -85,19 +109,49 @@ function SelloIntegridad({ estado }: { estado: EstadoIntegridad | 'CONSULTANDO' 
   return null
 }
 
+/**
+ * Qué decir cuando una descarga falla, según dónde falló. «Intente de nuevo»
+ * solo cuando reintentar puede arreglarlo: si el teléfono no deja escribir el
+ * archivo, volverá a fallar igual, y decir otra cosa sería engañar.
+ */
+function motivoDeDescarga(err: unknown, nombre: string): string {
+  if (err instanceof ErrorAlGuardar) return `No se pudo guardar «${nombre}» en el teléfono: ${err.message}`
+  // El motivo real cuando lo hay: «no tiene archivo guardado» no se arregla
+  // intentando de nuevo.
+  if (err instanceof ApiError || (err instanceof Error && err.message.includes('vacío'))) return err.message
+  // fetch rechaza con TypeError cuando no hubo respuesta: servidor caído o
+  // sin red. No es un problema del archivo.
+  if (err instanceof TypeError) {
+    return `No se pudo descargar «${nombre}»: no hubo respuesta del servidor de SICOT. Compruebe la conexión e intente de nuevo.`
+  }
+  return `No se pudo descargar «${nombre}». Intente de nuevo en un momento.`
+}
+
 export default function VistaDocumentos({
   contrato,
   docsContrato,
+  cargando,
+  error,
+  onReintentar,
   tieneFirma,
   onIrASubPaso,
 }: {
   contrato: ContratoResponse
   docsContrato: DocumentoResponse[]
+  /** La lista se está consultando: vacía todavía no quiere decir «sin generar». */
+  cargando: boolean
+  /** No se pudo consultar: la lista vacía no dice nada sobre el contrato. */
+  error: boolean
+  onReintentar: () => void
   tieneFirma: boolean | null
   onIrASubPaso: (subStepId: string, step: number) => void
 }) {
-  const [integridad, setIntegridad] = useState<Record<number, EstadoIntegridad | 'CONSULTANDO'>>({})
+  const [integridad, setIntegridad] = useState<Record<number, Integridad>>({})
   const [errorDescarga, setErrorDescarga] = useState<string | null>(null)
+  // El documento que se está descargando. Un PDF firmado de varios MB tarda
+  // segundos con datos móviles; sin esta marca el botón no mostraba nada, y
+  // un segundo toque abría otro «Guardar como» o bajaba otra copia.
+  const [descargando, setDescargando] = useState<number | null>(null)
   // Confirmación de guardado. Solo se usa en el APK de Android: allí el
   // «Guardar como» del sistema se cierra y vuelve a la aplicación sin ninguna
   // otra señal de que el archivo quedó escrito. En el navegador no hace falta,
@@ -110,48 +164,50 @@ export default function VistaDocumentos({
   const firmados = docsContrato.filter((d) => d.firmaId !== null)
   const clavesFirmadas = firmados.map((d) => d.id).join(',')
 
+  const consultarIntegridad = (docs: DocumentoResponse[], vigente: () => boolean) => {
+    Promise.all(
+      docs.map(async (doc) => {
+        try {
+          const r = await verificarIntegridad(contrato.id, doc.id)
+          return [doc.id, r.estado] as const
+        } catch {
+          // Un fallo de red no es un veredicto sobre el documento: se dice
+          // que no se pudo verificar, sin sello en ninguno de los dos sentidos.
+          return [doc.id, 'NO_CONSULTADO'] as const
+        }
+      }),
+    ).then((resultados) => {
+      if (vigente()) setIntegridad((previo) => ({ ...previo, ...Object.fromEntries(resultados) }))
+    })
+  }
+
   useEffect(() => {
     if (firmados.length === 0) return
     let cancelado = false
     setIntegridad((previo) => {
       const siguiente = { ...previo }
       firmados.forEach((d) => {
-        if (!(d.id in siguiente)) siguiente[d.id] = 'CONSULTANDO'
+        if (!(d.id in siguiente) || siguiente[d.id] === 'NO_CONSULTADO') siguiente[d.id] = 'CONSULTANDO'
       })
       return siguiente
     })
-
-    Promise.all(
-      firmados.map(async (doc) => {
-        try {
-          const r = await verificarIntegridad(contrato.id, doc.id)
-          return [doc.id, r.estado] as const
-        } catch {
-          // Un fallo de red no es un veredicto sobre el documento: se deja sin
-          // sello antes que mostrar uno equivocado en cualquiera de los dos
-          // sentidos.
-          return [doc.id, null] as const
-        }
-      }),
-    ).then((resultados) => {
-      if (cancelado) return
-      setIntegridad((previo) => {
-        const siguiente = { ...previo }
-        resultados.forEach(([id, estado]) => {
-          if (estado) siguiente[id] = estado
-          else delete siguiente[id]
-        })
-        return siguiente
-      })
-    })
-
+    consultarIntegridad(firmados, () => !cancelado)
     return () => {
       cancelado = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clavesFirmadas, contrato.id])
 
+  // Los ids son de toda la base, así que un resultado tardío no puede caer
+  // sobre el documento de otro contrato: no hace falta cancelar el reintento.
+  const reintentarVerificacion = (doc: DocumentoResponse) => {
+    setIntegridad((previo) => ({ ...previo, [doc.id]: 'CONSULTANDO' }))
+    consultarIntegridad([doc], () => true)
+  }
+
   const descargar = (doc: DocumentoResponse) => {
+    if (descargando !== null) return
+    setDescargando(doc.id)
     setErrorDescarga(null)
     setAvisoDescarga(null)
     descargarDocumento(contrato.id, doc.id, doc.nombre)
@@ -160,14 +216,9 @@ export default function VistaDocumentos({
       })
       .catch((err) => {
         console.error('No se pudo descargar el documento:', err)
-        // El motivo real cuando lo hay: «no tiene archivo guardado» no se
-        // arregla intentando de nuevo, y decir eso sería engañar.
-        setErrorDescarga(
-          err instanceof ApiError || (err instanceof Error && err.message.includes('vacío'))
-            ? err.message
-            : `No se pudo descargar "${doc.nombre}". Intente de nuevo en un momento.`,
-        )
+        setErrorDescarga(motivoDeDescarga(err, doc.nombre))
       })
+      .finally(() => setDescargando(null))
   }
 
   return (
@@ -227,127 +278,169 @@ export default function VistaDocumentos({
         </div>
       )}
 
-      {/* Documentos formales — SICOT los arma, el supervisor firma.
-          El estado viene de docsContrato (datos reales), no de los pasos locales:
-          si el documento no existe todavía en el backend, se marca "Sin generar",
-          nunca se ofrece firmar algo que no fue realmente redactado. */}
-      <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
+      {/* Sin la lista no se sabe qué está generado ni qué está firmado. La
+          tabla de abajo, con la lista vacía, diría «Sin generar aún» en los
+          cinco formatos: con el servidor caído, a un supervisor que ya firmó
+          el Acta de Inicio (auditoría del 02-10-2026). */}
+      {error ? (
         <div
-          className="tabla-cabecera"
+          role="alert"
+          className="card"
           style={{
-            padding: '10px 16px',
-            borderBottom: '1px solid var(--border)',
-            fontSize: 10.5,
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            letterSpacing: '0.08em',
-            display: 'grid',
-            gridTemplateColumns: '1fr 150px 1fr 100px 160px',
+            padding: '12px 15px',
+            marginBottom: 14,
+            borderColor: 'var(--alert-critica)',
+            fontSize: 12.5,
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
             gap: 12,
-            background: 'var(--bg-elevated)',
+            flexWrap: 'wrap',
           }}
         >
-          <span>DOCUMENTO</span>
-          <span>CÓDIGO</span>
-          <span>DESCRIPCIÓN</span>
-          <span>ETAPA</span>
-          <span>ESTADO</span>
+          <span>
+            No se pudieron consultar los documentos del contrato. Hasta que el servidor responda, SICOT no puede decir
+            cuáles están generados o firmados.
+          </span>
+          <button onClick={onReintentar} style={BOTON}>
+            Reintentar
+          </button>
         </div>
-        {FORMAL_DOCS.map((doc) => {
-          const generado = docsContrato.find((d) => d.generadoPorIa && d.nombre.startsWith(doc.name))
-          return (
-            <div
-              key={doc.subStepId}
-              className="data-grid-row tabla-fila"
-              style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid var(--border)',
-                display: 'grid',
-                gridTemplateColumns: '1fr 150px 1fr 100px 160px',
-                gap: 12,
-                alignItems: 'center',
-                transition: 'background var(--t)',
-              }}
-            >
-              <div data-col="Documento">
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 500,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {doc.name}
+      ) : cargando && docsContrato.length === 0 ? (
+        <div
+          role="status"
+          className="card"
+          style={{ padding: '12px 15px', fontSize: 12.5, color: 'var(--text-muted)' }}
+        >
+          Consultando los documentos del contrato…
+        </div>
+      ) : (
+        /* Documentos formales — SICOT los arma, el supervisor firma.
+           El estado viene de docsContrato (datos reales), no de los pasos locales:
+           si el documento no existe todavía en el backend, se marca "Sin generar",
+           nunca se ofrece firmar algo que no fue realmente redactado. */
+        <div className="card" style={{ overflow: 'hidden', marginBottom: 24 }}>
+          <div
+            className="tabla-cabecera"
+            style={{
+              padding: '10px 16px',
+              borderBottom: '1px solid var(--border)',
+              fontSize: 10.5,
+              fontWeight: 700,
+              color: 'var(--text-muted)',
+              letterSpacing: '0.08em',
+              display: 'grid',
+              gridTemplateColumns: '1fr 150px 1fr 100px 160px',
+              gap: 12,
+              background: 'var(--bg-elevated)',
+            }}
+          >
+            <span>DOCUMENTO</span>
+            <span>CÓDIGO</span>
+            <span>DESCRIPCIÓN</span>
+            <span>ETAPA</span>
+            <span>ESTADO</span>
+          </div>
+          {FORMAL_DOCS.map((doc) => {
+            const generado = docsContrato.find((d) => d.generadoPorIa && d.nombre.startsWith(doc.name))
+            return (
+              <div
+                key={doc.subStepId}
+                className="data-grid-row tabla-fila"
+                style={{
+                  padding: '12px 16px',
+                  borderBottom: '1px solid var(--border)',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 150px 1fr 100px 160px',
+                  gap: 12,
+                  alignItems: 'center',
+                  transition: 'background var(--t)',
+                }}
+              >
+                <div data-col="Documento">
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 500,
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    {doc.name}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-muted)',
+                      marginTop: 2,
+                    }}
+                  >
+                    SICOT genera · sub-paso {doc.subStepId}
+                  </div>
                 </div>
-                <div
+                <span
+                  data-col="Código"
                   style={{
+                    fontFamily: 'var(--font-mono)',
                     fontSize: 11,
-                    color: 'var(--text-muted)',
-                    marginTop: 2,
+                    color: 'var(--accent-tech)',
                   }}
                 >
-                  SICOT genera · sub-paso {doc.subStepId}
-                </div>
-              </div>
-              <span
-                data-col="Código"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 11,
-                  color: 'var(--accent-tech)',
-                }}
-              >
-                {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
-              </span>
-              <span
-                data-col="Descripción"
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-secondary)',
-                  lineHeight: 1.45,
-                }}
-              >
-                {doc.desc}
-              </span>
-              <span
-                data-col="Etapa"
-                style={{
-                  fontSize: 11.5,
-                  color: 'var(--text-muted)',
-                  fontWeight: 500,
-                }}
-              >
-                {ETAPA_LABEL[doc.step]}
-              </span>
-              {/* La celda de estado envuelve las tres ramas en un solo elemento
+                  {doc.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : doc.code}
+                </span>
+                <span
+                  data-col="Descripción"
+                  style={{
+                    fontSize: 11.5,
+                    color: 'var(--text-secondary)',
+                    lineHeight: 1.45,
+                  }}
+                >
+                  {doc.desc}
+                </span>
+                <span
+                  data-col="Etapa"
+                  style={{
+                    fontSize: 11.5,
+                    color: 'var(--text-muted)',
+                    fontWeight: 500,
+                  }}
+                >
+                  {ETAPA_LABEL[doc.step]}
+                </span>
+                {/* La celda de estado envuelve las tres ramas en un solo elemento
                   para que en teléfono lleve su etiqueta como las demás: era
                   justo la columna que quedaba recortada y sin ella la lista no
                   decía en qué estado estaba ningún documento. */}
-              <span data-col="Estado">
-                {!generado ? (
-                  <Chip text="Sin generar aún" type="pending" />
-                ) : generado.estado === 'APROBADO' ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      flexWrap: 'wrap',
-                    }}
-                  >
-                    <Chip text="Firmado" type="signed" />
-                    <SelloIntegridad estado={integridad[generado.id] ?? 'CONSULTANDO'} />
-                  </div>
-                ) : (
-                  <button onClick={() => onIrASubPaso(doc.subStepId, doc.step)} style={BOTON}>
-                    Ir a firmar →
-                  </button>
-                )}
-              </span>
-            </div>
-          )
-        })}
-      </div>
+                <span data-col="Estado">
+                  {!generado ? (
+                    <Chip text="Sin generar aún" type="pending" />
+                  ) : generado.estado === 'APROBADO' ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        flexWrap: 'wrap',
+                      }}
+                    >
+                      <Chip text="Firmado" type="signed" />
+                      <SelloIntegridad
+                        estado={integridad[generado.id] ?? 'CONSULTANDO'}
+                        onReintentar={() => reintentarVerificacion(generado)}
+                      />
+                    </div>
+                  ) : (
+                    <button onClick={() => onIrASubPaso(doc.subStepId, doc.step)} style={BOTON}>
+                      Ir a firmar →
+                    </button>
+                  )}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Documentos reales del contrato (backend) */}
       {docsContrato.length > 0 && (
@@ -429,10 +522,19 @@ export default function VistaDocumentos({
                     flexShrink: 0,
                   }}
                 >
-                  {doc.firmaId && <SelloIntegridad estado={integridad[doc.id] ?? 'CONSULTANDO'} />}
+                  {doc.firmaId && (
+                    <SelloIntegridad
+                      estado={integridad[doc.id] ?? 'CONSULTANDO'}
+                      onReintentar={() => reintentarVerificacion(doc)}
+                    />
+                  )}
                   <Chip text={estado.text} type={estado.type} />
-                  <button onClick={() => descargar(doc)} style={BOTON}>
-                    Descargar
+                  <button
+                    onClick={() => descargar(doc)}
+                    disabled={descargando !== null}
+                    style={{ ...BOTON, cursor: descargando !== null ? 'default' : 'pointer' }}
+                  >
+                    {descargando === doc.id ? 'Descargando…' : 'Descargar'}
                   </button>
                 </div>
               </div>

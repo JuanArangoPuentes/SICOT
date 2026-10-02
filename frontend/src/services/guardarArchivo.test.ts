@@ -5,7 +5,7 @@ const writeFile = vi.fn()
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save }))
 vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile }))
 
-import { guardarArchivo } from './guardarArchivo'
+import { ErrorAlGuardar, guardarArchivo } from './guardarArchivo'
 
 // jsdom no implementa dos cosas que el WebView de Android (Chrome 124) sí tiene:
 // `Blob.prototype.arrayBuffer` y `URL.createObjectURL`. Se completan aquí, en la
@@ -63,6 +63,19 @@ describe('guardarArchivo', () => {
 
     await expect(guardarArchivo(new Blob(['x']), 'registros.csv')).resolves.toBe('cancelado')
     expect(writeFile).not.toHaveBeenCalled()
+  })
+
+  // Auditoría del 02-10-2026: los plugins rechazan con un texto, y el panel lo
+  // tomaba por un fallo pasajero y pedía «intente de nuevo en un momento».
+  it('si el teléfono no deja escribir, lo dice con el motivo del sistema', async () => {
+    simularApk()
+    save.mockResolvedValue('content://descargas/42')
+    writeFile.mockRejectedValue('No queda espacio en el dispositivo')
+
+    const intento = guardarArchivo(new Blob(['x']), 'acta.pdf')
+
+    await expect(intento).rejects.toBeInstanceOf(ErrorAlGuardar)
+    await expect(intento).rejects.toThrow('No queda espacio en el dispositivo')
   })
 
   it('en el navegador conserva el gestor de descargas y no toca los plugins', async () => {
