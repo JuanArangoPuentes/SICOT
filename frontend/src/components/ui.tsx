@@ -395,23 +395,93 @@ export interface LiveAlert {
 
 // ─── Modal genérico ───────────────────────────────────────────────────────────
 
+// Los diálogos abiertos, del de abajo al de arriba. Solo el de arriba atiende
+// el teclado y va por encima: desde que la revisión de la redacción se abre
+// sola cuando el Copiloto termina —minutos después—, puede aparecer con
+// Configuración abierta, y un solo Escape cerraba los dos (el de revisión,
+// además, tapado) (revisión del 29-09-2026).
+const DIALOGOS_ABIERTOS: HTMLElement[] = []
+
+const ENFOCABLES =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function Modal({
   title,
   onClose,
   width = 520,
   hideClose = false,
+  cerrarAlTocarFuera = true,
   children,
 }: {
   title: string
   onClose: () => void
   width?: number
   hideClose?: boolean
+  /**
+   * false en los diálogos donde se escribe algo largo: un toque fuera, que en
+   * un teléfono es fácil de dar sin querer, cerraba el formulario y borraba lo
+   * escrito. Siguen cerrándose con «×», con Cancelar y con Escape.
+   */
+  cerrarAlTocarFuera?: boolean
   children: React.ReactNode
 }) {
+  // Teclado y lector de pantalla. Sin esto, al abrirse el diálogo el foco se
+  // quedaba en el botón de la página que lo abrió: con Tab se recorría la
+  // página de detrás —tapada por el telón—, Escape no hacía nada y, al
+  // cerrarlo, el foco se perdía al principio del documento.
+  const dialogoRef = useRef<HTMLDivElement>(null)
+  const [capa, setCapa] = useState(200)
+  // El efecto de abajo corre una sola vez; el ref le da siempre el onClose
+  // vigente, que cambia en cada render de quien abre el diálogo.
+  const cerrarRef = useRef(onClose)
+  useEffect(() => {
+    cerrarRef.current = onClose
+  })
+  useEffect(() => {
+    const dialogo = dialogoRef.current
+    if (!dialogo) return
+    const anterior = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    // Al diálogo, no a su primer campo: en un teléfono enfocar un campo abre el
+    // teclado y tapa medio formulario antes de que se haya podido leer.
+    dialogo.focus()
+    DIALOGOS_ABIERTOS.push(dialogo)
+    setCapa(200 + DIALOGOS_ABIERTOS.length)
+    const alPulsarTecla = (e: KeyboardEvent) => {
+      if (DIALOGOS_ABIERTOS[DIALOGOS_ABIERTOS.length - 1] !== dialogo) return
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        cerrarRef.current()
+        return
+      }
+      if (e.key !== 'Tab') return
+      const enfocables = Array.from(dialogo.querySelectorAll<HTMLElement>(ENFOCABLES))
+      if (enfocables.length === 0) {
+        e.preventDefault()
+        return
+      }
+      const primero = enfocables[0]
+      const ultimo = enfocables[enfocables.length - 1]
+      const activo = document.activeElement
+      if (e.shiftKey && (activo === primero || activo === dialogo)) {
+        e.preventDefault()
+        ultimo.focus()
+      } else if (!e.shiftKey && (activo === ultimo || !dialogo.contains(activo))) {
+        e.preventDefault()
+        primero.focus()
+      }
+    }
+    document.addEventListener('keydown', alPulsarTecla)
+    return () => {
+      document.removeEventListener('keydown', alPulsarTecla)
+      const i = DIALOGOS_ABIERTOS.indexOf(dialogo)
+      if (i >= 0) DIALOGOS_ABIERTOS.splice(i, 1)
+      if (anterior?.isConnected) anterior.focus()
+    }
+  }, [])
   return (
     <div
       role="presentation"
-      onClick={onClose}
+      onClick={cerrarAlTocarFuera ? onClose : undefined}
       style={{
         position: 'fixed',
         inset: 0,
@@ -420,7 +490,7 @@ export function Modal({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        zIndex: 200,
+        zIndex: capa,
         // Zonas seguras: sin esto, en un teléfono con barra de gestos el borde
         // inferior del diálogo —donde están Cancelar y Confirmar— queda debajo
         // de la barra. Es el mismo defecto que se corrigió en el armazón el 16
@@ -434,8 +504,13 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
+        ref={dialogoRef}
+        tabIndex={-1}
         onClick={(e) => e.stopPropagation()}
         style={{
+          // El foco llega al diálogo por programa, no porque se pueda pulsar:
+          // el anillo de foco alrededor de toda la tarjeta solo confundía.
+          outline: 'none',
           width: '100%',
           maxWidth: width,
           // dvh y no vh: en un navegador móvil `vh` mide la altura que habría

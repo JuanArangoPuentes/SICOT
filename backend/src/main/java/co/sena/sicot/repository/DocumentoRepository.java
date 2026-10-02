@@ -74,12 +74,25 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      * generación para no crear un segundo «Acta de Inicio» después de firmada
      * la primera: el borrador sobrante quedaba como tarea pendiente en la
      * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     *
+     * <p>Solo cuenta lo que generó SICOT, con el mismo criterio que el panel:
+     * un PDF cargado a mano y firmado con nombre parecido («Acta de Inicio
+     * firmada por el contratista») bloqueaba la generación, el panel no lo
+     * reconocía como el acta del paso, y el sub-paso no se cerraba nunca
+     * (revisión del 29-09-2026).
      */
-    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
-    /** El borrador sin firmar más reciente de un formato en una subetapa. */
-    java.util.Optional<Documento> findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+    /**
+     * El borrador sin firmar más reciente de un formato en una subetapa, entre
+     * los que generó SICOT. Sin la condición de «generado», un PDF cargado a
+     * mano cuyo nombre empezara igual («Acta de Inicio firmada por el
+     * contratista») se tomaba por borrador y la regeneración lo sobrescribía
+     * (revisión adversarial del 28-09-2026).
+     */
+    java.util.Optional<Documento>
+            findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
     /**

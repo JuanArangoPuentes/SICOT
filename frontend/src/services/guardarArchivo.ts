@@ -38,6 +38,11 @@ const FILTROS: Record<string, { name: string; extensions: string[] }> = {
   csv: { name: 'Hoja de cálculo CSV', extensions: ['csv'] },
   docx: { name: 'Documento de Word', extensions: ['docx'] },
   xlsx: { name: 'Libro de Excel', extensions: ['xlsx'] },
+  // Sin estos, una foto de evidencia caía en «sin filtro» y el sistema podía
+  // proponer guardarla con otro tipo.
+  jpg: { name: 'Imagen JPEG', extensions: ['jpg', 'jpeg'] },
+  jpeg: { name: 'Imagen JPEG', extensions: ['jpg', 'jpeg'] },
+  png: { name: 'Imagen PNG', extensions: ['png'] },
 }
 
 export async function guardarArchivo(contenido: Blob, nombreArchivo: string): Promise<ResultadoGuardado> {

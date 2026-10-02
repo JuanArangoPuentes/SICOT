@@ -250,6 +250,41 @@ export interface GenerarDocumentoRequest {
    * apartado queda marcado como pendiente en vez de inventarse.
    */
   notas?: string | null
+  /**
+   * Datos del documento que el contrato no tiene —factura, póliza, cédulas…—,
+   * por clave (ver `PlantillaDocumento.campos`). Los que falten salen en el PDF
+   * como «[dato pendiente…]», en rojo, en vez de inventarse.
+   */
+  datos?: Record<string, string>
+  /**
+   * false: las observaciones van tal como el supervisor las escribió, sin
+   * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
+   */
+  redactarConIa?: boolean
+  /**
+   * Filas de las tablas del formato (ver `PlantillaDocumento.tablas`). Una
+   * tabla sin filas sale en el PDF como «[dato pendiente…]».
+   */
+  tablas?: TablasDelDocumento
+}
+
+/**
+ * El documento recién generado y cómo quedaron sus observaciones. El panel
+ * muestra la redacción del Copiloto antes de firmar: ninguna comprobación
+ * automática ve que cambie el sujeto de una frase, y quien firma sí.
+ */
+export interface DocumentoGeneradoResponse extends DocumentoResponse {
+  /** El texto que quedó en el apartado de observaciones, o null si no hay. */
+  observaciones: string | null
+  /** Si ese texto lo redactó el Copiloto (false: son las notas tal cual). */
+  observacionesRedactadasConIa: boolean
+  /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
+  motivoNotasTalCual: string | null
+  /**
+   * SHA-256 del borrador tal como quedó. Se devuelve al firmar para que se
+   * firme exactamente lo que el supervisor leyó.
+   */
+  huellaDelBorrador: string
 }
 
 export interface ChatResponse {
@@ -400,3 +435,45 @@ export interface SeguimientoResponse {
   contratosSinSupervisor: ContratoSeguimiento[]
   generadoEn: string
 }
+
+/** Un documento formal que SICOT arma y los datos que pide que el contrato no tiene (GET /api/ia/plantillas). */
+export interface PlantillaDocumento {
+  tipo: string
+  codigo: string
+  nombre: string
+  /** Si el formato tiene un apartado donde van las notas del supervisor. */
+  llevaObservaciones: boolean
+  /**
+   * `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no
+   * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
+   * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
+   * cambia en cada documento (número de informe, factura…), así que no se
+   * recuerda para el siguiente. `largo`: es un párrafo (el cumplimiento del
+   * SIGA), no un dato de una línea.
+   */
+  campos: Array<{
+    clave: string
+    etiqueta: string
+    ejemplo: string
+    opcional: boolean
+    dependeDe: string | null
+    porDocumento: boolean
+    largo?: boolean
+  }>
+  /**
+   * Tablas del formato que se llenan fila por fila (obligaciones, amparos,
+   * órdenes de pago). En cada columna, `delContrato` dice si lo escrito es del
+   * contrato (el texto de la obligación) y se ofrece en el siguiente documento,
+   * o de este (lo hecho en el periodo) y no se arrastra. Opcional para tolerar
+   * un backend anterior al 30-09-2026, que no las enviaba.
+   */
+  tablas?: Array<{
+    clave: string
+    etiqueta: string
+    ayuda: string
+    columnas: Array<{ etiqueta: string; ejemplo: string; delContrato: boolean }>
+  }>
+}
+
+/** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
+export type TablasDelDocumento = Record<string, string[][]>
