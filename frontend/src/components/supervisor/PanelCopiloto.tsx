@@ -20,6 +20,7 @@ import type { AccionCopiloto, ContratoResponse } from '@/services/api/types'
 export type RevisionPaso = {
   stepId: number
   subStepId: string
+  /** El Copiloto ya revisó la descripción (o falló al intentarlo). Confirmar no lo exige. */
   listaParaConfirmar: boolean
   /** Lo que el supervisor describió del paso: va como notas al documento. */
   descripcion?: string
@@ -34,6 +35,7 @@ export default function PanelCopiloto({
   pensando,
   tutorialMode,
   revisionPaso,
+  revisando = false,
   activeStep,
   chatInput,
   chatEndRef,
@@ -53,6 +55,8 @@ export default function PanelCopiloto({
   pensando: boolean
   tutorialMode: boolean
   revisionPaso: RevisionPaso | null
+  /** La revisión del paso está esperando al modelo (no una pregunta suelta). */
+  revisando?: boolean
   activeStep: Step | undefined
   chatInput: string
   chatEndRef: RefObject<HTMLDivElement | null>
@@ -67,7 +71,21 @@ export default function PanelCopiloto({
   /** El supervisor pulsó el botón de la acción que ofrecía una respuesta. */
   onAccion: (accion: AccionCopiloto) => void
 }) {
-  const bloqueado = pensando || !!revisionPaso
+  // Las sugerencias son preguntas: con una revisión del paso abierta van al
+  // chat igual que cualquier pregunta escrita, sin tomarse por la descripción.
+  const bloqueado = pensando
+
+  // Si el sub-paso lleva documento, confirmar también lo firma: el botón lo
+  // dice, para que nadie firme un acta sin saberlo. Y dice si se confirma sin
+  // la revisión del Copiloto, que es de apoyo y nunca obligatoria.
+  const confirmar = revisionPaso?.documento
+    ? `Confirmar Paso ${revisionPaso.stepId} y firmar ${revisionPaso.documento}`
+    : `Confirmar Paso ${revisionPaso?.stepId} como completado`
+  const etiquetaConfirmar = revisionPaso?.listaParaConfirmar
+    ? confirmar
+    : revisando
+      ? `${confirmar} sin esperar la revisión`
+      : `${confirmar} sin revisión`
 
   return (
     <div
@@ -273,7 +291,12 @@ export default function PanelCopiloto({
           </div>
         )}
 
-        {revisionPaso?.listaParaConfirmar && !pensando && (
+        {/* La revisión es consultiva: confirmar y cancelar están desde el
+            principio, también mientras el modelo revisa. Antes solo aparecían
+            cuando la revisión había terminado, y el supervisor quedaba atrapado
+            describiendo y esperando minutos para cerrar cada paso. Con una
+            pregunta suelta en curso no se ofrece confirmar: es la suya. */}
+        {revisionPaso && (
           <div
             style={{
               paddingLeft: 30,
@@ -282,13 +305,11 @@ export default function PanelCopiloto({
               flexWrap: 'wrap',
             }}
           >
-            <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
-              {/* Si el sub-paso lleva documento, confirmar también lo firma: el
-                  botón lo dice, para que nadie firme un acta sin saberlo. */}
-              {revisionPaso.documento
-                ? `Confirmar Paso ${revisionPaso.stepId} y firmar ${revisionPaso.documento}`
-                : `Confirmar Paso ${revisionPaso.stepId} como completado`}
-            </button>
+            {(!pensando || revisando) && (
+              <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
+                {etiquetaConfirmar}
+              </button>
+            )}
             <button className="btn-ghost" onClick={onCancelarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
               Cancelar, quiero revisar algo antes
             </button>

@@ -49,6 +49,37 @@ describe('PanelCopiloto — confirmar un paso', () => {
     expect(screen.getByRole('button', { name: 'Confirmar Paso 1 como completado' })).toBeInTheDocument()
   })
 
+  /**
+   * Confirmar y cancelar solo aparecían cuando el modelo ya había revisado:
+   * para salir de la revisión había que describir algo y esperar minutos.
+   */
+  it('antes de describir nada ya se puede cancelar o confirmar sin revisión', () => {
+    montar({ stepId: 1, subStepId: '1.6', listaParaConfirmar: false })
+
+    expect(screen.getByRole('button', { name: /cancelar, quiero revisar algo antes/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar Paso 1 como completado sin revisión' })).toBeInTheDocument()
+  })
+
+  it('mientras el Copiloto revisa, confirmar dice que no se espera la revisión', () => {
+    montar(
+      { stepId: 2, subStepId: '2.7', listaParaConfirmar: false, documento: 'Acta de Inicio' },
+      { pensando: true, revisando: true },
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'Confirmar Paso 2 y firmar Acta de Inicio sin esperar la revisión' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancelar, quiero revisar algo antes/i })).toBeInTheDocument()
+  })
+
+  /** Con una pregunta suelta en curso, la espera es la de esa pregunta: no se ofrece confirmar. */
+  it('con una pregunta suelta en curso solo deja cancelar', () => {
+    montar({ stepId: 1, subStepId: '1.6', listaParaConfirmar: false }, { pensando: true })
+
+    expect(screen.queryByRole('button', { name: /confirmar paso 1/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cancelar, quiero revisar algo antes/i })).toBeInTheDocument()
+  })
+
   it('el campo y el botón de enviar tienen nombre para un lector de pantalla', () => {
     montar({ stepId: 1, subStepId: '1.6', listaParaConfirmar: true })
 
