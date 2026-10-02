@@ -1,20 +1,33 @@
 <!doctype html>
-<html lang="<!-- figma:lang -->">
+<!-- `lang="es"` porque la interfaz entera está en español. Hasta el 02-10-2026
+     salía `lang="en"` (el valor por defecto de un plugin de Figma Make): el
+     navegador ofrecía traducir «del inglés» en cada pantalla, los lectores de
+     pantalla leían con fonética inglesa y el corrector marcaba en rojo las
+     observaciones que el supervisor escribe para el documento firmado. -->
+<html lang="es">
   <head>
-    <!-- figma:head-start -->
     <meta charset="UTF-8" />
     <!-- `viewport-fit=cover` no es decorativo: sin él, `env(safe-area-inset-*)`
          devuelve cero y los rellenos que evitan la barra de estado y la barra de
          gestos del teléfono no hacen nada. Se vio al abrir el APK en un
          emulador: la marca de SICOT quedaba dibujada justo debajo del reloj. -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title><!-- figma:title --></title>
-    <!-- figma:head-end -->
+    <title>SICOT — Centro Tecnológico del Mobiliario (SENA)</title>
+    <meta
+      name="description"
+      content="Sistema Inteligente para la Gestión y Acompañamiento de Contratos del Centro Tecnológico del Mobiliario (SENA)."
+    />
+    <!-- SICOT es un sistema institucional interno y no debe aparecer en
+         buscadores; public/robots.txt dice lo mismo a los rastreadores. -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta property="og:title" content="SICOT — Centro Tecnológico del Mobiliario (SENA)" />
+    <meta
+      property="og:description"
+      content="Sistema Inteligente para la Gestión y Acompañamiento de Contratos del Centro Tecnológico del Mobiliario (SENA)."
+    />
   </head>
   <body>
-    <!-- figma:body-start -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <!-- figma:body-end -->
   </body>
 </html>
