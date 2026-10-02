@@ -554,7 +554,10 @@ Actualmente están conectadas al backend:
 * **copiloto conversacional** (chat real sobre Ollama, anclado al contrato y sus etapas reales);
 * **tutorial guiado** de los 6 pasos, con gate de revisión IA asesor (nunca bloqueante) antes
   de cerrar un paso;
-* **generación automática de documentos** formales vía IA;
+* **documentos formales armados por SICOT** con los datos exactos del contrato
+  (`RedactorDeDocumentos`; el modelo solo redacta el apartado de observaciones);
+* **evidencia fotográfica de la entrega** en los sub-pasos 3.1 y 3.2 (`EvidenciaFotografica`;
+  el backend lee de la foto la fecha y el lugar de la toma);
 * **firma electrónica** de referencia interna (usa la firma real asignada a la cuenta, nunca un
   valor generado en el cliente);
 * **firmas electrónicas administrativas** (asignación por parte del ADMINISTRADOR);
@@ -578,9 +581,10 @@ Estas funcionalidades NO tienen backend funcional y NO deben fingirse como reale
 * RAG normativo / detección automática de inconsistencias documentales;
 * gráfica avanzada de actividad del panel de administrador (no existe endpoint de estadísticas
   agregadas; el panel muestra un estado vacío honesto, no números inventados);
-* carga de archivos por sub-paso individual del flujo del supervisor (**no existe**: en los
-  sub-pasos de verificación la única acción es "Marcar completado" — el Copiloto tiene
-  prohibido explícitamente sugerir lo contrario);
+* carga de archivos en los sub-pasos de verificación del supervisor (**no existe**, con una sola
+  excepción: en 3.1 y 3.2 se cargan **fotos de la entrega** con «Cargar evidencia». En todos los
+  demás la única acción es "Marcar completado" — el Copiloto tiene prohibido explícitamente
+  sugerir lo contrario);
 * firma electrónica con un proveedor PKI externo real (lo actual es una referencia interna de
   SICOT, no una integración con infraestructura nacional de firma);
 * empaquetado de escritorio (Tauri) para el rol SUPERVISOR.
@@ -864,9 +868,13 @@ Piezas reales del paquete `co.sena.sicot.ia`:
 * `OllamaClient` — único punto de salida hacia Ollama. Si Ollama no está disponible lanza
   `IaNoDisponibleException`: falla honestamente, **nunca fabrica un resultado**.
 * `ExtraccionContratoService` — extrae datos de un contrato desde un PDF real (Apache PDFBox).
-* `GeneracionDocumentoService` + `PlantillaDocumentoIA` — redacta los documentos formales del
-  proceso.
+* `GeneracionDocumentoService` + `PlantillaDocumentoIA` + `RedactorDeDocumentos` — arman los
+  documentos formales con los datos del contrato; el modelo solo redacta el apartado de
+  observaciones.
 * `CopilotoChatService` — chat conversacional anclado al contrato y a sus etapas reales.
+* `GuiaDelPasoActual`, `FichaDeDocumentoFormal` — contestan sin modelo lo que tiene respuesta
+  fija: el paso en el que va el supervisor y qué es cada documento formal (código, sub-paso,
+  quién firma). `CopilotoChatService` las consulta antes de llamar a Ollama.
 * `PdfTextExtractor`, `SimplePdfWriter` — lectura y escritura real de PDF.
 
 Reglas al trabajar sobre la IA:
@@ -875,9 +883,16 @@ Reglas al trabajar sobre la IA:
   (`OLLAMA_URL`/`OLLAMA_MODEL`). Cambiar de modelo es configuración, no código.
 * La IA es **asesora, nunca autoridad**: su revisión antes de cerrar un paso no bloquea al
   supervisor; la decisión final siempre es de una persona.
-* Los prompts no deben afirmar capacidades que la interfaz no tiene (ver §18) — el modelo ya
-  alucinó una vez una función de carga de archivos inexistente, y esa restricción está escrita
-  explícitamente en `CopilotoChatService.CONOCIMIENTO_PROCESO`. No debilitarla.
+* Los prompts describen la interfaz **tal como es** (ver §18): ni afirman capacidades que no
+  tiene ni niegan las que sí tiene. El modelo ya alucinó una vez una función de carga de
+  archivos inexistente, y por eso `CopilotoChatService.CONOCIMIENTO_PROCESO` prohíbe sugerir
+  cargas fuera de las fotos de 3.1 y 3.2. No debilitar esa prohibición.
+* Cuando la interfaz gana o pierde una capacidad, se actualizan **a la vez** el prompt, §18 y
+  las guías deterministas (`frontend/src/data/guiaSubPaso.ts`, `GuiaDelPasoActual`). La carga
+  de fotos de 3.1-3.2 existió una semana mientras el prompt seguía negándola, y el modelo
+  contradecía a la guía del tutorial en el mismo sub-paso.
+* Lo que tiene respuesta fija no se le pide al modelo (ADR-006, ADR-008): se compone con código
+  y se prueba con el texto exacto. Al modelo le quedan las preguntas abiertas.
 
 ---
 

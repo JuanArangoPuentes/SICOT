@@ -176,3 +176,42 @@ El paso pendiente, si se quiere cerrar esto, es un conjunto de preguntas abierta
 reales de supervisión con su respuesta esperada, y medir 3B contra él. Mientras
 eso no exista, bajar el modelo sería cambiar un problema medido por una
 suposición.
+
+---
+
+## Revisión — 1 de octubre de 2026: las sugerencias rápidas tampoco pasan por el modelo
+
+Misma doctrina que la revisión anterior, aplicada a lo que el supervisor más
+pulsa: las cinco sugerencias rápidas del panel del Copiloto.
+
+**Lo que se encontró.** Ninguna entraba por un atajo. Cuatro preguntaban datos
+fijos del catálogo —qué es el GCCON-F-031, quién lo firma, en qué sub-paso se
+genera— que el prompt le pasaba al modelo para que los repitiera; la quinta
+pedía el paso actual, que es justo lo que los modelos pequeños fallan (tabla de
+arriba). Cada pulsación era una inferencia completa en CPU: hasta ~158 s la
+primera del contrato, decenas de segundos las siguientes. Además, `GuiaDelPasoActual`
+comparaba sus frases solo en minúsculas: «¿qué documento falta?» o «qué
+necesito» no coincidían con ninguna y se iban al modelo.
+
+**Lo que se hizo.**
+
+- `FichaDeDocumentoFormal` contesta sin modelo qué es cada documento formal,
+  en qué sub-paso lo arma SICOT, quién firma y su estado en ese contrato. El
+  código y el nombre salen de `PlantillaDocumentoIA.CATALOGO`, el mismo con el
+  que se arma el PDF.
+- `PreguntaNormalizada` quita tildes, signos y mayúsculas a la pregunta y a
+  las frases señal por igual, y exige que la frase empiece en una palabra
+  («qué falta» ya no se encuentra dentro de «porque faltan»).
+- La guía del paso actual dice además qué botón pulsar en el sub-paso
+  siguiente, con la misma regla que la guía del tutorial (`guiaSubPaso.ts`).
+- Las preguntas condicionales («¿qué hago si…?») se dejan al modelo aunque
+  traigan la frase: piden consejo sobre un caso, no el estado del contrato.
+
+Las pruebas afirman el texto exacto de cada respuesta y que ninguna de las
+cinco sugerencias llama a Ollama.
+
+**Lo que se corrigió en el prompt de paso.** Decía que SICOT no deja cargar
+archivos «ni en 3.1-3.3»; desde el 22-09-2026 en 3.1 y 3.2 se cargan las
+fotos de la entrega, y el modelo contradecía a la guía del tutorial. También
+decía que el Copiloto redacta los documentos, cuando los arma
+`RedactorDeDocumentos` con código y el modelo solo redacta las observaciones.
