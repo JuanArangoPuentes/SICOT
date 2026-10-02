@@ -33,6 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 /**
@@ -65,11 +66,11 @@ class CopilotoChatServiceTest {
 
     @BeforeEach
     void construirElServicio() {
-        // GuiaDelPasoActual va real y no simulada: es determinista y sin
-        // dependencias, asi que simularla solo escondería el encaminamiento
-        // que estas pruebas quieren ver.
+        // GuiaDelPasoActual y FichaDeDocumentoFormal van reales y no simuladas:
+        // son deterministas y sin dependencias, asi que simularlas solo
+        // escondería el encaminamiento que estas pruebas quieren ver.
         servicio = new CopilotoChatService(contratoService, etapaService, ollamaClient,
-                new GuiaDelPasoActual(), 5);
+                new GuiaDelPasoActual(), new FichaDeDocumentoFormal(), 5);
 
         Usuario supervisor = new Usuario();
         supervisor.setId(2L);
@@ -142,6 +143,69 @@ class CopilotoChatServiceTest {
         assertThat(promptCapturado())
                 .contains("no existe forma de adjuntar archivos")
                 .contains("Marcar completado");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Las sugerencias rápidas del panel no pasan por el modelo
+    //
+    // Hasta el 1-10-2026 ninguna de las cinco entraba por un atajo: cada
+    // pulsación era una inferencia en CPU (hasta ~158 s la primera del contrato)
+    // para repetir datos fijos del catálogo o el
+    // paso actual, que es justo lo que los modelos pequeños fallan (ADR-006).
+    // Las preguntas son, letra por letra, las de QUICK_SUGGESTIONS en
+    // frontend/src/screens/SupervisorPanel.tsx.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("ninguna de las cinco sugerencias rápidas llega al modelo")
+    void lasSugerenciasRapidasNoLleganAlModelo() {
+        List<String> sugerencias = List.of(
+                "¿Qué me falta en el paso en el que estoy y cómo lo registro en SICOT?",
+                FichaDeDocumentoFormalTest.SUGERENCIA_F031,
+                FichaDeDocumentoFormalTest.SUGERENCIA_F010,
+                FichaDeDocumentoFormalTest.SUGERENCIA_ESUCON,
+                FichaDeDocumentoFormalTest.SUGERENCIA_F030);
+
+        for (String pregunta : sugerencias) {
+            assertThat(servicio.responder(1L, pregunta, null)).as(pregunta).isNotBlank();
+        }
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("la del paso actual contesta con el paso real del contrato y el botón a pulsar")
+    void laSugerenciaDelPasoActualContestaConElPasoReal() {
+        String r = servicio.responder(1L, "¿Qué me falta en el paso en el que estoy y cómo lo registro en SICOT?", null);
+
+        assertThat(r).isEqualTo("""
+                Está en el paso 4: Recepción (50% completado).
+
+                Lo que le falta aquí:
+
+                4.2 Verificar factura electrónica
+
+                Empiece por 4.2: Verificar factura electrónica. Responsable: Supervisor.
+
+                En SICOT: cuando lo haya hecho, márquelo como completado.
+
+                Si necesita detalle de alguno de estos sub-pasos —qué documento sirve de soporte, de dónde sale \
+                un insumo— pregúnteme por él y se lo explico.""");
+    }
+
+    /**
+     * «¿En qué paso se genera el GCCON-F-031?» trae la señal «en qué paso» de
+     * GuiaDelPasoActual. Si la guía fuera primero, contestaría el paso en el que
+     * va el supervisor (aquí el 4) en vez del sub-paso del documento (3.4).
+     */
+    @Test
+    @DisplayName("una pregunta por el paso de un documento la contesta la ficha, no la guía del paso actual")
+    void laFichaVaAntesQueLaGuiaDelPasoActual() {
+        String r = servicio.responder(1L, "¿En qué paso se genera el GCCON-F-031?", null);
+
+        assertThat(r).startsWith("Informe de Supervisión (GCCON-F-031).")
+                .contains("Dónde se genera: en el sub-paso 3.4.")
+                .doesNotContain("Está en el paso 4");
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
     }
 
     @Test

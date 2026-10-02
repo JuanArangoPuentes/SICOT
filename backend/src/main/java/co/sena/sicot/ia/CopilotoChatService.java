@@ -28,7 +28,12 @@ import java.util.stream.Collectors;
  * real). Cada respuesta se genera con Ollama, anclada a los datos reales del
  * contrato y al estado real de sus 6 etapas/subetapas — nunca inventa
  * códigos de formato, firmantes ni procedimientos fuera de lo confirmado
- * en CATALOGO_CONOCIDO.
+ * en CONOCIMIENTO_PROCESO.
+ *
+ * <p>Lo que tiene respuesta fija no llega al modelo: el paso en el que va el
+ * supervisor lo contesta {@link GuiaDelPasoActual} y qué es cada documento
+ * formal, {@link FichaDeDocumentoFormal}. Al modelo le quedan las preguntas
+ * abiertas (ADR-006).
  */
 @Service
 public class CopilotoChatService {
@@ -85,6 +90,7 @@ public class CopilotoChatService {
     private final OllamaClient ollamaClient;
 
     private final GuiaDelPasoActual guiaDelPasoActual;
+    private final FichaDeDocumentoFormal fichaDeDocumentoFormal;
 
     /**
      * Preguntas del supervisor que están ahora mismo en Ollama.
@@ -168,11 +174,13 @@ public class CopilotoChatService {
 
     public CopilotoChatService(ContratoService contratoService, EtapaService etapaService,
                                OllamaClient ollamaClient, GuiaDelPasoActual guiaDelPasoActual,
+                               FichaDeDocumentoFormal fichaDeDocumentoFormal,
                                @Value("${sicot.ia.timeout-seconds}") int esperaPrecalentadoSegundos) {
         this.contratoService = contratoService;
         this.etapaService = etapaService;
         this.ollamaClient = ollamaClient;
         this.guiaDelPasoActual = guiaDelPasoActual;
+        this.fichaDeDocumentoFormal = fichaDeDocumentoFormal;
         this.esperaPrecalentadoSegundos = esperaPrecalentadoSegundos;
     }
 
@@ -314,6 +322,17 @@ public class CopilotoChatService {
         // Si la pregunta no encaja en el atajo, sigue su camino normal: esto
         // solo atiende las preguntas cuya respuesta completa es el estado del
         // contrato, nunca las abiertas.
+        //
+        // La ficha de documento va antes, a propósito: «¿en qué paso se genera
+        // el GCCON-F-031?» trae la señal «en qué paso» de la guía, pero lo que
+        // pide es el sub-paso de ese documento, no el paso en el que va el
+        // supervisor. Cuatro de las cinco sugerencias rápidas del panel entran
+        // por aquí (ver FichaDeDocumentoFormal).
+        var ficha = fichaDeDocumentoFormal.responder(pregunta, etapas);
+        if (ficha.isPresent()) {
+            log.info("Pregunta de contrato {} resuelta sin modelo por FichaDeDocumentoFormal.", contratoId);
+            return ficha.get();
+        }
         if (guiaDelPasoActual.puedeResponder(pregunta)) {
             var respuestaDirecta = guiaDelPasoActual.responder(etapas);
             if (respuestaDirecta.isPresent()) {
@@ -405,9 +424,9 @@ public class CopilotoChatService {
                         estadoEtapas, historialTexto,
                         EntradaNoConfiable.bloque("PREGUNTA DEL SUPERVISOR", recortar(pregunta, MAX_CARACTERES_ENTRADA)));
 
-        // Justo aquí, y no al entrar al método: el atajo de GuiaDelPasoActual de
-        // más arriba no usa Ollama, así que «¿en qué paso voy?» se sigue
-        // respondiendo en milisegundos aunque haya un precalentado en curso.
+        // Justo aquí, y no al entrar al método: los atajos de más arriba no usan
+        // Ollama, así que «¿en qué paso voy?» o «¿qué es el GIL-F-010?» se
+        // siguen respondiendo en milisegundos aunque haya un precalentado en curso.
         if (esperarAlPrecalentado) {
             esperarPrecalentado(contratoId);
         }
