@@ -61,3 +61,4 @@ parte del valor.
 | [011](./ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md) | Arranque fail closed y qué escáner es compuerta en el CI | Aceptada |
 | [012](./ADR-012-aplicacion-movil.md) | Qué es "la aplicación móvil" de SICOT | Aceptada |
 | [013](./ADR-013-firma-y-distribucion-del-apk.md) | Cómo se firma y se reparte la aplicación de Android | Aceptada |
+| [014](./ADR-014-salir-de-spring-boot-3-5.md) | Cuándo y cómo salir de Spring Boot 3.5 | Propuesta |
