@@ -363,9 +363,19 @@ POST /api/contratos/{contratoId}/documentos/{id}/firmar      (SUPERVISOR/ADMINIS
 
 ```http
 POST /api/contratos/{contratoId}/copiloto/chat
+POST /api/contratos/{contratoId}/copiloto/precalentar
 ```
 
-Solo el supervisor asignado al contrato o un ADMINISTRADOR pueden consultarlo.
+Solo el supervisor asignado al contrato o un ADMINISTRADOR pueden consultarlo (también el
+precalentado, que lo comprueba antes de encolar).
+
+`ChatResponse` lleva `respuesta`, `fuente` (`SISTEMA` si la armó SICOT sin modelo, `MODELO` si
+la escribió Ollama) y `accion`: la pantalla que el supervisor puede abrir desde la respuesta
+(`IR_A_PASO`, `IR_A_SUBPASO`, `ABRIR_DOCUMENTO`, `ABRIR_EVIDENCIA`, `MOSTRAR_ALERTAS`,
+`MOSTRAR_DOCUMENTOS`, `DESCARGAR_DOCUMENTO`, `IR_A_CONFIGURACION`), o `null`. **Ninguna acción
+firma, marca, genera ni modifica nada**: la interfaz la muestra como un botón y solo abre esa
+pantalla cuando él lo toca. `ChatRequest` admite `idSolicitud` (el reintento recibe la respuesta
+del primer intento) y `revisarPaso` (la revisión antes de cerrar un paso, armada en el servidor).
 
 ---
 
@@ -551,7 +561,9 @@ Actualmente están conectadas al backend:
 * activación/desactivación;
 * autorización por roles (incluido el control de acceso por contrato: un SUPERVISOR solo
   alcanza los datos del contrato que tiene asignado);
-* **copiloto conversacional** (chat real sobre Ollama, anclado al contrato y sus etapas reales);
+* **copiloto conversacional** (chat real sobre Ollama, anclado al contrato y sus etapas reales),
+  con **órdenes** («llévame al paso 3», «genera el acta de inicio») que se atienden sin modelo y
+  devuelven el botón para abrir la pantalla, nunca para firmar ni marcar;
 * **tutorial guiado** de los 6 pasos, con gate de revisión IA asesor (nunca bloqueante) antes
   de cerrar un paso;
 * **documentos formales armados por SICOT** con los datos exactos del contrato
@@ -587,7 +599,10 @@ Estas funcionalidades NO tienen backend funcional y NO deben fingirse como reale
   sugerir lo contrario);
 * firma electrónica con un proveedor PKI externo real (lo actual es una referencia interna de
   SICOT, no una integración con infraestructura nacional de firma);
-* empaquetado de escritorio (Tauri) para el rol SUPERVISOR.
+* empaquetado de escritorio (Tauri) para el rol SUPERVISOR;
+* que el Copiloto **ejecute** algo: no firma, no genera documentos, no marca sub-pasos ni cambia
+  ajustes o datos. Una orden en el chat solo devuelve una acción que abre la pantalla donde el
+  supervisor decide; el prompt le prohíbe al modelo decir que hizo algo.
 
 NO inventar endpoints para ellas.
 
@@ -872,9 +887,13 @@ Piezas reales del paquete `co.sena.sicot.ia`:
   documentos formales con los datos del contrato; el modelo solo redacta el apartado de
   observaciones.
 * `CopilotoChatService` — chat conversacional anclado al contrato y a sus etapas reales.
-* `GuiaDelPasoActual`, `FichaDeDocumentoFormal` — contestan sin modelo lo que tiene respuesta
-  fija: el paso en el que va el supervisor y qué es cada documento formal (código, sub-paso,
-  quién firma). `CopilotoChatService` las consulta antes de llamar a Ollama.
+* `OrdenDelSupervisor`, `FichaDeDocumentoFormal`, `GuiaDelPasoActual`, `FichaDelContrato` —
+  contestan sin modelo lo que tiene respuesta fija, en ese orden: las órdenes (con la acción
+  que abre la pantalla), qué es cada documento formal (código, sub-paso, quién firma), el paso
+  en el que va el supervisor o el paso, sub-paso o documento que nombre, y los datos del
+  contrato (valor, fechas, días que quedan, `Cronograma`). `CopilotoChatService` las consulta
+  antes de llamar a Ollama. El flujo de firma lo dice `FlujoDeFirma`, un solo texto para la
+  ficha, la guía, las órdenes y el prompt.
 * `PdfTextExtractor`, `SimplePdfWriter` — lectura y escritura real de PDF.
 
 Reglas al trabajar sobre la IA:
