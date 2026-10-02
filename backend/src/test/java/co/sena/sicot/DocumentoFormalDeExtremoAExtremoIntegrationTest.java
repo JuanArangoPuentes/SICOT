@@ -405,6 +405,38 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
     }
 
+    /**
+     * Si la firma visible no se puede estampar, el documento no se firma:
+     * antes quedaba firmado e íntegro con el hueco de la firma vacío, y ya no
+     * se podía volver a estampar (auditoría del 02-10-2026).
+     */
+    @Test
+    void siNoSePuedeEstamparLaFirmaElDocumentoNoQuedaFirmado() throws Exception {
+        long id = generarActa(subetapa27());
+        Documento documento = documentoRepository.findById(id).orElseThrow();
+        byte[] danado;
+        try (PDDocument pdf = Loader.loadPDF(documento.getContenido())) {
+            // El hueco apunta a una página que el documento no tiene.
+            pdf.getDocumentInformation().setCustomMetadataValue("SICOT-AnclaFirma", "99;70;100;200;60");
+            var salida = new java.io.ByteArrayOutputStream();
+            pdf.save(salida);
+            danado = salida.toByteArray();
+        }
+        documento.setContenido(danado);
+        documentoRepository.save(documento);
+
+        mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
+                        .param("huellaRevisada", HexFormat.of().formatHex(
+                                MessageDigest.getInstance("SHA-256").digest(danado)))
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("No se pudo poner la firma visible")));
+        Documento sinFirmar = documentoRepository.findById(id).orElseThrow();
+        assertThat(sinFirmar.getFirmaId()).isNull();
+        assertThat(sinFirmar.getFirmaHashSha256()).isNull();
+        assertThat(sinFirmar.getContenido()).isEqualTo(danado);
+    }
+
     /** Si Gestión corrige el número del contrato, el borrador regenerado lleva el nombre nuevo. */
     @Test
     void alRegenerarElBorradorTomaElNumeroDeContratoActual() throws Exception {

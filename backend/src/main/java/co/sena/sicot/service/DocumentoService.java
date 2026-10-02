@@ -270,7 +270,10 @@ public class DocumentoService {
         // Los documentos que genera SICOT llevan la firma visible: se estampa
         // en el hueco que el PDF reservó para ella ANTES de calcular la
         // huella, así que lo que queda registrado como firmado es el PDF con
-        // la firma ya puesta. Un PDF cargado desde fuera se firma tal cual.
+        // la firma ya puesta. Un PDF cargado desde fuera se firma tal cual. Si
+        // la estampa falla, estampar lanza y no se firma: el documento sigue
+        // pendiente y se puede regenerar, en vez de quedar firmado sin firma
+        // visible y sin arreglo (auditoría del 02-10-2026).
         if (documento.isGeneradoPorIa() && "application/pdf".equalsIgnoreCase(documento.getContentType())) {
             byte[] estampado = estampaDeFirma.estampar(documento.getContenido(), usuario.getNombre(),
                     firma.getFirmaId(), ahora);

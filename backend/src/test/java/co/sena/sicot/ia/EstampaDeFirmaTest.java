@@ -2,8 +2,13 @@ package co.sena.sicot.ia;
 
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
+import co.sena.sicot.exception.BusinessException;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -13,6 +18,7 @@ import java.time.ZoneId;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * La firma visible en el PDF firmado. Antes de esto, el PDF que se descargaba
@@ -146,10 +152,38 @@ class EstampaDeFirmaTest {
         assertThat(estampa.estampar(ajeno, "X", "F", Instant.now())).isSameAs(ajeno);
     }
 
+    /**
+     * Si no se puede estampar, no se firma. Antes se devolvía el PDF sin
+     * estampa y la firma seguía: el acta quedaba firmada, íntegra y con el
+     * hueco vacío, sin arreglo posible (auditoría del 02-10-2026).
+     */
     @Test
-    void unArchivoQueNoEsPdfSeDevuelveIgual() {
+    void unArchivoQueNoSeLeeComoPdfNoSeFirma() {
         byte[] basura = "no es un pdf".getBytes(StandardCharsets.UTF_8);
 
-        assertThat(estampa.estampar(basura, "X", "F", Instant.now())).isSameAs(basura);
+        assertThatThrownBy(() -> estampa.estampar(basura, "X", "F", Instant.now()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No se pudo poner la firma visible");
+    }
+
+    @Test
+    void unHuecoDeFirmaFueraDelDocumentoODanadoNoSeFirma() throws Exception {
+        for (String ancla : List.of("99;70;100;200;60", "0;no-es-un-numero;1;1;1", "0;10")) {
+            byte[] pdf = conAncla(documento("ACTA_INICIO"), ancla);
+
+            assertThatThrownBy(() -> estampa.estampar(pdf, "X", "F", Instant.now())).as(ancla)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("el borrador sigue pendiente");
+        }
+    }
+
+    /** El mismo PDF con otra ancla de firma, como uno que se dañó al guardarse. */
+    static byte[] conAncla(byte[] pdf, String ancla) throws IOException {
+        try (PDDocument d = Loader.loadPDF(pdf)) {
+            d.getDocumentInformation().setCustomMetadataValue(PdfInstitucional.PROPIEDAD_ANCLA_FIRMA, ancla);
+            ByteArrayOutputStream salida = new ByteArrayOutputStream();
+            d.save(salida);
+            return salida.toByteArray();
+        }
     }
 }

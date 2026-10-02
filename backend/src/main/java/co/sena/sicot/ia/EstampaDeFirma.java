@@ -1,5 +1,6 @@
 package co.sena.sicot.ia;
 
+import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.ia.BloqueDocumento.Estilo;
 import co.sena.sicot.ia.FormatoInstitucional.Familia;
 import org.apache.pdfbox.Loader;
@@ -57,10 +58,6 @@ public class EstampaDeFirma {
     }
 
     /**
-     * @return el PDF con la firma estampada, o el mismo arreglo si el PDF no
-     *         trae ancla (no lo generó SICOT) o no se puede leer.
-     */
-    /**
      * El id del usuario para quien se generó el documento (su nombre es el
      * del bloque de firma), o {@code null} si el PDF no lo dice: uno cargado
      * desde fuera, o uno generado antes de que SICOT lo guardara.
@@ -75,6 +72,16 @@ public class EstampaDeFirma {
         }
     }
 
+    /**
+     * @return el PDF con la firma estampada, o el mismo arreglo si el PDF no
+     *         trae ancla (no lo generó SICOT).
+     * @throws BusinessException si el PDF trae ancla y no se puede estampar
+     *         (ancla dañada, página que no existe, error de PDFBox) o si ni
+     *         siquiera se puede leer. Hasta la auditoría del 02-10-2026 se
+     *         devolvía el PDF sin estampa y la firma seguía: el acta quedaba
+     *         firmada, íntegra y con el hueco de la firma vacío, y como ya
+     *         estaba firmada no había forma de volver a estamparla.
+     */
     public byte[] estampar(byte[] pdf, String firmante, String codigoFirma, Instant cuando) {
         try (PDDocument documento = Loader.loadPDF(pdf)) {
             String ancla = documento.getDocumentInformation()
@@ -89,7 +96,8 @@ public class EstampaDeFirma {
             float ancho = Float.parseFloat(partes[3]);
             float alto = Float.parseFloat(partes[4]);
             if (pagina < 0 || pagina >= documento.getNumberOfPages()) {
-                return pdf;
+                throw new IllegalStateException("el hueco de la firma está en la página " + pagina
+                        + " de un documento de " + documento.getNumberOfPages());
             }
             PDPage page = documento.getPage(pagina);
             FuentesDelDocumento fuentes = new FuentesDelDocumento(documento);
@@ -154,10 +162,12 @@ public class EstampaDeFirma {
             documento.save(salida);
             return salida.toByteArray();
         } catch (IOException | RuntimeException e) {
-            // Sin estampa el documento sigue siendo válido y su huella se
-            // calcula igual: no se bloquea la firma por esto.
-            log.warn("No se pudo estampar la firma en el PDF; se firma sin estampa: {}", e.getMessage());
-            return pdf;
+            // Firmar sin estampa dejaba un acta «firmada» sin firma visible, y
+            // ya no se podía corregir. Sin firmar, el borrador sigue pendiente
+            // y regenerarlo rehace el PDF con su hueco.
+            log.warn("No se pudo estampar la firma en el PDF; no se firma: {}", e.getMessage());
+            throw new BusinessException("No se pudo poner la firma visible en el documento, así que no se firmó:"
+                    + " el borrador sigue pendiente. Vuelva a generarlo e intente firmar de nuevo.");
         }
     }
 
