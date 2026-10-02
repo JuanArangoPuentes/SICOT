@@ -119,4 +119,23 @@ describe('GestionPanel', () => {
 
     await waitFor(() => expect(screen.getByDisplayValue('Compraventa')).toBeInTheDocument())
   })
+
+  /**
+   * La subida y la extracción van en la misma petición y nada mide cuánto lleva
+   * subido. Hubo un «Subiendo… 100 %» que React nunca pintaba y que, de
+   * reactivarse, habría mostrado un porcentaje inventado.
+   */
+  it('mientras lee la ficha muestra un solo estado de espera, sin porcentaje', async () => {
+    const { extraerDatosContrato } = await import('@/services/documentoService')
+    vi.mocked(extraerDatosContrato).mockReturnValue(new Promise(() => {}))
+
+    const { container } = montar()
+    fireEvent.click((await screen.findAllByText(/Cargar nueva ficha/))[0])
+    const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['%PDF'], 'acta.pdf', { type: 'application/pdf' })] } })
+
+    expect(await screen.findByText(/Analizando 1 documento/)).toBeInTheDocument()
+    expect(screen.queryByText(/Subiendo/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\d+\s*%/)).not.toBeInTheDocument()
+  })
 })
