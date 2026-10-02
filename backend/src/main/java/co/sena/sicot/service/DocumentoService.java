@@ -183,18 +183,13 @@ public class DocumentoService {
      * posterior del contenido. Se calcula sobre los bytes que hay en ese
      * instante, dentro de la misma transacción que escribe la firma, para que
      * no exista ninguna ventana entre lo que se midió y lo que se firmó.
-     */
-    @Transactional
-    public DocumentoResponse firmar(Long id) {
-        return firmar(id, null);
-    }
-
-    /**
+     *
      * @param huellaRevisada SHA-256 del borrador que el supervisor leyó antes de
-     *                       firmar, o {@code null}. Si el contenido ya no es ese —otra
-     *                       pestaña o un reintento lo regeneró entre medias—, no se firma:
-     *                       se habría firmado una redacción que nadie leyó (revisión del
-     *                       29-09-2026).
+     *                       firmar. Si el contenido ya no es ese —otra pestaña o un
+     *                       reintento lo regeneró entre medias—, no se firma: se habría
+     *                       firmado una redacción que nadie leyó (revisión del
+     *                       29-09-2026). Obligatoria para lo que genera SICOT; para un
+     *                       documento cargado puede ser {@code null}.
      */
     @Transactional
     public DocumentoResponse firmar(Long id, String huellaRevisada) {
@@ -206,6 +201,15 @@ public class DocumentoService {
         }
         if (documento.getContenido() == null || documento.getContenido().length == 0) {
             throw new BusinessException("Este documento no tiene contenido: no hay nada que firmar.");
+        }
+        // Un borrador generado se regenera sobre la misma fila (un reintento,
+        // otra pestaña), así que sin la huella de lo que se revisó se firmaba lo
+        // que hubiera en la fila en ese instante: quizá los datos de otra
+        // petición, que quien firma nunca vio (auditoría del 02-10-2026).
+        if (documento.isGeneradoPorIa() && (huellaRevisada == null || huellaRevisada.isBlank())) {
+            throw new BusinessException("Falta indicar qué borrador revisó: un documento que genera SICOT solo se"
+                    + " firma junto con la huella del borrador que se le mostró. Vuelva a firmar el paso para ver"
+                    + " el borrador actual.");
         }
         if (huellaRevisada != null && !huellaRevisada.isBlank()
                 && !huellaRevisada.strip().equalsIgnoreCase(HuellaDeDocumento.calcular(documento.getContenido()))) {
@@ -225,11 +229,14 @@ public class DocumentoService {
                     + "Un documento firmado no se reemplaza firmando otro.");
         }
         var usuario = SecurityUtils.currentUsuario();
-        // Un documento formal que genera SICOT lleva el nombre del supervisor
-        // en su bloque de firma, y la firma se estampa encima. Que la firme
-        // otra persona —un administrador con firma propia— dejaba su nombre
-        // estampado en el hueco del supervisor: un documento oficial que
-        // atribuye la firma a quien no firmó (revisión del 28-09-2026).
+        // Los documentos de un contrato los firma solo su supervisor asignado.
+        // Un documento formal que genera SICOT lleva además su nombre en el
+        // bloque de firma, y la firma se estampa encima: que la firmara otra
+        // persona —un administrador con firma propia— dejaba su nombre
+        // estampado en el hueco del supervisor (revisión del 28-09-2026). Hasta
+        // la auditoría del 02-10-2026 la regla valía solo para los generados:
+        // un acta cargada por Gestión la podía firmar cualquier administrador,
+        // y quedaba aprobada e inmutable sin que el supervisor la viera.
         //
         // Tres casos, según la revisión del 29-09-2026: sin supervisor asignado
         // el administrador podía firmarlo sobre «[dato pendiente: supervisor]»;
@@ -238,15 +245,17 @@ public class DocumentoService {
         // también para quién se generó (queda en el PDF), no solo quién es
         // el supervisor hoy. Regenerar el borrador lo pone a nombre del actual.
         var supervisor = documento.getContrato().getSupervisor();
+        if (supervisor == null) {
+            throw new BusinessException(documento.isGeneradoPorIa()
+                    ? "El contrato no tiene supervisor asignado, y un documento generado lleva el nombre del"
+                            + " supervisor en su bloque de firma. Asigne el supervisor y vuelva a generarlo."
+                    : "El contrato no tiene supervisor asignado, y sus documentos solo los firma su supervisor.");
+        }
+        if (!supervisor.getId().equals(usuario.getId())) {
+            throw new BusinessException("Este documento lo firma el supervisor del contrato (" + supervisor.getNombre()
+                    + (documento.isGeneradoPorIa() ? "): su nombre es el que aparece en el bloque de firma." : ")."));
+        }
         if (documento.isGeneradoPorIa()) {
-            if (supervisor == null) {
-                throw new BusinessException("El contrato no tiene supervisor asignado, y un documento generado lleva"
-                        + " el nombre del supervisor en su bloque de firma. Asigne el supervisor y vuelva a generarlo.");
-            }
-            if (!supervisor.getId().equals(usuario.getId())) {
-                throw new BusinessException("Este documento lo firma el supervisor del contrato ("
-                        + supervisor.getNombre() + "): su nombre es el que aparece en el bloque de firma.");
-            }
             Long previsto = estampaDeFirma.firmantePrevisto(documento.getContenido());
             if (previsto != null && !previsto.equals(usuario.getId())) {
                 throw new BusinessException("Este borrador se generó cuando el supervisor del contrato era otra"

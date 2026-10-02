@@ -354,7 +354,7 @@ GET /api/contratos/{contratoId}/documentos
 POST /api/contratos/{contratoId}/documentos                  (multipart, GESTION/ADMINISTRADOR)
 GET /api/contratos/{contratoId}/documentos/{id}/archivo      (descarga real)
 POST /api/contratos/{contratoId}/documentos/generar          (SUPERVISOR/ADMINISTRADOR, vía IA)
-POST /api/contratos/{contratoId}/documentos/{id}/firmar      (SUPERVISOR/ADMINISTRADOR)
+POST /api/contratos/{contratoId}/documentos/{id}/firmar      (solo el SUPERVISOR asignado; lo generado exige ?huellaRevisada=)
 ```
 
 ---
