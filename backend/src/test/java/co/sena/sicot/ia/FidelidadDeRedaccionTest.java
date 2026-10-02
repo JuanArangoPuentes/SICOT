@@ -501,4 +501,43 @@ class FidelidadDeRedaccionTest {
             assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
         }
     }
+
+    // ── Auditoría del 02-10-2026: la cosa que cuenta una cantidad ───────────
+
+    @Test
+    void cambiarLaCosaOLaUnidadDeUnaCantidadOIntercambiarlasSeDescarta() {
+        String[][] alteradas = {
+                {"llegaron 5 camas", "Llegaron 5 literas."},
+                {"se recibieron 2.5 toneladas de cemento", "Se recibieron 2.5 kilogramos de cemento."},
+                {"llegaron 12 mesas y 5 sillas", "Llegaron 12 sillas y 5 mesas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("cambiaba lo que cuentan las cifras de sus notas");
+        }
+    }
+
+    @Test
+    void unVerboTrasLaCantidadOLaMismaCosaDichaOtraVezNoEsCambiarLaCosa() {
+        String[][] fieles = {
+                {"se probaron los 6 hornos; 5 funcionaron y 1 no calentó",
+                        "Se probaron los 6 hornos; 5 operaron y 1 no calentó."},
+                {"de las 40 sillas, 2 tenían el tapizado rasgado",
+                        "De las 40 sillas, 2 sillas tenían el tapizado rasgado."},
+                {"llegaron 5 portátiles", "Llegaron 5 computadores portátiles."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    /** Medición del 02-10-2026 con qwen2.5:7b: «1 no calentó» redactado «uno no calentó». */
+    @Test
+    void unoSueltoEsElNumeroYNoUnArticulo() {
+        String notas = "se probaron los 6 hornos; 5 funcionaron y 1 no calentó";
+        assertThat(fiel("Se probaron los seis hornos; cinco funcionaron y uno no calentó.", notas)).isTrue();
+        assertThat(fiel("De las 4 sillas, una no tenía patas.", "de las 4 sillas, 1 no tenía patas")).isTrue();
+        // Sin el «uno», el 1 sigue perdiéndose.
+        assertThat(fiel("Se probaron los seis hornos; cinco funcionaron y otro no calentó.", notas)).isFalse();
+    }
 }

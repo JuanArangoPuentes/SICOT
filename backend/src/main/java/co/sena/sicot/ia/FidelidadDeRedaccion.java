@@ -31,7 +31,8 @@ import java.util.regex.Pattern;
  *   <li><b>Una redacción que pierde una cifra, cambia una palabra, dice lo
  *       contrario, agrega afirmaciones de cumplimiento o mezcla otra escritura
  *       también se descarta</b> (desde el 29-09-2026, cuando «5 camas» salió
- *       como «las cunas»).</li>
+ *       como «las cunas»), y también la que cambia lo que cuenta una cifra o
+ *       agrega un nombre (desde el 02-10-2026).</li>
  * </ol>
  */
 public final class FidelidadDeRedaccion {
@@ -219,6 +220,8 @@ public final class FidelidadDeRedaccion {
                         ? "cambiaba o perdía fechas u horas de sus notas"
                 : !conservaLasCifras(corregido, recortadas, datos)
                         ? "perdía cifras de sus notas"
+                : !sinCosasCambiadas(corregido, recortadas, datos)
+                        ? "cambiaba lo que cuentan las cifras de sus notas"
                 : !sinPalabrasCambiadas(corregido, recortadas, datos)
                         ? "cambiaba palabras de sus notas por otras parecidas"
                 : !sinSentidoInvertido(corregido, recortadas)
@@ -573,22 +576,11 @@ public final class FidelidadDeRedaccion {
                 }
             }
         }
-        StringBuilder notasSinReferencias = new StringBuilder(textoNotas);
-        StringBuilder redaccionSinReferencias = new StringBuilder(textoRedactado);
-        taparFechasYHoras(textoNotas, notasSinReferencias, textoRedactado, redaccionSinReferencias);
-        taparDatosDelContrato(notasSinReferencias, datosConocidos);
-        taparDatosDelContrato(redaccionSinReferencias, datosConocidos);
-        taparOrdinales(notasSinReferencias);
-        taparOrdinales(redaccionSinReferencias);
-        Matcher sub = SUB_PASO.matcher(notasSinReferencias.toString());
-        while (sub.find()) {
-            tapar(notasSinReferencias, sub.start(1), sub.end(1));
-        }
-        for (int[] e : enumeradores(notasSinReferencias.toString())) {
-            tapar(notasSinReferencias, e[0], e[1]);
-        }
+        StringBuilder[] sinReferencias = sinReferencias(textoNotas, textoRedactado, datosConocidos);
+        StringBuilder notasSinReferencias = sinReferencias[0];
+        StringBuilder redaccionSinReferencias = sinReferencias[1];
         Set<String> identificadores = identificadores(datosConocidos);
-        List<String[]> conCosa = valoresConCosa(notasSinReferencias.toString()).stream()
+        List<String[]> conCosa = valoresConCosa(notasSinReferencias.toString(), false).stream()
                 .filter(v -> !identificadores.contains(v[0])).toList();
         List<String> deNotas = conCosa.stream().map(v -> v[0]).toList();
         // «2 hornos, 1 nevera» redactado «dos hornos, una nevera»: el artículo
@@ -606,6 +598,17 @@ public final class FidelidadDeRedaccion {
                     redaccionSinReferencias.replace(articulo.start(1), articulo.end(1),
                             "1" + " ".repeat(articulo.group(1).length() - 1));
                 }
+            }
+        }
+        // «5 funcionaron y 1 no calentó» redactado «cinco funcionaron y uno no
+        // calentó»: «uno» suelto, o «una» antes de una pausa o de un «no», no
+        // acompaña a nada y es el número, no un artículo. Vale por un 1 de las
+        // notas; para inventar sigue sin contar (medición del 02-10-2026).
+        if (deNotas.contains("1")) {
+            Matcher suelto = UNO_SUELTO.matcher(redaccionSinReferencias.toString());
+            while (suelto.find()) {
+                redaccionSinReferencias.replace(suelto.start(), suelto.end(),
+                        "1" + " ".repeat(suelto.group().length() - 1));
             }
         }
         List<String> deRedaccion = new ArrayList<>(valoresEnOrden(redaccionSinReferencias.toString()));
@@ -635,6 +638,96 @@ public final class FidelidadDeRedaccion {
         List<String> ordenRedaccion = deRedaccion.stream().distinct().filter(ordenNotas::contains).toList();
         return ordenNotas.equals(ordenRedaccion);
     }
+
+    /**
+     * Las notas y la redacción ya normalizadas, con tapado lo que no es una
+     * cantidad: las fechas y horas de las notas, los datos del contrato, los
+     * ordinales, y en las notas los números de sub-paso y de lista.
+     */
+    private static StringBuilder[] sinReferencias(String textoNotas, String textoRedactado,
+                                                  List<String> datosConocidos) {
+        StringBuilder notas = new StringBuilder(textoNotas);
+        StringBuilder redaccion = new StringBuilder(textoRedactado);
+        taparFechasYHoras(textoNotas, notas, textoRedactado, redaccion);
+        taparDatosDelContrato(notas, datosConocidos);
+        taparDatosDelContrato(redaccion, datosConocidos);
+        taparOrdinales(notas);
+        taparOrdinales(redaccion);
+        Matcher sub = SUB_PASO.matcher(notas.toString());
+        while (sub.find()) {
+            tapar(notas, sub.start(1), sub.end(1));
+        }
+        for (int[] e : enumeradores(notas.toString())) {
+            tapar(notas, e[0], e[1]);
+        }
+        return new StringBuilder[]{notas, redaccion};
+    }
+
+    /**
+     * ¿Cuenta cada cantidad de la redacción lo mismo que en las notas? Que
+     * estén los mismos valores en el mismo orden ({@link #conservaLasCifras})
+     * no basta (auditoría del 02-10-2026): «llegaron 12
+     * mesas y 5 sillas» redactado «llegaron 12 sillas y 5 mesas», «5 camas»
+     * redactado «5 literas» o «2.5 toneladas de cemento» redactado «2.5
+     * kilogramos» pasaban, y el acta certificaba otro reparto, otra cosa u
+     * otra unidad. Solo se mira la cosa pegada al número, para no tomar por
+     * cosa un verbo cualquiera, y se descarta en dos casos:
+     * <ul>
+     *   <li>un intercambio: las notas cuentan A con un valor y B con otro, y
+     *       la redacción cuenta los dos al revés;</li>
+     *   <li>otra cosa u otra unidad: lo que las notas cuentan (en plural) ya
+     *       no aparece en la redacción, y el mismo valor va junto a un plural
+     *       que las notas no dicen. Con un verbo («5 funcionaron» → «cinco
+     *       operaron») no, porque no termina en «s»; con 1 tampoco, porque
+     *       casi siempre es un artículo.</li>
+     * </ul>
+     */
+    public static boolean sinCosasCambiadas(String redactado, String notas, List<String> datosConocidos) {
+        if (notas == null || notas.isBlank() || redactado == null) {
+            return true;
+        }
+        StringBuilder[] sinReferencias = sinReferencias(normalizarCifras(notas), normalizarCifras(redactado),
+                datosConocidos);
+        List<String> fichasNotas = fichas(notas);
+        List<String> fichasRedaccion = fichas(redactado);
+        List<String[]> enNotas = valoresConCosa(sinReferencias[0].toString(), true).stream()
+                .filter(v -> v[1] != null).toList();
+        List<String[]> enRedaccion = valoresConCosa(sinReferencias[1].toString(), true).stream()
+                .filter(v -> v[1] != null).toList();
+        for (String[] a : enNotas) {
+            for (String[] b : enNotas) {
+                if (a[0].equals(b[0]) || mismaPalabra(a[1], b[1])
+                        || cuenta(enNotas, a[0], b[1]) || cuenta(enNotas, b[0], a[1])) {
+                    continue;
+                }
+                if (cuenta(enRedaccion, a[0], b[1]) && cuenta(enRedaccion, b[0], a[1])) {
+                    return false;
+                }
+            }
+        }
+        for (String[] a : enNotas) {
+            if (a[0].equals("1") || !a[1].endsWith("s")
+                    || fichasRedaccion.stream().anyMatch(w -> mismaPalabra(a[1], w))) {
+                continue;
+            }
+            for (String[] b : enRedaccion) {
+                if (b[0].equals(a[0]) && b[1].endsWith("s")
+                        && fichasNotas.stream().noneMatch(v -> mismaPalabra(v, b[1]))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** ¿Cuentan esos pares el valor con esa cosa (o con otra forma de la misma palabra)? */
+    private static boolean cuenta(List<String[]> pares, String valor, String cosa) {
+        return pares.stream().anyMatch(p -> p[0].equals(valor) && mismaPalabra(p[1], cosa));
+    }
+
+    /** «uno» como palabra suelta, o «una» seguida de una pausa o de «no»: el número, no el artículo. */
+    private static final Pattern UNO_SUELTO =
+            Pattern.compile("(?<![\\p{L}\\d])(?:uno|una(?=\\s*[.,;:]|\\s+no(?![\\p{L}])|\\s*$))(?![\\p{L}\\d])");
 
     private static void taparOrdinales(StringBuilder texto) {
         Matcher m = ORDINAL.matcher(texto.toString());
@@ -930,13 +1023,21 @@ public final class FidelidadDeRedaccion {
     /**
      * Como {@link #valoresEnOrden}, pero con la palabra de cuatro letras o más
      * que sigue a cada número (la cosa que cuenta), o {@code null}.
+     *
+     * @param pegada si la cosa tiene que ir pegada al número, sin más que
+     *               espacios y palabras de enlace en medio: en «60%; revisé»
+     *               o «en total 7. funcionan» el número no cuenta «revisé» ni
+     *               «funcionan»
      */
-    private static List<String[]> valoresConCosa(String textoNormalizado) {
+    private static List<String[]> valoresConCosa(String textoNormalizado, boolean pegada) {
         List<String[]> r = new ArrayList<>();
         List<String> fs = new ArrayList<>();
-        Matcher m = FICHA_CON_NUMEROS.matcher(textoNormalizado == null ? "" : textoNormalizado);
+        List<int[]> posiciones = new ArrayList<>();
+        String texto = textoNormalizado == null ? "" : textoNormalizado;
+        Matcher m = FICHA_CON_NUMEROS.matcher(texto);
         while (m.find()) {
             fs.add(m.group());
+            posiciones.add(new int[]{m.start(), m.end()});
         }
         int i = 0;
         while (i < fs.size()) {
@@ -965,7 +1066,12 @@ public final class FidelidadDeRedaccion {
                 continue;
             }
             String cosa = null;
+            int finAnterior = posiciones.get(i - 1)[1];
             for (int j = i; j < Math.min(fs.size(), i + 3); j++) {
+                if (pegada && !texto.substring(finAnterior, posiciones.get(j)[0]).isBlank()) {
+                    break;
+                }
+                finAnterior = posiciones.get(j)[1];
                 String g = fs.get(j);
                 if (DE_ENLACE.contains(g) || Character.isDigit(g.charAt(0))) {
                     continue;
