@@ -83,6 +83,19 @@
               la clase de fallo que convierte un DTO de entrada en un vector
               para escribir campos que el cliente no debería poder tocar.
 
+            · jackson 2.21.6 → 2.21.7 (cuatro ALTAS, todas de denegación de
+              servicio; Trivy bloqueaba con ellas el chequeo de dependencias)
+              CVE-2026-89407 en jackson-core: la expresión regular con la que
+              se prevalidan los números que llegan como texto retrocede de forma
+              cuadrática, así que un "número" largo y malformado en un cuerpo
+              JSON deja un hilo de Tomcat girando. Ésta es alcanzable desde la
+              API: basta con mandar como cadena un campo numérico de un DTO.
+              Las otras tres piden algo que SICOT no usa hoy: CVE-2026-89425
+              sólo afecta a parsers creados sobre DataInput, CVE-2026-91776 a
+              @JsonTypeInfo con defaultImpl y CVE-2026-91777 a @JsonIdentityInfo
+              (ninguno aparece en backend/src). Se suben juntas porque vienen en
+              el mismo BOM y por la misma razón que Tomcat.
+
             · commons-lang3 3.17.0 → 3.18.0
               CVE-2025-48924, recursión no controlada. Entra por debajo de Tika.
 
@@ -94,7 +107,7 @@
               que alguien lee el informe del escáner.
         -->
         <tomcat.version>10.1.59</tomcat.version>
-        <jackson-bom.version>2.21.6</jackson-bom.version>
+        <jackson-bom.version>2.21.7</jackson-bom.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <log4j2.version>2.25.5</log4j2.version>
     </properties>
