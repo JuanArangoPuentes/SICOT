@@ -7,6 +7,7 @@ import co.sena.sicot.entity.Subetapa;
 import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
+import co.sena.sicot.exception.DemasiadasSolicitudesException;
 import co.sena.sicot.mapper.DocumentoMapper;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
@@ -17,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,9 +50,10 @@ public class GeneracionDocumentoService {
     private static final Logger log = LoggerFactory.getLogger(GeneracionDocumentoService.class);
 
     /**
-     * Tope de las notas que se mandan al modelo. Con más texto la redacción en
-     * un equipo sin GPU se va de los minutos, y unas observaciones de un paso
-     * no necesitan más.
+     * Largo máximo de las notas que se mandan a redactar. Con más texto la
+     * redacción en un equipo sin GPU se va de los minutos, y unas
+     * observaciones de un paso no necesitan más: las que pasan de aquí van
+     * tal cual, completas.
      */
     static final int MAX_NOTAS = 2000;
 
@@ -375,18 +378,85 @@ public class GeneracionDocumentoService {
             return new Observaciones(null, false,
                     "; las notas del supervisor no se incluyen porque el formato no tiene apartado de observaciones");
         }
-        // Tal cual quiere decir completas: el tope es solo para lo que se le
-        // manda al modelo. Recortarlas también al usarlas tal cual cortaba a
-        // mitad de palabra unas notas que el diálogo de revisión mostraba
-        // enteras (revisión del 29-09-2026). El DTO ya las limita a 4000.
+        // Tal cual quiere decir completas. Recortarlas al usarlas tal cual
+        // cortaba a mitad de palabra unas notas que el diálogo de revisión
+        // mostraba enteras (revisión del 29-09-2026). El DTO ya las limita a 4000.
         String completas = notas.strip();
-        String recortadas = completas.length() > MAX_NOTAS ? completas.substring(0, MAX_NOTAS) : completas;
         if (!redactarConIa) {
             return new Observaciones(completas, false,
                     "; las observaciones van tal como las escribió el supervisor (así lo pidió)");
         }
+        // Hasta el 02-10-2026 al modelo le llegaban solo los primeros 2000
+        // caracteres y la fidelidad se comparaba con esos mismos: una
+        // redacción fiel del principio pasaba, y el documento firmable perdía
+        // el final de las notas, que es donde suelen ir los faltantes o el
+        // requerimiento al contratista. Unas notas así de largas no se
+        // redactan, y el supervisor no espera minutos para nada.
+        if (completas.length() > MAX_NOTAS) {
+            return new Observaciones(completas, false,
+                    "; las observaciones van tal como las escribió el supervisor (eran demasiado largas para"
+                            + " redactarlas con la IA)",
+                    "sus notas son demasiado largas para que el Copiloto las redacte en este equipo");
+        }
 
-        String prompt = """
+        String redactado;
+        try {
+            long inicio = System.currentTimeMillis();
+            redactado = ollamaClient.generarSinCompetir(promptDeRedaccion(plantilla, completas),
+                    topeDeTokens(plantilla, completas), ESPERA_POR_OTRA_INFERENCIA);
+            log.info("Observaciones de '{}' redactadas en {} ms", plantilla.nombre(), System.currentTimeMillis() - inicio);
+        } catch (IaNoDisponibleException | DemasiadasSolicitudesException e) {
+            // El documento no depende de la IA: si no responde, o el limitador
+            // la rechaza, van las notas tal cual y el supervisor no pierde el paso.
+            log.warn("No se pudieron redactar las observaciones de '{}' con la IA; se usan las notas tal cual: {}",
+                    plantilla.nombre(), e.getMessage());
+            return sinRedaccion(completas, e);
+        }
+
+        List<String> nombres = new ArrayList<>();
+        nombres.add(contrato.getContratista());
+        nombres.add(contrato.getRepresentanteLegal());
+        if (contrato.getSupervisor() != null) {
+            nombres.add(contrato.getSupervisor().getNombre());
+        }
+        String corregido = depurar(redactado, completas, nombres);
+
+        List<String> datos = new ArrayList<>(nombres);
+        datos.add(contrato.getNumeroContrato());
+        datos.add(contrato.getContratistaNit());
+        datos.add(contrato.getNumeroRegistroPresupuestal());
+        // stripTrailingZeros: con la columna en escala 2, toPlainString daba
+        // «120450000.00» y el valor bien escrito («$120.450.000») se tomaba
+        // por una cifra inventada.
+        datos.add(contrato.getValor() != null ? contrato.getValor().stripTrailingZeros().toPlainString() : null);
+        // El valor en letras correcto tampoco es una cifra inventada.
+        datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
+        String infiel = motivoDeInfidelidad(corregido, completas, datos);
+        if (infiel != null) {
+            log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
+            return new Observaciones(completas, false,
+                    "; las observaciones van tal como las escribió el supervisor (la redacción de la IA " + infiel
+                            + ")",
+                    "la redacción del Copiloto " + infiel);
+        }
+        return new Observaciones(corregido, true,
+                "; las observaciones del supervisor se redactaron con el copiloto");
+    }
+
+    /**
+     * Cuánto espera la redacción a que termine otra inferencia en curso antes
+     * de empezar (ver {@link OllamaClient#generarSinCompetir}). Lo típico es
+     * el precalentado que sale al abrir el contrato, de unos 160 s: el
+     * supervisor que genera en seguida espera a lo sumo esto más la redacción,
+     * y si la IA sigue ocupada recibe sus notas tal cual con la causa verdadera.
+     */
+    static final Duration ESPERA_POR_OTRA_INFERENCIA = Duration.ofSeconds(90);
+
+    private static final String ACTA_RECIBO = "ACTA_RECIBO";
+
+    /** El prompt de la redacción de observaciones. */
+    static String promptDeRedaccion(PlantillaDocumentoIA plantilla, String notas) {
+        return """
                 Eres el Copiloto de SICOT. Vas a redactar el apartado de observaciones del documento "%s" (%s).
                 Convierte en uno o dos párrafos formales, en primera persona del supervisor y en español \
                 institucional, las NOTAS DEL SUPERVISOR que aparecen más abajo.
@@ -405,55 +475,65 @@ public class GeneracionDocumentoService {
                 // La hoja GIL-F-010 solo tiene dos renglones para observaciones:
                 // lo que no quepa va a una hoja de continuación, pero el acta
                 // se lee mejor si cabe en su casilla.
-                "ACTA_RECIBO".equals(plantilla.clave())
+                ACTA_RECIBO.equals(plantilla.clave())
                         ? "\n- No pases de 350 caracteres: en el formato solo caben dos renglones." : "",
                 EntradaNoConfiable.INSTRUCCION,
-                EntradaNoConfiable.bloque("NOTAS DEL SUPERVISOR", recortadas));
+                EntradaNoConfiable.bloque("NOTAS DEL SUPERVISOR", notas));
+    }
 
-        String redactado;
-        try {
-            long inicio = System.currentTimeMillis();
-            redactado = ollamaClient.generar(prompt, false).strip();
-            log.info("Observaciones de '{}' redactadas en {} ms", plantilla.nombre(), System.currentTimeMillis() - inicio);
-        } catch (IaNoDisponibleException | co.sena.sicot.exception.DemasiadasSolicitudesException e) {
-            // El documento no depende de la IA: si no responde —o el limitador
-            // la rechaza porque está atendiendo otras solicitudes (429)—, van
-            // las notas tal cual y el supervisor no pierde el paso.
-            log.warn("No se pudieron redactar las observaciones de '{}' con la IA; se usan las notas tal cual: {}",
-                    plantilla.nombre(), e.getMessage());
-            return new Observaciones(completas, false,
-                    "; las observaciones van tal como las escribió el supervisor (la IA no respondió)",
-                    "el Copiloto no respondió a tiempo");
+    /**
+     * Tope de tokens de la redacción: unas dos veces lo que ocupan las notas
+     * (un token son unos cuatro caracteres), con un mínimo para las notas de
+     * una línea. Corta al modelo que entra en un bucle de repetición en vez de
+     * dejarlo escribir hasta el tiempo límite; la redacción que llega al tope
+     * sale cortada y se trata como un fallo. El Acta de Recibo lleva uno
+     * propio, porque se le piden 350 caracteres.
+     */
+    static int topeDeTokens(PlantillaDocumentoIA plantilla, String notas) {
+        if (ACTA_RECIBO.equals(plantilla.clave())) {
+            return 240;
         }
+        return Math.min(800, Math.max(160, notas.length() / 2));
+    }
 
-        List<String> nombres = new ArrayList<>();
-        nombres.add(contrato.getContratista());
-        nombres.add(contrato.getRepresentanteLegal());
-        if (contrato.getSupervisor() != null) {
-            nombres.add(contrato.getSupervisor().getNombre());
-        }
-        String corregido = FidelidadDeRedaccion.corregirNombres(redactado, nombres);
+    /**
+     * Lo que se le hace a la respuesta del modelo antes de comprobarla, sin
+     * cambiar lo que dice: poner exactos los nombres conocidos. Lo que se
+     * comprueba y lo que entra al documento es el mismo texto.
+     */
+    static String depurar(String redactado, String notas, List<String> nombres) {
+        return FidelidadDeRedaccion.corregirNombres(redactado.strip(), nombres);
+    }
 
-        List<String> datos = new ArrayList<>(nombres);
-        datos.add(contrato.getNumeroContrato());
-        datos.add(contrato.getContratistaNit());
-        datos.add(contrato.getNumeroRegistroPresupuestal());
-        // stripTrailingZeros: con la columna en escala 2, toPlainString daba
-        // «120450000.00» y el valor bien escrito («$120.450.000») se tomaba
-        // por una cifra inventada.
-        datos.add(contrato.getValor() != null ? contrato.getValor().stripTrailingZeros().toPlainString() : null);
-        // El valor en letras correcto tampoco es una cifra inventada.
-        datos.add(contrato.getValor() != null ? NumeroEnLetras.pesos(contrato.getValor()) : null);
-        String infiel = motivoDeInfidelidad(corregido, recortadas, datos);
-        if (infiel != null) {
-            log.warn("La redacción de '{}' {}; se usan las notas tal cual.", plantilla.nombre(), infiel);
-            return new Observaciones(completas, false,
-                    "; las observaciones van tal como las escribió el supervisor (la redacción de la IA " + infiel
-                            + ")",
-                    "la redacción del Copiloto " + infiel);
+    /**
+     * Las notas tal cual, con la causa verdadera de que no haya redacción.
+     * Hasta el 02-10-2026 todo fallo de la IA se decía «el Copiloto no
+     * respondió a tiempo»: con Ollama apagado o el modelo sin descargar falla
+     * en milisegundos, y el supervisor reintentaba creyendo que el equipo
+     * estaba lento en vez de avisar a sistemas.
+     */
+    private static Observaciones sinRedaccion(String completas, RuntimeException e) {
+        IaNoDisponibleException.Causa causa = e instanceof IaNoDisponibleException ia ? ia.getCausa() : null;
+        String registro;
+        String motivo;
+        if (e instanceof IaOcupadaException) {
+            registro = "la IA estaba atendiendo otra solicitud";
+            motivo = "el Copiloto estaba atendiendo otra solicitud";
+        } else if (e instanceof DemasiadasSolicitudesException) {
+            registro = "se alcanzó el tope de consultas a la IA por minuto";
+            motivo = "hizo demasiadas consultas al Copiloto en el último minuto";
+        } else if (causa == IaNoDisponibleException.Causa.TIEMPO_AGOTADO) {
+            registro = "la IA no respondió a tiempo";
+            motivo = "el Copiloto no respondió a tiempo";
+        } else if (causa == IaNoDisponibleException.Causa.RESPUESTA_CORTADA) {
+            registro = "la redacción de la IA quedó cortada";
+            motivo = "la redacción del Copiloto quedó cortada";
+        } else {
+            registro = "la IA no estaba disponible";
+            motivo = "el Copiloto no está disponible en este momento";
         }
-        return new Observaciones(corregido, true,
-                "; las observaciones del supervisor se redactaron con el copiloto");
+        return new Observaciones(completas, false,
+                "; las observaciones van tal como las escribió el supervisor (" + registro + ")", motivo);
     }
 
     /**
@@ -462,9 +542,9 @@ public class GeneracionDocumentoService {
      * que no se previó, se toma la redacción por no fiel y van las notas tal
      * cual, en vez de dejar al supervisor sin su documento.
      */
-    private static String motivoDeInfidelidad(String corregido, String recortadas, List<String> datos) {
+    private static String motivoDeInfidelidad(String corregido, String notas, List<String> datos) {
         try {
-            return FidelidadDeRedaccion.motivoDeInfidelidad(corregido, recortadas, datos);
+            return FidelidadDeRedaccion.motivoDeInfidelidad(corregido, notas, datos);
         } catch (RuntimeException e) {
             log.warn("La comprobación de fidelidad falló; se usan las notas tal cual", e);
             return "no se pudo comprobar";

@@ -141,6 +141,18 @@ public class OllamaClient {
     }
 
     /**
+     * Genera texto sin compartir el modelo con otra inferencia: espera hasta
+     * {@code espera} a que no haya ninguna en curso y no deja empezar otra
+     * mientras dura (ver {@link LimitadorDeUsoIa#ejecutarEnExclusiva}). Va a
+     * la temperatura por defecto, con el tope de tokens que da quien llama:
+     * el que le corresponde a lo que pide, no el general.
+     */
+    public String generarSinCompetir(String prompt, int maxTokens, Duration espera) {
+        Opciones opciones = new Opciones(porDefecto.temperatura(), maxTokens);
+        return limitador.ejecutarEnExclusiva("ollama:redactar", espera, () -> llamar(prompt, false, opciones));
+    }
+
+    /**
      * Opciones de generación de una llamada.
      *
      * @param temperatura cuánto varía el modelo al escoger cada palabra (0: siempre la más probable)

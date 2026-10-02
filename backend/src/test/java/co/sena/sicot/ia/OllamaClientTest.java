@@ -173,6 +173,17 @@ class OllamaClientTest {
     }
 
     @Test
+    void laRedaccionSinCompetirVaALaTemperaturaPorDefectoConSuPropioTope() throws Exception {
+        new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100), 0.2, 1024, 0)
+                .generarSinCompetir("redacta las observaciones", 240, java.time.Duration.ofSeconds(1));
+
+        JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
+        assertThat(peticion.get("format").isNull()).isTrue();
+        assertThat(peticion.get("options").get("temperature").asDouble()).isEqualTo(0.2);
+        assertThat(peticion.get("options").get("num_predict").asInt()).isEqualTo(240);
+    }
+
+    @Test
     void unaRespuestaCortadaPorElTopeDeTokensEsUnFalloConSuCausa() {
         cuerpoRespuesta = "{\"response\":\"Se recibieron 40 sillas. Se recibieron 40 sillas. Se recib\","
                 + "\"done_reason\":\"length\"}";
