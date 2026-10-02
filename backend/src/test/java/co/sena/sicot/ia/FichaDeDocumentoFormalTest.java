@@ -32,9 +32,18 @@ class FichaDeDocumentoFormalTest {
     static final String SUGERENCIA_F030 =
             "¿Qué es el GCCON-F-030? ¿Es lo mismo que el acta de liquidación? ¿En qué sub-paso se genera?";
 
-    private static final String COMO_SE_HACE = "Cómo se hace en SICOT: al llegar al sub-paso, pulse «Firmar "
-            + "documento». SICOT arma el documento con los datos exactos del contrato y usted lo revisa antes de "
-            + "firmarlo; lo que SICOT no sabe (facturas, pólizas, pagos) queda marcado como «dato pendiente».";
+    /**
+     * El flujo de la interfaz (contrato del chat, §2). Hasta el 2-10-2026 la
+     * ficha decía que lo que SICOT no sabe «queda como dato pendiente» —la
+     * interfaz se lo pide antes— y que él «lo revisa antes de firmarlo» sin
+     * decir dónde.
+     */
+    private static final String COMO_SE_HACE = "Cómo se hace en SICOT: en el sub-paso del documento, pulse «Firmar "
+            + "documento». SICOT le pide los datos que el contrato no tiene (y sus notas, si el formato lleva "
+            + "observaciones), arma el borrador y se lo muestra en «Revisar antes de firmar»; ahí puede abrirlo con "
+            + "«Ver borrador completo (PDF)» y, si el Copiloto redactó sus notas, ver qué cambió frente a lo que usted "
+            + "escribió. Lo que deje sin diligenciar sale marcado como «dato pendiente». La firma solo se aplica "
+            + "cuando usted pulsa «Firmar»; «Cancelar» cierra sin firmar y el borrador queda pendiente.";
     private static final String FIRMA = "Quién firma: usted, como supervisor, con la firma electrónica que el "
             + "Administrador le asignó a su cuenta.";
 
@@ -233,5 +242,53 @@ class FichaDeDocumentoFormalTest {
         }
         assertThat(FichaDeDocumentoFormal.delSubpaso("5.3").orElseThrow().codigo()).isNull();
         assertThat(FichaDeDocumentoFormal.delSubpaso("3.2")).isEmpty();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2-10-2026
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * «Qué es» casaba con «qué escribo» y «qué está» (borde de palabra solo a
+     * la izquierda), y la ficha genérica contestaba preguntas abiertas sobre la
+     * redacción, que es donde el modelo sí aporta.
+     */
+    @Test
+    @DisplayName("«qué escribo…» y «qué está mal…» no se toman por «qué es»")
+    void queEscriboNoEsQueEs() {
+        assertThat(ficha.puedeResponder("¿Qué escribo en las observaciones del Informe Final?")).isFalse();
+        assertThat(ficha.puedeResponder("¿Qué está mal en el acta de inicio que firmé?")).isFalse();
+        assertThat(ficha.puedeResponder("¿Qué es el informe final?")).isTrue();
+    }
+
+    /**
+     * «¿En qué paso se firma el informe?» no reconocía ningún documento y caía
+     * en la guía, que contestaba el paso en curso: otra pregunta. Ahora da las
+     * fichas de los dos candidatos, sin elegir uno.
+     */
+    @Test
+    @DisplayName("«el informe» o «el acta» a secas dan las fichas de los dos candidatos")
+    void elNombreAbreviadoDaLosDosCandidatos() {
+        String informe = ficha.responder("¿En qué paso se firma el informe?", contratoEnInspeccion()).orElseThrow();
+        assertThat(informe).startsWith("Informe de Supervisión (GCCON-F-031).")
+                .contains("\n\nInforme Final de Supervisión (GCCON-F-030).");
+
+        String acta = ficha.responder("en que paso se firma el acta", List.of()).orElseThrow();
+        assertThat(acta).startsWith("Acta de Inicio (GCCON-F-018).")
+                .contains("\n\nActa de Recibo a Satisfacción de Bienes (GIL-F-010).");
+
+        // «El acta» a secas no es una pregunta: sin frase de ficha no contesta.
+        assertThat(ficha.puedeResponder("el acta")).isFalse();
+        // «Acta de liquidación» no es un documento de SICOT.
+        assertThat(ficha.puedeResponder("¿Qué es el acta de liquidación?")).isFalse();
+    }
+
+    @Test
+    @DisplayName("la segunda mitad de una pregunta doble la cubre si sigue hablando del documento")
+    void cubreLaSegundaMitadSiSigueHablandoDelDocumento() {
+        assertThat(ficha.cubre("quién lo firma")).isTrue();
+        assertThat(ficha.cubre("En qué sub-paso se genera")).isTrue();
+        assertThat(ficha.cubre("dónde consigo la póliza")).isFalse();
+        assertThat(ficha.cubre("cuánto vale el contrato")).isFalse();
     }
 }
