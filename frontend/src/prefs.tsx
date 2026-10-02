@@ -38,8 +38,16 @@ export interface Prefs {
   // Copiloto / avatar
   avatarId: string
   avatarName: string
-  avatarMode: 'ghost' | 'follower' | 'guide'
+  avatarMode: ModoAvatar
 }
+
+/**
+ * Presencia del avatar fuera del panel del Copiloto. No hay modo «Guide»: el
+ * recorrido guiado se lanza con su propio botón en cualquier modo, así que
+ * elegirlo daba lo mismo que «Ghost».
+ */
+export const MODOS_AVATAR = ['ghost', 'follower'] as const
+export type ModoAvatar = (typeof MODOS_AVATAR)[number]
 
 /** Súbelo al cambiar la paleta base — invalida los colores ya guardados. */
 export const THEME_VERSION = 3
@@ -249,8 +257,8 @@ function cargarPrefs(): Prefs {
  * Sin este filtro, lo que se quitó de Configuración (sonido, posición y
  * duración de las alertas, parpadeo, tono del copiloto) seguía viajando en el
  * almacenamiento del equipo para siempre, porque cada cambio vuelve a guardar el
- * objeto entero. Y un avatar que ya no está en la galería la dejaba sin ninguno
- * marcado.
+ * objeto entero. Y un avatar o un modo que ya no se ofrecen dejaban la galería
+ * o el modo de presencia sin ninguno marcado.
  */
 function vigentes(guardado: Record<string, unknown>): Partial<Prefs> {
   const resultado: Record<string, unknown> = {}
@@ -258,6 +266,7 @@ function vigentes(guardado: Record<string, unknown>): Partial<Prefs> {
     if (guardado[clave] !== undefined) resultado[clave] = guardado[clave]
   }
   if (!AVATARS.some((a) => a.id === resultado.avatarId)) delete resultado.avatarId
+  if (!MODOS_AVATAR.some((m) => m === resultado.avatarMode)) delete resultado.avatarMode
   return resultado as Partial<Prefs>
 }
 

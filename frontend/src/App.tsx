@@ -112,6 +112,10 @@ function AppInner() {
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
   const [errorContrato, setErrorContrato] = useState(false)
+  // Cuántas veces se pidió abrir el Copiloto desde el avatar flotante. Es un
+  // contador y no un booleano para que cada clic vuelva a abrirlo aunque el
+  // supervisor lo haya plegado después del anterior.
+  const [pedidosCopiloto, setPedidosCopiloto] = useState(0)
 
   const refreshRegistros = async () => {
     if (!contrato) return
@@ -201,6 +205,17 @@ function AppInner() {
     [location.pathname],
   )
 
+  // El avatar flotante abre el Copiloto del contrato. Solo hay uno que abrir en
+  // el panel del supervisor con contrato asignado; en Gestión, Administración o
+  // sin contrato el avatar flotante no se ofrece.
+  const abrirCopiloto =
+    session?.rol === 'SUPERVISOR' && contrato
+      ? () => {
+          setPedidosCopiloto((n) => n + 1)
+          navigate('/supervisor/contrato')
+        }
+      : undefined
+
   // Envoltura que protege una ruta.
   //
   // Dos comprobaciones, y ninguna es un control de seguridad: la autoridad sobre
@@ -249,6 +264,7 @@ function AppInner() {
                 onStartTour={() => setTourActive(true)}
                 registros={registros}
                 onRefreshRegistros={refreshRegistros}
+                pedidosCopiloto={pedidosCopiloto}
               />
             ))}
           />
@@ -286,7 +302,7 @@ function AppInner() {
           tour={tour}
           tourActive={tourActive}
           onTourEnd={() => setTourActive(false)}
-          onOpenChat={() => setSettingsOpen(false)}
+          onOpenChat={abrirCopiloto}
         />
       )}
     </>

@@ -21,8 +21,9 @@ function cargar(guardado: Record<string, unknown>) {
 }
 
 // Configuración ofrecía sonido, posición y duración de avisos, parpadeo, efectos
-// hover, tono del copiloto y un avatar personalizado. Nada de eso hacía nada y
-// se quitó el 02-10-2026; quien ya lo tenía guardado no debe arrastrarlo.
+// hover, tono del copiloto, un avatar personalizado y el modo «Guide». Nada de
+// eso hacía nada y se quitó el 02-10-2026; quien ya lo tenía guardado no debe
+// arrastrarlo.
 describe('preferencias guardadas', () => {
   it('descarta las preferencias que ya no existen al cargarlas', () => {
     const { enPantalla, guardado } = cargar({
@@ -41,17 +42,19 @@ describe('preferencias guardadas', () => {
     }
   })
 
-  it('conserva lo vigente y cae al avatar por defecto si el guardado ya no se ofrece', () => {
+  it('conserva lo vigente y cae a los valores por defecto si el avatar o el modo ya no se ofrecen', () => {
     const { enPantalla } = cargar({
       ...DEFAULT_PREFS,
       themeVersion: THEME_VERSION,
       fontSize: 17,
       avatarName: 'Mi asistente',
       avatarId: 'custom',
+      avatarMode: 'guide',
     })
 
     expect(enPantalla.fontSize).toBe(17)
     expect(enPantalla.avatarName).toBe('Mi asistente')
     expect(enPantalla.avatarId).toBe(DEFAULT_PREFS.avatarId)
+    expect(enPantalla.avatarMode).toBe(DEFAULT_PREFS.avatarMode)
   })
 })

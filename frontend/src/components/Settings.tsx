@@ -261,8 +261,11 @@ export default function Settings({
             {(
               [
                 ['ghost', 'Ghost', 'Oculto. Solo aparece en el panel Copiloto o durante un tutorial.'],
-                ['follower', 'Follower', 'Avatar flotante en la esquina inferior derecha; clic para abrir el chat.'],
-                ['guide', 'Guide', 'Tutorial asistido: el avatar se posiciona junto a cada elemento y lo explica.'],
+                [
+                  'follower',
+                  'Follower',
+                  'En el panel del supervisor, un avatar flotante en la esquina inferior derecha; al pulsarlo abre el Copiloto del contrato.',
+                ],
               ] as const
             ).map(([m, label, desc]) => (
               <button

@@ -278,6 +278,7 @@ export default function SupervisorPanel({
   onStartTour,
   registros,
   onRefreshRegistros,
+  pedidosCopiloto = 0,
 }: {
   vista: Tab
   onCambiarVista: (t: Tab) => void
@@ -292,6 +293,8 @@ export default function SupervisorPanel({
   onStartTour: () => void
   registros: Registro[]
   onRefreshRegistros: () => Promise<void>
+  /** Sube cada vez que el avatar flotante pide abrir el Copiloto. */
+  pedidosCopiloto?: number
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -413,6 +416,11 @@ export default function SupervisorPanel({
   // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
   // vuelve a abrirse desde el botón de la cabecera.
   const [copilotoAbierto, setCopilotoAbierto] = useState(true)
+  // El avatar flotante lo abre aunque esté plegado: App ya llevó a la vista
+  // Contrato, que es donde vive el panel.
+  useEffect(() => {
+    if (pedidosCopiloto > 0) setCopilotoAbierto(true)
+  }, [pedidosCopiloto])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
