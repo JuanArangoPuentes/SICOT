@@ -477,3 +477,30 @@ describe('SupervisorPanel — la revisión del paso es consultiva', () => {
     ])
   })
 })
+
+describe('SupervisorPanel — la pantalla mientras el Copiloto piensa', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'wakeLock')
+  })
+
+  /**
+   * Si la pantalla se apagaba sola durante una pregunta de minutos, el
+   * teléfono cortaba la conexión aunque el supervisor no hubiera salido.
+   */
+  it('la mantiene encendida mientras espera la respuesta, y la suelta al llegar', async () => {
+    const release = vi.fn(async () => {})
+    const request = vi.fn(async () => ({ released: false, release }))
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } })
+    const respuesta = respuestaPendiente()
+    vi.mocked(preguntarCopiloto).mockReturnValueOnce(respuesta.promesa)
+    await montar()
+    expect(request).not.toHaveBeenCalled()
+
+    await escribirAlCopiloto('¿Qué sigue en este paso?')
+    expect(request).toHaveBeenCalledExactlyOnceWith('screen')
+    expect(release).not.toHaveBeenCalled()
+
+    await act(async () => respuesta.resolver({ respuesta: 'Siga con la revisión de los estudios.', fuente: 'MODELO' }))
+    expect(release).toHaveBeenCalledOnce()
+  })
+})

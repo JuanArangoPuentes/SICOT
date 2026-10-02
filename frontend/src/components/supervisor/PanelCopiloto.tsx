@@ -268,7 +268,11 @@ export default function PanelCopiloto({
                 color: 'var(--text-muted)',
               }}
             >
-              Pensando… puede tardar uno o varios minutos según la carga del servidor. No cierre esta ventana.
+              {/* En un teléfono, apagarse la pantalla o cambiar de aplicación
+                  corta la petición: SICOT pide la pantalla encendida, pero no
+                  todos los WebView lo permiten. */}
+              Pensando… puede tardar uno o varios minutos según la carga del servidor. Mantenga SICOT abierto, con la
+              pantalla encendida, hasta que responda.
             </div>
           </div>
         )}

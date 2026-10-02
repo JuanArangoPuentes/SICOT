@@ -28,6 +28,10 @@
 // los dos cupos del limitador de IA, con la inferencia huérfana del primer
 // intento: la respuesta tardaba casi el doble o acababa en un 429 (auditoría
 // del 02-10-2026).
+//
+// Un teléfono pasa también a segundo plano cuando la pantalla se apaga sola,
+// sin que el supervisor salga de SICOT: {@link mantenerPantallaEncendida} la
+// pide encendida mientras dura una petición larga de IA.
 
 import { ApiError } from './api/client'
 
@@ -44,6 +48,55 @@ import { ApiError } from './api/client'
 export function idDeSolicitud(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('')
+}
+
+/**
+ * Pide que la pantalla no se apague sola mientras dura una petición larga de
+ * IA, y devuelve con qué soltar ese pedido.
+ *
+ * Con el apagado automático habitual de un teléfono (30 s o 1 min), la página
+ * pasa a segundo plano a mitad de una pregunta que dura minutos, y Android le
+ * corta la conexión igual que si el supervisor hubiera cambiado de aplicación;
+ * generar un documento, que no se repite, fallaba siempre si nadie tocaba la
+ * pantalla. Se usa la Screen Wake Lock API: el sistema suelta el pedido cada
+ * vez que la página se oculta, así que al volver se pide otro mientras la
+ * petición siga.
+ *
+ * Si el navegador o el WebView no la ofrecen, o el sistema la niega (ahorro de
+ * batería), no pasa nada: la petición sigue igual y la pantalla se apaga como
+ * antes. Por eso «Pensando…» sigue pidiendo mantener la pantalla encendida.
+ */
+export function mantenerPantallaEncendida(): () => void {
+  const wakeLock = 'wakeLock' in navigator ? navigator.wakeLock : undefined
+  if (!wakeLock) return () => {}
+  let activo = true
+  let pidiendo = false
+  let pedido: WakeLockSentinel | null = null
+  const pedir = async () => {
+    if (!activo || pidiendo || document.visibilityState !== 'visible' || pedido?.released === false) return
+    pidiendo = true
+    try {
+      const nuevo = await wakeLock.request('screen')
+      // Si se soltó mientras el sistema lo concedía, se devuelve enseguida.
+      if (activo) pedido = nuevo
+      else await nuevo.release()
+    } catch {
+      // Negado o no disponible: la petición de IA no depende de esto.
+    } finally {
+      pidiendo = false
+    }
+  }
+  const alVolver = () => {
+    if (document.visibilityState === 'visible') void pedir()
+  }
+  document.addEventListener('visibilitychange', alVolver)
+  void pedir()
+  return () => {
+    activo = false
+    document.removeEventListener('visibilitychange', alVolver)
+    void pedido?.release().catch(() => {})
+    pedido = null
+  }
 }
 
 /** Vigila si la página se oculta mientras dura una operación. */

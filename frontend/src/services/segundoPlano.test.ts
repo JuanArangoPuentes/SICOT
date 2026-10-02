@@ -4,6 +4,7 @@ import {
   CortadaPorSegundoPlano,
   esperarPrimerPlano,
   idDeSolicitud,
+  mantenerPantallaEncendida,
   repetirAlVolverSiSeCorta,
   vigilarSegundoPlano,
 } from './segundoPlano'
@@ -13,7 +14,36 @@ function ponerVisibilidad(estado: 'visible' | 'hidden') {
   document.dispatchEvent(new Event('visibilitychange'))
 }
 
-afterEach(() => ponerVisibilidad('visible'))
+afterEach(() => {
+  ponerVisibilidad('visible')
+  quitarWakeLock()
+})
+
+/**
+ * Una Screen Wake Lock API de mentira: cuenta los pedidos y deja soltarlos
+ * como lo haría el sistema al ocultarse la página.
+ */
+function ponerWakeLock(request = vi.fn(async () => pedidoFalso())) {
+  Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } })
+  return request
+}
+
+function quitarWakeLock() {
+  Reflect.deleteProperty(navigator, 'wakeLock')
+}
+
+function pedidoFalso() {
+  const pedido = {
+    released: false,
+    release: vi.fn(async () => {
+      pedido.released = true
+    }),
+  }
+  return pedido
+}
+
+/** Deja correr las promesas pendientes (el pedido es asíncrono). */
+const pendientes = () => new Promise((r) => setTimeout(r, 0))
 
 describe('vigilarSegundoPlano', () => {
   it('recuerda que la página se ocultó aunque ya haya vuelto', () => {
@@ -138,5 +168,69 @@ describe('idDeSolicitud', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+describe('mantenerPantallaEncendida', () => {
+  /**
+   * Con el apagado automático de la pantalla, el teléfono pasaba SICOT a
+   * segundo plano a mitad de una pregunta de minutos y cortaba la conexión,
+   * aunque el supervisor no hubiera salido de la aplicación.
+   */
+  it('pide la pantalla encendida y la suelta al terminar', async () => {
+    const request = ponerWakeLock()
+
+    const soltar = mantenerPantallaEncendida()
+    await pendientes()
+    expect(request).toHaveBeenCalledExactlyOnceWith('screen')
+
+    const pedido = await request.mock.results[0].value
+    soltar()
+    expect(pedido.release).toHaveBeenCalledOnce()
+  })
+
+  /** El sistema suelta el pedido al ocultarse la página; mientras la petición siga, se vuelve a pedir. */
+  it('la vuelve a pedir al volver a SICOT', async () => {
+    const request = ponerWakeLock()
+    const soltar = mantenerPantallaEncendida()
+    await pendientes()
+    const primero = await request.mock.results[0].value
+
+    ponerVisibilidad('hidden')
+    primero.released = true
+    await pendientes()
+    expect(request).toHaveBeenCalledOnce()
+
+    ponerVisibilidad('visible')
+    await pendientes()
+    expect(request).toHaveBeenCalledTimes(2)
+
+    soltar()
+    ponerVisibilidad('hidden')
+    ponerVisibilidad('visible')
+    await pendientes()
+    expect(request).toHaveBeenCalledTimes(2)
+  })
+
+  it('si se suelta antes de que el sistema lo conceda, lo devuelve enseguida', async () => {
+    const request = ponerWakeLock()
+
+    const soltar = mantenerPantallaEncendida()
+    soltar()
+    await pendientes()
+
+    const pedido = await request.mock.results[0].value
+    expect(pedido.release).toHaveBeenCalledOnce()
+  })
+
+  /** Ni el WebView sin la API ni un pedido negado (ahorro de batería) pueden tumbar la petición de IA. */
+  it('no falla si no está la API o el sistema la niega', async () => {
+    expect(() => mantenerPantallaEncendida()()).not.toThrow()
+
+    const request = ponerWakeLock(vi.fn(async () => Promise.reject(new DOMException('Sin batería', 'NotAllowedError'))))
+    const soltar = mantenerPantallaEncendida()
+    await pendientes()
+    expect(request).toHaveBeenCalledOnce()
+    expect(() => soltar()).not.toThrow()
   })
 })

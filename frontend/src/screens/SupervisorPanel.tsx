@@ -83,6 +83,7 @@ import {
   CortadaPorSegundoPlano,
   esperarPrimerPlano,
   idDeSolicitud,
+  mantenerPantallaEncendida,
   repetirAlVolverSiSeCorta,
   vigilarSegundoPlano,
 } from '@/services/segundoPlano'
@@ -432,6 +433,15 @@ export default function SupervisorPanel({
   // pintar «sin esperar la revisión» en el botón de confirmar.
   const revisionEnCurso = useRef<string | null>(null)
   const [revisando, setRevisando] = useState(false)
+  // Mientras SICOT espera a la IA —una pregunta o revisión del Copiloto, o
+  // generar y firmar un documento: el sub-paso ocupado sin formulario ni
+  // redacción abiertos—, la pantalla no se apaga sola. Si se apagaba, el
+  // teléfono pasaba SICOT a segundo plano y cortaba la petición aunque el
+  // supervisor no hubiera salido de la aplicación.
+  const esperandoALaIa = pensando || (procesandoFirma !== null && !datosDocumento && !revisionRedaccion)
+  useEffect(() => {
+    if (esperandoALaIa) return mantenerPantallaEncendida()
+  }, [esperandoALaIa])
   // El copiloto ocupa una columna alta y ancha a la derecha. Se puede plegar
   // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
   // vuelve a abrirse desde el botón de la cabecera.
