@@ -31,8 +31,9 @@ import java.util.regex.Pattern;
  *   <li><b>Una redacción que pierde una cifra, cambia una palabra, dice lo
  *       contrario, agrega afirmaciones de cumplimiento o mezcla otra escritura
  *       también se descarta</b> (desde el 29-09-2026, cuando «5 camas» salió
- *       como «las cunas»), y también la que cambia lo que cuenta una cifra o
- *       agrega un nombre (desde el 02-10-2026).</li>
+ *       como «las cunas»), y también la que cambia lo que cuenta una cifra,
+ *       agrega o pierde un nombre, cambia un reemplazo por una reparación o
+ *       pierde el «bien» o el «mal» de las notas (desde el 02-10-2026).</li>
  * </ol>
  */
 public final class FidelidadDeRedaccion {
@@ -224,12 +225,18 @@ public final class FidelidadDeRedaccion {
                         ? "cambiaba lo que cuentan las cifras de sus notas"
                 : !sinPalabrasCambiadas(corregido, recortadas, datos)
                         ? "cambiaba palabras de sus notas por otras parecidas"
+                : !sinReparacionPorReemplazo(corregido, recortadas)
+                        ? "cambiaba un reemplazo por una reparación, o al revés"
+                : !sinValoracionPerdida(corregido, recortadas)
+                        ? "perdía lo que sus notas califican de bien o de mal"
                 : !sinSentidoInvertido(corregido, recortadas)
                         ? "decía lo contrario de sus notas"
                 : !sinAfirmacionesAgregadas(corregido, recortadas)
                         ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
                 : !sinNombresAgregados(corregido, recortadas, datos)
                         ? "agregaba nombres que no estaban en sus notas"
+                : !sinNombresPerdidos(corregido, recortadas, datos)
+                        ? "perdía nombres de sus notas"
                 : null;
     }
 
@@ -284,6 +291,63 @@ public final class FidelidadDeRedaccion {
             return false;
         }
         return true;
+    }
+
+    /**
+     * Un nombre propio en las notas: palabras seguidas con mayúscula inicial y
+     * el resto en minúscula («Jorge Restrepo»). Las siglas y las notas escritas
+     * todo en mayúsculas no cuentan: ahí no se distingue un nombre.
+     */
+    private static final Pattern NOMBRE_EN_LAS_NOTAS = Pattern.compile(
+            "(?<![\\p{L}\\d])\\p{Lu}\\p{Ll}{2,}(?:[ \\t]+\\p{Lu}\\p{Ll}{2,})*(?![\\p{L}\\d])");
+
+    /**
+     * ¿Conserva la redacción a las personas y entidades que las notas
+     * nombran? En la medición del 02-10-2026, «recibí con el almacenista Jorge
+     * Restrepo 25 computadores…» salió tres de cuatro veces «Se recibieron 25
+     * computadores…»: la forma impersonal se comía al almacenista, ninguna
+     * comprobación lo veía (no hay cifras ni palabras parecidas en juego) y el
+     * Acta de Recibo perdía quién recibió. Un nombre es una racha de palabras
+     * con mayúscula que sigue a una minúscula o a una coma, donde en español
+     * solo va mayúscula si es un nombre; al principio de una frase, de un
+     * renglón o tras una viñeta la primera palabra no cuenta. Basta con que la
+     * redacción conserve una de sus palabras («el señor Restrepo»). No se
+     * exigen los datos del contrato, que el prompt pide no repetir, ni
+     * {@link #NOMBRES_DE_LA_CASA}, los meses o los días.
+     */
+    public static boolean sinNombresPerdidos(String redactado, String notas, List<String> datosConocidos) {
+        if (redactado == null || notas == null) {
+            return true;
+        }
+        Set<String> sinExigir = new HashSet<>(NOMBRES_DE_LA_CASA);
+        for (String dato : datosConocidos) {
+            sinExigir.addAll(fichas(dato));
+        }
+        sinExigir.addAll(java.util.Arrays.asList(MESES).subList(1, MESES.length));
+        sinExigir.addAll(DIAS_DE_LA_SEMANA);
+        List<String> deLaRedaccion = fichas(redactado);
+        Matcher m = NOMBRE_EN_LAS_NOTAS.matcher(notas);
+        while (m.find()) {
+            List<String> palabras = fichas(m.group());
+            if (!sigueAMinusculaOComa(notas, m.start())) {
+                palabras = palabras.subList(1, palabras.size());
+            }
+            List<String> exigidas = palabras.stream().filter(p -> !sinExigir.contains(p)).toList();
+            if (!exigidas.isEmpty() && exigidas.stream()
+                    .noneMatch(p -> deLaRedaccion.stream().anyMatch(w -> mismaPalabra(w, p)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** ¿Va la posición detrás de una palabra en minúscula o de una coma, con solo espacios en medio? */
+    private static boolean sigueAMinusculaOComa(String texto, int i) {
+        int j = i - 1;
+        while (j >= 0 && (texto.charAt(j) == ' ' || texto.charAt(j) == '\t')) {
+            j--;
+        }
+        return j >= 0 && (texto.charAt(j) == ',' || Character.isLowerCase(texto.charAt(j)));
     }
 
     /** ¿Va la posición al principio del texto, de un renglón o de una frase (comillas y signos de apertura aparte)? */
@@ -1284,6 +1348,77 @@ public final class FidelidadDeRedaccion {
                 .replace("ce", "se").replace("ci", "si").replace("ge", "je").replace("gi", "ji")
                 .replace('z', 's').replace('v', 'b').replace("nb", "mb").replace("np", "mp");
         return p.replace('c', 'k');
+    }
+
+    // ── Reparar o reemplazar ────────────────────────────────────────────────
+
+    /** Raíces de reemplazar lo recibido: «cambiarlas», «reemplazo», «sustituir», «reponer». */
+    private static final List<String> REEMPLAZAR = List.of("cambi", "reemplaz", "sustitu", "repon", "repus");
+
+    /** Raíces de repararlo: «repararlas», «reparación», «reparó», «arreglar» («reparto» no). */
+    private static final List<String> REPARAR = List.of("repara", "reparo", "arregl");
+
+    /**
+     * ¿Cambia la redacción un reemplazo por una reparación, o al revés? En la
+     * medición del 02-10-2026, «2 tenían el tapizado rasgado y el contratista
+     * se comprometió a cambiarlas» salió cuatro de cinco veces «se comprometió
+     * a repararlas»: el Informe de Supervisión le daba por bueno al
+     * contratista un arreglo cuando se había comprometido a reponer, y ninguna
+     * comprobación lo veía (otra palabra, de otra longitud, sin cifras). Solo
+     * se descarta cuando las notas dicen lo otro y nunca lo de la redacción:
+     * «se comprometió a solucionarlo» redactado «a repararlo» no es un cambio.
+     */
+    public static boolean sinReparacionPorReemplazo(String redactado, String notas) {
+        Set<String> deNotas = palabrasLargas(notas);
+        Set<String> deLaRedaccion = palabrasLargas(redactado);
+        return !(dice(deLaRedaccion, REPARAR) && !dice(deNotas, REPARAR) && dice(deNotas, REEMPLAZAR))
+                && !(dice(deLaRedaccion, REEMPLAZAR) && !dice(deNotas, REEMPLAZAR) && dice(deNotas, REPARAR));
+    }
+
+    private static boolean dice(Set<String> palabras, List<String> raices) {
+        return palabras.stream().anyMatch(w -> raices.stream().anyMatch(w::startsWith));
+    }
+
+    // ── Valoración perdida ──────────────────────────────────────────────────
+
+    /**
+     * Con qué otras palabras puede decir la redacción el «bien» de las notas.
+     * Raíces que no confunden: «bienes», «debido a» o «conforme a» no dicen
+     * que algo esté bien.
+     */
+    private static final List<String> BIEN_CON_OTRA_PALABRA = List.of("buen", "correct", "adecuad", "satisfac",
+            "debidament", "perfect", "optim", "excelent", "normal");
+
+    /** Con qué otras palabras puede decir la redacción el «mal» de las notas («malla» no). */
+    private static final List<String> MAL = List.of("mal", "mala", "malas", "malo", "malos");
+    private static final List<String> MAL_CON_OTRA_PALABRA = List.of("incorrect", "inadecuad", "defectu", "deficien",
+            "error", "erron");
+
+    /**
+     * ¿Conserva la redacción el «bien» o el «mal» con que las notas califican
+     * algo? En la medición del 02-10-2026, «revisé la factura FE-2231 …, está
+     * bien liquidada pero no trae el soporte de pago de parafiscales» salió
+     * cuatro de cinco veces «no se presentó el soporte de pago … de la factura
+     * FE-2231 … liquidada en septiembre»: el Informe de Supervisión perdía que
+     * la liquidación se revisó y estaba bien, y ninguna comprobación lo veía
+     * (no se pierde ninguna cifra ni cambia ninguna palabra parecida). Basta
+     * con decirlo con otra palabra («correctamente liquidada», «en buen
+     * estado», «todo bien» → «todo normal»); «si bien» y «más bien» no
+     * califican nada.
+     */
+    public static boolean sinValoracionPerdida(String redactado, String notas) {
+        List<String> deNotas = fichas(notas);
+        boolean bien = false;
+        boolean mal = false;
+        for (int i = 0; i < deNotas.size(); i++) {
+            String w = deNotas.get(i);
+            String antes = i > 0 ? deNotas.get(i - 1) : "";
+            bien |= w.equals("bien") && !antes.equals("si") && !antes.equals("mas");
+            mal |= MAL.contains(w);
+        }
+        Set<String> deLaRedaccion = new HashSet<>(fichas(redactado));
+        return (!bien || deLaRedaccion.contains("bien") || dice(deLaRedaccion, BIEN_CON_OTRA_PALABRA))
+                && (!mal || deLaRedaccion.stream().anyMatch(MAL::contains) || dice(deLaRedaccion, MAL_CON_OTRA_PALABRA));
     }
 
     // ── Sentido invertido ───────────────────────────────────────────────────

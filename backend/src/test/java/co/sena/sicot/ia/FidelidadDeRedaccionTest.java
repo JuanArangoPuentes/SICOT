@@ -502,6 +502,103 @@ class FidelidadDeRedaccionTest {
         }
     }
 
+    @Test
+    void unNombreDeLasNotasQueLaRedaccionPierdeSeDescarta() {
+        String[][] alteradas = {
+                {"recibí con el almacenista Jorge Restrepo 25 computadores", "Se recibieron 25 computadores."},
+                {"le entregué los bienes al coordinador, Juan Ospina", "Se entregaron los bienes al coordinador."},
+                {"Revisé las sillas con la interventoría de Consultores Andinos",
+                        "Se revisaron las sillas con la interventoría."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("perdía nombres de sus notas");
+        }
+    }
+
+    @Test
+    void conservarParteDelNombreOPerderMayusculasQueNoSonNombresNoEsPerderlo() {
+        String[][] fieles = {
+                // basta con una de las palabras del nombre
+                {"recibí con el almacenista Jorge Restrepo 25 computadores",
+                        "Se recibieron 25 computadores con el almacenista Restrepo."},
+                // la mayúscula de principio de frase, de renglón o tras una viñeta no es un nombre
+                {"Revisé las sillas. Llegaron completas", "Se revisaron las sillas, que llegaron completas."},
+                {"- Llegaron 5 sillas\n- Faltan 2 mesas", "Llegaron 5 sillas y faltan 2 mesas."},
+                // ni las notas en mayúsculas
+                {"NO LLEGARON LOS VIDEOBEAM", "No llegaron los videobeam."},
+                // ni los datos del contrato, que el prompt pide no repetir
+                {"el contratista Eventos Supernova entregó las sillas", "El contratista entregó las sillas."},
+                // ni los nombres de la casa, los meses o los días
+                {"lo debe resolver el Centro antes del Lunes", "Lo debe resolver antes del lunes."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinNombresPerdidos(par[1], par[0], DATOS)).as(par[1]).isTrue();
+        }
+    }
+
+    // ── Medición del 02-10-2026: reparar o reemplazar ───────────────────────
+
+    @Test
+    void cambiarUnReemplazoPorUnaReparacionOAlRevesSeDescarta() {
+        String[][] alteradas = {
+                {"2 sillas tenían el tapizado rasgado y el contratista se comprometió a cambiarlas",
+                        "Dos sillas tenían el tapizado rasgado; el contratista se comprometió a repararlas."},
+                {"el contratista va a reparar la mesa dañada", "El contratista va a reemplazar la mesa dañada."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("cambiaba un reemplazo por una reparación, o al revés");
+        }
+    }
+
+    @Test
+    void decirElMismoReemplazoOLaMismaReparacionConOtraPalabraPasa() {
+        String[][] fieles = {
+                {"el contratista se comprometió a cambiarlas",
+                        "El contratista se comprometió a efectuar los cambios necesarios."},
+                {"el contratista se comprometió a cambiarlas", "El contratista se comprometió a reemplazarlas."},
+                {"el contratista va a reparar la mesa", "El contratista va a arreglar la mesa."},
+                // sin decir cuál de las dos, no hay nada que cambiar
+                {"el contratista quedó de solucionarlo", "El contratista se comprometió a repararlo."},
+                {"se hizo el reparto de los bienes y se cambió la fecha", "Se realizó el reparto de los bienes."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinReparacionPorReemplazo(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    // ── Medición del 02-10-2026: el «bien» o el «mal» de las notas ──────────
+
+    @Test
+    void perderLoQueLasNotasCalificanDeBienODeMalSeDescarta() {
+        String[][] alteradas = {
+                {"la factura está bien liquidada pero no trae el soporte de pago",
+                        "La factura liquidada no trae el soporte de pago."},
+                {"las sillas llegaron mal empacadas", "Las sillas llegaron empacadas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("perdía lo que sus notas califican de bien o de mal");
+        }
+    }
+
+    @Test
+    void decirElBienOElMalConOtraPalabraPasa() {
+        String[][] fieles = {
+                {"la factura está bien liquidada", "La factura se encuentra correctamente liquidada."},
+                {"las sillas llegaron bien", "Las sillas llegaron en buen estado."},
+                {"las sillas llegaron mal empacadas", "Las sillas llegaron con un empaque defectuoso."},
+                // «si bien» no califica nada, y «los bienes» o «debido a» no dicen «bien»
+                {"si bien llegaron tarde, se recibieron", "Aunque llegaron tarde, se recibieron."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinValoracionPerdida(par[1], par[0])).as(par[1]).isTrue();
+        }
+        assertThat(FidelidadDeRedaccion.sinValoracionPerdida("Se recibieron los bienes debido a la visita.",
+                "los bienes llegaron bien")).isFalse();
+    }
+
     // ── Auditoría del 02-10-2026: la cosa que cuenta una cantidad ───────────
 
     @Test
@@ -572,6 +669,9 @@ class FidelidadDeRedaccionTest {
             + " en 40%. El contratista no ha entregado la planilla de seguridad social de septiembre; se le envió"
             + " requerimiento por correo el 08/10/2026. Faltan por instalar 3 de los 12 mesones del ambiente de"
             + " gastronomía.";
+    private static final String N3 = "recibí con el almacenista Jorge Restrepo 25 computadores portátiles y 25"
+            + " cargadores, todos encienden. Las cajas venían selladas. No llegaron los 2 videobeam que estaban en la"
+            + " orden.";
     private static final String N4 = "revisé la factura FE-2231 por $8.750.000 del mes de septiembre, está bien"
             + " liquidada pero no trae el soporte de pago de parafiscales. La devolví al contratista el lunes para que"
             + " la corrija.";
@@ -616,6 +716,11 @@ class FidelidadDeRedaccionTest {
                         + " panadería; se verificó que cinco funcionaron correctamente y uno no calentó. El técnico de"
                         + " la empresa se comprometió a retornar el viernes para resolver el problema. Además, aún no se"
                         + " ha proporcionado energía trifásica al bloque B, lo cual debe ser atendido por el Centro."},
+                // ahora, pidiendo no omitir ningún hecho: «los cambios necesarios» es el mismo compromiso
+                {N1, "Se recibieron en el almacén 40 sillas y 5 camas el 12 de octubre de 2026 a las 9:30 a. m. Se"
+                        + " revisaron todas las sillas, encontrándose que dos presentaban rasgaduras en el tapizado; el"
+                        + " contratista se comprometió a efectuar los cambios necesarios antes del 20 de octubre. No se"
+                        + " realizó la revisión de las camas debido a la falta de personal de almacén."},
         };
         for (String[] par : fieles) {
             assertThat(fielTrasDepurar(par[1], par[0])).as(par[1]).isTrue();
@@ -635,6 +740,20 @@ class FidelidadDeRedaccionTest {
                         + " contratista no ha presentado la planilla de seguridad social correspondiente al mes de"
                         + " septiembre; se le había enviado requerimiento mediante correo electrónico el día 8 de"
                         + " octubre de 2026. Se reportan faltantes de tres de los doce mesones del área gastronómica."},
+                // ahora: pierde que la factura se revisó y está bien liquidada
+                {N4, "no se presentó el soporte de pago de parafiscales correspondiente a la factura FE-2231 por"
+                        + " $8.750.000 liquidada en septiembre; la misma fue devuelta al contratista el lunes para su"
+                        + " corrección."},
+                // ahora: el contratista se comprometió a cambiarlas, no a repararlas
+                {N1, "Se recibieron 40 sillas y 5 camas en el almacén el 12 de octubre de 2026 a las 9:30 a. m. Se"
+                        + " verificaron todas las sillas, encontrándose que 2 presentaban daños en el tapizado; el"
+                        + " contratista se comprometió a repararlas antes del 20 de octubre. No se revisaron las camas"
+                        + " debido a la falta de personal de almacén."},
+                // ahora: la forma impersonal se come al almacenista que recibió con el supervisor
+                {N3, "Se recibieron 25 computadores portátiles y 25 cargadores, todos funcionales. Las cajas"
+                        + " estaban selladas. Falta el equipamiento de los 2 videobeam indicados en la orden."},
+                {N3, "Se recibieron 25 computadores portátiles y 25 cargadores, todos funcionales. Las cajas"
+                        + " estaban selladas. Falta el ingreso de 2 videobeam como consta en la orden original."},
                 // con una variante del prompt que se probó y no se dejó: inventa «las 40 cajas esperadas»
                 {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido las 40 cajas"
                         + " esperadas, el contratista indica que el envío restante llegará la próxima semana. La"

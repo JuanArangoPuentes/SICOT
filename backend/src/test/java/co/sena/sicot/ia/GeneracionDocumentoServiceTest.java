@@ -189,7 +189,7 @@ class GeneracionDocumentoServiceTest {
     @Test
     void conNotasLaIaLasRedactaYElTextoVaAlDocumento() {
         given(ollamaClient.generarSinCompetir(anyString(), anyInt(), any()))
-                .willReturn("Se verificó en bodega la entrega de las 26 unidades solicitadas.");
+                .willReturn("Se verificó en bodega la entrega de las 26 unidades solicitadas; todo bien.");
 
         servicio.generar(1L, null, "ACTA_RECIBO", "entregaron las 26 unidades en bodega, todo bien");
 
@@ -292,12 +292,12 @@ class GeneracionDocumentoServiceTest {
     @Test
     void laRedaccionAceptadaVuelveParaQueElSupervisorLaRevise() {
         given(ollamaClient.generarSinCompetir(anyString(), anyInt(), any()))
-                .willReturn("Se verificó en bodega la entrega de las 26 unidades solicitadas.");
+                .willReturn("Se verificó en bodega la entrega de las 26 unidades solicitadas; todo bien.");
 
         var r = servicio.generar(1L, null, "ACTA_RECIBO", "entregaron las 26 unidades en bodega, todo bien");
 
         assertThat(r.observacionesRedactadasConIa()).isTrue();
-        assertThat(r.observaciones()).isEqualTo("Se verificó en bodega la entrega de las 26 unidades solicitadas.");
+        assertThat(r.observaciones()).isEqualTo("Se verificó en bodega la entrega de las 26 unidades solicitadas; todo bien.");
         assertThat(r.motivoNotasTalCual()).isNull();
     }
 
