@@ -103,7 +103,12 @@ presentar tal como salía. Qué tablas pide cada formato está en
   escriba después queda como lo escribió, igual que en el real. Las órdenes de
   pago tienen que sumar el valor total pagado: si todas se leen como cifras y
   no suman, la generación se rechaza antes de llamar al modelo, porque el
-  documento se contradiría.
+  documento se contradiría. Por lo mismo, con el objeto cumplido «a
+  satisfacción» ninguna obligación general puede decir NO o PARCIALMENTE.
+  El 2.5 (pagos de seguridad social) tiene su propio dato: sin él queda
+  pendiente, y la frase del real («cumplió a cabalidad con el objeto y las
+  obligaciones contractuales») solo va si el supervisor declaró los pagos y
+  el objeto cumplido (auditoría del 02-10-2026).
 - **Amparos:** si el supervisor los da, van solo los de su póliza, con la
   fecha y el valor en el formato de la tabla («$ 4.000.000,00»). Si no, la
   lista fija del formato con «[dato pendiente: vigencia y valor]»; antes esas

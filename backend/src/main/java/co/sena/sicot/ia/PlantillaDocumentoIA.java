@@ -117,7 +117,7 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
             "multas", "actaNumero", "cantidadDevolutivos", "cantidadConsumo", "saldoPorEjecutar", "valorAObligar",
             "valorTotalPagado", "valorTotalEjecutado", "cumplimientoObjeto", "mantenimiento",
             "fechaCertificadoPagos", "terminacionAnticipada", "valorFinal", "fechaTerminacionFinal", "valorActual",
-            "fechaTerminacionActual", "prorroga", "adicion", "siga");
+            "fechaTerminacionActual", "prorroga", "adicion", "siga", "pagosSeguridadSocial");
 
     /**
      * Un dato opcional que pasa a ser necesario según otro: el valor actual
@@ -350,6 +350,12 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                             new CampoDelDocumento("cumplimientoObjeto",
                                     "¿El contratista cumplió el objeto a satisfacción? (SI / NO / PARCIALMENTE)", "SI"),
                             MULTAS,
+                            // El 2.5 es una certificación propia: antes se deducía
+                            // del cumplimiento del objeto y certificaba pagos que
+                            // nadie había declarado (auditoría del 02-10-2026).
+                            new CampoDelDocumento("pagosSeguridadSocial",
+                                    "¿El contratista cumplió con los pagos de seguridad social durante la ejecución?"
+                                            + " (SI / NO, o la certificación)", "SI"),
                             new CampoDelDocumento("mantenimiento",
                                     "¿Los bienes requieren revisiones o mantenimientos periódicos? (SI / NO)", "NO")),
                     true,

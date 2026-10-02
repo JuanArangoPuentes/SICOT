@@ -348,8 +348,8 @@ class RedactorDeDocumentosTest {
                 .doesNotContain("cumplió a cabalidad")
                 .doesNotContain("NO se presentaron multas");
 
-        String con = pdf("INFORME_FINAL", contrato(), null,
-                Map.of("cumplimientoObjeto", "sí", "multas", "No", "mantenimiento", "NO"));
+        String con = pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "sí", "multas", "No",
+                "mantenimiento", "NO", "pagosSeguridadSocial", "SI"));
         assertThat(con)
                 .contains("se dio cumplimiento a satisfacción de los bienes y/o servicios requeridos")
                 .contains("no se generaron incumplimientos")
@@ -363,6 +363,79 @@ class RedactorDeDocumentosTest {
                 .contains("se presentaron las siguientes multas y/o sanciones: Multa del 5 %")
                 .contains("los bienes recibidos requieren revisiones")
                 .doesNotContain("cumplió a cabalidad");
+    }
+
+    /**
+     * Auditoría del 02-10-2026: con solo responder SI al objeto, el 2.5
+     * certificaba los pagos de seguridad social y que el contratista «cumplió
+     * a cabalidad con el objeto y las obligaciones contractuales», aunque
+     * nadie hubiera declarado los pagos.
+     */
+    @Test
+    void losPagosDeSeguridadSocialSoloSeCertificanSiElSupervisorLosDeclara() {
+        String soloObjeto = pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "SI"));
+        assertThat(soloObjeto)
+                .contains("[dato pendiente: certificación de los pagos de seguridad social")
+                .doesNotContain("cumplió a cabalidad");
+
+        assertThat(pdf("INFORME_FINAL", contrato(), null,
+                Map.of("cumplimientoObjeto", "SI", "pagosSeguridadSocial", "Sí.")))
+                .contains("se evidenció que el contratista cumplió a cabalidad con el objeto y las obligaciones"
+                        + " contractuales.");
+        // Sin el objeto cumplido a satisfacción, la frase del informe real
+        // afirmaría lo que el supervisor no dijo: solo se certifican los pagos.
+        assertThat(pdf("INFORME_FINAL", contrato(), null,
+                Map.of("cumplimientoObjeto", "PARCIALMENTE", "pagosSeguridadSocial", "si")))
+                .contains("se evidenció que el contratista cumplió con los pagos de seguridad social.")
+                .doesNotContain("cumplió a cabalidad");
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("pagosSeguridadSocial", "NO")))
+                .contains("se evidenció que el contratista no cumplió con los pagos de seguridad social.");
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "SI",
+                "pagosSeguridadSocial", "Se verificaron las planillas de los cuatro meses de ejecución.")))
+                .contains("Se verificaron las planillas de los cuatro meses de ejecución.")
+                .doesNotContain("cumplió a cabalidad");
+    }
+
+    /** «Sin cumplir» empezaba por «SI» y el informe certificaba el cumplimiento a satisfacción. */
+    @Test
+    void laRespuestaSobreElObjetoSeLeeComoPalabraCompleta() {
+        assertThat(RedactorDeDocumentos.respuesta("Sí, a satisfacción")).isEqualTo("SI");
+        assertThat(RedactorDeDocumentos.respuesta("NO CUMPLIÓ")).isEqualTo("NO");
+        assertThat(RedactorDeDocumentos.respuesta("Parcial")).isEqualTo("PARCIALMENTE");
+        assertThat(RedactorDeDocumentos.respuesta("Sin cumplir")).isNull();
+        assertThat(RedactorDeDocumentos.respuesta("Novedades en la entrega")).isNull();
+
+        assertThat(pdf("INFORME_FINAL", contrato(), null, Map.of("cumplimientoObjeto", "Sin entregar")))
+                .contains("[dato pendiente: declaración sobre el cumplimiento del objeto")
+                .doesNotContain("se dio cumplimiento a satisfacción");
+    }
+
+    /**
+     * El objeto cumplido a satisfacción y una obligación que no se cumplió
+     * firmaban un informe que se contradice: se rechaza antes de generarlo.
+     */
+    @Test
+    void elObjetoCumplidoNoConviveConUnaObligacionIncumplida() {
+        PlantillaDocumentoIA fin = PlantillaDocumentoIA.CATALOGO.get("INFORME_FINAL");
+        List<String> vacia = java.util.Arrays.asList("", null, " ");
+        java.util.function.Function<String, Map<String, List<List<String>>>> conSegunda = cumplio -> Map.of(
+                "obligacionesGenerales", List.of(List.of("Cumplir la oferta.", "SI CUMPLIO", ""), vacia,
+                        List.of("Entregar las garantías.", cumplio, "")));
+
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("no cumplió: entregó la póliza tarde")))
+                .contains("en la obligación 2 respondió «NO CUMPLIO»");
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "Sí"),
+                conSegunda.apply("Parcialmente"))).contains("«PARCIALMENTE»");
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("NO"))).contains("«NO»");
+        // Lo que no contradice al objeto cumplido pasa.
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("No se requirió el cumplimiento"))).isNull();
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "SI"),
+                conSegunda.apply("Novedad resuelta en octubre"))).isNull();
+        assertThat(RedactorDeDocumentos.incoherencia(fin, Map.of("cumplimientoObjeto", "PARCIALMENTE"),
+                conSegunda.apply("NO CUMPLIO"))).isNull();
     }
 
     @Test
