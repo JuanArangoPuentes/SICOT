@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { mapRegistros } from './mappers'
-import type { RegistroResponse } from './api/types'
+import { mapEtapas, mapRegistros } from './mappers'
+import type { EtapaResponse, RegistroResponse } from './api/types'
 
 /**
  * La atribución en la auditoría.
@@ -43,5 +43,43 @@ describe('mapRegistros · atribución del actor', () => {
     const cuentaBorrada = { ...base, usuarioId: null, usuarioNombre: null, origen: 'USUARIO' as const }
 
     expect(mapRegistros([cuentaBorrada])[0].actor).toBe('Usuario eliminado')
+  })
+})
+
+/**
+ * El documento de cada sub-paso. Lo único que la interfaz pone de su parte: el
+ * resto de la subetapa (nombre, responsable, estado) llega del backend. Antes
+ * salía de una copia completa de las 27 subetapas de la que solo se leía este
+ * campo.
+ */
+describe('mapEtapas · documento del sub-paso', () => {
+  const etapa = (codigo: string): EtapaResponse => ({
+    id: 2,
+    numero: 2,
+    nombre: 'INICIO — Acta de Inicio',
+    estado: 'EN_CURSO',
+    porcentaje: 0,
+    subEtapas: [
+      {
+        id: 27,
+        codigo,
+        nombre: 'Del backend',
+        descripcion: 'Descripción del backend',
+        estado: 'PENDIENTE',
+        responsable: 'Supervisor',
+      },
+    ],
+  })
+
+  it('pone el documento del GCCON-P-010 y deja el resto como lo da el backend', () => {
+    const [sub] = mapEtapas([etapa('2.7')])[0].subSteps
+
+    expect(sub.document).toBe('GCCON-F-018')
+    expect(sub.label).toBe('Del backend')
+    expect(sub.responsible).toBe('Supervisor')
+  })
+
+  it('una subetapa que no conoce muestra la descripción del backend', () => {
+    expect(mapEtapas([etapa('9.9')])[0].subSteps[0].document).toBe('Descripción del backend')
   })
 })

@@ -3,14 +3,10 @@
 // del documento por subetapa es parte de la definición del proceso GCCON-P-010
 // (base de conocimiento local, igual que FORMAL_DOCS).
 
-import { STEPS_INITIAL, AI_GENERATED_DOCS } from '@/data/contractFlow'
+import { AI_GENERATED_DOCS, DOCUMENTO_POR_SUBETAPA } from '@/data/contractFlow'
 import type { Step, SubStep } from '@/types/domain'
 import type { EtapaResponse, RegistroResponse } from './api/types'
 import type { Registro } from '@/components/Registros'
-
-const DOCUMENTOS_POR_CODIGO = new Map<string, string>(
-  STEPS_INITIAL.flatMap((s) => s.subSteps).map((ss) => [ss.id, ss.document]),
-)
 
 const STATUS_FROM_ESTADO: Record<EtapaResponse['estado'], Step['status']> = {
   COMPLETADA: 'completed',
@@ -27,7 +23,7 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       id: ss.codigo,
       label: ss.nombre,
       responsible: ss.responsable,
-      document: DOCUMENTOS_POR_CODIGO.get(ss.codigo) ?? ss.descripcion,
+      document: DOCUMENTO_POR_SUBETAPA[ss.codigo] ?? ss.descripcion,
       description: ss.descripcion,
       completed: ss.estado === 'COMPLETADA',
       aiGenerated: AI_GENERATED_DOCS.has(ss.codigo),

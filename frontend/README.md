@@ -200,7 +200,7 @@ src/
 │   └── domain.ts              Tipos compartidos: Screen, Tab, Step, SubStep, ChatMsg…
 │
 ├── data/
-│   └── contractFlow.ts        Proceso GCCON-P-010: etapas, tutorial, catálogo de documentos
+│   └── contractFlow.ts        Proceso GCCON-P-010: documento por subetapa, tutorial, catálogo de documentos
 │
 ├── screens/                   Una pantalla completa por archivo
 │   ├── LoginScreen.tsx
