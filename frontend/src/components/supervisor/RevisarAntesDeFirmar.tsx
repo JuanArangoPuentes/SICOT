@@ -114,7 +114,7 @@ export default function RevisarAntesDeFirmar({
         if (resultado === 'guardado') {
           setAvisoBorrador('El borrador quedó guardado en el teléfono: ábralo con su lector de PDF y vuelva aquí.')
         } else if (resultado === 'navegador') {
-          setAvisoBorrador('El borrador se descargó: ábralo desde las descargas del navegador.')
+          setAvisoBorrador('El borrador se descargó: ábralo desde su carpeta de descargas.')
         }
       })
       .catch((err) => setErrorBorrador(motivoDelFalloDeDescarga(err, 'el borrador')))
