@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
-import { Chip, Field, Modal, type ChipType } from '@/components/ui'
+import { Chip } from '@/components/ui'
 import {
   IconAlertTriangle,
-  IconCheckCircle,
   IconClipboardList,
   IconDownload,
   IconFileText,
   IconGrid,
-  IconLock,
   IconSignature,
   IconTrash,
   IconUpload,
@@ -16,26 +14,12 @@ import {
 } from '@/components/icons'
 import SeguimientoSupervisores, { ResumenSeguimiento } from '@/components/admin/SeguimientoSupervisores'
 import { getSeguimiento } from '@/services/seguimientoService'
-import type {
-  AuthResponse,
-  EstadoFormato,
-  FirmaResponse,
-  FormatoDocumentalResponse,
-  Rol,
-  SeguimientoResponse,
-  UsuarioResponse,
-} from '@/services/api/types'
+import type { AuthResponse, FormatoDocumentalResponse, SeguimientoResponse } from '@/services/api/types'
 import type { AdminTab } from '@/types/domain'
-import {
-  getUsuarios,
-  crearUsuario,
-  actualizarUsuario,
-  cambiarEstadoUsuario,
-  enviarCredenciales,
-} from '@/services/usuarioService'
+import { getUsuarios, cambiarEstadoUsuario } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
-import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
-import { getFirmas, crearFirma, cambiarEstadoFirma } from '@/services/firmaService'
+import { getFormatos, eliminarFormato, descargarFormato } from '@/services/formatoService'
+import { getFirmas, cambiarEstadoFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { formatBytes, formatFecha } from '@/services/format'
 import { GridRow, MiniBtn, SectionHead, Widget } from '@/components/admin/piezas'
@@ -43,16 +27,7 @@ import { FormatoModal } from '@/components/admin/FormatoModal'
 import { ResetPasswordModal } from '@/components/admin/ResetPasswordModal'
 import { NewUserModal } from '@/components/admin/NewUserModal'
 import { NewFirmaModal } from '@/components/admin/NewFirmaModal'
-import {
-  FORMATO_CHIP,
-  ROL_CARGO,
-  ROL_LABEL,
-  mapFirma,
-  mapUser,
-  randomPassword,
-  type FirmaRow,
-  type UserRow,
-} from '@/components/admin/tipos'
+import { FORMATO_CHIP, mapFirma, mapUser, type FirmaRow, type UserRow } from '@/components/admin/tipos'
 
 export default function AdminPanel({
   vista,
@@ -116,12 +91,6 @@ export default function AdminPanel({
   const cargarFormatos = () => {
     getFormatos()
       .then(setFormatos)
-      .catch(() => setErrorDatos(true))
-  }
-
-  const cargarFirmas = () => {
-    getFirmas()
-      .then((lista) => setFirmas(lista.map(mapFirma)))
       .catch(() => setErrorDatos(true))
   }
 
