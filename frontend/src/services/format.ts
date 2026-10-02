@@ -13,10 +13,13 @@ export function formatFecha(iso: string | null | undefined): string {
   return `${d}/${m}/${y}`
 }
 
-// Las fotos de evidencia se leen en la hora del Centro, la misma que usa el
-// backend por defecto (sicot.zona-horaria). Se fija aquí en vez de usar la del
-// equipo que mira la pantalla para que el panel y el registro del contrato
-// digan la misma hora, y para que las pruebas no dependan de la máquina.
+// Toda fecha con hora se lee en la hora del Centro y en 24 h, la misma que usa
+// el backend por defecto (sicot.zona-horaria). Se fija aquí en vez de usar la
+// del equipo que mira la pantalla para que la evidencia fotográfica, la
+// bitácora del contrato y el seguimiento del Administrador digan la misma hora
+// —antes la bitácora usaba la zona del equipo y 12 h, y en un portátil o
+// emulador en UTC no cuadraba con las otras dos—, y para que las pruebas no
+// dependan de la máquina.
 const FECHA_Y_HORA_DEL_CENTRO = new Intl.DateTimeFormat('es-CO', {
   timeZone: 'America/Bogota',
   day: '2-digit',
@@ -27,9 +30,19 @@ const FECHA_Y_HORA_DEL_CENTRO = new Intl.DateTimeFormat('es-CO', {
   hourCycle: 'h23',
 })
 
+function partesDelCentro(iso: string): Record<string, string> {
+  return Object.fromEntries(FECHA_Y_HORA_DEL_CENTRO.formatToParts(new Date(iso)).map((p) => [p.type, p.value]))
+}
+
+/** `dd/mm/aaaa HH:MM` en la hora del Centro. */
+export function formatFechaYHoraDelCentro(iso: string): string {
+  const p = partesDelCentro(iso)
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`
+}
+
 function formatFechaYHora(iso: string): string {
-  const partes = Object.fromEntries(FECHA_Y_HORA_DEL_CENTRO.formatToParts(new Date(iso)).map((p) => [p.type, p.value]))
-  return `${partes.day}/${partes.month}/${partes.year} a las ${partes.hour}:${partes.minute}`
+  const p = partesDelCentro(iso)
+  return `${p.day}/${p.month}/${p.year} a las ${p.hour}:${p.minute}`
 }
 
 interface ConCaptura {

@@ -7,6 +7,7 @@ import { AI_GENERATED_DOCS, DOCUMENTO_POR_SUBETAPA } from '@/data/contractFlow'
 import type { Step, SubStep } from '@/types/domain'
 import type { EtapaResponse, RegistroResponse } from './api/types'
 import type { Registro } from '@/components/Registros'
+import { formatFechaYHoraDelCentro } from './format'
 
 const STATUS_FROM_ESTADO: Record<EtapaResponse['estado'], Step['status']> = {
   COMPLETADA: 'completed',
@@ -30,18 +31,6 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       apiId: ss.id,
     })),
   }))
-}
-
-function formatRegistroFecha(iso: string): string {
-  return new Date(iso)
-    .toLocaleString('es-CO', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    .replace(',', '')
 }
 
 // Categorías de la bitácora. Cubren las doce acciones que el backend registra
@@ -90,7 +79,7 @@ export function mapRegistros(registros: RegistroResponse[]): Registro[] {
     // borrar una cuenta dejaba sus acciones atribuidas al "Sistema" en el
     // registro que existe precisamente para saber quién hizo qué.
     actor: r.origen === 'SISTEMA' ? 'Sistema' : (r.usuarioNombre ?? 'Usuario eliminado'),
-    fecha: formatRegistroFecha(r.fecha),
+    fecha: formatFechaYHoraDelCentro(r.fecha),
     asunto: r.descripcion ?? humanizarAccion(r.accion),
   }))
 }

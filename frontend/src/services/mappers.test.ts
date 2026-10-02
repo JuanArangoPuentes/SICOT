@@ -47,6 +47,30 @@ describe('mapRegistros · atribución del actor', () => {
 })
 
 /**
+ * La hora de la bitácora. Usaba la zona del equipo y 12 h: en un portátil o un
+ * emulador en UTC decía «08:15 p. m.» para una firma que la evidencia
+ * fotográfica y el seguimiento del Administrador fechan a las 15:15.
+ */
+describe('mapRegistros · hora', () => {
+  it('sale en la hora del Centro y en 24 h, como el resto del sistema', () => {
+    const [registro] = mapRegistros([
+      {
+        id: 1,
+        contratoId: 7,
+        usuarioId: 3,
+        usuarioNombre: 'Ana Gómez',
+        accion: 'DOCUMENTO_FIRMADO',
+        descripcion: null,
+        fecha: '2026-10-02T20:15:00Z',
+        origen: 'USUARIO',
+      },
+    ])
+
+    expect(registro.fecha).toBe('02/10/2026 15:15')
+  })
+})
+
+/**
  * El documento de cada sub-paso. Lo único que la interfaz pone de su parte: el
  * resto de la subetapa (nombre, responsable, estado) llega del backend. Antes
  * salía de una copia completa de las 27 subetapas de la que solo se leía este
