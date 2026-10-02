@@ -14,8 +14,7 @@ import { useEffect, useState } from 'react'
 import { Chip, SectionHeader } from '@/components/ui'
 import { FORMAL_DOCS } from '@/data/contractFlow'
 import { descargarDocumento, verificarIntegridad } from '@/services/documentoService'
-import { ApiError } from '@/services/api/client'
-import { ErrorAlGuardar } from '@/services/guardarArchivo'
+import { motivoDelFalloDeDescarga } from '@/services/falloDeDescarga'
 import { describirCaptura, fechaDelCentro } from '@/services/format'
 import type { ContratoResponse, DocumentoResponse, EstadoIntegridad } from '@/services/api/types'
 
@@ -109,24 +108,6 @@ function SelloIntegridad({ estado, onReintentar }: { estado: Integridad; onReint
   return null
 }
 
-/**
- * Qué decir cuando una descarga falla, según dónde falló. «Intente de nuevo»
- * solo cuando reintentar puede arreglarlo: si el teléfono no deja escribir el
- * archivo, volverá a fallar igual, y decir otra cosa sería engañar.
- */
-function motivoDeDescarga(err: unknown, nombre: string): string {
-  if (err instanceof ErrorAlGuardar) return `No se pudo guardar «${nombre}» en el teléfono: ${err.message}`
-  // El motivo real cuando lo hay: «no tiene archivo guardado» no se arregla
-  // intentando de nuevo.
-  if (err instanceof ApiError || (err instanceof Error && err.message.includes('vacío'))) return err.message
-  // fetch rechaza con TypeError cuando no hubo respuesta: servidor caído o
-  // sin red. No es un problema del archivo.
-  if (err instanceof TypeError) {
-    return `No se pudo descargar «${nombre}»: no hubo respuesta del servidor de SICOT. Compruebe la conexión e intente de nuevo.`
-  }
-  return `No se pudo descargar «${nombre}». Intente de nuevo en un momento.`
-}
-
 export default function VistaDocumentos({
   contrato,
   docsContrato,
@@ -216,7 +197,7 @@ export default function VistaDocumentos({
       })
       .catch((err) => {
         console.error('No se pudo descargar el documento:', err)
-        setErrorDescarga(motivoDeDescarga(err, doc.nombre))
+        setErrorDescarga(motivoDelFalloDeDescarga(err, `«${doc.nombre}»`))
       })
       .finally(() => setDescargando(null))
   }

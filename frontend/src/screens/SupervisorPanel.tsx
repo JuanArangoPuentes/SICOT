@@ -52,7 +52,7 @@ import DatosDelDocumento, {
   soloLoDelDocumento,
   tablasDelContrato,
 } from '@/components/supervisor/DatosDelDocumento'
-import RevisarRedaccion from '@/components/supervisor/RevisarRedaccion'
+import RevisarAntesDeFirmar from '@/components/supervisor/RevisarAntesDeFirmar'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
   AuthResponse,
@@ -305,6 +305,10 @@ export default function SupervisorPanel({
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
   const [procesandoFirma, setProcesandoFirma] = useState<string | null>(null)
+  // Qué se está haciendo con el documento del sub-paso ocupado, para que el
+  // botón diga «Generando…» o «Firmando…»: decía «Generando y firmando…»
+  // mientras se generaba un borrador que todavía no se iba a firmar.
+  const [faseDocumento, setFaseDocumento] = useState<'generando' | 'firmando'>('generando')
   // Revisión de IA obligatoria antes de cerrar un paso: se activa al accionar
   // el último sub-paso pendiente de la etapa activa. listaParaConfirmar pasa
   // a true solo después de que el Copiloto ya revisó la descripción del
@@ -321,18 +325,23 @@ export default function SupervisorPanel({
     plantilla: PlantillaDocumento
     revision?: RevisionPaso
   } | null>(null)
-  // La redacción del Copiloto que el supervisor está leyendo antes de firmar:
-  // el documento ya está generado (sin firmar) y se firma solo si la acepta.
-  const [revisionRedaccion, setRevisionRedaccion] = useState<{
+  // El borrador que el supervisor está revisando antes de firmar: ya está
+  // generado (sin firmar) y se firma solo si pulsa «Firmar». Vale para los
+  // cinco documentos, lleven o no observaciones redactadas por el Copiloto.
+  const [revisionBorrador, setRevisionBorrador] = useState<{
     stepId: number
     subStepId: string
     notas: string
     datos: DatosParaGenerar
     revision?: RevisionPaso
     documentoId: number
+    /** La huella del borrador que se le muestra: se firma ese y no otro. */
     huella: string
     documento: string
-    observaciones: string
+    nombreArchivo: string
+    observaciones: string | null
+    redactadasConIa: boolean
+    motivoNotasTalCual: string | null
   } | null>(null)
   // Lo ya escrito para otro documento de este contrato (su cédula, la fecha de
   // suscripción…), para no pedirlo dos veces. Solo en memoria, a propósito: una
@@ -393,7 +402,7 @@ export default function SupervisorPanel({
     setBorradores({})
     setTablasRecordadas(contrato ? leerTablasDelContrato(contrato.id) : {})
     setBorradoresTablas({})
-    setRevisionRedaccion(null)
+    setRevisionBorrador(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- se recarga al cambiar de contrato, no con cada copia del objeto
   }, [contrato?.id])
   // Firma electrónica real de la cuenta — si el Administrador no la asignó
@@ -522,11 +531,12 @@ export default function SupervisorPanel({
     datos?: DatosParaGenerar,
     revision?: RevisionPaso,
     /**
-     * firmarId: el supervisor ya leyó la redacción de ese borrador y lo firma
-     * tal cual, sin regenerarlo. redactarConIa false: «Usar mis notas tal
-     * cual», se regenera sin pasar por el Copiloto.
+     * firmar: el supervisor ya revisó ese borrador y lo firma tal cual, sin
+     * regenerarlo; la huella es la del borrador que se le mostró, y va
+     * siempre, para que el servidor no firme otra versión. redactarConIa
+     * false: «Usar mis notas tal cual», se regenera sin pasar por el Copiloto.
      */
-    opciones?: { firmarId?: number; huellaRevisada?: string; redactarConIa?: boolean },
+    opciones?: { firmar?: { documentoId: number; huella: string }; redactarConIa?: boolean },
   ) => {
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
@@ -558,11 +568,13 @@ export default function SupervisorPanel({
         // Ocupado desde ya: antes se marcaba después de consultar el catálogo,
         // y en ese rato un doble clic generaba y firmaba dos veces.
         setProcesandoFirma(subStepId)
+        const firmar = opciones?.firmar
+        setFaseDocumento(firmar ? 'firmando' : 'generando')
         // Antes de generar y firmar se preguntan los datos que el formato pide y
         // el contrato no tiene: firmado, el documento ya no se puede corregir.
         // Si el catálogo no responde NO se genera: seguir sin preguntar era
         // firmar con todo pendiente, justo lo que el formulario evita.
-        if (opciones?.firmarId === undefined) {
+        if (!firmar) {
           let plantilla: PlantillaDocumento | undefined
           try {
             plantilla = (await getPlantillasDocumento()).find((p) => p.tipo === doc.tipo)
@@ -590,9 +602,24 @@ export default function SupervisorPanel({
         }
         const vigia = vigilarSegundoPlano()
         try {
-          let documentoId = opciones?.firmarId
-          let motivoNotasTalCual: string | null = null
-          if (documentoId === undefined) {
+          if (!firmar) {
+            // Redactar las observaciones con el Copiloto tarda minutos en un
+            // portátil sin GPU, y el único indicio era el rótulo del botón,
+            // que en el teléfono queda fuera de la pantalla. Sin notas, o en
+            // un formato sin observaciones, no hay modelo y tarda segundos.
+            const redactaElCopiloto = !!notas?.trim() && doc.llevaObservaciones && (opciones?.redactarConIa ?? true)
+            if (redactaElCopiloto) {
+              setChatMsgs((prev) => [
+                ...prev,
+                {
+                  role: 'ai',
+                  text:
+                    `Estoy armando «${doc.name}» y redactando sus observaciones: puede tardar varios minutos. ` +
+                    'Mantenga SICOT abierto y en pantalla mientras tanto; en el teléfono, si cambia de aplicación, ' +
+                    'se corta la conexión. No se firmará nada sin que usted revise el borrador.',
+                },
+              ])
+            }
             const generado = await generarDocumento(contrato.id, {
               tipo: doc.tipo,
               subetapaId: sub?.apiId ?? null,
@@ -601,27 +628,28 @@ export default function SupervisorPanel({
               tablas: datos?.tablas ?? {},
               redactarConIa: opciones?.redactarConIa ?? true,
             })
-            if (generado.observacionesRedactadasConIa && generado.observaciones) {
-              // Lo que el Copiloto redactó no se firma sin que el supervisor lo
-              // lea: queda como borrador y se le muestra junto a sus notas. El
-              // sub-paso sigue ocupado hasta que decida.
-              setRevisionRedaccion({
-                stepId,
-                subStepId,
-                notas: notas ?? '',
-                datos: datos ?? { campos: {}, tablas: {} },
-                revision,
-                documentoId: generado.id,
-                huella: generado.huellaDelBorrador,
-                documento: doc.name,
-                observaciones: generado.observaciones,
-              })
-              return
-            }
-            documentoId = generado.id
-            motivoNotasTalCual = generado.motivoNotasTalCual
+            // Nada se firma sin que el supervisor vea el borrador: queda sin
+            // firmar y se le muestra, con sus observaciones si las lleva. Antes
+            // solo se detenía cuando el Copiloto había redactado; en los demás
+            // casos se firmaba directo, sin que nadie abriera el PDF, y sin la
+            // huella de lo generado. El sub-paso sigue ocupado hasta que decida.
+            setRevisionBorrador({
+              stepId,
+              subStepId,
+              notas: notas ?? '',
+              datos: datos ?? { campos: {}, tablas: {} },
+              revision,
+              documentoId: generado.id,
+              huella: generado.huellaDelBorrador,
+              documento: doc.name,
+              nombreArchivo: generado.nombre,
+              observaciones: generado.observaciones,
+              redactadasConIa: generado.observacionesRedactadasConIa,
+              motivoNotasTalCual: generado.motivoNotasTalCual,
+            })
+            return
           }
-          await firmarDocumento(contrato.id, documentoId, opciones?.huellaRevisada)
+          await firmarDocumento(contrato.id, firmar.documentoId, firmar.huella)
           setBorradores((prev) => {
             const resto = { ...prev }
             delete resto[subStepId]
@@ -632,23 +660,12 @@ export default function SupervisorPanel({
             delete resto[subStepId]
             return resto
           })
-          // El documento lleva los datos exactos del contrato y los que acaba de
-          // dar el supervisor; lo que siga faltando queda marcado en el PDF como
-          // «dato pendiente». Las observaciones solo se mencionan si el formato
-          // tiene dónde ponerlas, y si fueron tal cual se dice por qué.
-          const conObservaciones = !!notas && doc.llevaObservaciones
+          // Lo que lleva, los datos pendientes y por qué las observaciones van
+          // tal cual ya se vieron en la revisión: aquí basta con decir dónde
+          // quedó.
           setChatMsgs((prev) => [
             ...prev,
-            {
-              role: 'ai',
-              text:
-                `Generé y firmé «${doc.name}» con los datos del contrato${conObservaciones ? ' y sus observaciones' : ''}. ` +
-                (conObservaciones && motivoNotasTalCual
-                  ? `Sus observaciones van tal como las escribió, porque ${motivoNotasTalCual}. `
-                  : '') +
-                'Revíselo en Documentos: si algún dato quedó marcado en rojo como ' +
-                '«dato pendiente», es porque no estaba en el contrato ni en lo que usted escribió.',
-            },
+            { role: 'ai', text: `Firmé «${doc.name}» tal como lo revisó. Lo encuentra en Documentos.` },
           ])
         } catch (e) {
           setProcesandoFirma(null)
@@ -1370,9 +1387,11 @@ export default function SupervisorPanel({
                           const actionLabel = procesando
                             ? datosDocumento?.subStepId === ss.id
                               ? 'Esperando datos…'
-                              : revisionRedaccion?.subStepId === ss.id
-                                ? 'Revisando la redacción…'
-                                : 'Generando y firmando…'
+                              : revisionBorrador?.subStepId === ss.id
+                                ? 'Revisando el borrador…'
+                                : faseDocumento === 'firmando'
+                                  ? 'Firmando…'
+                                  : 'Generando…'
                             : isAiDoc
                               ? 'Firmar documento'
                               : 'Marcar completado'
@@ -1621,27 +1640,31 @@ export default function SupervisorPanel({
         />
       )}
 
-      {revisionRedaccion && (
-        <RevisarRedaccion
-          documento={revisionRedaccion.documento}
-          notas={revisionRedaccion.notas}
-          observaciones={revisionRedaccion.observaciones}
+      {revisionBorrador && contrato && (
+        <RevisarAntesDeFirmar
+          contratoId={contrato.id}
+          documentoId={revisionBorrador.documentoId}
+          documento={revisionBorrador.documento}
+          nombreArchivo={revisionBorrador.nombreArchivo}
+          notas={revisionBorrador.notas}
+          observaciones={revisionBorrador.observaciones}
+          redactadasConIa={revisionBorrador.redactadasConIa}
+          motivoNotasTalCual={revisionBorrador.motivoNotasTalCual}
           onFirmar={() => {
-            const r = revisionRedaccion
-            setRevisionRedaccion(null)
+            const r = revisionBorrador
+            setRevisionBorrador(null)
             ejecutarAccionSubPaso(r.stepId, r.subStepId, r.notas, r.datos, r.revision, {
-              firmarId: r.documentoId,
-              huellaRevisada: r.huella,
+              firmar: { documentoId: r.documentoId, huella: r.huella },
             })
           }}
           onUsarNotas={() => {
-            const r = revisionRedaccion
-            setRevisionRedaccion(null)
+            const r = revisionBorrador
+            setRevisionBorrador(null)
             ejecutarAccionSubPaso(r.stepId, r.subStepId, r.notas, r.datos, r.revision, { redactarConIa: false })
           }}
           onCancelar={() => {
-            const r = revisionRedaccion
-            setRevisionRedaccion(null)
+            const r = revisionBorrador
+            setRevisionBorrador(null)
             setProcesandoFirma(null)
             if (r.revision) setRevisionPaso(r.revision)
             setChatMsgs((prev) => [

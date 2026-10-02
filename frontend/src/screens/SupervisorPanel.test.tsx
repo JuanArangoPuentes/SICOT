@@ -38,6 +38,7 @@ vi.mock('@/services/documentoService', () => ({
   preguntarCopiloto: vi.fn(),
   verificarIntegridad: vi.fn(),
   descargarDocumento: vi.fn(),
+  verBorrador: vi.fn(),
   getPlantillasDocumento: vi.fn(),
 }))
 vi.mock('@/services/firmaService', () => ({
@@ -388,13 +389,14 @@ describe('SupervisorPanel', () => {
     await firmarActa()
     expect(documentos.generarDocumento).not.toHaveBeenCalled()
     fireEvent.change(screen.getByLabelText('Cédula del supervisor'), { target: { value: '98.587.121' } })
-    await act(async () => fireEvent.click(screen.getByText('Generar y firmar')))
+    await act(async () => fireEvent.click(screen.getByText('Generar y revisar')))
 
     expect(documentos.generarDocumento).toHaveBeenCalledWith(
       1,
       expect.objectContaining({ tipo: 'ACTA_INICIO', datos: { cedulaSupervisor: '98.587.121' } }),
     )
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
     expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
@@ -435,7 +437,7 @@ describe('SupervisorPanel', () => {
       screen.getByLabelText('Actividades realizadas (fila 1) de Obligaciones específicas del contratista'),
       { target: { value: 'Se verificó' } },
     )
-    await act(async () => fireEvent.click(screen.getByText('Generar y firmar')))
+    await act(async () => fireEvent.click(screen.getByText('Generar y revisar')))
 
     expect(documentos.generarDocumento).toHaveBeenCalledWith(
       1,
@@ -445,7 +447,6 @@ describe('SupervisorPanel', () => {
         tablas: { obligacionesEspecificas: [['Proveer los bienes nuevos', 'Se verificó']] },
       }),
     )
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
   })
 
   // ── La redacción del Copiloto se lee antes de firmar ────────────────────
@@ -489,9 +490,9 @@ describe('SupervisorPanel', () => {
     expect(screen.getByTestId('redaccion-revisada')).toHaveTextContent('El contratista ha devuelto tres monitores.')
     expect(screen.getByTestId('redaccion-revisada').querySelectorAll('mark').length).toBeGreaterThan(0)
     expect(documentos.firmarDocumento).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Revisando la redacción…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Revisando el borrador…' })).toBeDisabled()
 
-    await act(async () => fireEvent.click(screen.getByText('Firmar con esta redacción')))
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
 
     // Se firma el mismo borrador que se mostró, sin regenerarlo, y con su
     // huella: si otra pestaña lo regeneró entre medias, el servidor no firma.
@@ -500,13 +501,18 @@ describe('SupervisorPanel', () => {
     expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
   })
 
-  it('«Usar mis notas tal cual» regenera sin el Copiloto y firma eso', async () => {
+  it('«Usar mis notas tal cual» regenera sin el Copiloto y, tras revisarlo, firma ese borrador', async () => {
     const { documentos } = await prepararRedaccion()
     documentos.generarDocumento
       .mockResolvedValueOnce(
         generado({ observaciones: 'El contratista ha devuelto tres monitores.', observacionesRedactadasConIa: true }),
       )
-      .mockResolvedValueOnce(generado({ observaciones: 'se devolvieron al contratista 3 monitores' }))
+      .mockResolvedValueOnce(
+        generado({
+          observaciones: 'se devolvieron al contratista 3 monitores',
+          huellaDelBorrador: 'huella-de-las-notas',
+        }),
+      )
     await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
 
     await firmarActa()
@@ -514,7 +520,13 @@ describe('SupervisorPanel', () => {
 
     expect(documentos.generarDocumento).toHaveBeenCalledTimes(2)
     expect(documentos.generarDocumento).toHaveBeenLastCalledWith(1, expect.objectContaining({ redactarConIa: false }))
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
+    // El borrador nuevo también se revisa: hasta el 02-10-2026 se firmaba
+    // directo y sin su huella, y otra pestaña que regenerara el mismo borrador
+    // con el Copiloto entre medias hacía firmar una redacción que nadie leyó.
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+    expect(screen.getByTestId('observaciones-tal-cual')).toHaveTextContent('se devolvieron al contratista 3 monitores')
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-de-las-notas')
   })
 
   it('cancelar deja el borrador sin firmar y el sub-paso libre', async () => {
@@ -533,7 +545,7 @@ describe('SupervisorPanel', () => {
     expect(screen.getByText(/quedó como borrador sin firmar/i)).toBeInTheDocument()
   })
 
-  it('si van las notas tal cual, firma directo y dice por qué', async () => {
+  it('si van las notas tal cual, las muestra con el motivo y no firma hasta que pulse «Firmar»', async () => {
     const { documentos } = await prepararRedaccion()
     documentos.generarDocumento.mockResolvedValue(
       generado({
@@ -545,7 +557,34 @@ describe('SupervisorPanel', () => {
 
     await firmarActa()
 
-    expect(screen.queryByText('Firmar con esta redacción')).not.toBeInTheDocument()
-    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
+    expect(screen.getByTestId('observaciones-tal-cual')).toHaveTextContent('mis notas')
+    expect(screen.getByText(/porque la redacción del Copiloto perdía cifras de sus notas/)).toBeInTheDocument()
+    expect(screen.queryByText('Usar mis notas tal cual')).not.toBeInTheDocument()
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
+  })
+
+  // Hasta el 02-10-2026 un documento sin observaciones redactadas se firmaba
+  // en cuanto se generaba: un número de contrato mal escrito o una celda vacía
+  // de la tabla quedaban firmados sin que nadie abriera el PDF.
+  it('un documento sin observaciones también se revisa, con su borrador completo, y no se firma sin «Firmar»', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento.mockResolvedValue(generado({ nombre: 'Acta de Inicio — CTMA-2026-0184' }))
+    documentos.verBorrador.mockResolvedValue('abierto')
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog')).toHaveTextContent(/revisar antes de firmar/i)
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ver borrador completo (PDF)' })))
+    expect(documentos.verBorrador).toHaveBeenCalledWith(1, 9, 'Acta de Inicio — CTMA-2026-0184')
+    expect(documentos.firmarDocumento).not.toHaveBeenCalled()
+
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
+    expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
+    expect(screen.getByText(/firmé «Acta de Inicio» tal como lo revisó/i)).toBeInTheDocument()
   })
 })

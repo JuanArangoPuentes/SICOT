@@ -2,7 +2,7 @@
 // (Ollama local, sin costo de licencia). Todas las llamadas pasan por el
 // backend; el frontend nunca habla con Ollama directamente.
 
-import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
+import { abrirArchivo, guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
 import { historialParaElCopiloto } from './historialCopiloto'
 import type {
@@ -80,6 +80,25 @@ export async function descargarDocumento(
   documentoId: number,
   nombreArchivo: string,
 ): Promise<ResultadoGuardado> {
+  const blob = await traerArchivo(contratoId, documentoId, nombreArchivo)
+  return guardarArchivo(blob, nombreConExtension(nombreArchivo, blob.type))
+}
+
+// El borrador completo de un documento generado, para leerlo antes de
+// firmar: lo que no se ve en el diálogo de revisión —el número y el valor del
+// contrato, las tablas, los datos pendientes en rojo— queda firmado tal cual.
+// El nombre lleva «BORRADOR» para que no se confunda con el firmado, que se
+// descarga después con el nombre del documento.
+export async function verBorrador(
+  contratoId: number,
+  documentoId: number,
+  nombreArchivo: string,
+): Promise<ResultadoGuardado | 'abierto'> {
+  const blob = await traerArchivo(contratoId, documentoId, nombreArchivo)
+  return abrirArchivo(blob, nombreConExtension(`BORRADOR ${nombreArchivo}`, blob.type))
+}
+
+async function traerArchivo(contratoId: number, documentoId: number, nombreArchivo: string): Promise<Blob> {
   const blob = await apiFetchBlob(`/api/contratos/${contratoId}/documentos/${documentoId}/archivo`)
   // Un archivo vacío no se guarda: se bajaba un «.pdf» de 0 bytes que el
   // lector daba por dañado (auditoría del 28-09-2026). El backend ya responde
@@ -87,7 +106,7 @@ export async function descargarDocumento(
   if (blob.size === 0) {
     throw new Error(`El archivo de «${nombreArchivo}» llegó vacío; no se guardó.`)
   }
-  return guardarArchivo(blob, nombreConExtension(nombreArchivo, blob.type))
+  return blob
 }
 
 const EXTENSIONES: Record<string, string> = {

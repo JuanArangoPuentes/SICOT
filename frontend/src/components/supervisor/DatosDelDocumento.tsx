@@ -298,7 +298,7 @@ export default function DatosDelDocumento({
       <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
         Estos datos van en el formato pero no están registrados en el contrato. Escríbalos como aparecen en sus
         soportes. Lo que deje vacío saldrá en el documento como «dato pendiente», en rojo; después de firmado ya no se
-        puede corregir.
+        puede corregir. Antes de firmar verá el borrador completo.
       </p>
       {plantilla.campos.map((c) => (
         <Field key={c.clave} label={esObligatorio(c, valores) ? c.etiqueta : `${c.etiqueta} (opcional)`}>
@@ -355,7 +355,7 @@ export default function DatosDelDocumento({
           style={{ flex: 2, padding: '10px 0', fontSize: 13 }}
           onClick={() => onConfirmar(limpios(), tablasLimpias())}
         >
-          Generar y firmar
+          Generar y revisar
         </button>
       </div>
     </Modal>

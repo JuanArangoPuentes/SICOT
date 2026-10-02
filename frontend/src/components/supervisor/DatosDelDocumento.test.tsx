@@ -96,7 +96,7 @@ describe('DatosDelDocumento', () => {
     expect((screen.getByLabelText('Cédula del supervisor') as HTMLInputElement).value).toBe('43.512.887')
     fireEvent.change(screen.getByLabelText('Número de la factura'), { target: { value: '  FE 547  ' } })
     fireEvent.change(screen.getByLabelText('Banco'), { target: { value: '   ' } })
-    fireEvent.click(screen.getByText('Generar y firmar'))
+    fireEvent.click(screen.getByText('Generar y revisar'))
 
     expect(onConfirmar).toHaveBeenCalledWith({ numeroFactura: 'FE 547', cedulaSupervisor: '43.512.887' }, {})
   })
@@ -195,7 +195,7 @@ describe('DatosDelDocumento con tablas', () => {
       ),
     ).toBeTruthy()
 
-    fireEvent.click(screen.getByText('Generar y firmar'))
+    fireEvent.click(screen.getByText('Generar y revisar'))
 
     expect(onConfirmar).toHaveBeenCalledWith(
       {},
