@@ -32,6 +32,21 @@ function formatFechaYHora(iso: string): string {
   return `${partes.day}/${partes.month}/${partes.year} a las ${partes.hour}:${partes.minute}`
 }
 
+/**
+ * La fecha de un instante («…T01:15:00Z») en la hora del Centro. Cortar los
+ * diez primeros caracteres daba la fecha en UTC: un documento generado el
+ * 30/09 a las 20:15 de Colombia salía con fecha 01/10, un día que nadie
+ * registró y que a fin de mes cae en otro periodo (auditoría del 02-10-2026).
+ * Para fechas sin hora (la de inicio del contrato) sigue siendo formatFecha.
+ */
+export function fechaDelCentro(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const instante = new Date(iso)
+  if (Number.isNaN(instante.getTime())) return '—'
+  const partes = Object.fromEntries(FECHA_Y_HORA_DEL_CENTRO.formatToParts(instante).map((p) => [p.type, p.value]))
+  return `${partes.day}/${partes.month}/${partes.year}`
+}
+
 interface ConCaptura {
   tipo: string
   capturaFecha: string | null

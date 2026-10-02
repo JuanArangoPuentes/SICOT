@@ -15,7 +15,7 @@ import { Chip, SectionHeader } from '@/components/ui'
 import { FORMAL_DOCS } from '@/data/contractFlow'
 import { descargarDocumento, verificarIntegridad } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
-import { describirCaptura, formatFecha } from '@/services/format'
+import { describirCaptura, fechaDelCentro } from '@/services/format'
 import type { ContratoResponse, DocumentoResponse, EstadoIntegridad } from '@/services/api/types'
 
 const ETAPA_LABEL: Record<number, string> = {
@@ -408,7 +408,7 @@ export default function VistaDocumentos({
                     }}
                   >
                     {doc.formatoCodigo ? `${doc.formatoCodigo} · ` : ''}
-                    {doc.tipo} · {formatFecha(doc.fechaSubida.slice(0, 10))}
+                    {doc.tipo} · {fechaDelCentro(doc.fechaSubida)}
                     {doc.generadoPorIa ? ' · Generado por SICOT' : ''}
                     {doc.firmadoPorNombre ? ` · Firmado por ${doc.firmadoPorNombre}` : ''}
                   </div>

@@ -84,7 +84,7 @@ import {
 } from '@/services/segundoPlano'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
-import { formatFecha } from '@/services/format'
+import { fechaDelCentro, formatFecha } from '@/services/format'
 
 // Chips de preguntas frecuentes — el label es corto para el botón y la
 // pregunta va completa. Las cinco tienen respuesta fija y el backend las
@@ -1099,7 +1099,7 @@ export default function SupervisorPanel({
         detalle: formal
           ? `${formal.code === 'PENDIENTE_DE_DEFINIR' ? 'Código pendiente de definir' : formal.code} · generado por SICOT en el sub-paso ${formal.subStepId}.`
           : 'Documento generado por SICOT que todavía no tiene firma registrada.',
-        fecha: formatFecha(doc.fechaSubida.slice(0, 10)),
+        fecha: fechaDelCentro(doc.fechaSubida),
         accionLabel: formal ? 'Ir a firmar' : undefined,
         onAccion: formal ? () => goToSubStep(formal.subStepId, formal.step) : undefined,
       })
