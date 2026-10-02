@@ -436,4 +436,38 @@ class FidelidadDeRedaccionTest {
         assertThat(FidelidadDeRedaccion.quitarAniosAgregados("Se visitó la obra el 12 de octubre de 2026.",
                 NOTAS_CON_Y_SIN_ANIO)).isEqualTo("Se visitó la obra el 12 de octubre de 2026.");
     }
+
+    // ── Auditoría del 02-10-2026: la negación dicha con otras palabras ──────
+
+    @Test
+    void unaNegacionDichaConOtrasPalabrasNoEsDecirLoContrario() {
+        String[][] fieles = {
+                // en vivo con qwen2.5:7b
+                {"no había personal de almacén para recibir",
+                        "Ante la ausencia de personal del almacén no se pudo recibir."},
+                {"no había personal de almacén", "La falta de personal de almacén."},
+                {"no había personal de almacén", "No se contaba con personal del almacén."},
+                {"no había energía en el ambiente", "El ambiente se encontraba sin energía."},
+                {"el contratista no ha pagado la seguridad social",
+                        "El contratista sigue sin que haya pagado la seguridad social."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[0]).isTrue();
+        }
+    }
+
+    @Test
+    void unaNegacionQuitadaSeSigueViendoAunqueLaRedaccionNieguePorOtroLado() {
+        String[][] alteradas = {
+                {"no había personal de almacén", "Había personal de almacén."},
+                // «sin embargo» y «no obstante» no niegan nada
+                {"no se entregaron las sillas", "Sin embargo se entregaron las sillas."},
+                {"no se entregaron las sillas", "No obstante se entregaron las sillas."},
+                // una negación de otra cláusula no alcanza a esta
+                {"no se entregaron las sillas", "Falta firmar el acta y se entregaron las sillas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isFalse();
+        }
+    }
 }

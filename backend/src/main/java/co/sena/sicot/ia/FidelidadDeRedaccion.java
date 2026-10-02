@@ -1135,14 +1135,19 @@ public final class FidelidadDeRedaccion {
                 }
             }
         }
-        // Con «no»: la palabra que niega es la que le sigue, con a lo sumo un
-        // pronombre en medio («no cumplió», «no se entregaron»). No se toma un
-        // alcance más largo ni «sin»: «sin novedades» y «no se observaron
-        // novedades» dicen lo mismo, y «sin embargo» o «no obstante» no niegan
-        // nada; con un alcance de cuatro palabras se descartaban por eso
-        // redacciones fieles.
+        // Con «no»: la palabra que niega es la que le sigue, con a lo sumo
+        // unos pronombres o auxiliares en medio («no cumplió», «no se han
+        // entregado»). Para ver una negación AGREGADA no se toma un alcance
+        // más largo ni «sin»: «sin novedades» y «no se observaron novedades»
+        // dicen lo mismo, y «sin embargo» o «no obstante» no niegan nada; con
+        // un alcance de cuatro palabras se descartaban por eso redacciones
+        // fieles. Para ver una negación QUITADA sí (polaridadesAmplias): «no
+        // había personal» redactado «la falta de personal» o «no se contaba
+        // con personal» sigue negándolo, y con el alcance corto se descartaba
+        // como «decía lo contrario» (auditoría del 02-10-2026, en vivo).
         java.util.Map<String, int[]> enNotas = polaridades(notas);
         java.util.Map<String, int[]> enTexto = polaridades(redactado);
+        java.util.Map<String, int[]> enTextoAmplias = polaridadesAmplias(redactado);
         for (var palabra : enTexto.entrySet()) {
             int afirmadaNotas = 0;
             int negadaNotas = 0;
@@ -1152,16 +1157,15 @@ public final class FidelidadDeRedaccion {
                     negadaNotas += v.getValue()[1];
                 }
             }
-            int afirmadaTexto = palabra.getValue()[0];
-            int negadaTexto = palabra.getValue()[1];
-            if (afirmadaNotas > 0 && negadaNotas == 0 && negadaTexto > 0) {
+            if (afirmadaNotas > 0 && negadaNotas == 0 && palabra.getValue()[1] > 0) {
                 return false;
             }
             // Quitar una negación solo cuenta con la misma forma de la palabra:
             // «no ha pagado» → «el pago» es otra cosa, «no ha pagado» → «ya ha
             // pagado» no.
+            int[] amplia = enTextoAmplias.getOrDefault(palabra.getKey(), palabra.getValue());
             boolean mismaForma = enNotas.containsKey(palabra.getKey());
-            if (mismaForma && negadaNotas > 0 && afirmadaNotas == 0 && afirmadaTexto > 0 && negadaTexto == 0) {
+            if (mismaForma && negadaNotas > 0 && afirmadaNotas == 0 && amplia[0] > 0 && amplia[1] == 0) {
                 return false;
             }
         }
@@ -1271,7 +1275,59 @@ public final class FidelidadDeRedaccion {
     /** Por cada palabra de cuatro letras o más: cuántas veces aparece afirmada y cuántas negada. */
     private static java.util.Map<String, int[]> polaridades(String texto) {
         java.util.Map<String, int[]> r = new java.util.HashMap<>();
-        List<String> fs = fichas(texto);
+        contarPolaridades(fichas(texto), false, r);
+        return r;
+    }
+
+    /**
+     * Palabras que niegan lo que sigue dentro de la misma cláusula, para ver
+     * si la redacción conserva una negación de las notas dicha con otras
+     * palabras: «la falta de personal», «la ausencia de energía», «sin que
+     * haya pagado». Sin un prefijo «falt»: «los faltantes» no niega nada.
+     */
+    private static final Set<String> NEGADORES_DE_LA_CLAUSULA = Set.of("no", "sin", "ningun", "ninguna", "ninguno",
+            "ningunos", "ningunas", "nunca", "tampoco", "ni", "falta", "faltan", "faltaba", "faltaban", "falto",
+            "faltaron", "ausencia", "carencia");
+
+    /**
+     * Cláusulas: se corta en la puntuación y en «y», «e», «pero», «aunque» y
+     * «mientras» sueltas, para que una negación no alcance a otra frase
+     * («falta firmar el acta y se entregaron las sillas»). No se corta en
+     * «que»: «sin que haya pagado» sigue negando.
+     */
+    private static final Pattern FIN_DE_CLAUSULA =
+            Pattern.compile("[.,;:!?()]|(?<![a-z])(?:y|e|pero|aunque|mientras)(?![a-z])");
+
+    /**
+     * Como {@link #polaridades}, pero una palabra también cuenta como negada si
+     * alguna de las cuatro anteriores, en su cláusula, la niega con otras
+     * palabras ({@link #NEGADORES_DE_LA_CLAUSULA} o «inexist…»). «Sin
+     * embargo» y «no obstante» no niegan. Solo se usa para ver si la
+     * redacción QUITÓ una negación de las notas.
+     */
+    private static java.util.Map<String, int[]> polaridadesAmplias(String texto) {
+        java.util.Map<String, int[]> r = new java.util.HashMap<>();
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(texto == null ? "" : texto))) {
+            contarPolaridades(fichas(clausula), true, r);
+        }
+        return r;
+    }
+
+    private static boolean negadaEnLaClausula(List<String> fs, int i) {
+        for (int j = Math.max(0, i - 4); j < i; j++) {
+            String f = fs.get(j);
+            String siguiente = j + 1 < fs.size() ? fs.get(j + 1) : "";
+            if ((f.equals("sin") && siguiente.equals("embargo")) || (f.equals("no") && siguiente.equals("obstante"))) {
+                continue;
+            }
+            if (NEGADORES_DE_LA_CLAUSULA.contains(f) || f.startsWith("inexist")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void contarPolaridades(List<String> fs, boolean amplia, java.util.Map<String, int[]> r) {
         for (int i = 0; i < fs.size(); i++) {
             String p = fs.get(i);
             boolean llevaSentido = LLEVAN_EL_SENTIDO.contains(p);
@@ -1288,10 +1344,9 @@ public final class FidelidadDeRedaccion {
                 j--;
                 saltos++;
             }
-            boolean negada = j >= 0 && NIEGAN_LA_SIGUIENTE.contains(fs.get(j));
+            boolean negada = (j >= 0 && NIEGAN_LA_SIGUIENTE.contains(fs.get(j))) || (amplia && negadaEnLaClausula(fs, i));
             r.computeIfAbsent(p, k -> new int[2])[negada ? 1 : 0]++;
         }
-        return r;
     }
 
     // ── Afirmaciones agregadas ──────────────────────────────────────────────
