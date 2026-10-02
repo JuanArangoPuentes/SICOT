@@ -182,6 +182,33 @@ describe('SupervisorPanel — Copiloto con la conexión cortada', () => {
   })
 
   /**
+   * El reintento repetía la pregunta sin nada que la identificara, y el
+   * servidor lanzaba otra inferencia mientras la del primer intento seguía
+   * ocupando la CPU y un cupo del limitador de IA.
+   */
+  it('el reintento lleva el mismo idSolicitud que la pregunta cortada, y otra pregunta lleva otro', async () => {
+    const primera = respuestaPendiente()
+    const reintento = respuestaPendiente()
+    vi.mocked(preguntarCopiloto)
+      .mockReturnValueOnce(primera.promesa)
+      .mockReturnValueOnce(reintento.promesa)
+      .mockResolvedValueOnce({ respuesta: 'Después, el cronograma.' })
+    await montar()
+
+    await escribirAlCopiloto('¿Qué sigue en este paso?')
+    await cortarAlSalir(primera)
+    await volverASicot()
+    await act(async () => reintento.resolver({ respuesta: 'Siga con la revisión de los estudios.' }))
+    await escribirAlCopiloto('¿Y después?')
+
+    const [cortada, repetida, otra] = vi.mocked(preguntarCopiloto).mock.calls.map((c) => c[3]?.idSolicitud)
+    expect(cortada).toBeTruthy()
+    expect(repetida).toBe(cortada)
+    expect(otra).toBeTruthy()
+    expect(otra).not.toBe(cortada)
+  })
+
+  /**
    * Si el reintento también se corta porque el supervisor volvió a salir, el
    * motivo sigue sin ser Ollama: decir «verifique que Ollama esté disponible»
    * lo manda a buscar un fallo que no existe.

@@ -3,6 +3,7 @@ import { ApiError } from './api/client'
 import {
   CortadaPorSegundoPlano,
   esperarPrimerPlano,
+  idDeSolicitud,
   repetirAlVolverSiSeCorta,
   vigilarSegundoPlano,
 } from './segundoPlano'
@@ -107,5 +108,35 @@ describe('repetirAlVolverSiSeCorta', () => {
     await expect(repetirAlVolverSiSeCorta(peticion, alCortarse)).rejects.toBe(error)
     expect(peticion).toHaveBeenCalledOnce()
     expect(alCortarse).not.toHaveBeenCalled()
+  })
+})
+
+describe('idDeSolicitud', () => {
+  /** El servidor solo acepta hasta 64 caracteres de [A-Za-z0-9-] (ChatRequest). */
+  const VALIDO = /^[A-Za-z0-9-]{1,64}$/
+
+  it('da uno distinto en cada pregunta, con el formato que acepta el servidor', () => {
+    const ids = Array.from({ length: 50 }, idDeSolicitud)
+
+    expect(ids.every((id) => VALIDO.test(id))).toBe(true)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  /**
+   * SICOT abierto por http:// desde otro equipo no es un contexto seguro y el
+   * navegador no ofrece randomUUID: sin la alternativa, preguntar al Copiloto
+   * fallaría antes de salir.
+   */
+  it('funciona sin crypto.randomUUID', () => {
+    const real = globalThis.crypto
+    vi.stubGlobal('crypto', { getRandomValues: real.getRandomValues.bind(real) })
+    try {
+      const a = idDeSolicitud()
+      const b = idDeSolicitud()
+      expect(a).toMatch(VALIDO)
+      expect(a).not.toBe(b)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

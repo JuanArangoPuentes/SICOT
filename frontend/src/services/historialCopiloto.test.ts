@@ -9,10 +9,15 @@ vi.mock('./api/client', () => ({
   apiFetchBlob: vi.fn(),
 }))
 
+/** Lo que el backend recibió en la última llamada al chat. */
+function cuerpoEnviado() {
+  const [, opciones] = vi.mocked(apiFetch).mock.calls.at(-1) ?? []
+  return JSON.parse(String(opciones?.body))
+}
+
 /** Turnos que el backend recibió en la última llamada al chat. */
 function historialEnviado(): Array<{ rol: string; texto: string }> {
-  const [, opciones] = vi.mocked(apiFetch).mock.calls.at(-1) ?? []
-  return JSON.parse(String(opciones?.body)).historial
+  return cuerpoEnviado().historial
 }
 
 /** Una conversación real de `n` preguntas, cada una con su respuesta del modelo. */
@@ -48,6 +53,24 @@ describe('preguntarCopiloto — el historial que sale hacia el backend', () => {
       'Pregunta 60',
       'Respuesta 60',
     ])
+  })
+
+  /**
+   * Sin idSolicitud, el reintento al volver de segundo plano era otra pregunta
+   * para el servidor: una segunda inferencia mientras la primera seguía en la
+   * CPU. Y la revisión del paso viaja con su número para que las
+   * instrucciones las arme el servidor, no el cliente.
+   */
+  it('manda el idSolicitud y el paso a revisar cuando se le dan, y nada de eso si no', async () => {
+    await preguntarCopiloto(1, 'Revisé los estudios previos.', undefined, { idSolicitud: 'abc-123', revisarPaso: 1 })
+    expect(cuerpoEnviado()).toEqual({
+      pregunta: 'Revisé los estudios previos.',
+      idSolicitud: 'abc-123',
+      revisarPaso: 1,
+    })
+
+    await preguntarCopiloto(1, '¿Y ahora?')
+    expect(cuerpoEnviado()).toEqual({ pregunta: '¿Y ahora?' })
   })
 })
 

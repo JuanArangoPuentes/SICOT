@@ -79,6 +79,7 @@ import { getMiFirma } from '@/services/firmaService'
 import {
   CortadaPorSegundoPlano,
   esperarPrimerPlano,
+  idDeSolicitud,
   repetirAlVolverSiSeCorta,
   vigilarSegundoPlano,
 } from '@/services/segundoPlano'
@@ -818,11 +819,13 @@ export default function SupervisorPanel({
         `directo: diga si le parece que se puede marcar el paso como completado o si recomienda revisar algo ` +
         `antes. Aclare que esta es una revisión de apoyo, no una aprobación oficial — la decisión final es del supervisor.`
       // Igual que una pregunta suelta: la revisión no cambia nada en el
-      // servidor, así que si el teléfono la corta se repite al volver. Hasta
-      // que termine, el paso no queda listo para confirmar (eso lo hace el
-      // finally, que ahora espera al reintento).
+      // servidor, así que si el teléfono la corta se repite al volver, con el
+      // mismo idSolicitud para no pagar otra inferencia. Hasta que termine, el
+      // paso no queda listo para confirmar (eso lo hace el finally, que ahora
+      // espera al reintento).
+      const idSolicitud = idDeSolicitud()
       const { respuesta } = await repetirAlVolverSiSeCorta(
-        () => preguntarCopiloto(contrato.id, pregunta, chatMsgs),
+        () => preguntarCopiloto(contrato.id, pregunta, chatMsgs, { idSolicitud }),
         avisarQueSeRepite,
       )
       setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
@@ -867,9 +870,13 @@ export default function SupervisorPanel({
   const preguntarAlCopiloto = async (texto: string) => {
     if (!contrato || pensando) return
     setPensando(true)
+    // Uno por pregunta, creado fuera de la petición para que el reintento
+    // lleve el mismo: así el servidor reconoce la pregunta y no lanza otra
+    // inferencia mientras la del primer intento sigue en la CPU.
+    const idSolicitud = idDeSolicitud()
     try {
       const { respuesta } = await repetirAlVolverSiSeCorta(
-        () => preguntarCopiloto(contrato.id, texto, chatMsgs),
+        () => preguntarCopiloto(contrato.id, texto, chatMsgs, { idSolicitud }),
         avisarQueSeRepite,
       )
       setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
