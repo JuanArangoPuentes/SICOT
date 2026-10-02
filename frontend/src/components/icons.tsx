@@ -372,8 +372,6 @@ export function AvatarIcon({ id, size = 24, style, className }: IconProps & { id
       return <IconAvatarGestor {...props} />
     case 'sena':
       return <IconAvatarSena {...props} />
-    case 'custom':
-      return <IconUpload {...props} />
     default:
       return <IconAvatarBot {...props} />
   }

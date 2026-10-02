@@ -910,32 +910,6 @@ input[type='radio'] {
   border: 1px solid var(--accent-line);
 }
 
-/* ── Alerts ── */
-@keyframes blinkSlow {
-  0%,
-  100% {
-    opacity: 0.78;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@keyframes blinkFast {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-.blink-slow {
-  animation: blinkSlow 1.5s ease-in-out infinite;
-}
-.blink-fast {
-  animation: blinkFast 0.7s ease-in-out infinite;
-}
-
 .alert-glow-ring {
   box-shadow:
     0 0 0 3px var(--accent-glow),
@@ -1009,21 +983,12 @@ input[type='radio'] {
 
 /* ── Accesibilidad de movimiento ── */
 @media (prefers-reduced-motion: reduce) {
-  .blink-slow,
-  .blink-fast,
   .avatar-float {
     animation: none;
   }
   * {
     transition-duration: 50ms !important;
   }
-}
-.no-hover *:hover {
-  transition: none !important;
-}
-.no-hover .blink-slow,
-.no-hover .blink-fast {
-  animation: none;
 }
 
 /* ── Scrollbar ── */

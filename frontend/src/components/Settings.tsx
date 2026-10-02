@@ -179,41 +179,11 @@ export default function Settings({
               onChange={(e) => patch({ transitionMs: Number(e.target.value) })}
             />
           </Field>
-          <Toggle label="Parpadeo en alertas" value={prefs.blinkAlerts} onChange={(v) => patch({ blinkAlerts: v })} />
-          <Toggle label="Efectos hover" value={prefs.hoverEffects} onChange={(v) => patch({ hoverEffects: v })} />
-
-          {sectionTitle('4. NOTIFICACIONES')}
-          <Field label={`Duración de alertas — ${prefs.alertDurationS}s`}>
-            <input
-              type="range"
-              min={3}
-              max={10}
-              value={prefs.alertDurationS}
-              onChange={(e) => patch({ alertDurationS: Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Posición">
-            <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {(
-                [
-                  ['top-right', 'Arriba derecha'],
-                  ['top-center', 'Arriba centro'],
-                  ['bottom-right', 'Abajo derecha'],
-                ] as const
-              ).map(([p, l]) => (
-                <label key={p} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="pos"
-                    checked={prefs.alertPosition === p}
-                    onChange={() => patch({ alertPosition: p })}
-                  />
-                  {l}
-                </label>
-              ))}
-            </div>
-          </Field>
-          <Toggle label="Sonido de notificación" value={prefs.sound} onChange={(v) => patch({ sound: v })} />
+          {/* Aquí había «Parpadeo en alertas», «Efectos hover» y una sección de
+              Notificaciones (duración, posición y sonido). Ninguno movía nada:
+              SICOT no tiene avisos emergentes ni sonidos, ninguna alerta
+              parpadea desde el rediseño del 27-08, y «Efectos hover» solo
+              quitaba la animación del cambio de color, no el cambio. */}
 
           {/* Las preferencias se guardan solas en cuanto cambian (ver prefs.tsx),
               así que no hay un botón "Guardar": tenerlo sugeriría que sin pulsarlo
@@ -282,27 +252,9 @@ export default function Settings({
               style={{ width: '100%', padding: '9px 10px' }}
             />
           </Field>
-          <Field label="Tono de comunicación">
-            <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {(
-                [
-                  ['formal', 'Formal y directo'],
-                  ['amable', 'Amable y detallado'],
-                  ['tecnico', 'Conciso y técnico'],
-                ] as const
-              ).map(([t, l]) => (
-                <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="tono"
-                    checked={prefs.avatarTone === t}
-                    onChange={() => patch({ avatarTone: t })}
-                  />
-                  {l}
-                </label>
-              ))}
-            </div>
-          </Field>
+          {/* No hay «Tono de comunicación»: el que hubo se guardaba y nunca
+              llegaba al modelo. Para que llegara habría que alargar el prompt
+              de cada pregunta, un coste que un modelo pequeño en CPU nota. */}
 
           {sectionTitle('MODO DE PRESENCIA')}
           <div style={{ display: 'grid', gap: 8 }}>
@@ -335,51 +287,6 @@ export default function Settings({
         </div>
       )}
     </Modal>
-  )
-}
-
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 0',
-        fontSize: 13,
-        color: 'var(--text-secondary)',
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        style={{
-          width: 40,
-          height: 22,
-          borderRadius: 999,
-          border: '1px solid var(--border)',
-          cursor: 'pointer',
-          background: value ? 'var(--accent)' : 'var(--bg-input)',
-          position: 'relative',
-          transition: 'background var(--t)',
-        }}
-      >
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            left: value ? 20 : 2,
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: value ? 'var(--on-accent)' : 'var(--text-muted)',
-            transition: 'left var(--t)',
-          }}
-        />
-      </button>
-    </label>
   )
 }
 
