@@ -40,9 +40,12 @@ import java.util.stream.Collectors;
  * Igual que {@link GuiaDelPasoActual}, es deliberadamente conservadora: solo
  * contesta si la pregunta nombra un documento conocido <b>y</b> pregunta qué
  * es, quién lo firma, dónde se genera o su código —o lo nombra a secas—. «¿Ya
- * puedo firmar el Acta de Inicio?» o «¿qué hago si el contratista no la
- * firma?» siguen hacia el modelo, que tiene el estado del contrato para
- * contestarlas.
+ * puedo firmar el Acta de Inicio?» la contesta la guía con el estado de ese
+ * sub-paso, y «¿qué hago si el contratista no la firma?» sigue hacia el
+ * modelo.
+ *
+ * <p>«El acta» o «el informe» a secas no dicen cuál: la ficha da las de los
+ * dos candidatos en vez de elegir uno.
  */
 @Component
 public class FichaDeDocumentoFormal {
@@ -50,13 +53,16 @@ public class FichaDeDocumentoFormal {
     /**
      * Un documento sobre el que se puede contestar sin modelo.
      *
+     * @param clave       su clave en {@link PlantillaDocumentoIA#CATALOGO}, la
+     *                    que viaja en las acciones del Copiloto, o
+     *                    {@code null} si SICOT no lo arma.
      * @param subpaso     sub-paso del GCCON-P-010 donde SICOT lo arma, o
      *                    {@code null} si SICOT no lo arma.
      * @param descripcion la línea que dice qué es o qué contiene, o {@code null}.
      * @param aclaracion  lo que hay que decir siempre para que no se confunda
      *                    con otro documento, o {@code null}.
      */
-    record Documento(String codigo, String nombre, String subpaso, String descripcion, String firma,
+    record Documento(String clave, String codigo, String nombre, String subpaso, String descripcion, String firma,
                      String aclaracion, Pattern reconocer) {
     }
 
@@ -93,7 +99,7 @@ public class FichaDeDocumentoFormal {
             // No es del supervisor y SICOT no lo arma, pero se le confunde con
             // los suyos (ver la nota de PlantillaDocumentoIA): por eso tiene
             // ficha, para decir de quién es.
-            new Documento("GRF-F-089", "Oficio de Pago", null, null,
+            new Documento(null, "GRF-F-089", "Oficio de Pago", null, null,
                     "el Ordenador del gasto (Subdirector), no el supervisor.",
                     "En SICOT: no es uno de los documentos que usted firma, y SICOT no lo arma. Lo que usted "
                             + "firma para el pago es la Certificación de cumplimiento, en el sub-paso 5.3.",
@@ -104,15 +110,31 @@ public class FichaDeDocumentoFormal {
      * corriente: {@link PreguntaNormalizada} les quita tildes y signos igual
      * que a la pregunta.
      */
+    // Se buscan con borde de palabra a los dos lados (contieneAlgunaFrase): con
+    // el borde solo a la izquierda, «qué es» casaba con «qué escribo» y «qué
+    // está», y la ficha contestaba preguntas abiertas sobre la redacción.
     private static final Set<String> PREGUNTAS_POR_EL_DOCUMENTO = PreguntaNormalizada.normalizarTodas(
-            "qué es", "qué son", "qué significa", "para qué sirve", "qué contiene", "qué lleva",
+            "qué es", "qué son", "qué significa", "para qué sirve", "qué contiene", "qué lleva", "qué tiene",
+            "explícame", "explica",
             "quién firma", "quién lo firma", "quién la firma", "quiénes firman", "quién debe firmar",
-            "en qué sub-paso", "en qué subpaso", "en qué paso", "en qué etapa",
+            "en qué sub-paso", "en qué subpaso", "en qué paso", "en qué etapa", "en qué estado", "qué estado",
             "cuándo se genera", "cuándo se firma", "cuándo se hace",
             "dónde se genera", "dónde se firma", "dónde encuentro", "dónde lo encuentro", "dónde la encuentro",
             "de dónde saco", "dónde consigo", "cómo se genera", "cómo lo genero", "cómo la genero", "cómo se hace",
+            "cómo se firma", "cómo lo firmo", "cómo la firmo",
             "qué código", "cuál es el código", "tiene código", "lleva código", "código oficial", "código de formato",
-            "es lo mismo", "diferencia");
+            "es lo mismo", "diferencia", "diferencias");
+
+    /**
+     * «El acta» o «el informe» a secas. Con el nombre abreviado la ficha no
+     * reconocía ningún documento, y «¿en qué paso se firma el informe?» acababa
+     * en la guía del paso actual, que contestaba el paso en el que va el
+     * supervisor: otra pregunta, con toda seguridad. Ahora se dan las fichas de
+     * los dos candidatos. «Acta de liquidación» y demás nombres con «de» no
+     * entran: no son documentos de SICOT.
+     */
+    private static final Pattern ACTA_SIN_CALIFICAR = Pattern.compile("(?<= )actas?(?! de | del )(?![a-z0-9])");
+    private static final Pattern INFORME_SIN_CALIFICAR = Pattern.compile("(?<= )informes?(?! de | del )(?![a-z0-9])");
 
     /** Palabras que no añaden pregunta: «¿Y el acta de inicio?» nombra el documento a secas. */
     private static final Set<String> PALABRAS_DE_RELLENO = Set.of(
@@ -131,11 +153,15 @@ public class FichaDeDocumentoFormal {
         if (p.estaVacia() || p.largo() > 200 || p.tienePalabra("si")) {
             return List.of();
         }
-        List<Documento> nombrados = DOCUMENTOS.stream().filter(d -> p.coincide(d.reconocer())).toList();
-        if (nombrados.isEmpty()) {
-            return List.of();
+        List<Documento> nombrados = nombrados(p);
+        boolean ambiguos = nombrados.isEmpty();
+        if (ambiguos) {
+            nombrados = candidatosDeUnNombreAbreviado(p);
+            if (nombrados.isEmpty()) {
+                return List.of();
+            }
         }
-        if (p.contieneAlguna(PREGUNTAS_POR_EL_DOCUMENTO) || soloLosNombra(p, nombrados)) {
+        if (p.contieneAlgunaFrase(PREGUNTAS_POR_EL_DOCUMENTO) || (!ambiguos && soloLosNombra(p, nombrados))) {
             return nombrados;
         }
         return List.of();
@@ -143,6 +169,40 @@ public class FichaDeDocumentoFormal {
 
     public boolean puedeResponder(String pregunta) {
         return !reconocer(pregunta).isEmpty();
+    }
+
+    /**
+     * ¿Es este trozo de una pregunta compuesta de los que contesta la ficha?
+     * Ver {@link PreguntaNormalizada#otrasPreguntas}.
+     */
+    boolean cubre(String trozo) {
+        PreguntaNormalizada p = PreguntaNormalizada.de(trozo);
+        // «¿… y quién lo firma?» sigue hablando del mismo documento; «¿… y
+        // dónde consigo la póliza?» trae una frase de la ficha pero pregunta
+        // por otra cosa, y esa no se puede dar por contestada.
+        return !nombrados(p).isEmpty() || (p.contieneAlgunaFrase(PREGUNTAS_POR_EL_DOCUMENTO)
+                && OTRAS_COSAS.stream().noneMatch(p::tienePalabra));
+    }
+
+    /** Lo que, nombrado en otro trozo de la pregunta, no es el documento de la ficha. */
+    private static final Set<String> OTRAS_COSAS = Set.of("poliza", "polizas", "garantia", "garantias", "factura",
+            "facturas", "rut", "pila", "planilla", "cdp", "certificado", "camara", "contrato", "valor", "pago",
+            "pagos", "fecha", "plazo");
+
+    /** Los documentos que la pregunta nombra con su nombre o su código completo. */
+    static List<Documento> nombrados(PreguntaNormalizada p) {
+        return DOCUMENTOS.stream().filter(d -> p.coincide(d.reconocer())).toList();
+    }
+
+    /** Los documentos a los que puede referirse «el acta» o «el informe» dicho a secas. */
+    static List<Documento> candidatosDeUnNombreAbreviado(PreguntaNormalizada p) {
+        if (p.coincide(ACTA_SIN_CALIFICAR)) {
+            return List.of(DOCUMENTOS.get(0), DOCUMENTOS.get(2));
+        }
+        if (p.coincide(INFORME_SIN_CALIFICAR)) {
+            return List.of(DOCUMENTOS.get(1), DOCUMENTOS.get(4));
+        }
+        return List.of();
     }
 
     /**
@@ -157,10 +217,15 @@ public class FichaDeDocumentoFormal {
         if (documentos.isEmpty()) {
             return Optional.empty();
         }
+        return Optional.of(componer(documentos, etapas));
+    }
+
+    /** Las fichas de estos documentos, con el estado real de sus sub-pasos en el contrato. */
+    String componer(List<Documento> documentos, List<EtapaResponse> etapas) {
         String fichas = documentos.stream()
                 .map(d -> ficha(d, etapas == null ? List.of() : etapas))
                 .collect(Collectors.joining("\n\n"));
-        return Optional.of(fichas + "\n\nSi necesita más detalle, pregúnteme.");
+        return fichas + "\n\nSi necesita más detalle, pregúnteme.";
     }
 
     /** La ficha del documento que SICOT arma en este sub-paso, si arma alguno. */
@@ -188,9 +253,11 @@ public class FichaDeDocumentoFormal {
         etapa.ifPresent(e -> sb.append(" (Paso %d: %s)".formatted(e.numero(), e.nombre())));
         sb.append('.');
         sb.append("\nQuién firma: ").append(d.firma());
-        sb.append("\nCómo se hace en SICOT: al llegar al sub-paso, pulse «Firmar documento». SICOT arma el "
-                + "documento con los datos exactos del contrato y usted lo revisa antes de firmarlo; lo que SICOT "
-                + "no sabe (facturas, pólizas, pagos) queda marcado como «dato pendiente».");
+        // El flujo de la interfaz, dicho igual que en la guía y en el prompt
+        // (FlujoDeFirma). Hasta el 2-10-2026 decía que lo que SICOT no sabe
+        // «queda como dato pendiente» —la interfaz se lo pide antes— y que él
+        // «lo revisa antes de firmarlo» sin decir dónde.
+        sb.append("\nCómo se hace en SICOT: ").append(FlujoDeFirma.COMPLETO);
         etapa.flatMap(e -> e.subEtapas().stream().filter(s -> d.subpaso().equals(s.codigo())).findFirst())
                 .filter(s -> s.estado() != null)
                 .ifPresent(s -> sb.append("\nEn este contrato, el sub-paso %s está %s."
@@ -237,7 +304,8 @@ public class FichaDeDocumentoFormal {
         PlantillaDocumentoIA plantilla = PlantillaDocumentoIA.CATALOGO.get(clave);
         // «PENDIENTE_DE_DEFINIR» es una marca interna, no un código: no se le dice al supervisor.
         String codigo = plantilla.codigo().startsWith("PENDIENTE") ? null : plantilla.codigo();
-        return new Documento(codigo, plantilla.nombre(), subpaso, descripcion, firma, aclaracion, reconocedor(formas));
+        return new Documento(clave, codigo, plantilla.nombre(), subpaso, descripcion, firma, aclaracion,
+                reconocedor(formas));
     }
 
     /**

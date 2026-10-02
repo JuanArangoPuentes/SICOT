@@ -6,6 +6,7 @@ import { abrirArchivo, guardarArchivo, type ResultadoGuardado } from './guardarA
 import { apiFetch, apiFetchBlob } from './api/client'
 import { historialParaElCopiloto } from './historialCopiloto'
 import type {
+  ChatRequest,
   ChatResponse,
   DocumentoGeneradoResponse,
   DocumentoResponse,
@@ -186,15 +187,25 @@ export function precalentarCopiloto(contratoId: number): void {
 // Copiloto para que las preguntas de seguimiento tengan sentido en vez de
 // responderse como si la conversación empezara de cero. Se recorta aquí, y no
 // en quien llama, porque el tope lo pone el backend: ver historialCopiloto.ts.
-export function preguntarCopiloto(contratoId: number, pregunta: string, historial?: ChatMsg[]): Promise<ChatResponse> {
+//
+// `opciones.idSolicitud` y `opciones.revisarPaso`: ver ChatRequest.
+export function preguntarCopiloto(
+  contratoId: number,
+  pregunta: string,
+  historial?: ChatMsg[],
+  opciones?: { idSolicitud?: string; revisarPaso?: number },
+): Promise<ChatResponse> {
+  const cuerpo: ChatRequest = {
+    pregunta,
+    historial:
+      historial &&
+      historialParaElCopiloto(historial).map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
+    idSolicitud: opciones?.idSolicitud,
+    revisarPaso: opciones?.revisarPaso,
+  }
   return apiFetch<ChatResponse>(`/api/contratos/${contratoId}/copiloto/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pregunta,
-      historial:
-        historial &&
-        historialParaElCopiloto(historial).map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
-    }),
+    body: JSON.stringify(cuerpo),
   })
 }

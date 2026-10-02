@@ -255,16 +255,25 @@ class AccionesDeAutomatizacionTest {
     }
 
     /**
-     * Un documento que el supervisor pidió al copiloto es actividad del
-     * expediente y se cuenta como tal. Hasta el 21-09-2026 la generación no
-     * dejaba registro, así que el resumen no tenía cómo saberlo.
+     * Un documento generado es actividad del expediente y se cuenta como tal.
+     * Hasta el 21-09-2026 la generación no dejaba registro, así que el resumen
+     * no tenía cómo saberlo.
+     *
+     * <p>2-10-2026: el resumen decía «se generaron 2 documentos con el
+     * copiloto» por un solo borrador rearmado tras cancelar la revisión, y
+     * atribuía al modelo un documento que arma SICOT. Las descripciones son
+     * las que escribe GeneracionDocumentoService.
      */
     @Test
-    void unDocumentoGeneradoConElCopilotoSeCuentaEnElResumen() {
+    void unDocumentoGeneradoSeCuentaUnaVezYSeAtribuyeASicot() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
         when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
                 .thenReturn(List.of(
-                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado con el copiloto."),
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) regenerado por SICOT con los "
+                                + "datos del contrato en la subetapa 2.7; queda pendiente de firma."),
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado por SICOT con los "
+                                + "datos del contrato; las observaciones del supervisor se redactaron con el copiloto "
+                                + "en la subetapa 2.7; queda pendiente de firma."),
                         registro("DOCUMENTO_CARGADO", "Documento «soporte.pdf» cargado.")));
 
         redaccionDeResumen.ejecutar(tareaDeResumen());
@@ -272,7 +281,9 @@ class AccionesDeAutomatizacionTest {
         ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
         verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
         assertThat(texto.getValue())
-                .contains("se generó un documento con el copiloto")
+                .contains("se generó un documento en SICOT")
+                .doesNotContain("se generaron 2")
+                .doesNotContain("con el copiloto")
                 .contains("se cargó un documento");
     }
 

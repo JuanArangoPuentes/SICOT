@@ -15,11 +15,12 @@
 import type { RefObject } from 'react'
 import { AvatarIcon, IconArrowRight, IconChevron } from '@/components/icons'
 import type { ChatMsg, Step } from '@/types/domain'
-import type { ContratoResponse } from '@/services/api/types'
+import type { AccionCopiloto, ContratoResponse } from '@/services/api/types'
 
 export type RevisionPaso = {
   stepId: number
   subStepId: string
+  /** El Copiloto ya revisó la descripción (o falló al intentarlo). Confirmar no lo exige. */
   listaParaConfirmar: boolean
   /** Lo que el supervisor describió del paso: va como notas al documento. */
   descripcion?: string
@@ -34,6 +35,7 @@ export default function PanelCopiloto({
   pensando,
   tutorialMode,
   revisionPaso,
+  revisando = false,
   activeStep,
   chatInput,
   chatEndRef,
@@ -45,6 +47,7 @@ export default function PanelCopiloto({
   onIniciarPaso,
   onConfirmarRevision,
   onCancelarRevision,
+  onAccion,
 }: {
   prefs: { avatarId: string; avatarName: string }
   contrato: ContratoResponse
@@ -52,6 +55,8 @@ export default function PanelCopiloto({
   pensando: boolean
   tutorialMode: boolean
   revisionPaso: RevisionPaso | null
+  /** La revisión del paso está esperando al modelo (no una pregunta suelta). */
+  revisando?: boolean
   activeStep: Step | undefined
   chatInput: string
   chatEndRef: RefObject<HTMLDivElement | null>
@@ -63,8 +68,24 @@ export default function PanelCopiloto({
   onIniciarPaso: (stepId: number) => void
   onConfirmarRevision: () => void
   onCancelarRevision: () => void
+  /** El supervisor pulsó el botón de la acción que ofrecía una respuesta. */
+  onAccion: (accion: AccionCopiloto) => void
 }) {
-  const bloqueado = pensando || !!revisionPaso
+  // Las sugerencias son preguntas: con una revisión del paso abierta van al
+  // chat igual que cualquier pregunta escrita, sin tomarse por la descripción.
+  const bloqueado = pensando
+
+  // Si el sub-paso lleva documento, confirmar también lo firma: el botón lo
+  // dice, para que nadie firme un acta sin saberlo. Y dice si se confirma sin
+  // la revisión del Copiloto, que es de apoyo y nunca obligatoria.
+  const confirmar = revisionPaso?.documento
+    ? `Confirmar Paso ${revisionPaso.stepId} y firmar ${revisionPaso.documento}`
+    : `Confirmar Paso ${revisionPaso?.stepId} como completado`
+  const etiquetaConfirmar = revisionPaso?.listaParaConfirmar
+    ? confirmar
+    : revisando
+      ? `${confirmar} sin esperar la revisión`
+      : `${confirmar} sin revisión`
 
   return (
     <div
@@ -193,6 +214,29 @@ export default function PanelCopiloto({
                 {m.text}
               </div>
             )}
+            {/* Lo que el servidor armó sin modelo no se presenta como IA. */}
+            {m.origen === 'sistema' && (
+              <div
+                title="SICOT la armó con los datos del contrato y el procedimiento, sin el modelo de IA"
+                style={{ paddingLeft: 30, marginTop: 3, fontSize: 10, color: 'var(--text-muted)' }}
+              >
+                Respuesta del sistema
+              </div>
+            )}
+            {/* La acción no se ejecuta al llegar la respuesta: solo si el
+                supervisor pulsa el botón. */}
+            {m.accion && (
+              <div style={{ paddingLeft: 30, marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => m.accion && onAccion(m.accion)}
+                  style={{ padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {m.accion.etiqueta} <IconArrowRight size={11} />
+                </button>
+              </div>
+            )}
           </div>
         ))}
 
@@ -224,7 +268,11 @@ export default function PanelCopiloto({
                 color: 'var(--text-muted)',
               }}
             >
-              Pensando… puede tardar uno o varios minutos según la carga del servidor. No cierre esta ventana.
+              {/* En un teléfono, apagarse la pantalla o cambiar de aplicación
+                  corta la petición: SICOT pide la pantalla encendida, pero no
+                  todos los WebView lo permiten. */}
+              Pensando… puede tardar uno o varios minutos según la carga del servidor. Mantenga SICOT abierto, con la
+              pantalla encendida, hasta que responda.
             </div>
           </div>
         )}
@@ -247,7 +295,12 @@ export default function PanelCopiloto({
           </div>
         )}
 
-        {revisionPaso?.listaParaConfirmar && !pensando && (
+        {/* La revisión es consultiva: confirmar y cancelar están desde el
+            principio, también mientras el modelo revisa. Antes solo aparecían
+            cuando la revisión había terminado, y el supervisor quedaba atrapado
+            describiendo y esperando minutos para cerrar cada paso. Con una
+            pregunta suelta en curso no se ofrece confirmar: es la suya. */}
+        {revisionPaso && (
           <div
             style={{
               paddingLeft: 30,
@@ -256,13 +309,11 @@ export default function PanelCopiloto({
               flexWrap: 'wrap',
             }}
           >
-            <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
-              {/* Si el sub-paso lleva documento, confirmar también lo firma: el
-                  botón lo dice, para que nadie firme un acta sin saberlo. */}
-              {revisionPaso.documento
-                ? `Confirmar Paso ${revisionPaso.stepId} y firmar ${revisionPaso.documento}`
-                : `Confirmar Paso ${revisionPaso.stepId} como completado`}
-            </button>
+            {(!pensando || revisando) && (
+              <button className="btn-green" onClick={onConfirmarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
+                {etiquetaConfirmar}
+              </button>
+            )}
             <button className="btn-ghost" onClick={onCancelarRevision} style={{ padding: '8px 16px', fontSize: 13 }}>
               Cancelar, quiero revisar algo antes
             </button>
@@ -329,7 +380,9 @@ export default function PanelCopiloto({
               ? 'Esperando respuesta del Copiloto…'
               : revisionPaso && !revisionPaso.listaParaConfirmar
                 ? 'Describa qué hizo o verificó en este paso...'
-                : 'Escriba una orden o pregunta a la IA...'
+                : // Solo lo que de verdad se atiende: preguntas, y las órdenes de
+                  // ir a una pantalla que el servidor resuelve sin el modelo.
+                  'Pregunte, o pida «llévame al paso 3»…'
           }
           disabled={pensando}
           // Sin etiqueta visible: el lector de pantalla necesita un nombre, y el

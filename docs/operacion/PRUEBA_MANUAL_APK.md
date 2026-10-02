@@ -38,5 +38,6 @@ compilado en la máquina: es lo que va a instalar el supervisor.
 | 9 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT |
 | 10 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece |
 | 11 | Cerrar sesión | Vuelve a la pantalla de acceso |
+| 12 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece |
 
 Si algo de la tabla no pasa, la versión no se publica hasta saber por qué.

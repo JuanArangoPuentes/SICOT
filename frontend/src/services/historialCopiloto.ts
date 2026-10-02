@@ -18,6 +18,14 @@
 // pantalla: el modelo ya recibe el procedimiento y el estado real de las
 // etapas en su prompt, y un «No pude responder…» en el historial le haría
 // creer que fue él quien lo dijo.
+//
+// Tampoco van las respuestas que el servidor armó sin modelo (origen
+// 'sistema': fichas de documento, guía del paso, órdenes), ni la pregunta que
+// las pidió. Son textos fijos de unos cientos de tokens que nunca pasaron por
+// Ollama, así que no están en su caché: cuatro fichas tocadas en las
+// sugerencias le sumaban más de un minuto de CPU a la siguiente pregunta
+// abierta (auditoría del 02-10-2026). Y la pregunta sola, sin su respuesta,
+// el modelo la tomaría por pendiente y la contestaría otra vez.
 
 import type { ChatMsg } from '@/types/domain'
 
@@ -32,6 +40,22 @@ export function historialParaElCopiloto(mensajes: readonly ChatMsg[]): ChatMsg[]
     if (m.role === 'ai' && m.origen === 'guia') ultimaGuia = i
   })
   return mensajes
-    .filter((m, i) => m.role === 'user' || m.origen === 'modelo' || i === ultimaGuia)
+    .filter(
+      (m, i) => (m.role === 'user' && !laRespondioElSistema(mensajes, i)) || m.origen === 'modelo' || i === ultimaGuia,
+    )
     .slice(-TURNOS_DE_HISTORIAL)
+}
+
+/**
+ * ¿La pregunta `i` la contestó el servidor sin modelo? Su respuesta es el
+ * primer mensaje con origen de respuesta antes de la pregunta siguiente; los
+ * avisos de SICOT que haya en medio («la respuesta se cortó…») no cuentan.
+ */
+function laRespondioElSistema(mensajes: readonly ChatMsg[], i: number): boolean {
+  for (const m of mensajes.slice(i + 1)) {
+    if (m.role === 'user') return false
+    if (m.origen === 'sistema') return true
+    if (m.origen === 'modelo') return false
+  }
+  return false
 }

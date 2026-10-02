@@ -287,8 +287,68 @@ export interface DocumentoGeneradoResponse extends DocumentoResponse {
   huellaDelBorrador: string
 }
 
+/** Un turno de la conversación previa que se le manda al Copiloto. */
+export interface ChatTurno {
+  rol: 'user' | 'ai'
+  texto: string
+}
+
+/** Pregunta al Copiloto (POST /api/contratos/{id}/copiloto/chat). */
+export interface ChatRequest {
+  /** Lo que escribió el supervisor; en una revisión del paso, solo su descripción. */
+  pregunta: string
+  historial?: ChatTurno[]
+  /**
+   * Uno por pregunta, generado aquí. El reintento automático al volver de
+   * segundo plano repite el mismo: el servidor reconoce la pregunta y devuelve
+   * la inferencia que sigue en curso o la ya calculada, en vez de lanzar otra.
+   */
+  idSolicitud?: string
+  /**
+   * Paso (1..6) que el supervisor quiere cerrar: la petición es la revisión
+   * consultiva de ese paso. Las instrucciones de la revisión las arma el
+   * servidor; el cliente no las escribe.
+   */
+  revisarPaso?: number
+}
+
+/** Quién escribió la respuesta: SICOT con datos fijos, sin modelo, o el modelo de IA. */
+export type FuenteRespuestaCopiloto = 'SISTEMA' | 'MODELO'
+
+export type TipoAccionCopiloto =
+  | 'IR_A_PASO'
+  | 'IR_A_SUBPASO'
+  | 'ABRIR_DOCUMENTO'
+  | 'ABRIR_EVIDENCIA'
+  | 'MOSTRAR_ALERTAS'
+  | 'MOSTRAR_DOCUMENTOS'
+  | 'DESCARGAR_DOCUMENTO'
+  | 'IR_A_CONFIGURACION'
+
+/**
+ * La pantalla que el Copiloto ofrece abrir junto a su respuesta. Ninguna
+ * acción firma, marca ni genera nada: solo lleva a donde el supervisor decide.
+ * La interfaz la pinta como un botón con `etiqueta` y la ejecuta solo cuando
+ * él lo pulsa, nunca al llegar la respuesta.
+ */
+export interface AccionCopiloto {
+  tipo: TipoAccionCopiloto
+  paso: number | null
+  /** Código de la subetapa, «N.M». */
+  subpaso: string | null
+  /** Clave del catálogo de documentos del backend (ACTA_INICIO…). */
+  documentoTipo: string | null
+  /** Solo en DESCARGAR_DOCUMENTO, y de un documento que existe. */
+  documentoId: number | null
+  etiqueta: string
+}
+
 export interface ChatResponse {
   respuesta: string
+  // Opcionales a propósito: el APK y el instalador de escritorio pueden hablar
+  // con un servidor anterior al 02-10-2026, que solo manda `respuesta`.
+  fuente?: FuenteRespuestaCopiloto
+  accion?: AccionCopiloto | null
 }
 
 // ─── Alertas ─────────────────────────────────────────────────────────────────
