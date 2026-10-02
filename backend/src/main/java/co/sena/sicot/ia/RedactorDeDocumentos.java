@@ -382,6 +382,22 @@ public final class RedactorDeDocumentos {
 
     private static List<BloqueDocumento> actaDeRecibo(Contrato c, LocalDate hoy, String obs, Datos d) {
         String corto = "[dato pendiente]";
+        // El valor total y la fecha de vencimiento son los actuales, como en el
+        // Informe de Supervisión: con una adición o una prórroga declaradas,
+        // los que dé el supervisor o pendientes. Aquí además el acta no tiene
+        // casilla para la adición ni la prórroga, así que si no se declaran
+        // tampoco se afirman los iniciales: hasta la auditoría del 02-10-2026
+        // el acta imprimía el valor y la fecha registrados aunque el contrato
+        // tuviera adiciones, y contradecía al informe del mismo contrato.
+        String valorTotal;
+        if (d.tiene("valorActual")) {
+            BigDecimal v = d.pesos("valorActual");
+            valorTotal = v != null ? entero(v) : d.valor("valorActual");
+        } else {
+            valorTotal = esNo(d.valor("adicion")) && c.getValor() != null ? entero(c.getValor()) : corto;
+        }
+        String fechaVencimiento = d.tiene("fechaTerminacionActual") ? d.fecha("fechaTerminacionActual", CORTA)
+                : esNo(d.valor("prorroga")) && c.getFechaFin() != null ? c.getFechaFin().format(CORTA) : corto;
         DatosActaDeRecibo datos = new DatosActaDeRecibo(
                 d.o("actaNumero", corto),
                 hoy.format(DateTimeFormatter.ofPattern("dd 'de' MMMM yyyy", ES)),
@@ -398,8 +414,8 @@ public final class RedactorDeDocumentos {
                 c.getContratista() != null ? mayusculas(c.getContratista()) : corto,
                 c.getContratistaNit() != null && !c.getContratistaNit().isBlank()
                         ? soloDigitosSinVerificacion(c.getContratistaNit()) : corto,
-                c.getValor() != null ? entero(c.getValor()) : corto,
-                c.getFechaFin() != null ? c.getFechaFin().format(CORTA) : corto,
+                valorTotal,
+                fechaVencimiento,
                 c.getObjeto() != null ? mayusculas(c.getObjeto()) : corto,
                 d.o("cantidadDevolutivos", corto),
                 d.o("cantidadConsumo", corto),

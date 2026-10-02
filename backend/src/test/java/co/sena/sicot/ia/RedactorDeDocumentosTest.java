@@ -178,7 +178,8 @@ class RedactorDeDocumentosTest {
     @Test
     void elActaDeReciboEsLaHojaGilF010() {
         String t = pdf("ACTA_RECIBO", contrato(), "Se reciben los 26 ítems solicitados en sus respectivas cantidades.",
-                Map.of("actaNumero", "1", "cantidadConsumo", "26", "tipoEntrega", "suministro"));
+                Map.of("actaNumero", "1", "cantidadConsumo", "26", "tipoEntrega", "suministro", "adicion", "N/A",
+                        "prorroga", "N/A"));
         assertThat(t)
                 .contains("Versión: 08")
                 .contains("Código: GIL-F-010")
@@ -193,6 +194,41 @@ class RedactorDeDocumentosTest {
                 .contains("Se reciben los 26 ítems")
                 .contains("lcrestrepo@sena.edu.co")
                 .contains("3042713044");
+    }
+
+    /**
+     * Auditoría del 02-10-2026: el acta imprimía el valor y la fecha iniciales
+     * aunque el contrato tuviera adiciones o prórrogas, y contradecía al
+     * Informe de Supervisión del mismo contrato. Como el acta no tiene casilla
+     * para declararlas, sin ese dato tampoco afirma los iniciales.
+     */
+    @Test
+    void elActaDeReciboLlevaElValorYLaFechaActuales() {
+        BloqueDocumento.DatosActaDeRecibo sinDeclarar = datosDelActa(Map.of());
+        assertThat(sinDeclarar.valorTotal()).isEqualTo("[dato pendiente]");
+        assertThat(sinDeclarar.fechaVencimiento()).isEqualTo("[dato pendiente]");
+
+        BloqueDocumento.DatosActaDeRecibo sinCambios = datosDelActa(Map.of("adicion", "N/A", "prorroga", "No"));
+        assertThat(sinCambios.valorTotal()).isEqualTo("10.000.000");
+        assertThat(sinCambios.fechaVencimiento()).isEqualTo("17/12/2025");
+
+        BloqueDocumento.DatosActaDeRecibo conCambios = datosDelActa(Map.of(
+                "adicion", "ADICIÓN 1 por $5.000.000,00", "prorroga", "PRÓRROGA 1 de un mes"));
+        assertThat(conCambios.valorTotal()).isEqualTo("[dato pendiente]");
+        assertThat(conCambios.fechaVencimiento()).isEqualTo("[dato pendiente]");
+
+        BloqueDocumento.DatosActaDeRecibo actuales = datosDelActa(Map.of("adicion", "ADICIÓN 1",
+                "valorActual", "$15.000.000,00", "prorroga", "PRÓRROGA 1", "fechaTerminacionActual", "17-01-2026"));
+        assertThat(actuales.valorTotal()).isEqualTo("15.000.000");
+        assertThat(actuales.fechaVencimiento()).isEqualTo("17/01/2026");
+    }
+
+    private static BloqueDocumento.DatosActaDeRecibo datosDelActa(Map<String, String> datos) {
+        return RedactorDeDocumentos.componer(PlantillaDocumentoIA.CATALOGO.get("ACTA_RECIBO"), contrato(), HOY, null,
+                        datos).stream()
+                .filter(b -> b instanceof BloqueDocumento.HojaDeRecibo)
+                .map(b -> ((BloqueDocumento.HojaDeRecibo) b).datos())
+                .findFirst().orElseThrow();
     }
 
     // ── Certificado del supervisor ──────────────────────────────────────────

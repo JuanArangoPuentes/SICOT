@@ -65,7 +65,11 @@ se dibuja casilla por casilla (`HojaActaDeRecibo`) con la geometría medida en
 la impresión real (Excel la imprime al 55 %). SICOT la dibuja al 60 % y
 centrada, con la misma geometría y la letra algo más legible. El texto que no
 cabe en su casilla se reduce de letra hasta 4,5 pt antes de salirse. Se
-conserva «SATISFACCION» sin tilde, que es texto fijo del formato.
+conserva «SATISFACCION» sin tilde, que es texto fijo del formato. El VALOR
+TOTAL y la FECHA DE VENCIMIENTO son los actuales: el acta pide las
+adiciones y prórrogas (como el GCCON-F-031) y, si hubo, el valor o la fecha
+actual; sin esa declaración quedan pendientes, porque el acta no tiene
+casilla donde se vea que el valor registrado podría no ser el vigente.
 
 **Certificación de cumplimiento (ESUCON).** No tiene código oficial confirmado
 y no se le inventa uno. Usa el logo negro, Arial (**Liberation Sans**) de

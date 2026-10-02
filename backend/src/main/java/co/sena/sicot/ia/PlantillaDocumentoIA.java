@@ -169,6 +169,21 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
             "Multas o sanciones durante la ejecución (NO, o cuáles)", "NO");
     private static final CampoDelDocumento FORMA_DE_PAGO = new CampoDelDocumento("formaDePago", "Forma de pago",
             "El valor del contrato será cancelado mediante único pago según lo facturado…");
+    /**
+     * Prórrogas y adiciones: SICOT solo registra el valor y la fecha
+     * iniciales. Con una declarada, el valor o la fecha actual los da el
+     * supervisor o quedan pendientes. Los piden el Informe de Supervisión y el
+     * Acta de Recibo, que hasta la auditoría del 02-10-2026 imprimía los
+     * iniciales aunque el contrato tuviera adiciones o prórrogas.
+     */
+    private static final CampoDelDocumento PRORROGA =
+            new CampoDelDocumento("prorroga", "Prórrogas del contrato", "N/A");
+    private static final CampoDelDocumento ADICION =
+            new CampoDelDocumento("adicion", "Adiciones al contrato", "N/A");
+    private static final CampoDelDocumento VALOR_ACTUAL = CampoDelDocumento.opcional("valorActual",
+            "Valor actual del contrato (si hubo adiciones)", "$25.000.000,00");
+    private static final CampoDelDocumento FECHA_TERMINACION_ACTUAL = CampoDelDocumento.opcional(
+            "fechaTerminacionActual", "Fecha de terminación actual (si hubo prórrogas)", "20/12/2025");
 
     // Las tablas comparten clave entre formatos cuando son lo mismo: las
     // obligaciones específicas del Informe de Supervisión son las del Informe
@@ -233,13 +248,8 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                             Encabezado.CLASIFICACION_EN_CELDAS, GESTION_CONTRACTUAL, "INFORME DE SUPERVISIÓN",
                             Familia.CALIBRI, 11f, LOGO_GCCON, paginaGccon(706.95f),
                             new EstiloPie(Familia.CALIBRI, 11f, 55.5f, Familia.CALIBRI, 11f, 40.1f)),
-                    List.of(FECHA_SUSCRIPCION, PLAZO, FORMA_DE_PAGO,
-                            new CampoDelDocumento("prorroga", "Prórrogas del contrato", "N/A"),
-                            new CampoDelDocumento("adicion", "Adiciones al contrato", "N/A"),
-                            CampoDelDocumento.opcional("valorActual", "Valor actual del contrato (si hubo adiciones)",
-                                    "$25.000.000,00"),
-                            CampoDelDocumento.opcional("fechaTerminacionActual",
-                                    "Fecha de terminación actual (si hubo prórrogas)", "20/12/2025"),
+                    List.of(FECHA_SUSCRIPCION, PLAZO, FORMA_DE_PAGO, PRORROGA, ADICION, VALOR_ACTUAL,
+                            FECHA_TERMINACION_ACTUAL,
                             new CampoDelDocumento("informeNumero", "Número del informe de supervisión", "1"),
                             new CampoDelDocumento("periodoDesde", "Inicio del periodo del informe", "01/09/2026"),
                             new CampoDelDocumento("periodoHasta", "Fin del periodo del informe", "30/09/2026"),
@@ -284,6 +294,7 @@ public record PlantillaDocumentoIA(String clave, String codigo, String nombre, F
                                     "15/05/2026"),
                             new CampoDelDocumento("rubroPresupuestal", "Rubro presupuestal",
                                     "C-3603-1300-20-20305C-3603025-02"),
+                            ADICION, VALOR_ACTUAL, PRORROGA, FECHA_TERMINACION_ACTUAL,
                             new CampoDelDocumento("cantidadDevolutivos", "Cantidad de bienes devolutivos", "0"),
                             new CampoDelDocumento("cantidadConsumo", "Cantidad de bienes de consumo", "26"),
                             CEDULA_SUPERVISOR,
