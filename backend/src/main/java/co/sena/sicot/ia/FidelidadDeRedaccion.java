@@ -116,6 +116,43 @@ public final class FidelidadDeRedaccion {
         return resultado;
     }
 
+    /**
+     * Quita el año que la redacción le agrega a una fecha que las notas
+     * escriben sin año: «antes del 20 de octubre» redactado «antes del 20 de
+     * octubre de 2026» queda como lo escribió el supervisor.
+     *
+     * <p>En un registro formal el modelo completa el año casi siempre, con
+     * cualquier temperatura, y la comprobación lo descartaba como «agregaba
+     * cifras» (auditoría del 02-10-2026, en vivo con qwen2.5:7b). Aceptar el
+     * año supuesto no es una opción: al cambiar de año sería un dato
+     * inventado, y el diálogo de revisión no resalta números. Así el
+     * documento no lleva nada que el supervisor no dio, y la comprobación de
+     * fechas sigue exigiendo que una fecha sin año se quede sin año. Si las
+     * notas también escriben ese mismo día con año, ese año es suyo y no se
+     * toca.
+     */
+    public static String quitarAniosAgregados(String redactado, String notas) {
+        if (redactado == null || notas == null) {
+            return redactado;
+        }
+        List<Fecha> deNotas = fechas(normalizarCifras(notas));
+        String r = redactado;
+        for (Fecha f : deNotas) {
+            if (f.anio() != null || f.mes() < 1 || f.mes() > 12
+                    || deNotas.stream().anyMatch(o -> o.anio() != null && o.dia() == f.dia() && o.mes() == f.mes())) {
+                continue;
+            }
+            String d = "0?" + f.dia();
+            String diaLargo = f.dia() == 1 ? "(?:0?1|primero)" : d;
+            r = Pattern.compile("(?<![\\d/.,-])(" + d + "[/-]0?" + f.mes() + ")[/-]\\d{4}(?![\\d/-])")
+                    .matcher(r).replaceAll("$1");
+            r = Pattern.compile("(?<![\\p{L}\\d])(" + diaLargo + "\\s+de\\s+" + MESES[f.mes()]
+                            + ")\\s+(?:de|del)\\s+\\d{4}(?!\\d)", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+                    .matcher(r).replaceAll("$1");
+        }
+        return r;
+    }
+
     private static boolean mismasIniciales(String[] a, String[] b) {
         if (a.length != b.length) {
             return false;

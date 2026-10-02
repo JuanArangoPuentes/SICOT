@@ -498,11 +498,13 @@ public class GeneracionDocumentoService {
 
     /**
      * Lo que se le hace a la respuesta del modelo antes de comprobarla, sin
-     * cambiar lo que dice: poner exactos los nombres conocidos. Lo que se
+     * cambiar lo que dice: poner exactos los nombres conocidos y quitar el año
+     * que le agrega a una fecha que el supervisor escribió sin él. Lo que se
      * comprueba y lo que entra al documento es el mismo texto.
      */
     static String depurar(String redactado, String notas, List<String> nombres) {
-        return FidelidadDeRedaccion.corregirNombres(redactado.strip(), nombres);
+        return FidelidadDeRedaccion.quitarAniosAgregados(
+                FidelidadDeRedaccion.corregirNombres(redactado.strip(), nombres), notas);
     }
 
     /**

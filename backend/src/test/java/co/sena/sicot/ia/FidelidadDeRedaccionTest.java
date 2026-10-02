@@ -397,4 +397,43 @@ class FidelidadDeRedaccionTest {
             assertThat(fiel(par[1], par[0])).as(par[0]).isFalse();
         }
     }
+
+    // ── Auditoría del 02-10-2026: el año completado ─────────────────────────
+
+    private static final String NOTAS_CON_Y_SIN_ANIO =
+            "el 12 de octubre de 2026 visité la obra, entregará antes del 20 de octubre";
+
+    /** En vivo con qwen2.5:7b: completa el año de la fecha que el supervisor escribió sin él. */
+    @Test
+    void elAnioQueLaRedaccionLeAgregaAUnaFechaSeQuitaYLaRedaccionPasa() {
+        String limpia = FidelidadDeRedaccion.quitarAniosAgregados(
+                "El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO);
+
+        assertThat(limpia).isEqualTo("El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre.");
+        assertThat(fiel(limpia, NOTAS_CON_Y_SIN_ANIO)).isTrue();
+        assertThat(FidelidadDeRedaccion.quitarAniosAgregados("Entregará antes del 20/10/2026.", NOTAS_CON_Y_SIN_ANIO))
+                .isEqualTo("Entregará antes del 20/10.");
+        // Sin ningún año en las notas también: el año supuesto no es un dato del supervisor.
+        String sinAnio = FidelidadDeRedaccion.quitarAniosAgregados("Entregará antes del 20 de octubre de 2026.",
+                "entregará antes del 20 de octubre");
+        assertThat(sinAnio).isEqualTo("Entregará antes del 20 de octubre.");
+        assertThat(fiel(sinAnio, "entregará antes del 20 de octubre")).isTrue();
+    }
+
+    @Test
+    void laComprobacionNoAceptaAniosSupuestosNiOtraFecha() {
+        // Sin el paso que lo quita, el año completado sigue siendo una cifra que no estaba.
+        assertThat(fiel("El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO)).isFalse();
+        // Otro día con año no es la fecha de las notas: no se toca y se descarta.
+        String otroDia = FidelidadDeRedaccion.quitarAniosAgregados(
+                "El 12 de octubre de 2026 se visitó la obra; entregará antes del 21 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO);
+        assertThat(otroDia).contains("21 de octubre de 2026");
+        assertThat(fiel(otroDia, NOTAS_CON_Y_SIN_ANIO)).isFalse();
+        // La fecha que las notas sí escriben con año se queda con el suyo.
+        assertThat(FidelidadDeRedaccion.quitarAniosAgregados("Se visitó la obra el 12 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO)).isEqualTo("Se visitó la obra el 12 de octubre de 2026.");
+    }
 }

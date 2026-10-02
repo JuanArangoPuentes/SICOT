@@ -264,6 +264,21 @@ class GeneracionDocumentoServiceTest {
         assertThat(r.motivoNotasTalCual()).contains("perdía cifras");
     }
 
+    /** En vivo el 02-10-2026: el modelo completa el año y la redacción fiel se descartaba. */
+    @Test
+    void elAnioQueElModeloAgregaNoEntraAlDocumentoYLaRedaccionSeUsa() {
+        given(ollamaClient.generarSinCompetir(anyString(), anyInt(), any()))
+                .willReturn("Se recibieron las 40 sillas; el contratista las cambiará antes del 20 de octubre de 2026.");
+
+        var r = servicio.generar(1L, null, "INFORME_SUPERVISION",
+                "recibí las 40 sillas, el contratista las cambia antes del 20 de octubre");
+
+        assertThat(r.observacionesRedactadasConIa()).isTrue();
+        assertThat(r.observaciones())
+                .isEqualTo("Se recibieron las 40 sillas; el contratista las cambiará antes del 20 de octubre.");
+        assertThat(textoDelPdf().replaceAll("\\s+", " ")).doesNotContain("20 de octubre de 2026");
+    }
+
     /** «Usar mis notas tal cual», después de ver la redacción: no se vuelve a llamar al modelo. */
     @Test
     void conRedactarConIaEnFalseVanLasNotasTalCualSinLlamarAlModelo() {
