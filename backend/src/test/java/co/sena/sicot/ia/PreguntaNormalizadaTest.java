@@ -64,8 +64,57 @@ class PreguntaNormalizadaTest {
     void siComoPalabraSuelta() {
         assertThat(PreguntaNormalizada.de("¿Qué hago si no llega?").tienePalabra("si")).isTrue();
         assertThat(PreguntaNormalizada.de("¿Qué sigue?").tienePalabra("si")).isFalse();
-        // «Sí» con tilde queda también como «si». Se acepta: los atajos lo usan
-        // para no contestar, y ante la duda la pregunta va al modelo.
-        assertThat(PreguntaNormalizada.de("¿Sí lo firmo yo?").tienePalabra("si")).isTrue();
+    }
+
+    /**
+     * 2-10-2026: así se escribe en el teléfono. Sin el mapa, «en q paso voy»
+     * no coincidía con ninguna frase y se iba al modelo.
+     */
+    @Test
+    @DisplayName("las abreviaturas del teléfono se escriben enteras, solo como palabra suelta")
+    void lasAbreviaturasSeEscribenEnteras() {
+        assertThat(PreguntaNormalizada.normalizar("en q paso voy")).isEqualTo("en que paso voy");
+        assertThat(PreguntaNormalizada.normalizar("k me falta xq no se")).isEqualTo("que me falta porque no se");
+        assertThat(PreguntaNormalizada.normalizar("pa cuando es? tb el rut")).isEqualTo("para cuando es tambien el rut");
+        // La «q» dentro de una palabra o de un código no se toca.
+        assertThat(PreguntaNormalizada.normalizar("¿qué es el GCCON-F-031?")).isEqualTo("que es el gccon f 031");
+    }
+
+    /**
+     * «Sí» y el «si» condicional quedaban iguales al quitar la tilde, y los
+     * atajos, que descartan las condicionales, mandaban «sí, ¿y ahora qué?» al
+     * modelo.
+     */
+    @Test
+    @DisplayName("el «sí» que afirma se quita; el «si» condicional se queda")
+    void elSiQueAfirmaSeQuita() {
+        assertThat(PreguntaNormalizada.normalizar("Sí, ¿y ahora qué?")).isEqualTo("y ahora que");
+        assertThat(PreguntaNormalizada.normalizar("si, y ahora q")).isEqualTo("y ahora que");
+        assertThat(PreguntaNormalizada.normalizar("si y ahora que")).isEqualTo("y ahora que");
+        assertThat(PreguntaNormalizada.de("¿Qué hago si no llega la póliza?").tienePalabra("si")).isTrue();
+        assertThat(PreguntaNormalizada.de("si no llega, ¿qué hago?").tienePalabra("si")).isTrue();
+    }
+
+    @Test
+    @DisplayName("«contieneFrase» exige el borde de palabra también a la derecha")
+    void contieneFraseExigeLosDosBordes() {
+        PreguntaNormalizada p = PreguntaNormalizada.de("¿Qué escribo en las observaciones?");
+
+        assertThat(p.contiene("que es")).isTrue();
+        assertThat(p.contieneFrase("que es")).isFalse();
+        assertThat(PreguntaNormalizada.de("¿Qué es el acta?").contieneFrase("que es")).isTrue();
+    }
+
+    @Test
+    @DisplayName("separa las otras preguntas de un mismo mensaje, tal como se escribieron")
+    void separaLasOtrasPreguntas() {
+        assertThat(PreguntaNormalizada.otrasPreguntas("¿Qué es el acta de inicio y cuánto vale el contrato?"))
+                .containsExactly("cuánto vale el contrato");
+        assertThat(PreguntaNormalizada.otrasPreguntas("¿Qué es el GCCON-F-030? ¿Es lo mismo que el acta de "
+                + "liquidación? ¿En qué sub-paso se genera?"))
+                .containsExactly("En qué sub-paso se genera");
+        // «y» sin palabra interrogativa detrás no abre otra pregunta.
+        assertThat(PreguntaNormalizada.otrasPreguntas("¿Quién firma el acta de inicio y el informe final?")).isEmpty();
+        assertThat(PreguntaNormalizada.otrasPreguntas(null)).isEmpty();
     }
 }

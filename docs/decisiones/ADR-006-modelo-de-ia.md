@@ -215,3 +215,46 @@ archivos «ni en 3.1-3.3»; desde el 22-09-2026 en 3.1 y 3.2 se cargan las
 fotos de la entrega, y el modelo contradecía a la guía del tutorial. También
 decía que el Copiloto redacta los documentos, cuando los arma
 `RedactorDeDocumentos` con código y el modelo solo redacta las observaciones.
+
+---
+
+## Revisión — 2 de octubre de 2026: órdenes, datos del contrato y revisión del paso
+
+Misma doctrina, aplicada a lo que la auditoría del 2-10-2026 encontró que
+seguía llegando al modelo sin necesidad, o llegando mal.
+
+**Lo que se encontró.** El panel invitaba a darle órdenes al Copiloto y toda
+orden iba al modelo, sin ninguna regla de que no puede ejecutar nada: un
+modelo de 3B/7B podía contestar «listo, marqué el 2.3» sin que nada hubiera
+pasado, redactar en el chat un acta con datos que nadie dio, o —por la
+advertencia de inyección pensada para documentos— decirle al supervisor que
+su propio mensaje parecía un intento de darle instrucciones. «¿Cuántos días
+me quedan?» y «¿voy atrasado?» se contestaban sin la fecha de hoy ni el
+semáforo. El valor del contrato le llegaba como `450000000.00`. Y el ejemplo
+de estilo con «le falta 4.2», el que los modelos pequeños copiaron en la
+medición del 14 de septiembre, seguía en el prompt.
+
+**Lo que se hizo.**
+
+- `OrdenDelSupervisor` atiende sin modelo las órdenes reconocibles (lista
+  cerrada de verbos y objetos) y devuelve una acción que la interfaz ofrece
+  como botón. Ninguna firma, marca ni genera: abren la pantalla donde el
+  supervisor decide.
+- `FichaDelContrato` contesta el valor (formateado y en letras), las fechas,
+  los días que quedan con la zona horaria del Centro y el atraso con el mismo
+  `Cronograma` de la pantalla Alertas.
+- `GuiaDelPasoActual` contesta sobre el paso, sub-paso o documento que nombre
+  la pregunta, incluido «¿ya puedo firmar…?», en vez de contestar siempre el
+  paso en curso.
+- `PreguntaNormalizada` entiende las abreviaturas del teléfono («en q paso
+  voy») y el «sí» que afirma.
+- Cada respuesta dice su `fuente` (`SISTEMA` o `MODELO`).
+- Al modelo le llegan la regla de que no ejecuta nada, el valor formateado,
+  la fecha de hoy y el cronograma; el ejemplo con datos de un paso se quitó.
+  El historial tiene un presupuesto total y su ventana avanza por bloques
+  para no romper la caché del prefijo.
+- La revisión antes de cerrar un paso la arma el servidor (`revisarPaso`),
+  con un prompt propio y corto, sin el historial ni el prompt general.
+
+Coste: cero inferencias nuevas. Las órdenes y los datos del contrato se
+responden en milisegundos y funcionan con Ollama apagado.
