@@ -54,8 +54,10 @@ import DatosDelDocumento, {
 import RevisarRedaccion from '@/components/supervisor/RevisarRedaccion'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
+  AccionCopiloto,
   AuthResponse,
   AlertaResponse,
+  ChatResponse,
   ContratoResponse,
   DocumentoResponse,
   CronogramaResponse,
@@ -74,14 +76,18 @@ import {
   getPlantillasDocumento,
   precalentarCopiloto,
   preguntarCopiloto,
+  descargarDocumento,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
 import {
   CortadaPorSegundoPlano,
   esperarPrimerPlano,
+  idDeSolicitud,
+  mantenerPantallaEncendida,
   repetirAlVolverSiSeCorta,
   vigilarSegundoPlano,
 } from '@/services/segundoPlano'
+import { intencionEnLaRevision } from '@/services/revisionDelPaso'
 import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
@@ -110,6 +116,18 @@ const QUICK_SUGGESTIONS: Array<{ label: string; question: string }> = [
     question: '¿Qué es el GCCON-F-030? ¿Es lo mismo que el acta de liquidación? ¿En qué sub-paso se genera?',
   },
 ]
+
+// Una respuesta del Copiloto tal como se guarda en el chat. Lo que el servidor
+// armó sin modelo (fuente SISTEMA) se marca en pantalla y no se le reenvía al
+// modelo (ver historialCopiloto.ts); un servidor anterior al 02-10-2026 no
+// manda fuente, y todo lo suyo pasaba por el modelo o se trataba como tal.
+// La acción solo se guarda: se ejecuta cuando el supervisor pulsa su botón.
+const mensajeDelCopiloto = ({ respuesta, fuente, accion }: ChatResponse): ChatMsg => ({
+  role: 'ai',
+  text: respuesta,
+  origen: fuente === 'SISTEMA' ? 'sistema' : 'modelo',
+  ...(accion ? { accion } : {}),
+})
 
 // La barra de recorrido tiene una sección por paso REAL del contrato (los
 // mismos que trae el backend), no por una agrupación aparte: así el número que
@@ -304,10 +322,11 @@ export default function SupervisorPanel({
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
   const [procesandoFirma, setProcesandoFirma] = useState<string | null>(null)
-  // Revisión de IA obligatoria antes de cerrar un paso: se activa al accionar
-  // el último sub-paso pendiente de la etapa activa. listaParaConfirmar pasa
-  // a true solo después de que el Copiloto ya revisó la descripción del
-  // supervisor (o falló al intentarlo) — antes de eso no se puede confirmar.
+  // Revisión del Copiloto antes de cerrar un paso: se activa al accionar el
+  // último sub-paso pendiente de la etapa activa. Es consultiva: el supervisor
+  // puede confirmar el paso o cancelar en cualquier momento, sin describir
+  // nada ni esperar al modelo. listaParaConfirmar pasa a true cuando el
+  // Copiloto ya revisó la descripción (o falló al intentarlo).
   const [revisionPaso, setRevisionPaso] = useState<RevisionPaso | null>(null)
   // Datos del documento que el supervisor está por generar y firmar.
   // `revision` es la revisión del Copiloto que llevó hasta aquí (último
@@ -409,6 +428,20 @@ export default function SupervisorPanel({
   // puede tardar, así que se deshabilita el envío en vez de dejar que se
   // acumulen preguntas superpuestas.
   const [pensando, setPensando] = useState(false)
+  // La revisión del paso que espera al modelo (su idSolicitud), para saber al
+  // llegar su respuesta si el supervisor la dejó; y lo mismo como estado, para
+  // pintar «sin esperar la revisión» en el botón de confirmar.
+  const revisionEnCurso = useRef<string | null>(null)
+  const [revisando, setRevisando] = useState(false)
+  // Mientras SICOT espera a la IA —una pregunta o revisión del Copiloto, o
+  // generar y firmar un documento: el sub-paso ocupado sin formulario ni
+  // redacción abiertos—, la pantalla no se apaga sola. Si se apagaba, el
+  // teléfono pasaba SICOT a segundo plano y cortaba la petición aunque el
+  // supervisor no hubiera salido de la aplicación.
+  const esperandoALaIa = pensando || (procesandoFirma !== null && !datosDocumento && !revisionRedaccion)
+  useEffect(() => {
+    if (esperandoALaIa) return mantenerPantallaEncendida()
+  }, [esperandoALaIa])
   // El copiloto ocupa una columna alta y ancha a la derecha. Se puede plegar
   // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
   // vuelve a abrirse desde el botón de la cabecera.
@@ -788,7 +821,7 @@ export default function SupervisorPanel({
         ...prev,
         {
           role: 'ai',
-          text: `Antes de marcar el Paso ${stepId} como completado, cuénteme brevemente qué hizo o verificó en cada uno de estos puntos:\n${resumenSubPasos}\n\nEscriba su respuesta abajo y la reviso con usted.`,
+          text: `Antes de marcar el Paso ${stepId} como completado, cuénteme brevemente qué hizo o verificó en cada uno de estos puntos:\n${resumenSubPasos}\n\nEscriba su respuesta abajo y la reviso con usted. La revisión es de apoyo: si prefiere, confirme el paso sin ella o cancele con los botones de abajo. Si tiene una duda, pregúntela; no la tomo como su descripción.`,
         },
       ])
       return
@@ -800,33 +833,42 @@ export default function SupervisorPanel({
   // paso — es una revisión de apoyo basada solo en lo que el supervisor
   // describe (SICOT no verifica evidencia externa todavía); la decisión
   // final de confirmar sigue siendo del supervisor.
+  //
+  // Se manda solo la descripción y el número del paso: las instrucciones de
+  // la revisión las arma el servidor. Antes viajaban desde aquí dentro de la
+  // «pregunta», y el servidor las metía en el bloque de contenido no
+  // confiable, bajo la orden de no seguir las instrucciones que trajera: un
+  // modelo pequeño a veces contestaba que no podía seguirlas, y cualquiera
+  // podía cambiarlas (auditoría del 02-10-2026). Tampoco va el historial: la
+  // revisión es de este paso, no de la conversación.
   const revisarPaso = async (descripcion: string) => {
     if (!contrato || !revisionPaso || pensando) return
-    const step = steps.find((s) => s.id === revisionPaso.stepId)
-    if (!step) {
-      setRevisionPaso(null)
-      return
-    }
+    const paso = revisionPaso.stepId
+    const idSolicitud = idDeSolicitud()
+    const sigueEnCurso = () => revisionEnCurso.current === idSolicitud
+    revisionEnCurso.current = idSolicitud
+    setRevisando(true)
     setPensando(true)
+    // Desde ya, y no al llegar la revisión: si el supervisor confirma sin
+    // esperarla, su descripción sigue yendo como notas del documento.
+    setRevisionPaso((prev) => (prev ? { ...prev, descripcion } : prev))
     try {
-      const pregunta =
-        `Voy a describirle lo que hice para completar el Paso ${step.id} (${step.title}), que tiene estos ` +
-        `sub-pasos: ${step.subSteps.map((ss) => `${ss.id} ${ss.label}`).join('; ')}. Mi descripción: "${descripcion}". ` +
-        `Como Copiloto, evalúe honestamente, basándose SOLO en lo que describí (usted no tiene forma de ` +
-        `verificar evidencia externa todavía), si esto parece razonablemente completo y coherente con lo que ` +
-        `se esperaba en cada punto, o si detecta algo que probablemente falte o sea insuficiente. Sea claro y ` +
-        `directo: diga si le parece que se puede marcar el paso como completado o si recomienda revisar algo ` +
-        `antes. Aclare que esta es una revisión de apoyo, no una aprobación oficial — la decisión final es del supervisor.`
       // Igual que una pregunta suelta: la revisión no cambia nada en el
-      // servidor, así que si el teléfono la corta se repite al volver. Hasta
-      // que termine, el paso no queda listo para confirmar (eso lo hace el
-      // finally, que ahora espera al reintento).
-      const { respuesta } = await repetirAlVolverSiSeCorta(
-        () => preguntarCopiloto(contrato.id, pregunta, chatMsgs),
-        avisarQueSeRepite,
+      // servidor, así que si el teléfono la corta se repite al volver, con el
+      // mismo idSolicitud para no pagar otra inferencia. Si mientras tanto el
+      // supervisor la dejó (confirmó o canceló), no se repite.
+      const respuesta = await repetirAlVolverSiSeCorta(
+        () =>
+          sigueEnCurso()
+            ? preguntarCopiloto(contrato.id, descripcion, undefined, { idSolicitud, revisarPaso: paso })
+            : Promise.reject(new Error('Revisión abandonada')),
+        () => {
+          if (sigueEnCurso()) avisarQueSeRepite()
+        },
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
+      if (sigueEnCurso()) setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
+      if (!sigueEnCurso()) return
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
           ? e.message
@@ -842,9 +884,47 @@ export default function SupervisorPanel({
         },
       ])
     } finally {
-      setPensando(false)
-      setRevisionPaso((prev) => (prev ? { ...prev, listaParaConfirmar: true, descripcion } : prev))
+      // Una revisión que el supervisor dejó ya no manda: «Pensando…» se apagó
+      // al dejarla, y puede haber otra pregunta en curso.
+      if (sigueEnCurso()) {
+        revisionEnCurso.current = null
+        setRevisando(false)
+        setPensando(false)
+        setRevisionPaso((prev) => (prev ? { ...prev, listaParaConfirmar: true } : prev))
+      }
     }
+  }
+
+  // El supervisor deja la revisión en curso (confirma o cancela sin
+  // esperarla). La inferencia sigue en el servidor, pero su respuesta ya no
+  // se pinta: él decidió no esperarla, y una revisión que llega después de
+  // cerrar el paso solo confundiría.
+  const dejarLaRevisionEnCurso = () => {
+    if (!revisionEnCurso.current) return
+    revisionEnCurso.current = null
+    setRevisando(false)
+    setPensando(false)
+  }
+
+  const confirmarRevision = () => {
+    const r = revisionPaso
+    dejarLaRevisionEnCurso()
+    setRevisionPaso(null)
+    if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion, undefined, r)
+  }
+
+  const cancelarRevision = (pedidoPorEscrito: boolean) => {
+    const r = revisionPaso
+    dejarLaRevisionEnCurso()
+    setRevisionPaso(null)
+    if (pedidoPorEscrito && r)
+      setChatMsgs((prev) => [
+        ...prev,
+        {
+          role: 'ai',
+          text: `De acuerdo, el Paso ${r.stepId} sigue abierto. Cuando quiera cerrarlo, vuelva a pulsar el botón de su último sub-paso.`,
+        },
+      ])
   }
 
   // Si el teléfono cortó la pregunta porque SICOT pasó a segundo plano, el
@@ -867,12 +947,16 @@ export default function SupervisorPanel({
   const preguntarAlCopiloto = async (texto: string) => {
     if (!contrato || pensando) return
     setPensando(true)
+    // Uno por pregunta, creado fuera de la petición para que el reintento
+    // lleve el mismo: así el servidor reconoce la pregunta y no lanza otra
+    // inferencia mientras la del primer intento sigue en la CPU.
+    const idSolicitud = idDeSolicitud()
     try {
-      const { respuesta } = await repetirAlVolverSiSeCorta(
-        () => preguntarCopiloto(contrato.id, texto, chatMsgs),
+      const respuesta = await repetirAlVolverSiSeCorta(
+        () => preguntarCopiloto(contrato.id, texto, chatMsgs, { idSolicitud }),
         avisarQueSeRepite,
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
+      setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
@@ -889,7 +973,12 @@ export default function SupervisorPanel({
     if (!text || pensando) return
     setChatMsgs((prev) => [...prev, { role: 'user', text }])
     setChatInput('')
-    if (revisionPaso && !revisionPaso.listaParaConfirmar) {
+    // Con una revisión del paso abierta, no todo lo escrito es la descripción:
+    // una pregunta va al chat y «cancelar» sale (ver revisionDelPaso.ts).
+    const intencion = revisionPaso ? intencionEnLaRevision(text) : 'pregunta'
+    if (intencion === 'cancelar') {
+      cancelarRevision(true)
+    } else if (intencion === 'descripcion' && revisionPaso && !revisionPaso.listaParaConfirmar) {
       revisarPaso(text)
     } else {
       preguntarAlCopiloto(text)
@@ -917,6 +1006,60 @@ export default function SupervisorPanel({
   const irAPaso = (stepId: number) => {
     setTab('contrato')
     setExpandedSteps(new Set([stepId]))
+  }
+
+  // Lo que una respuesta del Copiloto ofrece abrir. Solo se llama cuando el
+  // supervisor pulsa el botón de la acción, nunca al llegar la respuesta, y
+  // reutiliza la misma navegación que el resto del panel: ninguna acción
+  // firma, marca ni genera nada. Abrir el sub-paso de un documento deja al
+  // supervisor ante «Firmar documento», con su revisión y su confirmación.
+  const ejecutarAccionDelCopiloto = (accion: AccionCopiloto) => {
+    // El paso se deduce del sub-paso («2.7» → 2) si el servidor no lo manda.
+    const paso = accion.paso ?? (accion.subpaso ? Number(accion.subpaso.split('.')[0]) : null)
+    const existeElSubPaso = steps.some((s) => s.id === paso && s.subSteps.some((ss) => ss.id === accion.subpaso))
+    switch (accion.tipo) {
+      case 'IR_A_PASO':
+        if (paso) irAPaso(paso)
+        return
+      case 'IR_A_SUBPASO':
+      case 'ABRIR_DOCUMENTO':
+      case 'ABRIR_EVIDENCIA':
+        if (paso && accion.subpaso && existeElSubPaso) goToSubStep(accion.subpaso, paso)
+        else if (paso) irAPaso(paso)
+        return
+      case 'MOSTRAR_ALERTAS':
+        setTab('alertas')
+        return
+      case 'MOSTRAR_DOCUMENTOS':
+        setTab('documentos')
+        return
+      case 'DESCARGAR_DOCUMENTO': {
+        const doc = docsContrato.find((d) => d.id === accion.documentoId)
+        // Si la lista de este equipo todavía no lo tiene, se abre la vista
+        // Documentos en vez de bajar a ciegas un archivo que no se puede nombrar.
+        if (!contrato || !doc) {
+          setTab('documentos')
+          return
+        }
+        descargarDocumento(contrato.id, doc.id, doc.nombre)
+          .then((resultado) => {
+            if (resultado === 'guardado')
+              setChatMsgs((prev) => [...prev, { role: 'ai', text: `«${doc.nombre}» quedó guardado en el teléfono.` }])
+          })
+          .catch((e) => {
+            // El motivo real cuando lo hay, como en la vista Documentos.
+            const motivo =
+              e instanceof ApiError || (e instanceof Error && e.message.includes('vacío'))
+                ? e.message
+                : 'Intente de nuevo en un momento.'
+            setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude descargar «${doc.nombre}»: ${motivo}` }])
+          })
+        return
+      }
+      case 'IR_A_CONFIGURACION':
+        onOpenSettings()
+        return
+    }
   }
 
   // El paso que el Copiloto debe guiar ahora mismo — cualquiera de los 6, no solo el 3.
@@ -1556,12 +1699,10 @@ export default function SupervisorPanel({
               onEnviar={sendChat}
               onSugerencia={quickChat}
               onIniciarPaso={handleIniciarPaso}
-              onConfirmarRevision={() => {
-                const r = revisionPaso
-                setRevisionPaso(null)
-                if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion, undefined, r)
-              }}
-              onCancelarRevision={() => setRevisionPaso(null)}
+              revisando={revisando}
+              onConfirmarRevision={confirmarRevision}
+              onCancelarRevision={() => cancelarRevision(false)}
+              onAccion={ejecutarAccionDelCopiloto}
             />
           )}
         </div>

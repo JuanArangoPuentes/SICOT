@@ -9,10 +9,15 @@ vi.mock('./api/client', () => ({
   apiFetchBlob: vi.fn(),
 }))
 
+/** Lo que el backend recibió en la última llamada al chat. */
+function cuerpoEnviado() {
+  const [, opciones] = vi.mocked(apiFetch).mock.calls.at(-1) ?? []
+  return JSON.parse(String(opciones?.body))
+}
+
 /** Turnos que el backend recibió en la última llamada al chat. */
 function historialEnviado(): Array<{ rol: string; texto: string }> {
-  const [, opciones] = vi.mocked(apiFetch).mock.calls.at(-1) ?? []
-  return JSON.parse(String(opciones?.body)).historial
+  return cuerpoEnviado().historial
 }
 
 /** Una conversación real de `n` preguntas, cada una con su respuesta del modelo. */
@@ -48,6 +53,24 @@ describe('preguntarCopiloto — el historial que sale hacia el backend', () => {
       'Pregunta 60',
       'Respuesta 60',
     ])
+  })
+
+  /**
+   * Sin idSolicitud, el reintento al volver de segundo plano era otra pregunta
+   * para el servidor: una segunda inferencia mientras la primera seguía en la
+   * CPU. Y la revisión del paso viaja con su número para que las
+   * instrucciones las arme el servidor, no el cliente.
+   */
+  it('manda el idSolicitud y el paso a revisar cuando se le dan, y nada de eso si no', async () => {
+    await preguntarCopiloto(1, 'Revisé los estudios previos.', undefined, { idSolicitud: 'abc-123', revisarPaso: 1 })
+    expect(cuerpoEnviado()).toEqual({
+      pregunta: 'Revisé los estudios previos.',
+      idSolicitud: 'abc-123',
+      revisarPaso: 1,
+    })
+
+    await preguntarCopiloto(1, '¿Y ahora?')
+    expect(cuerpoEnviado()).toEqual({ pregunta: '¿Y ahora?' })
   })
 })
 
@@ -99,6 +122,29 @@ describe('historialParaElCopiloto', () => {
       'Gestión.',
       'Sub-paso 2.3 — …',
       '¿Y eso quién lo firma?',
+    ])
+  })
+
+  /**
+   * Una ficha o la guía del paso que armó el servidor son cientos de tokens
+   * que nunca pasaron por el modelo: reenviarlas alargaba minutos la pregunta
+   * siguiente. La pregunta que las pidió tampoco va: sola, el modelo la
+   * tomaría por pendiente y la contestaría otra vez.
+   */
+  it('deja fuera las respuestas del sistema y la pregunta que las pidió', () => {
+    const chat: ChatMsg[] = [
+      { role: 'user', text: '¿Quién firma el acta de inicio?' },
+      { role: 'ai', text: 'La respuesta se cortó porque SICOT pasó a segundo plano…' },
+      { role: 'ai', text: 'Acta de Inicio (GCCON-F-018): sub-paso 2.7…', origen: 'sistema' },
+      { role: 'user', text: '¿Qué es un CDP?' },
+      { role: 'ai', text: 'El certificado de disponibilidad presupuestal.', origen: 'modelo' },
+      { role: 'user', text: 'Llévame al paso 3' },
+      { role: 'ai', text: 'Le abro el Paso 3.', origen: 'sistema' },
+    ]
+
+    expect(historialParaElCopiloto(chat).map((m) => m.text)).toEqual([
+      '¿Qué es un CDP?',
+      'El certificado de disponibilidad presupuestal.',
     ])
   })
 

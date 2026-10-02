@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
-import { preguntarCopiloto } from '@/services/documentoService'
+import { firmarDocumento, generarDocumento, preguntarCopiloto } from '@/services/documentoService'
 import { historialParaElCopiloto } from '@/services/historialCopiloto'
 import type { ChatResponse } from '@/services/api/types'
 import { contrato, sesionSupervisor } from '@/test/dobles'
@@ -88,13 +88,15 @@ function pasoConUnSubPaso(): Step[] {
 }
 
 async function montar() {
+  const onCambiarVista = vi.fn()
+  const setSteps = vi.fn()
   render(
     <PrefsProvider>
       <SupervisorPanel
         vista="contrato"
-        onCambiarVista={vi.fn()}
+        onCambiarVista={onCambiarVista}
         steps={pasoConUnSubPaso()}
-        setSteps={vi.fn()}
+        setSteps={setSteps}
         usuario={sesionSupervisor()}
         contrato={contrato()}
         cargandoContrato={false}
@@ -108,6 +110,7 @@ async function montar() {
     </PrefsProvider>,
   )
   await act(async () => {})
+  return { onCambiarVista, setSteps }
 }
 
 async function escribirAlCopiloto(texto: string) {
@@ -182,6 +185,33 @@ describe('SupervisorPanel — Copiloto con la conexión cortada', () => {
   })
 
   /**
+   * El reintento repetía la pregunta sin nada que la identificara, y el
+   * servidor lanzaba otra inferencia mientras la del primer intento seguía
+   * ocupando la CPU y un cupo del limitador de IA.
+   */
+  it('el reintento lleva el mismo idSolicitud que la pregunta cortada, y otra pregunta lleva otro', async () => {
+    const primera = respuestaPendiente()
+    const reintento = respuestaPendiente()
+    vi.mocked(preguntarCopiloto)
+      .mockReturnValueOnce(primera.promesa)
+      .mockReturnValueOnce(reintento.promesa)
+      .mockResolvedValueOnce({ respuesta: 'Después, el cronograma.' })
+    await montar()
+
+    await escribirAlCopiloto('¿Qué sigue en este paso?')
+    await cortarAlSalir(primera)
+    await volverASicot()
+    await act(async () => reintento.resolver({ respuesta: 'Siga con la revisión de los estudios.' }))
+    await escribirAlCopiloto('¿Y después?')
+
+    const [cortada, repetida, otra] = vi.mocked(preguntarCopiloto).mock.calls.map((c) => c[3]?.idSolicitud)
+    expect(cortada).toBeTruthy()
+    expect(repetida).toBe(cortada)
+    expect(otra).toBeTruthy()
+    expect(otra).not.toBe(cortada)
+  })
+
+  /**
    * Si el reintento también se corta porque el supervisor volvió a salir, el
    * motivo sigue sin ser Ollama: decir «verifique que Ollama esté disponible»
    * lo manda a buscar un fallo que no existe.
@@ -205,10 +235,11 @@ describe('SupervisorPanel — Copiloto con la conexión cortada', () => {
   /**
    * La revisión del paso no vigilaba el segundo plano: un corte del teléfono
    * salía como «No se pudo conectar con el Copiloto IA (Ollama)» —el mensaje
-   * falso que segundoPlano.ts se escribió para evitar— y el `finally` dejaba
-   * el paso listo para confirmar sin que nadie lo hubiera revisado.
+   * falso que segundoPlano.ts se escribió para evitar— y el `finally` daba
+   * el paso por revisado sin que nadie lo hubiera revisado. Confirmar sin
+   * esperar sí se puede (la revisión es consultiva), y el botón lo dice.
    */
-  it('si la revisión del paso se corta, no culpa a Ollama y la repite antes de dejar confirmar', async () => {
+  it('si la revisión del paso se corta, no culpa a Ollama y la repite antes de darla por hecha', async () => {
     const primera = respuestaPendiente()
     const reintento = respuestaPendiente()
     vi.mocked(preguntarCopiloto).mockReturnValueOnce(primera.promesa).mockReturnValueOnce(reintento.promesa)
@@ -221,18 +252,21 @@ describe('SupervisorPanel — Copiloto con la conexión cortada', () => {
 
     expect(screen.queryByText(/ollama/i)).not.toBeInTheDocument()
     expect(screen.getByText(/pasó a segundo plano/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /confirmar paso 1/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /confirmar paso 1 .*sin esperar la revisión/i })).toBeInTheDocument()
 
     await volverASicot()
     expect(preguntarCopiloto).toHaveBeenCalledTimes(2)
-    // Se repite la misma revisión, no una pregunta suelta con la descripción.
-    expect(vi.mocked(preguntarCopiloto).mock.calls[1][1]).toBe(vi.mocked(preguntarCopiloto).mock.calls[0][1])
+    // Se repite la misma revisión, con el mismo idSolicitud, y no una pregunta
+    // suelta con la descripción.
+    const [cortada, repetida] = vi.mocked(preguntarCopiloto).mock.calls
+    expect(repetida).toEqual(cortada)
+    expect(repetida[3]).toMatchObject({ revisarPaso: 1, idSolicitud: expect.any(String) })
     expectEsperandoAlCopiloto()
-    expect(screen.queryByRole('button', { name: /confirmar paso 1/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /confirmar paso 1 .*sin esperar la revisión/i })).toBeInTheDocument()
 
     await act(async () => reintento.resolver({ respuesta: 'Parece completo; puede cerrar el paso.' }))
     expect(screen.getByText('Parece completo; puede cerrar el paso.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /confirmar paso 1/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirmar Paso 1 como completado' })).toBeInTheDocument()
   })
 })
 
@@ -259,5 +293,214 @@ describe('SupervisorPanel — lo que le llega al Copiloto', () => {
       '¿Quién hace los estudios previos?',
       'Los estudios previos los elabora el área requirente.',
     ])
+  })
+})
+
+describe('SupervisorPanel — las acciones que ofrece el Copiloto', () => {
+  /**
+   * Firmar es un acto legal: que el Copiloto entienda «firma el documento» no
+   * puede firmar, generar ni abrir nada por sí solo. La respuesta trae a dónde
+   * llevar; el supervisor decide pulsando el botón, y lo que abre es el
+   * sub-paso, donde la firma sigue pasando por «Firmar documento».
+   */
+  it('recibir una acción no navega ni genera nada; pulsarla abre el sub-paso y nada más', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({
+      respuesta: 'Los estudios previos se revisan en el sub-paso 1.1. Le abro ese sub-paso.',
+      fuente: 'SISTEMA',
+      accion: {
+        tipo: 'ABRIR_DOCUMENTO',
+        paso: 1,
+        subpaso: '1.1',
+        documentoTipo: null,
+        documentoId: null,
+        etiqueta: 'Abrir el sub-paso 1.1',
+      },
+    })
+    const { onCambiarVista } = await montar()
+
+    await escribirAlCopiloto('firma el documento')
+    expect(screen.getByText(/le abro ese sub-paso/i)).toBeInTheDocument()
+    expect(onCambiarVista).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /marcar completado/i })).not.toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /abrir el sub-paso 1\.1/i }))
+    })
+    expect(onCambiarVista).toHaveBeenCalledExactlyOnceWith('contrato')
+    expect(screen.getByRole('button', { name: /marcar completado/i })).toBeInTheDocument()
+    expect(generarDocumento).not.toHaveBeenCalled()
+    expect(firmarDocumento).not.toHaveBeenCalled()
+  })
+
+  it('«ver alertas» lleva a la pestaña de alertas solo al pulsar el botón', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({
+      respuesta: 'Este contrato tiene una alerta de cronograma.',
+      fuente: 'SISTEMA',
+      accion: {
+        tipo: 'MOSTRAR_ALERTAS',
+        paso: null,
+        subpaso: null,
+        documentoTipo: null,
+        documentoId: null,
+        etiqueta: 'Ver las alertas',
+      },
+    })
+    const { onCambiarVista } = await montar()
+
+    await escribirAlCopiloto('muéstrame las alertas')
+    expect(onCambiarVista).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /ver las alertas/i }))
+    expect(onCambiarVista).toHaveBeenCalledExactlyOnceWith('alertas')
+  })
+
+  /** Lo que armó el servidor sin modelo no le vuelve al modelo en la pregunta siguiente. */
+  it('no le reenvía al modelo una respuesta del sistema ni la pregunta que la pidió', async () => {
+    vi.mocked(preguntarCopiloto)
+      .mockResolvedValueOnce({ respuesta: 'Acta de Inicio (GCCON-F-018): sub-paso 2.7…', fuente: 'SISTEMA' })
+      .mockResolvedValueOnce({ respuesta: 'Sí, cuando el contratista la firme.', fuente: 'MODELO' })
+    await montar()
+
+    await escribirAlCopiloto('¿Quién firma el acta de inicio?')
+    expect(screen.getByText('Respuesta del sistema')).toBeInTheDocument()
+    await escribirAlCopiloto('¿Hay que esperar al contratista?')
+
+    const historial = historialParaElCopiloto(vi.mocked(preguntarCopiloto).mock.calls[1][2] ?? [])
+    expect(historial.map((m) => m.text)).toEqual([])
+  })
+})
+
+describe('SupervisorPanel — la revisión del paso es consultiva', () => {
+  /** Abre la revisión del Paso 1: el supervisor pulsa el botón de su último sub-paso. */
+  async function pedirCerrarElPaso() {
+    fireEvent.click(screen.getByRole('button', { name: /iniciar paso 1/i }))
+    fireEvent.click(screen.getByRole('button', { name: /marcar completado/i }))
+    expect(screen.getByText(/antes de marcar el paso 1 como completado/i)).toBeInTheDocument()
+  }
+
+  /**
+   * Las instrucciones de la revisión viajaban desde aquí dentro de la
+   * pregunta, y el servidor las metía en el bloque de contenido no confiable
+   * con la orden de no seguirlas. Ahora solo va lo que describió el
+   * supervisor, el número del paso y nada del historial.
+   */
+  it('manda solo la descripción y el paso a revisar', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({ respuesta: 'Parece completo.', fuente: 'MODELO' })
+    await montar()
+    await pedirCerrarElPaso()
+
+    await escribirAlCopiloto('Revisé los estudios previos y están completos.')
+
+    expect(preguntarCopiloto).toHaveBeenCalledExactlyOnceWith(
+      expect.any(Number),
+      'Revisé los estudios previos y están completos.',
+      undefined,
+      { idSolicitud: expect.any(String), revisarPaso: 1 },
+    )
+  })
+
+  /**
+   * «cancelar» se tomaba como la descripción del paso: iba a una revisión de
+   * minutos y después se ofrecía firmar con «cancelar» como notas.
+   */
+  it('«cancelar» sale de la revisión sin preguntarle nada al Copiloto', async () => {
+    await montar()
+    await pedirCerrarElPaso()
+
+    await escribirAlCopiloto('cancelar')
+
+    expect(preguntarCopiloto).not.toHaveBeenCalled()
+    expect(screen.getByText(/el paso 1 sigue abierto/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /confirmar paso 1/i })).not.toBeInTheDocument()
+  })
+
+  it('una pregunta va al chat y el paso sigue esperando su descripción', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({ respuesta: 'Es el informe de supervisión.', fuente: 'MODELO' })
+    await montar()
+    await pedirCerrarElPaso()
+
+    await escribirAlCopiloto('que es el f-031?')
+
+    expect(preguntarCopiloto).toHaveBeenCalledOnce()
+    expect(vi.mocked(preguntarCopiloto).mock.calls[0][3]?.revisarPaso).toBeUndefined()
+    expect(screen.getByText('Es el informe de supervisión.')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /mensaje para el copiloto/i })).toHaveAttribute(
+      'placeholder',
+      expect.stringMatching(/describa qué hizo/i),
+    )
+    expect(screen.getByRole('button', { name: /confirmar paso 1 .*sin revisión/i })).toBeInTheDocument()
+  })
+
+  /**
+   * Cerrar cada paso obligaba a esperar una inferencia de hasta minutos,
+   * aunque la revisión no decide nada. Ahora se confirma sin esperarla, la
+   * descripción sigue sirviendo y la respuesta que llegue tarde no se pinta.
+   */
+  it('se puede confirmar el paso sin esperar la revisión', async () => {
+    const revision = respuestaPendiente()
+    vi.mocked(preguntarCopiloto).mockReturnValueOnce(revision.promesa)
+    const { setSteps } = await montar()
+    await pedirCerrarElPaso()
+    await escribirAlCopiloto('Revisé los estudios previos.')
+    expectEsperandoAlCopiloto()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /confirmar paso 1 .*sin esperar la revisión/i }))
+    })
+
+    expect(setSteps).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 1, subSteps: [expect.objectContaining({ id: '1.1', completed: true })] }),
+    ])
+    expect(screen.queryByText(/pensando…/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /enviar al copiloto/i })).toBeEnabled()
+
+    await act(async () => revision.resolver({ respuesta: 'Le falta la póliza.', fuente: 'MODELO' }))
+    expect(screen.queryByText('Le falta la póliza.')).not.toBeInTheDocument()
+  })
+
+  it('se puede cancelar mientras el Copiloto revisa, sin quedarse «Pensando…»', async () => {
+    const revision = respuestaPendiente()
+    vi.mocked(preguntarCopiloto).mockReturnValueOnce(revision.promesa)
+    const { setSteps } = await montar()
+    await pedirCerrarElPaso()
+    await escribirAlCopiloto('Revisé los estudios previos.')
+
+    fireEvent.click(screen.getByRole('button', { name: /cancelar, quiero revisar algo antes/i }))
+
+    expect(screen.queryByText(/pensando…/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /confirmar paso 1/i })).not.toBeInTheDocument()
+    await act(async () => revision.resolver({ respuesta: 'Parece completo.', fuente: 'MODELO' }))
+    expect(screen.queryByText('Parece completo.')).not.toBeInTheDocument()
+    // El panel recarga las etapas al abrirse; lo que no hace es marcar el 1.1.
+    expect(setSteps).not.toHaveBeenCalledWith([
+      expect.objectContaining({ subSteps: [expect.objectContaining({ completed: true })] }),
+    ])
+  })
+})
+
+describe('SupervisorPanel — la pantalla mientras el Copiloto piensa', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'wakeLock')
+  })
+
+  /**
+   * Si la pantalla se apagaba sola durante una pregunta de minutos, el
+   * teléfono cortaba la conexión aunque el supervisor no hubiera salido.
+   */
+  it('la mantiene encendida mientras espera la respuesta, y la suelta al llegar', async () => {
+    const release = vi.fn(async () => {})
+    const request = vi.fn(async () => ({ released: false, release }))
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } })
+    const respuesta = respuestaPendiente()
+    vi.mocked(preguntarCopiloto).mockReturnValueOnce(respuesta.promesa)
+    await montar()
+    expect(request).not.toHaveBeenCalled()
+
+    await escribirAlCopiloto('¿Qué sigue en este paso?')
+    expect(request).toHaveBeenCalledExactlyOnceWith('screen')
+    expect(release).not.toHaveBeenCalled()
+
+    await act(async () => respuesta.resolver({ respuesta: 'Siga con la revisión de los estudios.', fuente: 'MODELO' }))
+    expect(release).toHaveBeenCalledOnce()
   })
 })
