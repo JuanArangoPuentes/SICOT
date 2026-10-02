@@ -143,11 +143,9 @@ public class GeneracionDocumentoService {
         // Un documento firmado es oficial: no se reemplaza generando otro
         // encima. Sin esta comprobación, un doble clic o un reintento dejaba un
         // segundo borrador que la bandeja mostraba como «documento sin firmar».
-        if (subetapa != null && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
-                contrato.getId(), subetapa.getId(), plantilla.nombre())) {
-            throw new BusinessException("Ya hay un «" + plantilla.nombre() + "» firmado en la subetapa "
-                    + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
-        }
+        // Se mira antes de redactar, para no hacer esperar minutos a quien no
+        // puede generar, y otra vez justo antes de guardar.
+        exigirQueNoHayaUnoFirmado(contrato, subetapa, plantilla);
 
         Observaciones obs = observaciones(plantilla, contrato, notas, redactarConIa);
         LocalDate hoy = LocalDate.now(reloj);
@@ -168,41 +166,55 @@ public class GeneracionDocumentoService {
         // 28-09-2026 se devolvía tal cual, sin regenerarlo: con los datos
         // complementarios eso habría firmado el borrador viejo sin los datos
         // que el supervisor acababa de corregir. Se busca justo antes de
-        // guardar porque entre el inicio y aquí pasan los segundos de la
+        // guardar porque entre el inicio y aquí pasan los minutos de la
         // redacción con IA, y un doble clic o dos pestañas podían colarse.
-        Documento documento = null;
-        if (subetapa != null) {
-            documento = documentoRepository
-                    .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
-                            contrato.getId(), subetapa.getId(), plantilla.nombre())
-                    .orElse(null);
+        //
+        // Por lo mismo se vuelve a mirar si ya hay uno firmado: si el
+        // supervisor firmó en otra pestaña el borrador de un intento anterior
+        // mientras este redactaba, la búsqueda (que solo ve borradores sin
+        // firmar) no lo encontraba y se creaba otro que firmar() rechazaría
+        // siempre (auditoría del 02-10-2026). Y la búsqueda y el guardado van
+        // juntos bajo un cerrojo por contrato, subetapa y formato: dos
+        // peticiones casi simultáneas (doble clic con la IA caída) llegaban a
+        // la vez, ninguna veía el borrador de la otra y quedaban dos.
+        Documento guardado;
+        boolean reutilizado;
+        synchronized (cerrojo(contrato.getId(), subetapa, plantilla)) {
+            exigirQueNoHayaUnoFirmado(contrato, subetapa, plantilla);
+            Documento documento = null;
+            if (subetapa != null) {
+                documento = documentoRepository
+                        .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                                contrato.getId(), subetapa.getId(), plantilla.nombre())
+                        .orElse(null);
+            }
+            reutilizado = documento != null;
+            if (documento == null) {
+                documento = new Documento();
+                documento.setContrato(contrato);
+                documento.setSubetapa(subetapa);
+                documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
+            } else {
+                log.info("Se regenera el borrador {} de '{}' sin firmar en la subetapa {}.",
+                        documento.getId(), plantilla.nombre(), subetapa.getCodigo());
+                // El nombre se recalcula: si Gestión corrigió el número del
+                // contrato, el borrador guardaba el viejo y el expediente y la
+                // descarga lo seguían mostrando aunque el PDF ya llevara el nuevo.
+                documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
+            }
+            documento.setTipo(TipoDocumento.PDF);
+            documento.setContentType("application/pdf");
+            documento.setContenido(pdf);
+            documento.setTamanioBytes((long) pdf.length);
+            documento.setEstado(EstadoDocumento.PENDIENTE);
+            // «generadoPorIa» conserva el nombre de la columna, pero lo que marca es
+            // que el documento lo produjo SICOT y no se cargó desde fuera: el panel
+            // del supervisor lo usa para reconocer los documentos formales del
+            // proceso. Si la IA intervino lo dice el registro, que es donde queda
+            // la trazabilidad.
+            documento.setGeneradoPorIa(true);
+            guardado = documentoRepository.save(documento);
         }
-        boolean reutilizado = documento != null;
-        if (documento == null) {
-            documento = new Documento();
-            documento.setContrato(contrato);
-            documento.setSubetapa(subetapa);
-            documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
-        } else {
-            log.info("Se regenera el borrador {} de '{}' sin firmar en la subetapa {}.",
-                    documento.getId(), plantilla.nombre(), subetapa.getCodigo());
-            // El nombre se recalcula: si Gestión corrigió el número del
-            // contrato, el borrador guardaba el viejo y el expediente y la
-            // descarga lo seguían mostrando aunque el PDF ya llevara el nuevo.
-            documento.setNombre(plantilla.nombre() + " — " + contrato.getNumeroContrato());
-        }
-        documento.setTipo(TipoDocumento.PDF);
-        documento.setContentType("application/pdf");
-        documento.setContenido(pdf);
-        documento.setTamanioBytes((long) pdf.length);
-        documento.setEstado(EstadoDocumento.PENDIENTE);
-        // «generadoPorIa» conserva el nombre de la columna, pero lo que marca es
-        // que el documento lo produjo SICOT y no se cargó desde fuera: el panel
-        // del supervisor lo usa para reconocer los documentos formales del
-        // proceso. Si la IA intervino lo dice el registro, que es donde queda
-        // la trazabilidad.
-        documento.setGeneradoPorIa(true);
-        Documento guardado = documentoRepository.save(documento);
 
         int pendientes = RedactorDeDocumentos.contarPendientes(bloques);
         registroService.registrar(contrato, "DOCUMENTO_GENERADO",
@@ -216,6 +228,29 @@ public class GeneracionDocumentoService {
                         + ".");
         return new DocumentoGeneradoResponse(DocumentoMapper.toResponse(guardado), obs.texto(), obs.conIa(),
                 obs.motivoNotasTalCual(), co.sena.sicot.service.HuellaDeDocumento.calcular(pdf));
+    }
+
+    private void exigirQueNoHayaUnoFirmado(Contrato contrato, Subetapa subetapa, PlantillaDocumentoIA plantilla) {
+        if (subetapa != null && documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
+                contrato.getId(), subetapa.getId(), plantilla.nombre())) {
+            throw new BusinessException("Ya hay un «" + plantilla.nombre() + "» firmado en la subetapa "
+                    + subetapa.getCodigo() + ". Un documento firmado no se reemplaza generando otro.");
+        }
+    }
+
+    /**
+     * Cerrojos para buscar y guardar el borrador de un formato en una
+     * subetapa sin que otra petición se cuele en medio. Son un número fijo,
+     * repartidos por contrato, subetapa y formato: dos claves distintas
+     * pueden compartir uno y esperarse un instante, pero la memoria no crece
+     * con los documentos. Valen dentro de una instancia del backend; con
+     * varias haría falta un índice único en la base de datos.
+     */
+    private final Object[] cerrojos = java.util.stream.Stream.generate(Object::new).limit(64).toArray();
+
+    private Object cerrojo(Long contratoId, Subetapa subetapa, PlantillaDocumentoIA plantilla) {
+        int clave = java.util.Objects.hash(contratoId, subetapa != null ? subetapa.getId() : null, plantilla.clave());
+        return cerrojos[Math.floorMod(clave, cerrojos.length)];
     }
 
     /** Longitud máxima de un dato complementario: una forma de pago o un rubro caben de sobra. */

@@ -660,6 +660,60 @@ class GeneracionDocumentoServiceTest {
         assertThat(registro()).startsWith("Acta de Inicio (GCCON-F-018) regenerado por SICOT");
     }
 
+    /**
+     * Auditoría del 02-10-2026: mientras este intento redactaba, el supervisor
+     * firmó en otra pestaña el borrador del intento anterior. La búsqueda solo
+     * ve borradores sin firmar, así que se creaba otro que firmar() rechazaría
+     * siempre y quedaba para siempre en la bandeja.
+     */
+    @Test
+    void siSeFirmoOtroMientrasSeRedactabaNoSeCreaUnBorradorHuerfano() {
+        Subetapa subetapa = new Subetapa();
+        subetapa.setId(27L);
+        subetapa.setCodigo("3.4");
+        given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
+        given(documentoRepository.existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
+                1L, 27L, "Informe de Supervisión")).willReturn(false, true);
+        given(ollamaClient.generarSinCompetir(anyString(), anyInt(), any())).willReturn("Se revisó la factura.");
+
+        assertThatThrownBy(() -> servicio.generar(1L, 27L, "INFORME_SUPERVISION", "revisé la factura"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Ya hay un «Informe de Supervisión» firmado en la subetapa 3.4");
+        verify(documentoRepository, never()).save(any());
+    }
+
+    /** Doble clic con la IA caída: las dos peticiones llegaban a la vez a la búsqueda y al guardado. */
+    @Test
+    void dosPeticionesCasiSimultaneasNoDejanDosBorradores() throws Exception {
+        Subetapa subetapa = new Subetapa();
+        subetapa.setId(27L);
+        subetapa.setCodigo("3.4");
+        given(subetapaRepository.findByIdAndEtapaContratoId(27L, 1L)).willReturn(Optional.of(subetapa));
+        java.util.concurrent.atomic.AtomicReference<Documento> primero = new java.util.concurrent.atomic.AtomicReference<>();
+        given(documentoRepository
+                .findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
+                        1L, 27L, "Informe de Supervisión")).willAnswer(i -> {
+                    // Una búsqueda lenta abre la ventana en la que, sin el
+                    // cerrojo, la otra petición también la hacía antes del guardado.
+                    Thread.sleep(200);
+                    return Optional.ofNullable(primero.get());
+                });
+        given(documentoRepository.save(any(Documento.class))).willAnswer(i -> {
+            Documento d = i.getArgument(0);
+            primero.compareAndSet(null, d);
+            return d;
+        });
+
+        Thread otra = new Thread(() -> servicio.generar(1L, 27L, "INFORME_SUPERVISION"));
+        otra.start();
+        servicio.generar(1L, 27L, "INFORME_SUPERVISION");
+        otra.join(10_000);
+
+        ArgumentCaptor<Documento> guardados = ArgumentCaptor.forClass(Documento.class);
+        verify(documentoRepository, org.mockito.Mockito.times(2)).save(guardados.capture());
+        assertThat(guardados.getAllValues()).allSatisfy(d -> assertThat(d).isSameAs(primero.get()));
+    }
+
     // ── Tablas fila por fila (30-09-2026) ───────────────────────────────────
 
     private static final PlantillaDocumentoIA F031 = PlantillaDocumentoIA.CATALOGO.get("INFORME_SUPERVISION");
