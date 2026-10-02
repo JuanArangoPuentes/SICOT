@@ -129,6 +129,17 @@ const DETALLE_PASO: Record<number, string> = {
   6: 'Cumplimiento total del objeto, Informe Final GCCON-F-030 y archivo del expediente digital en SIGEP.',
 }
 
+/**
+ * Lo que el servidor dijo que estaba mal. En un 400 de validación el mensaje
+ * general es «Error de validación en los datos enviados.» y lo que hay que
+ * corregir viene por campo: unas notas de más de 4000 caracteres fallaban sin
+ * que nada dijera que el problema era su largo (auditoría del 02-10-2026).
+ */
+function motivoDelServidor(e: ApiError): string {
+  const porCampo = Object.values(e.detail?.fieldErrors ?? {})
+  return porCampo[0] ?? e.message
+}
+
 /** "INSPECCIÓN — Monitoreo y Ejecución" -> "Inspección". */
 function etiquetaCorta(titulo: string): string {
   const cabeza = titulo.split('—')[0].trim()
@@ -670,18 +681,30 @@ export default function SupervisorPanel({
         } catch (e) {
           setProcesandoFirma(null)
           if (revision) setRevisionPaso(revision)
-          // Aquí NO se reintenta, a diferencia del chat del copiloto. Si la
-          // conexión se cortó al pasar SICOT a segundo plano, el servidor puede
-          // haber generado el documento igualmente —así pasó al medirlo—, y
-          // repetir la petición crearía un segundo documento oficial del mismo
-          // paso. Lo honesto es decir qué pasó y mandar a comprobarlo.
-          const cortadoPorSegundoPlano = !(e instanceof ApiError) && vigia.seOculto()
-          const mensaje = cortadoPorSegundoPlano
-            ? 'la conexión se cortó porque SICOT pasó a segundo plano, y el teléfono cierra las conexiones de las aplicaciones que no están en pantalla. Es posible que el documento se haya generado igualmente: revise Documentos antes de volver a intentarlo, para no crear uno repetido.'
-            : e instanceof ApiError
-              ? e.message
-              : 'No se pudo generar o firmar el documento con el Copiloto IA.'
-          setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude completar la firma: ${mensaje}` }])
+          // Aquí NO se reintenta, a diferencia del chat del copiloto: si la
+          // conexión se cortó, el servidor puede haber hecho su parte igualmente
+          // —así pasó al medirlo—. Lo honesto es decir qué se estaba haciendo y
+          // qué comprobar. Hasta el 02-10-2026 todo fallo sin respuesta del
+          // servidor se atribuía al «Copiloto IA», también al firmar un
+          // borrador ya revisado, donde el Copiloto no interviene.
+          const motivo = e instanceof ApiError ? motivoDelServidor(e) : null
+          const cortadoPorSegundoPlano = motivo === null && vigia.seOculto()
+          const porQueSeCorto = cortadoPorSegundoPlano
+            ? 'la conexión se cortó porque SICOT pasó a segundo plano, y el teléfono cierra las conexiones de las aplicaciones que no están en pantalla'
+            : 'no hubo respuesta del servidor de SICOT'
+          const texto = firmar
+            ? motivo === null
+              ? // La firma pudo registrarse aunque la respuesta se perdiera, y un
+                // documento firmado no se vuelve a firmar.
+                `No sé si la firma de «${doc.name}» llegó a registrarse: ${porQueSeCorto}. Revise Documentos antes de volver a firmar.`
+              : `No pude firmar «${doc.name}»: ${motivo}`
+            : motivo === null
+              ? // Generar solo arma un borrador, que se reutiliza al repetir: no
+                // hay documento repetido que temer, y nada quedó firmado.
+                `No pude generar «${doc.name}»: ${porQueSeCorto}. No se firmó nada; vuelva a intentarlo` +
+                (cortadoPorSegundoPlano ? ' con SICOT en pantalla mientras se genera.' : ' en un momento.')
+              : `No pude generar «${doc.name}»: ${motivo}`
+          setChatMsgs((prev) => [...prev, { role: 'ai', text: texto }])
           // La lista de documentos se refresca (al volver, si se cortó por
           // segundo plano): si el documento llegó a firmarse, el siguiente
           // intento lo encuentra y cierra el sub-paso en vez de chocar.

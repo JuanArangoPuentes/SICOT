@@ -4,6 +4,7 @@ import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
 import { contrato, documento, sesionSupervisor } from '@/test/dobles'
 import type { Step, SubStep } from '@/types/domain'
+import { ApiError } from '@/services/api/client'
 import type { DocumentoGeneradoResponse, PlantillaDocumento } from '@/services/api/types'
 
 /**
@@ -527,6 +528,62 @@ describe('SupervisorPanel', () => {
     expect(screen.getByTestId('observaciones-tal-cual')).toHaveTextContent('se devolvieron al contratista 3 monitores')
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-de-las-notas')
+  })
+
+  // ── Los fallos se cuentan por lo que se estaba haciendo ─────────────────
+  //
+  // Hasta el 02-10-2026 todo fallo sin respuesta del servidor salía como «No
+  // se pudo generar o firmar el documento con el Copiloto IA», también al
+  // firmar un borrador ya revisado, donde el Copiloto no interviene.
+
+  it('si se pierde la respuesta al firmar, no culpa al Copiloto y manda a comprobar si la firma quedó', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento.mockResolvedValue(generado())
+    documentos.firmarDocumento.mockRejectedValue(new TypeError('Failed to fetch'))
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
+
+    const aviso = screen.getByText(/no sé si la firma de «Acta de Inicio» llegó a registrarse/i)
+    expect(aviso).toHaveTextContent(/no hubo respuesta del servidor de SICOT/i)
+    expect(aviso).toHaveTextContent(/revise Documentos antes de volver a firmar/i)
+    expect(screen.queryByText(/copiloto ia/i)).not.toBeInTheDocument()
+  })
+
+  it('si el servidor no responde al generar, lo dice y aclara que no se firmó nada', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento.mockRejectedValue(new TypeError('Failed to fetch'))
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    const aviso = screen.getByText(/no pude generar «Acta de Inicio»/i)
+    expect(aviso).toHaveTextContent(/no hubo respuesta del servidor de SICOT/i)
+    expect(aviso).toHaveTextContent(/no se firmó nada/i)
+    expect(screen.queryByText(/copiloto ia/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Firmar documento' })).toBeEnabled()
+  })
+
+  it('si el servidor rechaza un dato, dice cuál y no el «Error de validación» genérico', async () => {
+    const { documentos } = await prepararRedaccion()
+    documentos.generarDocumento.mockRejectedValue(
+      new ApiError(400, 'Error de validación en los datos enviados.', {
+        timestamp: '2026-10-02T15:00:00Z',
+        status: 400,
+        error: 'Bad Request',
+        message: 'Error de validación en los datos enviados.',
+        path: '/api/contratos/1/documentos/generar',
+        fieldErrors: { notas: 'Las notas del supervisor no pueden superar 4000 caracteres.' },
+      }),
+    )
+    await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
+
+    await firmarActa()
+
+    expect(
+      screen.getByText(/no pude generar «Acta de Inicio»: las notas del supervisor no pueden superar 4000 caracteres/i),
+    ).toBeInTheDocument()
   })
 
   it('cancelar deja el borrador sin firmar y el sub-paso libre', async () => {
