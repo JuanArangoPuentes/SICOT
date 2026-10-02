@@ -54,8 +54,10 @@ import DatosDelDocumento, {
 import RevisarRedaccion from '@/components/supervisor/RevisarRedaccion'
 import type { Step, Tab, ChatMsg } from '@/types/domain'
 import type {
+  AccionCopiloto,
   AuthResponse,
   AlertaResponse,
+  ChatResponse,
   ContratoResponse,
   DocumentoResponse,
   CronogramaResponse,
@@ -74,6 +76,7 @@ import {
   getPlantillasDocumento,
   precalentarCopiloto,
   preguntarCopiloto,
+  descargarDocumento,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
 import {
@@ -111,6 +114,18 @@ const QUICK_SUGGESTIONS: Array<{ label: string; question: string }> = [
     question: '¿Qué es el GCCON-F-030? ¿Es lo mismo que el acta de liquidación? ¿En qué sub-paso se genera?',
   },
 ]
+
+// Una respuesta del Copiloto tal como se guarda en el chat. Lo que el servidor
+// armó sin modelo (fuente SISTEMA) se marca en pantalla y no se le reenvía al
+// modelo (ver historialCopiloto.ts); un servidor anterior al 02-10-2026 no
+// manda fuente, y todo lo suyo pasaba por el modelo o se trataba como tal.
+// La acción solo se guarda: se ejecuta cuando el supervisor pulsa su botón.
+const mensajeDelCopiloto = ({ respuesta, fuente, accion }: ChatResponse): ChatMsg => ({
+  role: 'ai',
+  text: respuesta,
+  origen: fuente === 'SISTEMA' ? 'sistema' : 'modelo',
+  ...(accion ? { accion } : {}),
+})
 
 // La barra de recorrido tiene una sección por paso REAL del contrato (los
 // mismos que trae el backend), no por una agrupación aparte: así el número que
@@ -824,11 +839,11 @@ export default function SupervisorPanel({
       // paso no queda listo para confirmar (eso lo hace el finally, que ahora
       // espera al reintento).
       const idSolicitud = idDeSolicitud()
-      const { respuesta } = await repetirAlVolverSiSeCorta(
+      const respuesta = await repetirAlVolverSiSeCorta(
         () => preguntarCopiloto(contrato.id, pregunta, chatMsgs, { idSolicitud }),
         avisarQueSeRepite,
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
+      setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
@@ -875,11 +890,11 @@ export default function SupervisorPanel({
     // inferencia mientras la del primer intento sigue en la CPU.
     const idSolicitud = idDeSolicitud()
     try {
-      const { respuesta } = await repetirAlVolverSiSeCorta(
+      const respuesta = await repetirAlVolverSiSeCorta(
         () => preguntarCopiloto(contrato.id, texto, chatMsgs, { idSolicitud }),
         avisarQueSeRepite,
       )
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: respuesta, origen: 'modelo' }])
+      setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
       const mensaje =
         e instanceof ApiError || e instanceof CortadaPorSegundoPlano
@@ -924,6 +939,60 @@ export default function SupervisorPanel({
   const irAPaso = (stepId: number) => {
     setTab('contrato')
     setExpandedSteps(new Set([stepId]))
+  }
+
+  // Lo que una respuesta del Copiloto ofrece abrir. Solo se llama cuando el
+  // supervisor pulsa el botón de la acción, nunca al llegar la respuesta, y
+  // reutiliza la misma navegación que el resto del panel: ninguna acción
+  // firma, marca ni genera nada. Abrir el sub-paso de un documento deja al
+  // supervisor ante «Firmar documento», con su revisión y su confirmación.
+  const ejecutarAccionDelCopiloto = (accion: AccionCopiloto) => {
+    // El paso se deduce del sub-paso («2.7» → 2) si el servidor no lo manda.
+    const paso = accion.paso ?? (accion.subpaso ? Number(accion.subpaso.split('.')[0]) : null)
+    const existeElSubPaso = steps.some((s) => s.id === paso && s.subSteps.some((ss) => ss.id === accion.subpaso))
+    switch (accion.tipo) {
+      case 'IR_A_PASO':
+        if (paso) irAPaso(paso)
+        return
+      case 'IR_A_SUBPASO':
+      case 'ABRIR_DOCUMENTO':
+      case 'ABRIR_EVIDENCIA':
+        if (paso && accion.subpaso && existeElSubPaso) goToSubStep(accion.subpaso, paso)
+        else if (paso) irAPaso(paso)
+        return
+      case 'MOSTRAR_ALERTAS':
+        setTab('alertas')
+        return
+      case 'MOSTRAR_DOCUMENTOS':
+        setTab('documentos')
+        return
+      case 'DESCARGAR_DOCUMENTO': {
+        const doc = docsContrato.find((d) => d.id === accion.documentoId)
+        // Si la lista de este equipo todavía no lo tiene, se abre la vista
+        // Documentos en vez de bajar a ciegas un archivo que no se puede nombrar.
+        if (!contrato || !doc) {
+          setTab('documentos')
+          return
+        }
+        descargarDocumento(contrato.id, doc.id, doc.nombre)
+          .then((resultado) => {
+            if (resultado === 'guardado')
+              setChatMsgs((prev) => [...prev, { role: 'ai', text: `«${doc.nombre}» quedó guardado en el teléfono.` }])
+          })
+          .catch((e) => {
+            // El motivo real cuando lo hay, como en la vista Documentos.
+            const motivo =
+              e instanceof ApiError || (e instanceof Error && e.message.includes('vacío'))
+                ? e.message
+                : 'Intente de nuevo en un momento.'
+            setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude descargar «${doc.nombre}»: ${motivo}` }])
+          })
+        return
+      }
+      case 'IR_A_CONFIGURACION':
+        onOpenSettings()
+        return
+    }
   }
 
   // El paso que el Copiloto debe guiar ahora mismo — cualquiera de los 6, no solo el 3.
@@ -1569,6 +1638,7 @@ export default function SupervisorPanel({
                 if (r) ejecutarAccionSubPaso(r.stepId, r.subStepId, r.descripcion, undefined, r)
               }}
               onCancelarRevision={() => setRevisionPaso(null)}
+              onAccion={ejecutarAccionDelCopiloto}
             />
           )}
         </div>

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
-import { preguntarCopiloto } from '@/services/documentoService'
+import { firmarDocumento, generarDocumento, preguntarCopiloto } from '@/services/documentoService'
 import { historialParaElCopiloto } from '@/services/historialCopiloto'
 import type { ChatResponse } from '@/services/api/types'
 import { contrato, sesionSupervisor } from '@/test/dobles'
@@ -88,11 +88,12 @@ function pasoConUnSubPaso(): Step[] {
 }
 
 async function montar() {
+  const onCambiarVista = vi.fn()
   render(
     <PrefsProvider>
       <SupervisorPanel
         vista="contrato"
-        onCambiarVista={vi.fn()}
+        onCambiarVista={onCambiarVista}
         steps={pasoConUnSubPaso()}
         setSteps={vi.fn()}
         usuario={sesionSupervisor()}
@@ -108,6 +109,7 @@ async function montar() {
     </PrefsProvider>,
   )
   await act(async () => {})
+  return { onCambiarVista }
 }
 
 async function escribirAlCopiloto(texto: string) {
@@ -286,5 +288,79 @@ describe('SupervisorPanel — lo que le llega al Copiloto', () => {
       '¿Quién hace los estudios previos?',
       'Los estudios previos los elabora el área requirente.',
     ])
+  })
+})
+
+describe('SupervisorPanel — las acciones que ofrece el Copiloto', () => {
+  /**
+   * Firmar es un acto legal: que el Copiloto entienda «firma el documento» no
+   * puede firmar, generar ni abrir nada por sí solo. La respuesta trae a dónde
+   * llevar; el supervisor decide pulsando el botón, y lo que abre es el
+   * sub-paso, donde la firma sigue pasando por «Firmar documento».
+   */
+  it('recibir una acción no navega ni genera nada; pulsarla abre el sub-paso y nada más', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({
+      respuesta: 'Los estudios previos se revisan en el sub-paso 1.1. Le abro ese sub-paso.',
+      fuente: 'SISTEMA',
+      accion: {
+        tipo: 'ABRIR_DOCUMENTO',
+        paso: 1,
+        subpaso: '1.1',
+        documentoTipo: null,
+        documentoId: null,
+        etiqueta: 'Abrir el sub-paso 1.1',
+      },
+    })
+    const { onCambiarVista } = await montar()
+
+    await escribirAlCopiloto('firma el documento')
+    expect(screen.getByText(/le abro ese sub-paso/i)).toBeInTheDocument()
+    expect(onCambiarVista).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /marcar completado/i })).not.toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /abrir el sub-paso 1\.1/i }))
+    })
+    expect(onCambiarVista).toHaveBeenCalledExactlyOnceWith('contrato')
+    expect(screen.getByRole('button', { name: /marcar completado/i })).toBeInTheDocument()
+    expect(generarDocumento).not.toHaveBeenCalled()
+    expect(firmarDocumento).not.toHaveBeenCalled()
+  })
+
+  it('«ver alertas» lleva a la pestaña de alertas solo al pulsar el botón', async () => {
+    vi.mocked(preguntarCopiloto).mockResolvedValueOnce({
+      respuesta: 'Este contrato tiene una alerta de cronograma.',
+      fuente: 'SISTEMA',
+      accion: {
+        tipo: 'MOSTRAR_ALERTAS',
+        paso: null,
+        subpaso: null,
+        documentoTipo: null,
+        documentoId: null,
+        etiqueta: 'Ver las alertas',
+      },
+    })
+    const { onCambiarVista } = await montar()
+
+    await escribirAlCopiloto('muéstrame las alertas')
+    expect(onCambiarVista).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /ver las alertas/i }))
+    expect(onCambiarVista).toHaveBeenCalledExactlyOnceWith('alertas')
+  })
+
+  /** Lo que armó el servidor sin modelo no le vuelve al modelo en la pregunta siguiente. */
+  it('no le reenvía al modelo una respuesta del sistema ni la pregunta que la pidió', async () => {
+    vi.mocked(preguntarCopiloto)
+      .mockResolvedValueOnce({ respuesta: 'Acta de Inicio (GCCON-F-018): sub-paso 2.7…', fuente: 'SISTEMA' })
+      .mockResolvedValueOnce({ respuesta: 'Sí, cuando el contratista la firme.', fuente: 'MODELO' })
+    await montar()
+
+    await escribirAlCopiloto('¿Quién firma el acta de inicio?')
+    expect(screen.getByText('Respuesta del sistema')).toBeInTheDocument()
+    await escribirAlCopiloto('¿Hay que esperar al contratista?')
+
+    const historial = historialParaElCopiloto(vi.mocked(preguntarCopiloto).mock.calls[1][2] ?? [])
+    expect(historial.map((m) => m.text)).toEqual([])
   })
 })

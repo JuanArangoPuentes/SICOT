@@ -15,7 +15,7 @@
 import type { RefObject } from 'react'
 import { AvatarIcon, IconArrowRight, IconChevron } from '@/components/icons'
 import type { ChatMsg, Step } from '@/types/domain'
-import type { ContratoResponse } from '@/services/api/types'
+import type { AccionCopiloto, ContratoResponse } from '@/services/api/types'
 
 export type RevisionPaso = {
   stepId: number
@@ -45,6 +45,7 @@ export default function PanelCopiloto({
   onIniciarPaso,
   onConfirmarRevision,
   onCancelarRevision,
+  onAccion,
 }: {
   prefs: { avatarId: string; avatarName: string }
   contrato: ContratoResponse
@@ -63,6 +64,8 @@ export default function PanelCopiloto({
   onIniciarPaso: (stepId: number) => void
   onConfirmarRevision: () => void
   onCancelarRevision: () => void
+  /** El supervisor pulsó el botón de la acción que ofrecía una respuesta. */
+  onAccion: (accion: AccionCopiloto) => void
 }) {
   const bloqueado = pensando || !!revisionPaso
 
@@ -191,6 +194,29 @@ export default function PanelCopiloto({
             ) : (
               <div className="user-msg" style={{ maxWidth: '88%' }}>
                 {m.text}
+              </div>
+            )}
+            {/* Lo que el servidor armó sin modelo no se presenta como IA. */}
+            {m.origen === 'sistema' && (
+              <div
+                title="SICOT la armó con los datos del contrato y el procedimiento, sin el modelo de IA"
+                style={{ paddingLeft: 30, marginTop: 3, fontSize: 10, color: 'var(--text-muted)' }}
+              >
+                Respuesta del sistema
+              </div>
+            )}
+            {/* La acción no se ejecuta al llegar la respuesta: solo si el
+                supervisor pulsa el botón. */}
+            {m.accion && (
+              <div style={{ paddingLeft: 30, marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => m.accion && onAccion(m.accion)}
+                  style={{ padding: '6px 12px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  {m.accion.etiqueta} <IconArrowRight size={11} />
+                </button>
               </div>
             )}
           </div>

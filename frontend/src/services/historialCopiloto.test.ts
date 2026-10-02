@@ -125,6 +125,29 @@ describe('historialParaElCopiloto', () => {
     ])
   })
 
+  /**
+   * Una ficha o la guía del paso que armó el servidor son cientos de tokens
+   * que nunca pasaron por el modelo: reenviarlas alargaba minutos la pregunta
+   * siguiente. La pregunta que las pidió tampoco va: sola, el modelo la
+   * tomaría por pendiente y la contestaría otra vez.
+   */
+  it('deja fuera las respuestas del sistema y la pregunta que las pidió', () => {
+    const chat: ChatMsg[] = [
+      { role: 'user', text: '¿Quién firma el acta de inicio?' },
+      { role: 'ai', text: 'La respuesta se cortó porque SICOT pasó a segundo plano…' },
+      { role: 'ai', text: 'Acta de Inicio (GCCON-F-018): sub-paso 2.7…', origen: 'sistema' },
+      { role: 'user', text: '¿Qué es un CDP?' },
+      { role: 'ai', text: 'El certificado de disponibilidad presupuestal.', origen: 'modelo' },
+      { role: 'user', text: 'Llévame al paso 3' },
+      { role: 'ai', text: 'Le abro el Paso 3.', origen: 'sistema' },
+    ]
+
+    expect(historialParaElCopiloto(chat).map((m) => m.text)).toEqual([
+      '¿Qué es un CDP?',
+      'El certificado de disponibilidad presupuestal.',
+    ])
+  })
+
   /** Se recorta lo que queda después de filtrar: los avisos no le quitan sitio a la conversación. */
   it('cuenta los turnos sobre la conversación, no sobre lo que se ve en pantalla', () => {
     const chat = conversacion(4).flatMap((m) => [m, aviso, error])
