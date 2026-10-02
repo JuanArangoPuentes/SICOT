@@ -123,7 +123,6 @@ export default function GestionPanel({
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [showModal, setShowModal] = useState(false)
   const [lastProcessedContract, setLastProcessedContract] = useState<{ id: string; supervisor: string } | null>(null)
-  const [progress, setProgress] = useState(0)
   const [extraccion, setExtraccion] = useState<ExtraccionContratoResponse | null>(null)
   const [errorExtraccion, setErrorExtraccion] = useState('')
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([])
@@ -183,7 +182,6 @@ export default function GestionPanel({
   const openUpload = () => {
     setShowModal(true)
     setUploadState('idle')
-    setProgress(0)
     setAdjuntosSubidos(0)
     setExtraccion(null)
     setErrorExtraccion('')
@@ -208,8 +206,10 @@ export default function GestionPanel({
     if (archivos.length === 0) return
     setArchivosSeleccionados(archivos)
     setErrorExtraccion('')
-    setUploadState('uploading')
-    setProgress(100)
+    // Un solo estado de espera: la subida y el análisis van en la misma
+    // petición y no hay forma de medir cuánto lleva subido. Antes había un
+    // «Subiendo… N%» que React nunca llegaba a pintar y cuya barra se ponía
+    // en 100 % sin medir nada.
     setUploadState('analyzing')
     try {
       const resultado = await extraerDatosContrato(archivos)
@@ -583,27 +583,6 @@ export default function GestionPanel({
                 el Copiloto IA completa el objeto y el tipo, y puede tardar unos minutos. Un PDF escaneado (una imagen)
                 todavía no se puede leer: diligencie esos datos a mano.
               </p>
-            </div>
-          )}
-
-          {uploadState === 'uploading' && (
-            <div style={{ textAlign: 'center', padding: '20px 0' }}>
-              <IconUpload size={32} style={{ color: 'var(--accent)', margin: '0 auto 16px' }} />
-              <p style={{ fontSize: 14, marginBottom: 12 }}>
-                Subiendo {archivosSeleccionados.length} documento{archivosSeleccionados.length === 1 ? '' : 's'}...
-              </p>
-              <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${progress}%`,
-                    background: 'var(--accent)',
-                    borderRadius: 2,
-                    transition: 'width 0.12s',
-                  }}
-                />
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8 }}>{progress}%</p>
             </div>
           )}
 

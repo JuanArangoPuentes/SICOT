@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { avisoTraficoSinCifrar, enAndroid, enAplicacionEmpaquetada, mensajeSinConexion } from './entorno'
+import {
+  avisoTraficoSinCifrar,
+  enAndroid,
+  enAplicacionEmpaquetada,
+  mensajeSinConexion,
+  queUsaLaDireccionVacia,
+} from './entorno'
 
 /** Simula estar dentro del APK: marca de Tauri + agente de usuario de Android. */
 function simularApkAndroid() {
@@ -42,7 +48,7 @@ describe('avisoTraficoSinCifrar', () => {
     expect(avisoTraficoSinCifrar('http://192.168.1.50:8080')).toBeNull()
   })
 
-  it('no avisa con la dirección vacía, que significa «el mismo origen»', () => {
+  it('no avisa con la dirección vacía: lo que significa vacío lo explica queUsaLaDireccionVacia', () => {
     simularApkAndroid()
     expect(avisoTraficoSinCifrar('')).toBeNull()
   })
@@ -72,5 +78,29 @@ describe('mensajeSinConexion', () => {
     const m = mensajeSinConexion('http://192.168.1.50:8080')
     expect(m).toContain('Revise que la dirección del servidor sea la correcta')
     expect(m).not.toContain('certificado')
+  })
+})
+
+describe('queUsaLaDireccionVacia', () => {
+  it('en el despliegue web, compilado sin dirección, vacío es el mismo origen', () => {
+    expect(queUsaLaDireccionVacia('')).toContain('mismo origen')
+  })
+
+  // El APK se publica sin VITE_API_URL: vacío es http://localhost:8080. La
+  // pantalla decía «el mismo origen» y quien lo dejaba vacío se quedaba sin
+  // conexión.
+  it('en el APK no promete el mismo origen: dice la dirección real y que es el propio teléfono', () => {
+    simularApkAndroid()
+    const m = queUsaLaDireccionVacia('http://localhost:8080')
+    expect(m).not.toContain('mismo origen')
+    expect(m).toContain('http://localhost:8080')
+    expect(m).toContain('propio teléfono')
+  })
+
+  it('en el instalador de escritorio dice la dirección de compilación sin hablar del teléfono', () => {
+    ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}
+    const m = queUsaLaDireccionVacia('http://localhost:8080')
+    expect(m).toContain('http://localhost:8080')
+    expect(m).not.toContain('teléfono')
   })
 })

@@ -85,6 +85,18 @@ el mismo artefacto sirve para cualquier Centro.
 cámara, biometría. Ninguna de esas capacidades la ha pedido nadie, y añadirlas
 sin que nadie las pida sería inventar el proceso institucional.
 
+> **Actualizado el 2 de octubre de 2026.** La cámara salió de esta lista: sí se
+> pidió —la evidencia fotográfica de la entrega en bodega, sub-pasos 3.1 y 3.2—
+> y entró el 22 de septiembre (PR #91) sin salir del envoltorio: el WebView abre
+> la cámara del sistema con el permiso `CAMERA` y la consulta `IMAGE_CAPTURE`
+> que el manifiesto declara en `<queries>` (sin ella, desde Android 11, «Tomar
+> foto» abría la galería; se corrigió el 23). La fecha y la ubicación las lee el
+> backend de la propia foto (MDL-205, PR #96). Lo que se pierde sigue siendo lo
+> demás: notificaciones push y biometría, que nadie ha pedido. La cámara la
+> cubre la [prueba manual del APK](../operacion/PRUEBA_MANUAL_APK.md), porque
+> una regeneración del proyecto Android puede quitar esa declaración sin que
+> nada avise.
+
 **Lo que queda pendiente y hay que decir en voz alta.** Android bloquea el
 tráfico sin cifrar en las compilaciones de publicación. Hoy el andamiaje lo
 permite solo en la compilación de depuración, que es lo correcto. Pero significa
@@ -122,7 +134,9 @@ decisión previa sobre la cuenta institucional y su costo.
   cobertura** en planta o en obra. Entonces esto ya no es un problema de
   empaquetado sino el de ADR-001, y hay que reabrir aquella decisión primero.
 - Si aparece un requisito que un envoltorio web no puede cumplir —firma con
-  certificado del dispositivo, evidencia fotográfica con metadatos, trabajo sin
-  red—. Uno solo de ellos no justifica la interpretación C; tres sí.
+  certificado del dispositivo, trabajo sin red—. Uno solo de ellos no justifica
+  la interpretación C; tres sí. La evidencia fotográfica con metadatos estaba en
+  esta lista y ya no cuenta: se pidió y el envoltorio la cumple (ver «Lo que se
+  pierde»).
 - Si el SENA entrega equipos iOS, que obligaría a replantear el costo del
   programa de desarrollador frente a la restricción de gratuidad.

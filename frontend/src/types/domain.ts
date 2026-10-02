@@ -12,7 +12,7 @@ import type { AccionCopiloto } from '@/services/api/types'
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 
 export type AdminTab = 'dashboard' | 'seguimiento' | 'documentos' | 'usuarios' | 'firmas'
-export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
+export type UploadState = 'idle' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {
   id: string

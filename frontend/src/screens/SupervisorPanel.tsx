@@ -26,6 +26,7 @@ import ContratoInfo from '@/components/supervisor/ContratoInfo'
 import ContratoGraficas from '@/components/supervisor/ContratoGraficas'
 import VistaDocumentos from '@/components/supervisor/VistaDocumentos'
 import VistaAlertas from '@/components/supervisor/VistaAlertas'
+import { destinoDeAlerta, type DestinoDeAlerta } from '@/components/supervisor/destinoDeAlerta'
 import PanelCopiloto, { type RevisionPaso } from '@/components/supervisor/PanelCopiloto'
 import {
   CargandoContratoState,
@@ -64,6 +65,7 @@ import type {
   CronogramaResponse,
   PlantillaDocumento,
   TablasDelDocumento,
+  TipoAlerta,
 } from '@/services/api/types'
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
@@ -308,6 +310,7 @@ export default function SupervisorPanel({
   onStartTour,
   registros,
   onRefreshRegistros,
+  pedidosCopiloto = 0,
 }: {
   vista: Tab
   onCambiarVista: (t: Tab) => void
@@ -322,6 +325,8 @@ export default function SupervisorPanel({
   onStartTour: () => void
   registros: Registro[]
   onRefreshRegistros: () => Promise<void>
+  /** Sube cada vez que el avatar flotante pide abrir el Copiloto. */
+  pedidosCopiloto?: number
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -467,6 +472,11 @@ export default function SupervisorPanel({
   // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
   // vuelve a abrirse desde el botón de la cabecera.
   const [copilotoAbierto, setCopilotoAbierto] = useState(true)
+  // El avatar flotante lo abre aunque esté plegado: App ya llevó a la vista
+  // Contrato, que es donde vive el panel.
+  useEffect(() => {
+    if (pedidosCopiloto > 0) setCopilotoAbierto(true)
+  }, [pedidosCopiloto])
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -1127,22 +1137,12 @@ export default function SupervisorPanel({
     }
   }
 
-  const resolveAlert = (alertId: string) => {
-    if (alertId.startsWith('api-')) {
-      const a = alertasApi.find((x) => 'api-' + x.id === alertId)
-      if (!a) return
-      if (a.tipo === 'VENCIMIENTO' || a.tipo === 'SECOP' || a.tipo === 'CRONOGRAMA') {
-        irAPaso(6)
-      } else if (a.tipo === 'FIRMA' || a.tipo === 'DOCUMENTO' || a.tipo === 'IA') {
-        irAPaso(3)
-      } else {
-        irAPaso(4)
-      }
-      return
-    }
-    if (alertId.startsWith('cronograma-') && activeStep) {
-      irAPaso(activeStep.id)
-    }
+  // El botón de una alerta lleva al sitio relacionado con ella, o no se
+  // muestra (ver destinoDeAlerta.ts).
+  const destinoDe = (tipo: TipoAlerta) => destinoDeAlerta(tipo, activeStep?.id ?? null)
+  const irADestino = (destino: DestinoDeAlerta) => {
+    if (destino.vista === 'documentos') setTab('documentos')
+    else irAPaso(destino.paso)
   }
 
   // ── Barra de recorrido: una sección por paso real del contrato ──
@@ -1205,6 +1205,7 @@ export default function SupervisorPanel({
     const items: ItemBandeja[] = []
 
     if (alertaCronograma && !dismissed.has(alertaCronograma.id)) {
+      const destino = destinoDe('CRONOGRAMA')
       items.push({
         id: alertaCronograma.id,
         severidad:
@@ -1212,8 +1213,8 @@ export default function SupervisorPanel({
         categoria: 'Cronograma',
         titulo: alertaCronograma.severity === 'ok' ? 'El paso en curso va a tiempo' : 'El paso en curso está atrasado',
         detalle: alertaCronograma.text,
-        accionLabel: 'Ver el paso',
-        onAccion: () => resolveAlert(alertaCronograma.id),
+        accionLabel: destino?.etiqueta,
+        onAccion: destino ? () => irADestino(destino) : undefined,
         onDescartar: () => dismiss(alertaCronograma.id),
       })
     }
@@ -1221,6 +1222,7 @@ export default function SupervisorPanel({
     for (const a of alertasApi) {
       const id = 'api-' + a.id
       if (dismissed.has(id)) continue
+      const destino = destinoDe(a.tipo)
       items.push({
         id,
         severidad: a.prioridad === 'ALTA' ? 'critica' : a.prioridad === 'MEDIA' ? 'leve' : 'info',
@@ -1228,8 +1230,8 @@ export default function SupervisorPanel({
         titulo: a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace(/_/g, ' '),
         detalle: a.mensaje,
         fecha: formatFecha(a.fechaCreacion.slice(0, 10)),
-        accionLabel: 'Ir al paso',
-        onAccion: () => resolveAlert(id),
+        accionLabel: destino?.etiqueta,
+        onAccion: destino ? () => irADestino(destino) : undefined,
         onDescartar: () => dismiss(id),
       })
     }
@@ -1756,7 +1758,8 @@ export default function SupervisorPanel({
           alertaCronograma={alertaCronograma}
           alertasApi={alertasApi}
           errorAlertas={errorAlertas}
-          onResolver={resolveAlert}
+          destinoDe={destinoDe}
+          onIrA={irADestino}
         />
       )}
       {/* ── Documentos ── */}

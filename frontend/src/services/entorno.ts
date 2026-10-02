@@ -62,6 +62,28 @@ export function avisoTraficoSinCifrar(direccion: string): string | null {
 }
 
 /**
+ * Qué usa la aplicación si la dirección del servidor se deja vacía.
+ *
+ * Configuración decía siempre «el mismo origen desde el que se sirve la
+ * aplicación», y eso solo es cierto en el despliegue web, que se compila con
+ * `VITE_API_URL` vacío. El APK y el instalador se compilan sin definirla, así
+ * que vacío significa la dirección de desarrollo, `http://localhost:8080`: en
+ * un teléfono, el propio teléfono, donde no hay ningún servidor de SICOT. Quien
+ * lo dejaba vacío porque la pantalla se lo sugería se quedaba sin conexión.
+ *
+ * @param origenCompilado la dirección horneada al compilar (`ORIGEN_COMPILADO`
+ *        de services/api/client.ts).
+ */
+export function queUsaLaDireccionVacia(origenCompilado: string): string {
+  if (origenCompilado === '') return 'Déjelo vacío para usar el mismo origen desde el que se sirve la aplicación.'
+  const base = `Si lo deja vacío, se usa la dirección con la que se compiló esta instalación (${origenCompilado})`
+  if (enAplicacionEmpaquetada() && enAndroid() && /\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(origenCompilado)) {
+    return `${base}, que en el teléfono apunta al propio teléfono: escriba la dirección https:// del servidor de su Centro.`
+  }
+  return `${base}.`
+}
+
+/**
  * Mensaje para cuando no se puede alcanzar el servidor al iniciar sesión.
  *
  * Antes era siempre «No se pudo conectar con el servidor.», sin más. Es verdad,

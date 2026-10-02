@@ -13,7 +13,7 @@ import { useMemo, useState } from 'react'
 import { Chip, type ChipType } from '@/components/ui'
 import { IconAlertTriangle, IconUsers } from '@/components/icons'
 import { FORMAL_DOCS } from '@/data/contractFlow'
-import { formatCOP, formatFecha } from '@/services/format'
+import { formatCOP, formatFecha, formatFechaYHoraDelCentro } from '@/services/format'
 import type {
   ContratoSeguimiento,
   EstadoContrato,
@@ -37,18 +37,8 @@ const SEMAFORO: Record<SemaforoCronograma, { label: string; color: string }> = {
   SIN_DATOS: { label: 'Sin datos de plazo', color: 'var(--text-muted)' },
 }
 
-const HORA = new Intl.DateTimeFormat('es-CO', {
-  timeZone: 'America/Bogota',
-  day: '2-digit',
-  month: '2-digit',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-  hourCycle: 'h23',
-})
-
 function fechaYHora(iso: string | null | undefined) {
-  return iso ? HORA.format(new Date(iso)) : '—'
+  return iso ? formatFechaYHoraDelCentro(iso) : '—'
 }
 
 /**
