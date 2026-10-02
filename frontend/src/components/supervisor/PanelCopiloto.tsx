@@ -376,7 +376,9 @@ export default function PanelCopiloto({
               ? 'Esperando respuesta del Copiloto…'
               : revisionPaso && !revisionPaso.listaParaConfirmar
                 ? 'Describa qué hizo o verificó en este paso...'
-                : 'Escriba una orden o pregunta a la IA...'
+                : // Solo lo que de verdad se atiende: preguntas, y las órdenes de
+                  // ir a una pantalla que el servidor resuelve sin el modelo.
+                  'Pregunte, o pida «llévame al paso 3»…'
           }
           disabled={pensando}
           // Sin etiqueta visible: el lector de pantalla necesita un nombre, y el

@@ -88,6 +88,23 @@ describe('PanelCopiloto — confirmar un paso', () => {
   })
 })
 
+describe('PanelCopiloto — el campo de texto', () => {
+  /**
+   * Decía «Escriba una orden o pregunta a la IA», y no había órdenes: el
+   * supervisor escribía «firma el acta» y el modelo podía contestar que ya lo
+   * había hecho. Ahora invita a lo que se atiende de verdad: preguntas y las
+   * órdenes de ir a una pantalla, que el servidor resuelve sin el modelo.
+   */
+  it('invita a preguntar o a pedir ir a un paso', () => {
+    montar(null)
+
+    expect(screen.getByRole('textbox', { name: 'Mensaje para el Copiloto' })).toHaveAttribute(
+      'placeholder',
+      'Pregunte, o pida «llévame al paso 3»…',
+    )
+  })
+})
+
 describe('PanelCopiloto — lo que ofrece una respuesta', () => {
   const abrirActa: AccionCopiloto = {
     tipo: 'ABRIR_DOCUMENTO',
