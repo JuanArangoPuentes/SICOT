@@ -686,10 +686,13 @@ public final class FidelidadDeRedaccion {
         if (notas == null || notas.isBlank() || redactado == null) {
             return true;
         }
-        StringBuilder[] sinReferencias = sinReferencias(normalizarCifras(notas), normalizarCifras(redactado),
-                datosConocidos);
-        List<String> fichasNotas = fichas(notas);
-        List<String> fichasRedaccion = fichas(redactado);
+        String textoNotas = normalizarCifras(notas);
+        String textoRedactado = normalizarCifras(redactado);
+        StringBuilder[] sinReferencias = sinReferencias(textoNotas, textoRedactado, datosConocidos);
+        // Las palabras, con las unidades ya escritas igual en los dos: «120 m2»
+        // y «120 m²» son «120 metros cuadrados» (medición del 02-10-2026).
+        List<String> fichasNotas = fichas(textoNotas);
+        List<String> fichasRedaccion = fichas(textoRedactado);
         List<String[]> enNotas = valoresConCosa(sinReferencias[0].toString(), true).stream()
                 .filter(v -> v[1] != null).toList();
         List<String[]> enRedaccion = valoresConCosa(sinReferencias[1].toString(), true).stream()
@@ -1366,7 +1369,8 @@ public final class FidelidadDeRedaccion {
                     negadaNotas += v.getValue()[1];
                 }
             }
-            if (afirmadaNotas > 0 && negadaNotas == 0 && palabra.getValue()[1] > 0) {
+            if (afirmadaNotas > 0 && negadaNotas == 0 && palabra.getValue()[1] > 0
+                    && !niegaLoQueLasNotasYaNiegan(redactado, palabra.getKey(), notas)) {
                 return false;
             }
             // Quitar una negación solo cuenta con la misma forma de la palabra:
@@ -1379,6 +1383,49 @@ public final class FidelidadDeRedaccion {
             }
         }
         return true;
+    }
+
+    /**
+     * ¿Recae la negación que la redacción le pone a {@code palabra} sobre algo
+     * que las notas ya niegan con otras palabras? «Se recibieron 30 cajas.
+     * Faltan 10 cajas» redactado «se recibieron 30 cajas; no se han recibido
+     * 10 cajas» niega «recibido», que las notas afirman, pero sobre las 10
+     * cajas que faltan: lo mismo dicho de otra forma (medición del
+     * 02-10-2026). Cuenta si, en las cuatro palabras que siguen, dentro de la
+     * cláusula, va la misma cantidad con la misma cosa que las notas niegan
+     * («10 cajas»), o una palabra que las notas niegan y nunca afirman («los
+     * cargadores» de «faltan los cargadores»). «No se recibieron 30 cajas» con
+     * esas notas sigue siendo decir lo contrario.
+     */
+    private static boolean niegaLoQueLasNotasYaNiegan(String redactado, String palabra, String notas) {
+        java.util.Map<String, int[]> notasAmplias = polaridadesAmplias(notas);
+        Set<String> cantidadesNegadas = new HashSet<>();
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(notas == null ? "" : notas))) {
+            List<String> fs = fichas(clausula);
+            for (int i = 1; i < fs.size(); i++) {
+                if (fs.get(i - 1).matches("\\d+") && negadaEnLaClausula(fs, i)) {
+                    cantidadesNegadas.add(fs.get(i - 1) + " " + fs.get(i));
+                }
+            }
+        }
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(redactado))) {
+            List<String> fs = fichas(clausula);
+            for (int i = 0; i < fs.size(); i++) {
+                if (!fs.get(i).equals(palabra)) {
+                    continue;
+                }
+                for (int j = i + 1; j < Math.min(fs.size(), i + 5); j++) {
+                    String f = fs.get(j);
+                    int[] enNotas = notasAmplias.get(f);
+                    boolean negadaYNuncaAfirmada = enNotas != null && enNotas[1] > 0 && enNotas[0] == 0;
+                    boolean cantidadNegada = j + 1 < fs.size() && cantidadesNegadas.contains(f + " " + fs.get(j + 1));
+                    if (negadaYNuncaAfirmada || cantidadNegada) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static final Set<String> NIEGAN_LA_SIGUIENTE = Set.of("no", "nunca", "tampoco");

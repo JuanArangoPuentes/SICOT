@@ -525,6 +525,9 @@ class FidelidadDeRedaccionTest {
                 {"de las 40 sillas, 2 tenían el tapizado rasgado",
                         "De las 40 sillas, 2 sillas tenían el tapizado rasgado."},
                 {"llegaron 5 portátiles", "Llegaron 5 computadores portátiles."},
+                // medición del 02-10-2026: la unidad escrita de otra forma
+                {"se recibieron 120 m2 de piso laminado y 30 cajas de zócalo",
+                        "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo."},
         };
         for (String[] par : fieles) {
             assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
@@ -539,5 +542,19 @@ class FidelidadDeRedaccionTest {
         assertThat(fiel("De las 4 sillas, una no tenía patas.", "de las 4 sillas, 1 no tenía patas")).isTrue();
         // Sin el «uno», el 1 sigue perdiéndose.
         assertThat(fiel("Se probaron los seis hornos; cinco funcionaron y otro no calentó.", notas)).isFalse();
+    }
+
+    /** Medición del 02-10-2026 con qwen2.5:7b: «faltan 10 cajas» redactado «no se han recibido 10 cajas». */
+    @Test
+    void negarLoQueLasNotasYaNieganConOtrasPalabrasNoEsDecirLoContrario() {
+        String notas = "se recibieron 120 m2 de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de zócalo";
+        assertThat(fiel("Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido 10 cajas"
+                + " de zócalo.", notas)).isTrue();
+        assertThat(fiel("Se recibieron los computadores; no se recibieron los cargadores.",
+                "se recibieron los computadores y faltan los cargadores")).isTrue();
+        // Negar lo que las notas afirman sigue siendo decir lo contrario.
+        assertThat(fiel("No se recibieron 30 cajas de zócalo; faltan 10 cajas de zócalo.", notas)).isFalse();
+        assertThat(fiel("No se recibieron los computadores y faltan los cargadores.",
+                "se recibieron los computadores y faltan los cargadores")).isFalse();
     }
 }
