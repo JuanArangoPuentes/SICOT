@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -11,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Única puerta de entrada a Ollama (IA local, sin costo de licencia).
@@ -64,20 +67,52 @@ public class OllamaClient {
     private final RestClient restClient;
 
     /**
+     * Opciones con las que se genera cuando quien llama no da otras.
+     *
+     * <p>Hasta el 02-10-2026 no se mandaba ninguna y Ollama usaba las suyas:
+     * temperatura 0,8 y sin tope de tokens. La temperatura alta es justo lo que
+     * la comprobación de fidelidad castiga —sinónimos, valoraciones, cifras
+     * completadas— y hace que el mismo prompt dé textos distintos, así que
+     * nada se podía medir dos veces igual. Sin tope, un modelo que entra en un
+     * bucle de repetición sigue escribiendo hasta el tiempo límite: cuatro
+     * minutos de espera para nada.
+     */
+    private final Opciones porDefecto;
+
+    /**
+     * Tamaño del contexto, igual en todas las llamadas o ninguno (0: el de
+     * Ollama). Uno distinto por llamada obliga a Ollama a recargar el modelo,
+     * y con él se pierde la caché del precalentado.
+     */
+    private final int numCtx;
+
+    /** Con las opciones por defecto de {@code application.properties}. */
+    public OllamaClient(String ollamaUrl, String modelo, int timeoutSeconds, String keepAlive,
+                        LimitadorDeUsoIa limitador) {
+        this(ollamaUrl, modelo, timeoutSeconds, keepAlive, limitador, 0.2, 1024, 0);
+    }
+
+    /**
      * Inyección por constructor, como el resto del backend. Con {@code @Value}
      * sobre campos, los valores no existen todavía cuando corre el constructor,
      * lo que impide precisamente construir aquí el cliente.
      */
+    @Autowired
     public OllamaClient(@Value("${sicot.ia.ollama-url}") String ollamaUrl,
                         @Value("${sicot.ia.ollama-model}") String modelo,
                         @Value("${sicot.ia.timeout-seconds}") int timeoutSeconds,
                         @Value("${sicot.ia.keep-alive}") String keepAlive,
-                        LimitadorDeUsoIa limitador) {
+                        LimitadorDeUsoIa limitador,
+                        @Value("${sicot.ia.temperatura:0.2}") double temperatura,
+                        @Value("${sicot.ia.max-tokens:1024}") int maxTokens,
+                        @Value("${sicot.ia.num-ctx:0}") int numCtx) {
         this.ollamaUrl = ollamaUrl;
         this.modelo = modelo;
         this.keepAlive = keepAlive;
         this.limitador = limitador;
         this.timeoutSeconds = timeoutSeconds;
+        this.porDefecto = new Opciones(temperatura, maxTokens);
+        this.numCtx = numCtx;
 
         SimpleClientHttpRequestFactory fabrica = new SimpleClientHttpRequestFactory();
         fabrica.setConnectTimeout(Duration.ofSeconds(10));
@@ -95,13 +130,36 @@ public class OllamaClient {
      * fabrica una respuesta falsa para disimular que la IA no respondió.
      */
     public String generar(String prompt, boolean formatoJson) {
-        return limitador.ejecutar("ollama:generar", () -> llamar(prompt, formatoJson));
+        // Con JSON el modelo copia datos de un documento: no hay nada que
+        // variar, y a temperatura 0 la misma extracción da el mismo resultado.
+        return generar(prompt, formatoJson, formatoJson ? new Opciones(0.0, porDefecto.maxTokens()) : porDefecto);
     }
 
-    private String llamar(String prompt, boolean formatoJson) {
+    /** Como {@link #generar(String, boolean)}, con las opciones de esta llamada. */
+    public String generar(String prompt, boolean formatoJson, Opciones opciones) {
+        return limitador.ejecutar("ollama:generar", () -> llamar(prompt, formatoJson, opciones));
+    }
+
+    /**
+     * Opciones de generación de una llamada.
+     *
+     * @param temperatura cuánto varía el modelo al escoger cada palabra (0: siempre la más probable)
+     * @param maxTokens   tope de tokens de la respuesta; si lo alcanza, la respuesta está cortada y
+     *                    se trata como un fallo ({@link IaNoDisponibleException.Causa#RESPUESTA_CORTADA})
+     */
+    public record Opciones(double temperatura, int maxTokens) {
+    }
+
+    private String llamar(String prompt, boolean formatoJson, Opciones opciones) {
         try {
+            Map<String, Object> options = new LinkedHashMap<>();
+            options.put("temperature", opciones.temperatura());
+            options.put("num_predict", opciones.maxTokens());
+            if (numCtx > 0) {
+                options.put("num_ctx", numCtx);
+            }
             GenerateRequest request =
-                    new GenerateRequest(modelo, prompt, false, formatoJson ? "json" : null, keepAlive);
+                    new GenerateRequest(modelo, prompt, false, formatoJson ? "json" : null, keepAlive, options);
             GenerateResponse respuesta = restClient.post()
                     .uri("/api/generate")
                     .contentType(MediaType.APPLICATION_JSON)
@@ -110,6 +168,17 @@ public class OllamaClient {
                     .body(GenerateResponse.class);
             if (respuesta == null || respuesta.response() == null) {
                 throw new IaNoDisponibleException("Ollama respondió vacío.");
+            }
+            // «length»: se acabó el tope de tokens antes de que el modelo
+            // terminara. Un texto cortado a media frase no se entrega como si
+            // fuera la respuesta completa; con el tope por defecto, casi
+            // siempre es un bucle de repetición.
+            if ("length".equals(respuesta.doneReason())) {
+                log.warn("Ollama llegó al tope de {} tokens con el modelo '{}'; la respuesta quedó cortada.",
+                        opciones.maxTokens(), modelo);
+                throw new IaNoDisponibleException(IaNoDisponibleException.Causa.RESPUESTA_CORTADA,
+                        "La respuesta de la IA superó el largo máximo y quedó cortada. "
+                                + "Intente de nuevo con una consulta más concreta.", null);
             }
             return respuesta.response();
         } catch (IaNoDisponibleException e) {
@@ -123,7 +192,7 @@ public class OllamaClient {
                 // justo lo que lo vuelve a saturar (prueba integral del
                 // 24-09-2026: el Informe de Supervisión se cortó a los 240 s).
                 log.warn("Ollama no respondió en {} s con el modelo '{}'", timeoutSeconds, modelo);
-                throw new IaNoDisponibleException(
+                throw new IaNoDisponibleException(IaNoDisponibleException.Causa.TIEMPO_AGOTADO,
                         "La IA tardó más de " + timeoutSeconds + " segundos en responder y la petición se "
                                 + "canceló. Suele pasar cuando el equipo está ocupado con otras tareas; "
                                 + "intente de nuevo en unos minutos.", e);
@@ -156,10 +225,10 @@ public class OllamaClient {
      * igual a los 5 minutos — un fallo que no deja rastro en ningún log.
      */
     private record GenerateRequest(String model, String prompt, boolean stream, String format,
-                                   @JsonProperty("keep_alive") String keepAlive) {
+                                   @JsonProperty("keep_alive") String keepAlive, Map<String, Object> options) {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record GenerateResponse(String response) {
+    private record GenerateResponse(String response, @JsonProperty("done_reason") String doneReason) {
     }
 }
