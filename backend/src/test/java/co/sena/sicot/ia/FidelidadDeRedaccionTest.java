@@ -397,4 +397,370 @@ class FidelidadDeRedaccionTest {
             assertThat(fiel(par[1], par[0])).as(par[0]).isFalse();
         }
     }
+
+    // ── Auditoría del 02-10-2026: el año completado ─────────────────────────
+
+    private static final String NOTAS_CON_Y_SIN_ANIO =
+            "el 12 de octubre de 2026 visité la obra, entregará antes del 20 de octubre";
+
+    /** En vivo con qwen2.5:7b: completa el año de la fecha que el supervisor escribió sin él. */
+    @Test
+    void elAnioQueLaRedaccionLeAgregaAUnaFechaSeQuitaYLaRedaccionPasa() {
+        String limpia = FidelidadDeRedaccion.quitarAniosAgregados(
+                "El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO);
+
+        assertThat(limpia).isEqualTo("El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre.");
+        assertThat(fiel(limpia, NOTAS_CON_Y_SIN_ANIO)).isTrue();
+        assertThat(FidelidadDeRedaccion.quitarAniosAgregados("Entregará antes del 20/10/2026.", NOTAS_CON_Y_SIN_ANIO))
+                .isEqualTo("Entregará antes del 20/10.");
+        // Sin ningún año en las notas también: el año supuesto no es un dato del supervisor.
+        String sinAnio = FidelidadDeRedaccion.quitarAniosAgregados("Entregará antes del 20 de octubre de 2026.",
+                "entregará antes del 20 de octubre");
+        assertThat(sinAnio).isEqualTo("Entregará antes del 20 de octubre.");
+        assertThat(fiel(sinAnio, "entregará antes del 20 de octubre")).isTrue();
+    }
+
+    @Test
+    void laComprobacionNoAceptaAniosSupuestosNiOtraFecha() {
+        // Sin el paso que lo quita, el año completado sigue siendo una cifra que no estaba.
+        assertThat(fiel("El 12 de octubre de 2026 se visitó la obra; entregará antes del 20 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO)).isFalse();
+        // Otro día con año no es la fecha de las notas: no se toca y se descarta.
+        String otroDia = FidelidadDeRedaccion.quitarAniosAgregados(
+                "El 12 de octubre de 2026 se visitó la obra; entregará antes del 21 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO);
+        assertThat(otroDia).contains("21 de octubre de 2026");
+        assertThat(fiel(otroDia, NOTAS_CON_Y_SIN_ANIO)).isFalse();
+        // La fecha que las notas sí escriben con año se queda con el suyo.
+        assertThat(FidelidadDeRedaccion.quitarAniosAgregados("Se visitó la obra el 12 de octubre de 2026.",
+                NOTAS_CON_Y_SIN_ANIO)).isEqualTo("Se visitó la obra el 12 de octubre de 2026.");
+    }
+
+    // ── Auditoría del 02-10-2026: la negación dicha con otras palabras ──────
+
+    @Test
+    void unaNegacionDichaConOtrasPalabrasNoEsDecirLoContrario() {
+        String[][] fieles = {
+                // en vivo con qwen2.5:7b
+                {"no había personal de almacén para recibir",
+                        "Ante la ausencia de personal del almacén no se pudo recibir."},
+                {"no había personal de almacén", "La falta de personal de almacén."},
+                {"no había personal de almacén", "No se contaba con personal del almacén."},
+                {"no había energía en el ambiente", "El ambiente se encontraba sin energía."},
+                {"el contratista no ha pagado la seguridad social",
+                        "El contratista sigue sin que haya pagado la seguridad social."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[0]).isTrue();
+        }
+    }
+
+    @Test
+    void unaNegacionQuitadaSeSigueViendoAunqueLaRedaccionNieguePorOtroLado() {
+        String[][] alteradas = {
+                {"no había personal de almacén", "Había personal de almacén."},
+                // «sin embargo» y «no obstante» no niegan nada
+                {"no se entregaron las sillas", "Sin embargo se entregaron las sillas."},
+                {"no se entregaron las sillas", "No obstante se entregaron las sillas."},
+                // una negación de otra cláusula no alcanza a esta
+                {"no se entregaron las sillas", "Falta firmar el acta y se entregaron las sillas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isFalse();
+        }
+    }
+
+    // ── Auditoría del 02-10-2026: nombres agregados ─────────────────────────
+
+    @Test
+    void unNombreQueNiLasNotasNiElContratoDanSeDescarta() {
+        String[][] alteradas = {
+                {"el almacenista firmó el recibido de las 20 carpas",
+                        "Se recibieron 20 carpas; el almacenista Carlos Pérez firmó el recibido."},
+                {"se recibió el informe de la interventoría",
+                        "Se recibió el informe de la interventoría de Consultores S.A.S."},
+                {"la ingeniera revisó la instalación", "La ingeniera Martínez revisó la instalación."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("agregaba nombres que no estaban en sus notas");
+        }
+    }
+
+    @Test
+    void unNombreDeLasNotasODelContratoAunqueCambieLaMayusculaNoEsAgregado() {
+        String[][] fieles = {
+                {"le entregué los bienes a juan ospina", "Se entregaron los bienes a Juan Ospina."},
+                {"se recibió en el almacén", "Se recibió en el almacén del SENA."},
+                {"el contratista entregó las sillas", "El contratista Eventos Supernova S.A.S. entregó las sillas."},
+                {"hice visita el 02/10/2026", "La visita se realizó el 2 de Octubre de 2026."},
+                {"se revisó el informe de supervisión", "Se revisó el Informe de Supervisión."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    @Test
+    void unNombreDeLasNotasQueLaRedaccionPierdeSeDescarta() {
+        String[][] alteradas = {
+                {"recibí con el almacenista Jorge Restrepo 25 computadores", "Se recibieron 25 computadores."},
+                {"le entregué los bienes al coordinador, Juan Ospina", "Se entregaron los bienes al coordinador."},
+                {"Revisé las sillas con la interventoría de Consultores Andinos",
+                        "Se revisaron las sillas con la interventoría."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("perdía nombres de sus notas");
+        }
+    }
+
+    @Test
+    void conservarParteDelNombreOPerderMayusculasQueNoSonNombresNoEsPerderlo() {
+        String[][] fieles = {
+                // basta con una de las palabras del nombre
+                {"recibí con el almacenista Jorge Restrepo 25 computadores",
+                        "Se recibieron 25 computadores con el almacenista Restrepo."},
+                // la mayúscula de principio de frase, de renglón o tras una viñeta no es un nombre
+                {"Revisé las sillas. Llegaron completas", "Se revisaron las sillas, que llegaron completas."},
+                {"- Llegaron 5 sillas\n- Faltan 2 mesas", "Llegaron 5 sillas y faltan 2 mesas."},
+                // ni las notas en mayúsculas
+                {"NO LLEGARON LOS VIDEOBEAM", "No llegaron los videobeam."},
+                // ni los datos del contrato, que el prompt pide no repetir
+                {"el contratista Eventos Supernova entregó las sillas", "El contratista entregó las sillas."},
+                // ni los nombres de la casa, los meses o los días
+                {"lo debe resolver el Centro antes del Lunes", "Lo debe resolver antes del lunes."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinNombresPerdidos(par[1], par[0], DATOS)).as(par[1]).isTrue();
+        }
+    }
+
+    // ── Medición del 02-10-2026: reparar o reemplazar ───────────────────────
+
+    @Test
+    void cambiarUnReemplazoPorUnaReparacionOAlRevesSeDescarta() {
+        String[][] alteradas = {
+                {"2 sillas tenían el tapizado rasgado y el contratista se comprometió a cambiarlas",
+                        "Dos sillas tenían el tapizado rasgado; el contratista se comprometió a repararlas."},
+                {"el contratista va a reparar la mesa dañada", "El contratista va a reemplazar la mesa dañada."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("cambiaba un reemplazo por una reparación, o al revés");
+        }
+    }
+
+    @Test
+    void decirElMismoReemplazoOLaMismaReparacionConOtraPalabraPasa() {
+        String[][] fieles = {
+                {"el contratista se comprometió a cambiarlas",
+                        "El contratista se comprometió a efectuar los cambios necesarios."},
+                {"el contratista se comprometió a cambiarlas", "El contratista se comprometió a reemplazarlas."},
+                {"el contratista va a reparar la mesa", "El contratista va a arreglar la mesa."},
+                // sin decir cuál de las dos, no hay nada que cambiar
+                {"el contratista quedó de solucionarlo", "El contratista se comprometió a repararlo."},
+                {"se hizo el reparto de los bienes y se cambió la fecha", "Se realizó el reparto de los bienes."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinReparacionPorReemplazo(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    // ── Medición del 02-10-2026: el «bien» o el «mal» de las notas ──────────
+
+    @Test
+    void perderLoQueLasNotasCalificanDeBienODeMalSeDescarta() {
+        String[][] alteradas = {
+                {"la factura está bien liquidada pero no trae el soporte de pago",
+                        "La factura liquidada no trae el soporte de pago."},
+                {"las sillas llegaron mal empacadas", "Las sillas llegaron empacadas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("perdía lo que sus notas califican de bien o de mal");
+        }
+    }
+
+    @Test
+    void decirElBienOElMalConOtraPalabraPasa() {
+        String[][] fieles = {
+                {"la factura está bien liquidada", "La factura se encuentra correctamente liquidada."},
+                {"las sillas llegaron bien", "Las sillas llegaron en buen estado."},
+                {"las sillas llegaron mal empacadas", "Las sillas llegaron con un empaque defectuoso."},
+                // «si bien» no califica nada, y «los bienes» o «debido a» no dicen «bien»
+                {"si bien llegaron tarde, se recibieron", "Aunque llegaron tarde, se recibieron."},
+        };
+        for (String[] par : fieles) {
+            assertThat(FidelidadDeRedaccion.sinValoracionPerdida(par[1], par[0])).as(par[1]).isTrue();
+        }
+        assertThat(FidelidadDeRedaccion.sinValoracionPerdida("Se recibieron los bienes debido a la visita.",
+                "los bienes llegaron bien")).isFalse();
+    }
+
+    // ── Auditoría del 02-10-2026: la cosa que cuenta una cantidad ───────────
+
+    @Test
+    void cambiarLaCosaOLaUnidadDeUnaCantidadOIntercambiarlasSeDescarta() {
+        String[][] alteradas = {
+                {"llegaron 5 camas", "Llegaron 5 literas."},
+                {"se recibieron 2.5 toneladas de cemento", "Se recibieron 2.5 kilogramos de cemento."},
+                {"llegaron 12 mesas y 5 sillas", "Llegaron 12 sillas y 5 mesas."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("cambiaba lo que cuentan las cifras de sus notas");
+        }
+    }
+
+    @Test
+    void unVerboTrasLaCantidadOLaMismaCosaDichaOtraVezNoEsCambiarLaCosa() {
+        String[][] fieles = {
+                {"se probaron los 6 hornos; 5 funcionaron y 1 no calentó",
+                        "Se probaron los 6 hornos; 5 operaron y 1 no calentó."},
+                {"de las 40 sillas, 2 tenían el tapizado rasgado",
+                        "De las 40 sillas, 2 sillas tenían el tapizado rasgado."},
+                {"llegaron 5 portátiles", "Llegaron 5 computadores portátiles."},
+                // medición del 02-10-2026: la unidad escrita de otra forma
+                {"se recibieron 120 m2 de piso laminado y 30 cajas de zócalo",
+                        "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    /** Medición del 02-10-2026 con qwen2.5:7b: «1 no calentó» redactado «uno no calentó». */
+    @Test
+    void unoSueltoEsElNumeroYNoUnArticulo() {
+        String notas = "se probaron los 6 hornos; 5 funcionaron y 1 no calentó";
+        assertThat(fiel("Se probaron los seis hornos; cinco funcionaron y uno no calentó.", notas)).isTrue();
+        assertThat(fiel("De las 4 sillas, una no tenía patas.", "de las 4 sillas, 1 no tenía patas")).isTrue();
+        // Sin el «uno», el 1 sigue perdiéndose.
+        assertThat(fiel("Se probaron los seis hornos; cinco funcionaron y otro no calentó.", notas)).isFalse();
+    }
+
+    /** Medición del 02-10-2026 con qwen2.5:7b: «faltan 10 cajas» redactado «no se han recibido 10 cajas». */
+    @Test
+    void negarLoQueLasNotasYaNieganConOtrasPalabrasNoEsDecirLoContrario() {
+        String notas = "se recibieron 120 m2 de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de zócalo";
+        assertThat(fiel("Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido 10 cajas"
+                + " de zócalo.", notas)).isTrue();
+        assertThat(fiel("Se recibieron los computadores; no se recibieron los cargadores.",
+                "se recibieron los computadores y faltan los cargadores")).isTrue();
+        // Negar lo que las notas afirman sigue siendo decir lo contrario.
+        assertThat(fiel("No se recibieron 30 cajas de zócalo; faltan 10 cajas de zócalo.", notas)).isFalse();
+        assertThat(fiel("No se recibieron los computadores y faltan los cargadores.",
+                "se recibieron los computadores y faltan los cargadores")).isFalse();
+    }
+
+    // ── Medición del 02-10-2026: salidas reales de qwen2.5:7b ───────────────
+    //
+    // Las notas son las seis de la medición (fechas, horas, cantidades,
+    // negaciones, un nombre). Las redacciones son lo que respondió el modelo,
+    // tal cual, con el prompt de antes («antes») o el de ahora; pasan por la
+    // misma depuración que en el servicio (envoltorio, nombres, año agregado).
+
+    private static final String N1 = "El 12 de octubre de 2026 a las 9:30 a. m. recibí en el almacén 40 sillas y 5"
+            + " camas. Revisé las 40 sillas una por una: 2 tenían el tapizado rasgado y el contratista se comprometió"
+            + " a cambiarlas antes del 20 de octubre. No revisé las camas porque no había personal de almacén.";
+    private static final String N2 = "Visita de seguimiento el 07/10/2026. El avance físico va en 65% y el financiero"
+            + " en 40%. El contratista no ha entregado la planilla de seguridad social de septiembre; se le envió"
+            + " requerimiento por correo el 08/10/2026. Faltan por instalar 3 de los 12 mesones del ambiente de"
+            + " gastronomía.";
+    private static final String N3 = "recibí con el almacenista Jorge Restrepo 25 computadores portátiles y 25"
+            + " cargadores, todos encienden. Las cajas venían selladas. No llegaron los 2 videobeam que estaban en la"
+            + " orden.";
+    private static final String N4 = "revisé la factura FE-2231 por $8.750.000 del mes de septiembre, está bien"
+            + " liquidada pero no trae el soporte de pago de parafiscales. La devolví al contratista el lunes para que"
+            + " la corrija.";
+    private static final String N5 = "a las 2 pm del 15 de octubre se hizo la prueba de los 6 hornos instalados en el"
+            + " taller de panadería; 5 funcionaron y 1 no calentó. El técnico de la empresa quedó de volver el viernes."
+            + " Todavía no hay energía trifásica en el bloque B, eso lo debe resolver el Centro.";
+    private static final String N6 = "se recibieron 120 m2 de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de"
+            + " zócalo, el contratista dice que llegan la otra semana. Sin novedades en la calidad.";
+
+    private static boolean fielTrasDepurar(String redactado, String notas) {
+        return fiel(GeneracionDocumentoService.depurar(redactado, notas, List.of()), notas);
+    }
+
+    @Test
+    void lasRedaccionesRealesFielesDeLaMedicionPasan() {
+        String[][] fieles = {
+                // a temperatura 0, con el prompt de antes: el año completado y
+                // «la falta de personal» la hacían descartar
+                {N1, "En la fecha 12 de octubre de 2026, a las 9:30 a. m., se recibieron en el almacén 40 sillas y 5"
+                        + " camas. Se realizó una revisión detallada de las 40 sillas, identificándose que 2 presentaban"
+                        + " daño en el tapizado. El contratista se comprometió a efectuar los cambios necesarios antes"
+                        + " del 20 de octubre de 2026. No se procedió a la revisión de las camas debido a la falta de"
+                        + " personal de almacén."},
+                // antes
+                {N4, "Se revisó la factura FE-2231 por $8.750.000 correspondiente al mes de septiembre, encontrándose"
+                        + " bien liquidada; no obstante, carece del soporte del pago de parafiscales. Fue devuelta al"
+                        + " contratista el lunes para su corrección."},
+                // antes: «uno no alcanzó» se descartaba por perder el 1
+                {N5, "En la prueba realizada a las 14:00 del 15 de octubre, se verificaron los seis hornos instalados"
+                        + " en el taller de panadería; cinco operaron correctamente mientras que uno no alcanzó el"
+                        + " calentamiento necesario. El técnico de la empresa se comprometió a retornar el viernes para"
+                        + " solucionar dicho problema. Además, persiste la falta de energía trifásica en el bloque B,"
+                        + " cuya resolución corresponde al Centro."},
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de zócalo, según el"
+                        + " contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                // ahora: «no se han recibido 10 cajas» y «120 m²» se descartaban
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido 10 cajas de"
+                        + " zócalo, según el contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han entregado 10 cajas de"
+                        + " zócalo, según el contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                {N5, "Se realizó una prueba a las 2 pm del 15 de octubre a los seis hornos instalados en el taller de"
+                        + " panadería; se verificó que cinco funcionaron correctamente y uno no calentó. El técnico de"
+                        + " la empresa se comprometió a retornar el viernes para resolver el problema. Además, aún no se"
+                        + " ha proporcionado energía trifásica al bloque B, lo cual debe ser atendido por el Centro."},
+                // ahora, pidiendo no omitir ningún hecho: «los cambios necesarios» es el mismo compromiso
+                {N1, "Se recibieron en el almacén 40 sillas y 5 camas el 12 de octubre de 2026 a las 9:30 a. m. Se"
+                        + " revisaron todas las sillas, encontrándose que dos presentaban rasgaduras en el tapizado; el"
+                        + " contratista se comprometió a efectuar los cambios necesarios antes del 20 de octubre. No se"
+                        + " realizó la revisión de las camas debido a la falta de personal de almacén."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fielTrasDepurar(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    @Test
+    void lasRedaccionesRealesInfielesDeLaMedicionSeDescartan() {
+        String[][] alteradas = {
+                // antes: pierde las dos fechas y que el contratista no ha entregado la planilla
+                {N2, "El avance físico asciende al 65%, mientras que el financiero alcanza un 40%. Se ha enviado"
+                        + " requerimiento para la entrega de la planilla de seguridad social correspondiente a"
+                        + " septiembre. Además, se encuentran pendientes tres de los doce mesones en el área de"
+                        + " gastronomía."},
+                // ahora: pierde la fecha de la visita
+                {N2, "El avance físico se encuentra en un 65%, mientras que el financiero está en un 40%. El"
+                        + " contratista no ha presentado la planilla de seguridad social correspondiente al mes de"
+                        + " septiembre; se le había enviado requerimiento mediante correo electrónico el día 8 de"
+                        + " octubre de 2026. Se reportan faltantes de tres de los doce mesones del área gastronómica."},
+                // ahora: pierde que la factura se revisó y está bien liquidada
+                {N4, "no se presentó el soporte de pago de parafiscales correspondiente a la factura FE-2231 por"
+                        + " $8.750.000 liquidada en septiembre; la misma fue devuelta al contratista el lunes para su"
+                        + " corrección."},
+                // ahora: el contratista se comprometió a cambiarlas, no a repararlas
+                {N1, "Se recibieron 40 sillas y 5 camas en el almacén el 12 de octubre de 2026 a las 9:30 a. m. Se"
+                        + " verificaron todas las sillas, encontrándose que 2 presentaban daños en el tapizado; el"
+                        + " contratista se comprometió a repararlas antes del 20 de octubre. No se revisaron las camas"
+                        + " debido a la falta de personal de almacén."},
+                // ahora: la forma impersonal se come al almacenista que recibió con el supervisor
+                {N3, "Se recibieron 25 computadores portátiles y 25 cargadores, todos funcionales. Las cajas"
+                        + " estaban selladas. Falta el equipamiento de los 2 videobeam indicados en la orden."},
+                {N3, "Se recibieron 25 computadores portátiles y 25 cargadores, todos funcionales. Las cajas"
+                        + " estaban selladas. Falta el ingreso de 2 videobeam como consta en la orden original."},
+                // con una variante del prompt que se probó y no se dejó: inventa «las 40 cajas esperadas»
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido las 40 cajas"
+                        + " esperadas, el contratista indica que el envío restante llegará la próxima semana. La"
+                        + " calidad no presenta novedades."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(fielTrasDepurar(par[1], par[0])).as(par[1]).isFalse();
+        }
+    }
 }

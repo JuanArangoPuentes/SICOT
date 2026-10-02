@@ -31,7 +31,9 @@ import java.util.regex.Pattern;
  *   <li><b>Una redacción que pierde una cifra, cambia una palabra, dice lo
  *       contrario, agrega afirmaciones de cumplimiento o mezcla otra escritura
  *       también se descarta</b> (desde el 29-09-2026, cuando «5 camas» salió
- *       como «las cunas»).</li>
+ *       como «las cunas»), y también la que cambia lo que cuenta una cifra,
+ *       agrega o pierde un nombre, cambia un reemplazo por una reparación o
+ *       pierde el «bien» o el «mal» de las notas (desde el 02-10-2026).</li>
  * </ol>
  */
 public final class FidelidadDeRedaccion {
@@ -116,6 +118,82 @@ public final class FidelidadDeRedaccion {
         return resultado;
     }
 
+    /**
+     * Quita el año que la redacción le agrega a una fecha que las notas
+     * escriben sin año: «antes del 20 de octubre» redactado «antes del 20 de
+     * octubre de 2026» queda como lo escribió el supervisor.
+     *
+     * <p>En un registro formal el modelo completa el año casi siempre, con
+     * cualquier temperatura, y la comprobación lo descartaba como «agregaba
+     * cifras» (auditoría del 02-10-2026, en vivo con qwen2.5:7b). Aceptar el
+     * año supuesto no es una opción: al cambiar de año sería un dato
+     * inventado, y el diálogo de revisión no resalta números. Así el
+     * documento no lleva nada que el supervisor no dio, y la comprobación de
+     * fechas sigue exigiendo que una fecha sin año se quede sin año. Si las
+     * notas también escriben ese mismo día con año, ese año es suyo y no se
+     * toca.
+     */
+    public static String quitarAniosAgregados(String redactado, String notas) {
+        if (redactado == null || notas == null) {
+            return redactado;
+        }
+        List<Fecha> deNotas = fechas(normalizarCifras(notas));
+        String r = redactado;
+        for (Fecha f : deNotas) {
+            if (f.anio() != null || f.mes() < 1 || f.mes() > 12
+                    || deNotas.stream().anyMatch(o -> o.anio() != null && o.dia() == f.dia() && o.mes() == f.mes())) {
+                continue;
+            }
+            String d = "0?" + f.dia();
+            String diaLargo = f.dia() == 1 ? "(?:0?1|primero)" : d;
+            r = Pattern.compile("(?<![\\d/.,-])(" + d + "[/-]0?" + f.mes() + ")[/-]\\d{4}(?![\\d/-])")
+                    .matcher(r).replaceAll("$1");
+            r = Pattern.compile("(?<![\\p{L}\\d])(" + diaLargo + "\\s+de\\s+" + MESES[f.mes()]
+                            + ")\\s+(?:de|del)\\s+\\d{4}(?!\\d)", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE)
+                    .matcher(r).replaceAll("$1");
+        }
+        return r;
+    }
+
+    /**
+     * Un preámbulo dirigido al usuario en la primera línea, hasta sus dos
+     * puntos: «Aquí tiene el texto:», «A continuación, la redacción:»,
+     * «Observaciones:».
+     */
+    private static final Pattern PREAMBULO = Pattern.compile("^(?:aqu[ií]\\s+(?:tiene|tienes|est[aá]|va|le|te"
+            + "|presento|el|la|los|las)|a\\s+continuaci[oó]n|claro|por\\s+supuesto|texto|redacci[oó]n"
+            + "|observaciones)[^:\\n]{0,80}:\\s*", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Todo el texto entre comillas, sin otras comillas dentro, con su punto final adentro o afuera. */
+    private static final Pattern ENTRE_COMILLAS = Pattern.compile("^[\"“«]([^\"“”«»]+)[\"”»](\\.?)$");
+
+    /**
+     * Quita lo que envuelve la redacción sin ser parte de ella: el markdown
+     * (negritas, títulos, viñetas), un preámbulo para el usuario y las
+     * comillas que encierran todo el texto. El prompt lo prohíbe, pero un
+     * modelo pequeño responde a veces «Aquí tiene el texto: "Se recibieron 20
+     * carpas."», y eso no trae cifras ni palabras parecidas: pasaba todas las
+     * comprobaciones y el apartado de observaciones de un acta empezaba con
+     * un mensaje para el usuario (auditoría del 02-10-2026). Lo que dice la
+     * redacción no cambia.
+     */
+    public static String quitarEnvoltorio(String redactado) {
+        if (redactado == null) {
+            return null;
+        }
+        String t = redactado.replace("**", "").replace("__", "")
+                .replaceAll("(?m)^[ \\t]*#{1,6}[ \\t]*", "")
+                .replaceAll("(?m)^[ \\t]*[-*•][ \\t]+", "")
+                .strip();
+        t = PREAMBULO.matcher(t).replaceFirst("").strip();
+        Matcher comillas = ENTRE_COMILLAS.matcher(t);
+        if (comillas.matches()) {
+            String dentro = comillas.group(1).strip();
+            t = !comillas.group(2).isEmpty() && !dentro.endsWith(".") ? dentro + "." : dentro;
+        }
+        return t;
+    }
+
     private static boolean mismasIniciales(String[] a, String[] b) {
         if (a.length != b.length) {
             return false;
@@ -143,13 +221,142 @@ public final class FidelidadDeRedaccion {
                         ? "cambiaba o perdía fechas u horas de sus notas"
                 : !conservaLasCifras(corregido, recortadas, datos)
                         ? "perdía cifras de sus notas"
+                : !sinCosasCambiadas(corregido, recortadas, datos)
+                        ? "cambiaba lo que cuentan las cifras de sus notas"
                 : !sinPalabrasCambiadas(corregido, recortadas, datos)
                         ? "cambiaba palabras de sus notas por otras parecidas"
+                : !sinReparacionPorReemplazo(corregido, recortadas)
+                        ? "cambiaba un reemplazo por una reparación, o al revés"
+                : !sinValoracionPerdida(corregido, recortadas)
+                        ? "perdía lo que sus notas califican de bien o de mal"
                 : !sinSentidoInvertido(corregido, recortadas)
                         ? "decía lo contrario de sus notas"
                 : !sinAfirmacionesAgregadas(corregido, recortadas)
                         ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
+                : !sinNombresAgregados(corregido, recortadas, datos)
+                        ? "agregaba nombres que no estaban en sus notas"
+                : !sinNombresPerdidos(corregido, recortadas, datos)
+                        ? "perdía nombres de sus notas"
                 : null;
+    }
+
+    // ── Nombres agregados ───────────────────────────────────────────────────
+
+    /** Una palabra con mayúscula inicial, de tres letras o más: «Carlos», «Pérez», «SENA». */
+    private static final Pattern CON_MAYUSCULA = Pattern.compile("(?<![\\p{L}\\d])\\p{Lu}\\p{L}{2,}");
+
+    /**
+     * Lo que la redacción puede escribir con mayúscula aunque las notas no lo
+     * digan: la entidad y el centro, los documentos del proceso y los papeles
+     * del contrato, que un registro formal suele escribir con mayúscula. Los
+     * meses y los días se suman aparte (las fechas se comprueban en
+     * {@link #sinFechasNiHorasCambiadas}).
+     */
+    private static final Set<String> NOMBRES_DE_LA_CASA = Set.of("sena", "servicio", "nacional", "aprendizaje",
+            "centro", "tecnologico", "mobiliario", "regional", "antioquia", "itagui", "colombia", "sicot",
+            "copiloto", "acta", "inicio", "informe", "supervision", "recibo", "satisfaccion", "bienes",
+            "certificacion", "cumplimiento", "final", "supervisor", "supervisora", "contratista", "contrato",
+            "contratante", "entidad");
+
+    /**
+     * ¿Trae la redacción un nombre propio que ni las notas ni el contrato
+     * dan? Ninguna otra comprobación lo veía: «el almacenista firmó el
+     * recibido» redactado «el almacenista Carlos Pérez firmó el recibido» no
+     * cambia cifras ni palabras parecidas, y el Acta de Recibo salía con una
+     * persona inventada (auditoría del 02-10-2026; el modelo ya había
+     * desobedecido la instrucción de no agregar nombres el 24-09-2026). Cuenta
+     * toda palabra con mayúscula que no empieza una frase y que, sin tildes ni
+     * mayúsculas, no está en las notas, en los datos del contrato ni entre
+     * {@link #NOMBRES_DE_LA_CASA}: «juan ospina» escrito en minúscula en las
+     * notas y «Juan Ospina» en la redacción es el mismo nombre.
+     */
+    public static boolean sinNombresAgregados(String redactado, String notas, List<String> datosConocidos) {
+        if (redactado == null) {
+            return true;
+        }
+        Set<String> conocidas = new HashSet<>(fichas(notas));
+        for (String dato : datosConocidos) {
+            conocidas.addAll(fichas(dato));
+        }
+        conocidas.addAll(NOMBRES_DE_LA_CASA);
+        conocidas.addAll(java.util.Arrays.asList(MESES).subList(1, MESES.length));
+        conocidas.addAll(DIAS_DE_LA_SEMANA);
+        Matcher m = CON_MAYUSCULA.matcher(redactado);
+        while (m.find()) {
+            String w = normalizar(m.group());
+            if (empiezaUnaFrase(redactado, m.start()) || conocidas.contains(w)
+                    || conocidas.stream().anyMatch(c -> mismaPalabra(c, w))) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Un nombre propio en las notas: palabras seguidas con mayúscula inicial y
+     * el resto en minúscula («Jorge Restrepo»). Las siglas y las notas escritas
+     * todo en mayúsculas no cuentan: ahí no se distingue un nombre.
+     */
+    private static final Pattern NOMBRE_EN_LAS_NOTAS = Pattern.compile(
+            "(?<![\\p{L}\\d])\\p{Lu}\\p{Ll}{2,}(?:[ \\t]+\\p{Lu}\\p{Ll}{2,})*(?![\\p{L}\\d])");
+
+    /**
+     * ¿Conserva la redacción a las personas y entidades que las notas
+     * nombran? En la medición del 02-10-2026, «recibí con el almacenista Jorge
+     * Restrepo 25 computadores…» salió tres de cuatro veces «Se recibieron 25
+     * computadores…»: la forma impersonal se comía al almacenista, ninguna
+     * comprobación lo veía (no hay cifras ni palabras parecidas en juego) y el
+     * Acta de Recibo perdía quién recibió. Un nombre es una racha de palabras
+     * con mayúscula que sigue a una minúscula o a una coma, donde en español
+     * solo va mayúscula si es un nombre; al principio de una frase, de un
+     * renglón o tras una viñeta la primera palabra no cuenta. Basta con que la
+     * redacción conserve una de sus palabras («el señor Restrepo»). No se
+     * exigen los datos del contrato, que el prompt pide no repetir, ni
+     * {@link #NOMBRES_DE_LA_CASA}, los meses o los días.
+     */
+    public static boolean sinNombresPerdidos(String redactado, String notas, List<String> datosConocidos) {
+        if (redactado == null || notas == null) {
+            return true;
+        }
+        Set<String> sinExigir = new HashSet<>(NOMBRES_DE_LA_CASA);
+        for (String dato : datosConocidos) {
+            sinExigir.addAll(fichas(dato));
+        }
+        sinExigir.addAll(java.util.Arrays.asList(MESES).subList(1, MESES.length));
+        sinExigir.addAll(DIAS_DE_LA_SEMANA);
+        List<String> deLaRedaccion = fichas(redactado);
+        Matcher m = NOMBRE_EN_LAS_NOTAS.matcher(notas);
+        while (m.find()) {
+            List<String> palabras = fichas(m.group());
+            if (!sigueAMinusculaOComa(notas, m.start())) {
+                palabras = palabras.subList(1, palabras.size());
+            }
+            List<String> exigidas = palabras.stream().filter(p -> !sinExigir.contains(p)).toList();
+            if (!exigidas.isEmpty() && exigidas.stream()
+                    .noneMatch(p -> deLaRedaccion.stream().anyMatch(w -> mismaPalabra(w, p)))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** ¿Va la posición detrás de una palabra en minúscula o de una coma, con solo espacios en medio? */
+    private static boolean sigueAMinusculaOComa(String texto, int i) {
+        int j = i - 1;
+        while (j >= 0 && (texto.charAt(j) == ' ' || texto.charAt(j) == '\t')) {
+            j--;
+        }
+        return j >= 0 && (texto.charAt(j) == ',' || Character.isLowerCase(texto.charAt(j)));
+    }
+
+    /** ¿Va la posición al principio del texto, de un renglón o de una frase (comillas y signos de apertura aparte)? */
+    private static boolean empiezaUnaFrase(String texto, int i) {
+        int j = i - 1;
+        while (j >= 0 && " \t\"'«“¿¡(".indexOf(texto.charAt(j)) >= 0) {
+            j--;
+        }
+        return j < 0 || ".!?:;…\n".indexOf(texto.charAt(j)) >= 0;
     }
 
     // ── Cifras, fechas y horas ──────────────────────────────────────────────
@@ -433,22 +640,11 @@ public final class FidelidadDeRedaccion {
                 }
             }
         }
-        StringBuilder notasSinReferencias = new StringBuilder(textoNotas);
-        StringBuilder redaccionSinReferencias = new StringBuilder(textoRedactado);
-        taparFechasYHoras(textoNotas, notasSinReferencias, textoRedactado, redaccionSinReferencias);
-        taparDatosDelContrato(notasSinReferencias, datosConocidos);
-        taparDatosDelContrato(redaccionSinReferencias, datosConocidos);
-        taparOrdinales(notasSinReferencias);
-        taparOrdinales(redaccionSinReferencias);
-        Matcher sub = SUB_PASO.matcher(notasSinReferencias.toString());
-        while (sub.find()) {
-            tapar(notasSinReferencias, sub.start(1), sub.end(1));
-        }
-        for (int[] e : enumeradores(notasSinReferencias.toString())) {
-            tapar(notasSinReferencias, e[0], e[1]);
-        }
+        StringBuilder[] sinReferencias = sinReferencias(textoNotas, textoRedactado, datosConocidos);
+        StringBuilder notasSinReferencias = sinReferencias[0];
+        StringBuilder redaccionSinReferencias = sinReferencias[1];
         Set<String> identificadores = identificadores(datosConocidos);
-        List<String[]> conCosa = valoresConCosa(notasSinReferencias.toString()).stream()
+        List<String[]> conCosa = valoresConCosa(notasSinReferencias.toString(), false).stream()
                 .filter(v -> !identificadores.contains(v[0])).toList();
         List<String> deNotas = conCosa.stream().map(v -> v[0]).toList();
         // «2 hornos, 1 nevera» redactado «dos hornos, una nevera»: el artículo
@@ -466,6 +662,17 @@ public final class FidelidadDeRedaccion {
                     redaccionSinReferencias.replace(articulo.start(1), articulo.end(1),
                             "1" + " ".repeat(articulo.group(1).length() - 1));
                 }
+            }
+        }
+        // «5 funcionaron y 1 no calentó» redactado «cinco funcionaron y uno no
+        // calentó»: «uno» suelto, o «una» antes de una pausa o de un «no», no
+        // acompaña a nada y es el número, no un artículo. Vale por un 1 de las
+        // notas; para inventar sigue sin contar (medición del 02-10-2026).
+        if (deNotas.contains("1")) {
+            Matcher suelto = UNO_SUELTO.matcher(redaccionSinReferencias.toString());
+            while (suelto.find()) {
+                redaccionSinReferencias.replace(suelto.start(), suelto.end(),
+                        "1" + " ".repeat(suelto.group().length() - 1));
             }
         }
         List<String> deRedaccion = new ArrayList<>(valoresEnOrden(redaccionSinReferencias.toString()));
@@ -495,6 +702,99 @@ public final class FidelidadDeRedaccion {
         List<String> ordenRedaccion = deRedaccion.stream().distinct().filter(ordenNotas::contains).toList();
         return ordenNotas.equals(ordenRedaccion);
     }
+
+    /**
+     * Las notas y la redacción ya normalizadas, con tapado lo que no es una
+     * cantidad: las fechas y horas de las notas, los datos del contrato, los
+     * ordinales, y en las notas los números de sub-paso y de lista.
+     */
+    private static StringBuilder[] sinReferencias(String textoNotas, String textoRedactado,
+                                                  List<String> datosConocidos) {
+        StringBuilder notas = new StringBuilder(textoNotas);
+        StringBuilder redaccion = new StringBuilder(textoRedactado);
+        taparFechasYHoras(textoNotas, notas, textoRedactado, redaccion);
+        taparDatosDelContrato(notas, datosConocidos);
+        taparDatosDelContrato(redaccion, datosConocidos);
+        taparOrdinales(notas);
+        taparOrdinales(redaccion);
+        Matcher sub = SUB_PASO.matcher(notas.toString());
+        while (sub.find()) {
+            tapar(notas, sub.start(1), sub.end(1));
+        }
+        for (int[] e : enumeradores(notas.toString())) {
+            tapar(notas, e[0], e[1]);
+        }
+        return new StringBuilder[]{notas, redaccion};
+    }
+
+    /**
+     * ¿Cuenta cada cantidad de la redacción lo mismo que en las notas? Que
+     * estén los mismos valores en el mismo orden ({@link #conservaLasCifras})
+     * no basta (auditoría del 02-10-2026): «llegaron 12
+     * mesas y 5 sillas» redactado «llegaron 12 sillas y 5 mesas», «5 camas»
+     * redactado «5 literas» o «2.5 toneladas de cemento» redactado «2.5
+     * kilogramos» pasaban, y el acta certificaba otro reparto, otra cosa u
+     * otra unidad. Solo se mira la cosa pegada al número, para no tomar por
+     * cosa un verbo cualquiera, y se descarta en dos casos:
+     * <ul>
+     *   <li>un intercambio: las notas cuentan A con un valor y B con otro, y
+     *       la redacción cuenta los dos al revés;</li>
+     *   <li>otra cosa u otra unidad: lo que las notas cuentan (en plural) ya
+     *       no aparece en la redacción, y el mismo valor va junto a un plural
+     *       que las notas no dicen. Con un verbo («5 funcionaron» → «cinco
+     *       operaron») no, porque no termina en «s»; con 1 tampoco, porque
+     *       casi siempre es un artículo.</li>
+     * </ul>
+     */
+    public static boolean sinCosasCambiadas(String redactado, String notas, List<String> datosConocidos) {
+        if (notas == null || notas.isBlank() || redactado == null) {
+            return true;
+        }
+        String textoNotas = normalizarCifras(notas);
+        String textoRedactado = normalizarCifras(redactado);
+        StringBuilder[] sinReferencias = sinReferencias(textoNotas, textoRedactado, datosConocidos);
+        // Las palabras, con las unidades ya escritas igual en los dos: «120 m2»
+        // y «120 m²» son «120 metros cuadrados» (medición del 02-10-2026).
+        List<String> fichasNotas = fichas(textoNotas);
+        List<String> fichasRedaccion = fichas(textoRedactado);
+        List<String[]> enNotas = valoresConCosa(sinReferencias[0].toString(), true).stream()
+                .filter(v -> v[1] != null).toList();
+        List<String[]> enRedaccion = valoresConCosa(sinReferencias[1].toString(), true).stream()
+                .filter(v -> v[1] != null).toList();
+        for (String[] a : enNotas) {
+            for (String[] b : enNotas) {
+                if (a[0].equals(b[0]) || mismaPalabra(a[1], b[1])
+                        || cuenta(enNotas, a[0], b[1]) || cuenta(enNotas, b[0], a[1])) {
+                    continue;
+                }
+                if (cuenta(enRedaccion, a[0], b[1]) && cuenta(enRedaccion, b[0], a[1])) {
+                    return false;
+                }
+            }
+        }
+        for (String[] a : enNotas) {
+            if (a[0].equals("1") || !a[1].endsWith("s")
+                    || fichasRedaccion.stream().anyMatch(w -> mismaPalabra(a[1], w))) {
+                continue;
+            }
+            for (String[] b : enRedaccion) {
+                if (b[0].equals(a[0]) && b[1].endsWith("s")
+                        && fichasNotas.stream().noneMatch(v -> mismaPalabra(v, b[1]))) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** ¿Cuentan esos pares el valor con esa cosa (o con otra forma de la misma palabra)? */
+    private static boolean cuenta(List<String[]> pares, String valor, String cosa) {
+        return pares.stream().anyMatch(p -> p[0].equals(valor) && mismaPalabra(p[1], cosa));
+    }
+
+    /** «uno» como palabra suelta, o «una» seguida de una pausa o de «no»: el número, no el artículo. */
+    private static final Pattern UNO_SUELTO =
+            Pattern.compile("(?<![\\p{L}\\d])(?:uno|una(?=\\s*[.,;:]|\\s+no(?![\\p{L}])|\\s*$))(?![\\p{L}\\d])");
 
     private static void taparOrdinales(StringBuilder texto) {
         Matcher m = ORDINAL.matcher(texto.toString());
@@ -790,13 +1090,21 @@ public final class FidelidadDeRedaccion {
     /**
      * Como {@link #valoresEnOrden}, pero con la palabra de cuatro letras o más
      * que sigue a cada número (la cosa que cuenta), o {@code null}.
+     *
+     * @param pegada si la cosa tiene que ir pegada al número, sin más que
+     *               espacios y palabras de enlace en medio: en «60%; revisé»
+     *               o «en total 7. funcionan» el número no cuenta «revisé» ni
+     *               «funcionan»
      */
-    private static List<String[]> valoresConCosa(String textoNormalizado) {
+    private static List<String[]> valoresConCosa(String textoNormalizado, boolean pegada) {
         List<String[]> r = new ArrayList<>();
         List<String> fs = new ArrayList<>();
-        Matcher m = FICHA_CON_NUMEROS.matcher(textoNormalizado == null ? "" : textoNormalizado);
+        List<int[]> posiciones = new ArrayList<>();
+        String texto = textoNormalizado == null ? "" : textoNormalizado;
+        Matcher m = FICHA_CON_NUMEROS.matcher(texto);
         while (m.find()) {
             fs.add(m.group());
+            posiciones.add(new int[]{m.start(), m.end()});
         }
         int i = 0;
         while (i < fs.size()) {
@@ -825,7 +1133,12 @@ public final class FidelidadDeRedaccion {
                 continue;
             }
             String cosa = null;
+            int finAnterior = posiciones.get(i - 1)[1];
             for (int j = i; j < Math.min(fs.size(), i + 3); j++) {
+                if (pegada && !texto.substring(finAnterior, posiciones.get(j)[0]).isBlank()) {
+                    break;
+                }
+                finAnterior = posiciones.get(j)[1];
                 String g = fs.get(j);
                 if (DE_ENLACE.contains(g) || Character.isDigit(g.charAt(0))) {
                     continue;
@@ -1037,6 +1350,77 @@ public final class FidelidadDeRedaccion {
         return p.replace('c', 'k');
     }
 
+    // ── Reparar o reemplazar ────────────────────────────────────────────────
+
+    /** Raíces de reemplazar lo recibido: «cambiarlas», «reemplazo», «sustituir», «reponer». */
+    private static final List<String> REEMPLAZAR = List.of("cambi", "reemplaz", "sustitu", "repon", "repus");
+
+    /** Raíces de repararlo: «repararlas», «reparación», «reparó», «arreglar» («reparto» no). */
+    private static final List<String> REPARAR = List.of("repara", "reparo", "arregl");
+
+    /**
+     * ¿Cambia la redacción un reemplazo por una reparación, o al revés? En la
+     * medición del 02-10-2026, «2 tenían el tapizado rasgado y el contratista
+     * se comprometió a cambiarlas» salió cuatro de cinco veces «se comprometió
+     * a repararlas»: el Informe de Supervisión le daba por bueno al
+     * contratista un arreglo cuando se había comprometido a reponer, y ninguna
+     * comprobación lo veía (otra palabra, de otra longitud, sin cifras). Solo
+     * se descarta cuando las notas dicen lo otro y nunca lo de la redacción:
+     * «se comprometió a solucionarlo» redactado «a repararlo» no es un cambio.
+     */
+    public static boolean sinReparacionPorReemplazo(String redactado, String notas) {
+        Set<String> deNotas = palabrasLargas(notas);
+        Set<String> deLaRedaccion = palabrasLargas(redactado);
+        return !(dice(deLaRedaccion, REPARAR) && !dice(deNotas, REPARAR) && dice(deNotas, REEMPLAZAR))
+                && !(dice(deLaRedaccion, REEMPLAZAR) && !dice(deNotas, REEMPLAZAR) && dice(deNotas, REPARAR));
+    }
+
+    private static boolean dice(Set<String> palabras, List<String> raices) {
+        return palabras.stream().anyMatch(w -> raices.stream().anyMatch(w::startsWith));
+    }
+
+    // ── Valoración perdida ──────────────────────────────────────────────────
+
+    /**
+     * Con qué otras palabras puede decir la redacción el «bien» de las notas.
+     * Raíces que no confunden: «bienes», «debido a» o «conforme a» no dicen
+     * que algo esté bien.
+     */
+    private static final List<String> BIEN_CON_OTRA_PALABRA = List.of("buen", "correct", "adecuad", "satisfac",
+            "debidament", "perfect", "optim", "excelent", "normal");
+
+    /** Con qué otras palabras puede decir la redacción el «mal» de las notas («malla» no). */
+    private static final List<String> MAL = List.of("mal", "mala", "malas", "malo", "malos");
+    private static final List<String> MAL_CON_OTRA_PALABRA = List.of("incorrect", "inadecuad", "defectu", "deficien",
+            "error", "erron");
+
+    /**
+     * ¿Conserva la redacción el «bien» o el «mal» con que las notas califican
+     * algo? En la medición del 02-10-2026, «revisé la factura FE-2231 …, está
+     * bien liquidada pero no trae el soporte de pago de parafiscales» salió
+     * cuatro de cinco veces «no se presentó el soporte de pago … de la factura
+     * FE-2231 … liquidada en septiembre»: el Informe de Supervisión perdía que
+     * la liquidación se revisó y estaba bien, y ninguna comprobación lo veía
+     * (no se pierde ninguna cifra ni cambia ninguna palabra parecida). Basta
+     * con decirlo con otra palabra («correctamente liquidada», «en buen
+     * estado», «todo bien» → «todo normal»); «si bien» y «más bien» no
+     * califican nada.
+     */
+    public static boolean sinValoracionPerdida(String redactado, String notas) {
+        List<String> deNotas = fichas(notas);
+        boolean bien = false;
+        boolean mal = false;
+        for (int i = 0; i < deNotas.size(); i++) {
+            String w = deNotas.get(i);
+            String antes = i > 0 ? deNotas.get(i - 1) : "";
+            bien |= w.equals("bien") && !antes.equals("si") && !antes.equals("mas");
+            mal |= MAL.contains(w);
+        }
+        Set<String> deLaRedaccion = new HashSet<>(fichas(redactado));
+        return (!bien || deLaRedaccion.contains("bien") || dice(deLaRedaccion, BIEN_CON_OTRA_PALABRA))
+                && (!mal || deLaRedaccion.stream().anyMatch(MAL::contains) || dice(deLaRedaccion, MAL_CON_OTRA_PALABRA));
+    }
+
     // ── Sentido invertido ───────────────────────────────────────────────────
 
     /** Prefijos que niegan: «incumplió», «imposible», «desorden», «disconforme». */
@@ -1098,14 +1482,19 @@ public final class FidelidadDeRedaccion {
                 }
             }
         }
-        // Con «no»: la palabra que niega es la que le sigue, con a lo sumo un
-        // pronombre en medio («no cumplió», «no se entregaron»). No se toma un
-        // alcance más largo ni «sin»: «sin novedades» y «no se observaron
-        // novedades» dicen lo mismo, y «sin embargo» o «no obstante» no niegan
-        // nada; con un alcance de cuatro palabras se descartaban por eso
-        // redacciones fieles.
+        // Con «no»: la palabra que niega es la que le sigue, con a lo sumo
+        // unos pronombres o auxiliares en medio («no cumplió», «no se han
+        // entregado»). Para ver una negación AGREGADA no se toma un alcance
+        // más largo ni «sin»: «sin novedades» y «no se observaron novedades»
+        // dicen lo mismo, y «sin embargo» o «no obstante» no niegan nada; con
+        // un alcance de cuatro palabras se descartaban por eso redacciones
+        // fieles. Para ver una negación QUITADA sí (polaridadesAmplias): «no
+        // había personal» redactado «la falta de personal» o «no se contaba
+        // con personal» sigue negándolo, y con el alcance corto se descartaba
+        // como «decía lo contrario» (auditoría del 02-10-2026, en vivo).
         java.util.Map<String, int[]> enNotas = polaridades(notas);
         java.util.Map<String, int[]> enTexto = polaridades(redactado);
+        java.util.Map<String, int[]> enTextoAmplias = polaridadesAmplias(redactado);
         for (var palabra : enTexto.entrySet()) {
             int afirmadaNotas = 0;
             int negadaNotas = 0;
@@ -1115,20 +1504,63 @@ public final class FidelidadDeRedaccion {
                     negadaNotas += v.getValue()[1];
                 }
             }
-            int afirmadaTexto = palabra.getValue()[0];
-            int negadaTexto = palabra.getValue()[1];
-            if (afirmadaNotas > 0 && negadaNotas == 0 && negadaTexto > 0) {
+            if (afirmadaNotas > 0 && negadaNotas == 0 && palabra.getValue()[1] > 0
+                    && !niegaLoQueLasNotasYaNiegan(redactado, palabra.getKey(), notas)) {
                 return false;
             }
             // Quitar una negación solo cuenta con la misma forma de la palabra:
             // «no ha pagado» → «el pago» es otra cosa, «no ha pagado» → «ya ha
             // pagado» no.
+            int[] amplia = enTextoAmplias.getOrDefault(palabra.getKey(), palabra.getValue());
             boolean mismaForma = enNotas.containsKey(palabra.getKey());
-            if (mismaForma && negadaNotas > 0 && afirmadaNotas == 0 && afirmadaTexto > 0 && negadaTexto == 0) {
+            if (mismaForma && negadaNotas > 0 && afirmadaNotas == 0 && amplia[0] > 0 && amplia[1] == 0) {
                 return false;
             }
         }
         return true;
+    }
+
+    /**
+     * ¿Recae la negación que la redacción le pone a {@code palabra} sobre algo
+     * que las notas ya niegan con otras palabras? «Se recibieron 30 cajas.
+     * Faltan 10 cajas» redactado «se recibieron 30 cajas; no se han recibido
+     * 10 cajas» niega «recibido», que las notas afirman, pero sobre las 10
+     * cajas que faltan: lo mismo dicho de otra forma (medición del
+     * 02-10-2026). Cuenta si, en las cuatro palabras que siguen, dentro de la
+     * cláusula, va la misma cantidad con la misma cosa que las notas niegan
+     * («10 cajas»), o una palabra que las notas niegan y nunca afirman («los
+     * cargadores» de «faltan los cargadores»). «No se recibieron 30 cajas» con
+     * esas notas sigue siendo decir lo contrario.
+     */
+    private static boolean niegaLoQueLasNotasYaNiegan(String redactado, String palabra, String notas) {
+        java.util.Map<String, int[]> notasAmplias = polaridadesAmplias(notas);
+        Set<String> cantidadesNegadas = new HashSet<>();
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(notas == null ? "" : notas))) {
+            List<String> fs = fichas(clausula);
+            for (int i = 1; i < fs.size(); i++) {
+                if (fs.get(i - 1).matches("\\d+") && negadaEnLaClausula(fs, i)) {
+                    cantidadesNegadas.add(fs.get(i - 1) + " " + fs.get(i));
+                }
+            }
+        }
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(redactado))) {
+            List<String> fs = fichas(clausula);
+            for (int i = 0; i < fs.size(); i++) {
+                if (!fs.get(i).equals(palabra)) {
+                    continue;
+                }
+                for (int j = i + 1; j < Math.min(fs.size(), i + 5); j++) {
+                    String f = fs.get(j);
+                    int[] enNotas = notasAmplias.get(f);
+                    boolean negadaYNuncaAfirmada = enNotas != null && enNotas[1] > 0 && enNotas[0] == 0;
+                    boolean cantidadNegada = j + 1 < fs.size() && cantidadesNegadas.contains(f + " " + fs.get(j + 1));
+                    if (negadaYNuncaAfirmada || cantidadNegada) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     private static final Set<String> NIEGAN_LA_SIGUIENTE = Set.of("no", "nunca", "tampoco");
@@ -1234,7 +1666,59 @@ public final class FidelidadDeRedaccion {
     /** Por cada palabra de cuatro letras o más: cuántas veces aparece afirmada y cuántas negada. */
     private static java.util.Map<String, int[]> polaridades(String texto) {
         java.util.Map<String, int[]> r = new java.util.HashMap<>();
-        List<String> fs = fichas(texto);
+        contarPolaridades(fichas(texto), false, r);
+        return r;
+    }
+
+    /**
+     * Palabras que niegan lo que sigue dentro de la misma cláusula, para ver
+     * si la redacción conserva una negación de las notas dicha con otras
+     * palabras: «la falta de personal», «la ausencia de energía», «sin que
+     * haya pagado». Sin un prefijo «falt»: «los faltantes» no niega nada.
+     */
+    private static final Set<String> NEGADORES_DE_LA_CLAUSULA = Set.of("no", "sin", "ningun", "ninguna", "ninguno",
+            "ningunos", "ningunas", "nunca", "tampoco", "ni", "falta", "faltan", "faltaba", "faltaban", "falto",
+            "faltaron", "ausencia", "carencia");
+
+    /**
+     * Cláusulas: se corta en la puntuación y en «y», «e», «pero», «aunque» y
+     * «mientras» sueltas, para que una negación no alcance a otra frase
+     * («falta firmar el acta y se entregaron las sillas»). No se corta en
+     * «que»: «sin que haya pagado» sigue negando.
+     */
+    private static final Pattern FIN_DE_CLAUSULA =
+            Pattern.compile("[.,;:!?()]|(?<![a-z])(?:y|e|pero|aunque|mientras)(?![a-z])");
+
+    /**
+     * Como {@link #polaridades}, pero una palabra también cuenta como negada si
+     * alguna de las cuatro anteriores, en su cláusula, la niega con otras
+     * palabras ({@link #NEGADORES_DE_LA_CLAUSULA} o «inexist…»). «Sin
+     * embargo» y «no obstante» no niegan. Solo se usa para ver si la
+     * redacción QUITÓ una negación de las notas.
+     */
+    private static java.util.Map<String, int[]> polaridadesAmplias(String texto) {
+        java.util.Map<String, int[]> r = new java.util.HashMap<>();
+        for (String clausula : FIN_DE_CLAUSULA.split(normalizar(texto == null ? "" : texto))) {
+            contarPolaridades(fichas(clausula), true, r);
+        }
+        return r;
+    }
+
+    private static boolean negadaEnLaClausula(List<String> fs, int i) {
+        for (int j = Math.max(0, i - 4); j < i; j++) {
+            String f = fs.get(j);
+            String siguiente = j + 1 < fs.size() ? fs.get(j + 1) : "";
+            if ((f.equals("sin") && siguiente.equals("embargo")) || (f.equals("no") && siguiente.equals("obstante"))) {
+                continue;
+            }
+            if (NEGADORES_DE_LA_CLAUSULA.contains(f) || f.startsWith("inexist")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void contarPolaridades(List<String> fs, boolean amplia, java.util.Map<String, int[]> r) {
         for (int i = 0; i < fs.size(); i++) {
             String p = fs.get(i);
             boolean llevaSentido = LLEVAN_EL_SENTIDO.contains(p);
@@ -1251,10 +1735,9 @@ public final class FidelidadDeRedaccion {
                 j--;
                 saltos++;
             }
-            boolean negada = j >= 0 && NIEGAN_LA_SIGUIENTE.contains(fs.get(j));
+            boolean negada = (j >= 0 && NIEGAN_LA_SIGUIENTE.contains(fs.get(j))) || (amplia && negadaEnLaClausula(fs, i));
             r.computeIfAbsent(p, k -> new int[2])[negada ? 1 : 0]++;
         }
-        return r;
     }
 
     // ── Afirmaciones agregadas ──────────────────────────────────────────────
