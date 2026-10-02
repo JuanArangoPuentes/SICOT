@@ -353,7 +353,6 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     r.setProperty('--accent-glow', toRgba(hex, 0.2))
     r.setProperty('--accent-soft', toRgba(hex, 0.1))
     r.setProperty('--accent-line', toRgba(hex, 0.26))
-    r.setProperty('--grid-line', toRgba(hex, 0.05))
     r.setProperty('--on-accent', textoSobre(hex))
 
     // Text — explicit per theme
