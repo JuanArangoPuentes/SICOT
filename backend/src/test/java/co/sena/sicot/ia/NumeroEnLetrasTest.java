@@ -1,11 +1,14 @@
 package co.sena.sicot.ia;
 
+import co.sena.sicot.exception.BusinessException;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * El valor en letras de las actas. Los casos incluyen los dos que el modelo
@@ -44,5 +47,23 @@ class NumeroEnLetrasTest {
     })
     void losCentavosVanComoFraccion(String valor, String esperado) {
         assertThat(NumeroEnLetras.pesos(new BigDecimal(valor))).isEqualTo(esperado);
+    }
+
+    /**
+     * Por encima del tope era una IllegalArgumentException que nadie manejaba:
+     * el Acta de Inicio de un contrato con 13 dígitos daba un 500 genérico
+     * (auditoría del 02-10-2026). Ahora es un error que se le explica a quien
+     * genera, y el tope es el mismo con que se valida el contrato.
+     */
+    @Test
+    void hastaElTopeSeEscribeYPorEncimaSeExplicaElError() {
+        assertThat(NumeroEnLetras.pesos(NumeroEnLetras.MAXIMO)).isEqualTo("NOVECIENTOS NOVENTA Y NUEVE MIL NOVECIENTOS"
+                + " NOVENTA Y NUEVE MILLONES NOVECIENTOS NOVENTA Y NUEVE MIL NOVECIENTOS NOVENTA Y NUEVE PESOS"
+                + " CON 99/100 M/CTE");
+        for (String valor : new String[]{"1000000000000", "9999999999999999.99", "-1"}) {
+            assertThatThrownBy(() -> NumeroEnLetras.pesos(new BigDecimal(valor))).as(valor)
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Revise el valor registrado en el contrato");
+        }
     }
 }
