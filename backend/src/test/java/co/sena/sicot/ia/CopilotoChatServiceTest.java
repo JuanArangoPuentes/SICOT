@@ -145,6 +145,55 @@ class CopilotoChatServiceTest {
                 .contains("Marcar completado");
     }
 
+    /**
+     * La regla de arriba tiene una excepción real desde el 22-09-2026: en 3.1 y
+     * 3.2 el supervisor carga la foto de la entrega (EvidenciaFotografica). El
+     * prompt decía que no se podía cargar nada «ni en 3.1-3.3», y el modelo
+     * contradecía a la guía del tutorial, que en ese mismo sub-paso dice «pulse
+     * Cargar evidencia». Afirmar que falta algo que sí existe es tan falso como
+     * afirmar lo contrario.
+     */
+    @Test
+    void elPromptDiceQueEn31Y32SiSeCarganLasFotosDeLaEntrega() {
+        servicio.responder(1L, "¿dónde subo la foto de la entrega?", null);
+
+        assertThat(promptCapturado())
+                .contains("Sub-pasos 3.1 y 3.2")
+                .contains("son los ÚNICOS donde se puede cargar algo, y solo fotos de la entrega")
+                .contains("\"Cargar evidencia\"")
+                .contains("solo en 3.1 y 3.2 se cargan fotos de la entrega")
+                .doesNotContain("ni en 3.1-3.3");
+    }
+
+    /**
+     * En un text block, la línea que continúa a otra (la anterior acaba en
+     * «\») conserva la sangría que tenga de más. Los puntos de lista del prompt
+     * llegaban al modelo como «donde     se puede cargar»: tokens que no dicen
+     * nada y que, en CPU, se pagan leyendo el prompt.
+     */
+    @Test
+    void elPromptNoLlevaTirasDeEspaciosEnMitadDeUnaFrase() {
+        servicio.responder(1L, "¿qué riesgos ve en este contrato?", null);
+
+        assertThat(promptCapturado()).doesNotContainPattern("\\S {2,}\\S");
+    }
+
+    /**
+     * Los documentos los arma RedactorDeDocumentos con código desde el
+     * 24-09-2026; el modelo solo redacta las observaciones. Si el prompt sigue
+     * diciendo que el Copiloto los redacta, el modelo se atribuye el documento
+     * entero cuando el supervisor le pregunta por él.
+     */
+    @Test
+    void elPromptNoAtribuyeLosDocumentosAlCopiloto() {
+        servicio.responder(1L, "¿puedo cambiar el texto del acta?", null);
+
+        assertThat(promptCapturado())
+                .contains("SICOT los arma con los datos exactos del contrato")
+                .contains("El Copiloto solo redacta el apartado de observaciones")
+                .doesNotContain("que el Copiloto redacta automáticamente");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Las sugerencias rápidas del panel no pasan por el modelo
     //
