@@ -225,7 +225,71 @@ public final class FidelidadDeRedaccion {
                         ? "decía lo contrario de sus notas"
                 : !sinAfirmacionesAgregadas(corregido, recortadas)
                         ? "afirmaba sobre plazos, cumplimiento o calidad algo que sus notas no dicen"
+                : !sinNombresAgregados(corregido, recortadas, datos)
+                        ? "agregaba nombres que no estaban en sus notas"
                 : null;
+    }
+
+    // ── Nombres agregados ───────────────────────────────────────────────────
+
+    /** Una palabra con mayúscula inicial, de tres letras o más: «Carlos», «Pérez», «SENA». */
+    private static final Pattern CON_MAYUSCULA = Pattern.compile("(?<![\\p{L}\\d])\\p{Lu}\\p{L}{2,}");
+
+    /**
+     * Lo que la redacción puede escribir con mayúscula aunque las notas no lo
+     * digan: la entidad y el centro, los documentos del proceso y los papeles
+     * del contrato, que un registro formal suele escribir con mayúscula. Los
+     * meses y los días se suman aparte (las fechas se comprueban en
+     * {@link #sinFechasNiHorasCambiadas}).
+     */
+    private static final Set<String> NOMBRES_DE_LA_CASA = Set.of("sena", "servicio", "nacional", "aprendizaje",
+            "centro", "tecnologico", "mobiliario", "regional", "antioquia", "itagui", "colombia", "sicot",
+            "copiloto", "acta", "inicio", "informe", "supervision", "recibo", "satisfaccion", "bienes",
+            "certificacion", "cumplimiento", "final", "supervisor", "supervisora", "contratista", "contrato",
+            "contratante", "entidad");
+
+    /**
+     * ¿Trae la redacción un nombre propio que ni las notas ni el contrato
+     * dan? Ninguna otra comprobación lo veía: «el almacenista firmó el
+     * recibido» redactado «el almacenista Carlos Pérez firmó el recibido» no
+     * cambia cifras ni palabras parecidas, y el Acta de Recibo salía con una
+     * persona inventada (auditoría del 02-10-2026; el modelo ya había
+     * desobedecido la instrucción de no agregar nombres el 24-09-2026). Cuenta
+     * toda palabra con mayúscula que no empieza una frase y que, sin tildes ni
+     * mayúsculas, no está en las notas, en los datos del contrato ni entre
+     * {@link #NOMBRES_DE_LA_CASA}: «juan ospina» escrito en minúscula en las
+     * notas y «Juan Ospina» en la redacción es el mismo nombre.
+     */
+    public static boolean sinNombresAgregados(String redactado, String notas, List<String> datosConocidos) {
+        if (redactado == null) {
+            return true;
+        }
+        Set<String> conocidas = new HashSet<>(fichas(notas));
+        for (String dato : datosConocidos) {
+            conocidas.addAll(fichas(dato));
+        }
+        conocidas.addAll(NOMBRES_DE_LA_CASA);
+        conocidas.addAll(java.util.Arrays.asList(MESES).subList(1, MESES.length));
+        conocidas.addAll(DIAS_DE_LA_SEMANA);
+        Matcher m = CON_MAYUSCULA.matcher(redactado);
+        while (m.find()) {
+            String w = normalizar(m.group());
+            if (empiezaUnaFrase(redactado, m.start()) || conocidas.contains(w)
+                    || conocidas.stream().anyMatch(c -> mismaPalabra(c, w))) {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    /** ¿Va la posición al principio del texto, de un renglón o de una frase (comillas y signos de apertura aparte)? */
+    private static boolean empiezaUnaFrase(String texto, int i) {
+        int j = i - 1;
+        while (j >= 0 && " \t\"'«“¿¡(".indexOf(texto.charAt(j)) >= 0) {
+            j--;
+        }
+        return j < 0 || ".!?:;…\n".indexOf(texto.charAt(j)) >= 0;
     }
 
     // ── Cifras, fechas y horas ──────────────────────────────────────────────

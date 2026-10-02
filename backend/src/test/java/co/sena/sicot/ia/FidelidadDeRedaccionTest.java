@@ -470,4 +470,35 @@ class FidelidadDeRedaccionTest {
             assertThat(fiel(par[1], par[0])).as(par[1]).isFalse();
         }
     }
+
+    // ── Auditoría del 02-10-2026: nombres agregados ─────────────────────────
+
+    @Test
+    void unNombreQueNiLasNotasNiElContratoDanSeDescarta() {
+        String[][] alteradas = {
+                {"el almacenista firmó el recibido de las 20 carpas",
+                        "Se recibieron 20 carpas; el almacenista Carlos Pérez firmó el recibido."},
+                {"se recibió el informe de la interventoría",
+                        "Se recibió el informe de la interventoría de Consultores S.A.S."},
+                {"la ingeniera revisó la instalación", "La ingeniera Martínez revisó la instalación."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(FidelidadDeRedaccion.motivoDeInfidelidad(par[1], par[0], DATOS)).as(par[1])
+                    .isEqualTo("agregaba nombres que no estaban en sus notas");
+        }
+    }
+
+    @Test
+    void unNombreDeLasNotasODelContratoAunqueCambieLaMayusculaNoEsAgregado() {
+        String[][] fieles = {
+                {"le entregué los bienes a juan ospina", "Se entregaron los bienes a Juan Ospina."},
+                {"se recibió en el almacén", "Se recibió en el almacén del SENA."},
+                {"el contratista entregó las sillas", "El contratista Eventos Supernova S.A.S. entregó las sillas."},
+                {"hice visita el 02/10/2026", "La visita se realizó el 2 de Octubre de 2026."},
+                {"se revisó el informe de supervisión", "Se revisó el Informe de Supervisión."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fiel(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
 }
