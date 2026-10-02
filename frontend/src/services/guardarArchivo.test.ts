@@ -5,7 +5,7 @@ const writeFile = vi.fn()
 vi.mock('@tauri-apps/plugin-dialog', () => ({ save }))
 vi.mock('@tauri-apps/plugin-fs', () => ({ writeFile }))
 
-import { guardarArchivo } from './guardarArchivo'
+import { abrirArchivo, ErrorAlGuardar, guardarArchivo } from './guardarArchivo'
 
 // jsdom no implementa dos cosas que el WebView de Android (Chrome 124) sí tiene:
 // `Blob.prototype.arrayBuffer` y `URL.createObjectURL`. Se completan aquí, en la
@@ -65,6 +65,19 @@ describe('guardarArchivo', () => {
     expect(writeFile).not.toHaveBeenCalled()
   })
 
+  // Auditoría del 02-10-2026: los plugins rechazan con un texto, y el panel lo
+  // tomaba por un fallo pasajero y pedía «intente de nuevo en un momento».
+  it('si el teléfono no deja escribir, lo dice con el motivo del sistema', async () => {
+    simularApk()
+    save.mockResolvedValue('content://descargas/42')
+    writeFile.mockRejectedValue('No queda espacio en el dispositivo')
+
+    const intento = guardarArchivo(new Blob(['x']), 'acta.pdf')
+
+    await expect(intento).rejects.toBeInstanceOf(ErrorAlGuardar)
+    await expect(intento).rejects.toThrow('No queda espacio en el dispositivo')
+  })
+
   it('en el navegador conserva el gestor de descargas y no toca los plugins', async () => {
     // Sin la marca de Tauri: es la aplicación web, donde el patrón de siempre
     // funciona. Cambiarlo aquí sería añadir riesgo sin ningún beneficio.
@@ -90,5 +103,37 @@ describe('guardarArchivo', () => {
 
     await expect(guardarArchivo(new Blob(['x']), 'acta.pdf')).resolves.toBe('navegador')
     expect(save).not.toHaveBeenCalled()
+  })
+})
+
+describe('abrirArchivo', () => {
+  it('en el navegador abre el borrador en otra pestaña en vez de descargarlo', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:borrador')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const abrir = vi.spyOn(window, 'open').mockReturnValue({} as Window)
+    const clic = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await expect(abrirArchivo(new Blob(['%PDF']), 'BORRADOR Acta.pdf')).resolves.toBe('abierto')
+    expect(abrir).toHaveBeenCalledWith('blob:borrador', '_blank')
+    expect(clic).not.toHaveBeenCalled()
+  })
+
+  it('si el navegador bloquea la pestaña, lo descarga', async () => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:borrador')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    vi.spyOn(window, 'open').mockReturnValue(null)
+    const clic = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    await expect(abrirArchivo(new Blob(['%PDF']), 'BORRADOR Acta.pdf')).resolves.toBe('navegador')
+    expect(clic).toHaveBeenCalled()
+  })
+
+  it('en el APK lo guarda con el «Guardar como» del sistema', async () => {
+    simularApk()
+    save.mockResolvedValue('content://descargas/43')
+    const abrir = vi.spyOn(window, 'open')
+
+    await expect(abrirArchivo(new Blob(['%PDF']), 'BORRADOR Acta.pdf')).resolves.toBe('guardado')
+    expect(abrir).not.toHaveBeenCalled()
   })
 })
