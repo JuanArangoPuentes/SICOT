@@ -86,14 +86,17 @@ import { ApiError } from '@/services/api/client'
 import { mapEtapas } from '@/services/mappers'
 import { formatFecha } from '@/services/format'
 
-// Chips de preguntas frecuentes — el label es corto para el botón, la
-// pregunta real que se envía al Copiloto va completa para que la respuesta
-// de Ollama sea específica y no un genérico "¿en qué te ayudo?".
+// Chips de preguntas frecuentes — el label es corto para el botón y la
+// pregunta va completa. Las cinco tienen respuesta fija y el backend las
+// contesta sin modelo, al instante: la primera GuiaDelPasoActual (el paso real
+// del contrato) y las otras cuatro FichaDeDocumentoFormal (el catálogo). Hasta
+// el 1-10-2026 iban todas a Ollama: hasta ~158 s en CPU. Si se cambia una
+// pregunta, hay que cambiarla también en CopilotoChatServiceTest y
+// FichaDeDocumentoFormalTest, que comprueban que no lleguen al modelo.
 const QUICK_SUGGESTIONS: Array<{ label: string; question: string }> = [
   {
-    label: '¿Qué documentos necesito?',
-    question:
-      '¿Qué necesito hacer en el paso en el que estoy ahora mismo? Deme el paso a paso completo: de dónde consigo cada insumo y cómo lo registro en SICOT.',
+    label: '¿Qué me falta en este paso?',
+    question: '¿Qué me falta en el paso en el que estoy y cómo lo registro en SICOT?',
   },
   { label: 'GCCON-F-031', question: '¿Qué es el GCCON-F-031, quién lo firma y en qué sub-paso se genera?' },
   { label: 'GIL-F-010', question: '¿Qué es el GIL-F-010, quién lo firma y en qué sub-paso se genera?' },

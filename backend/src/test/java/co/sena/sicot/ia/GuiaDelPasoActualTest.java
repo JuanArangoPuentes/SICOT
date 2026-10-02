@@ -155,4 +155,133 @@ class GuiaDelPasoActualTest {
         assertThat(guia.responder(List.of())).isEqualTo(Optional.empty());
         assertThat(guia.responder(null)).isEqualTo(Optional.empty());
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 1-10-2026: la puerta de entrada, normalizada
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("da igual la tilde, la mayúscula o un teclado que manda la tilde aparte")
+    void daIgualLaTildeOLaMayuscula() {
+        assertThat(guia.puedeResponder("en que paso voy")).isTrue();
+        assertThat(guia.puedeResponder("EN QUÉ PASO VOY")).isTrue();
+        assertThat(guia.puedeResponder("¿En qué paso voy?")).isTrue();
+        assertThat(guia.puedeResponder("¿cual es el siguiente paso?")).isTrue();
+        assertThat(guia.puedeResponder("¡Siguiente sub-paso!")).isTrue();
+    }
+
+    /**
+     * Las dos que citó la revisión del 1-10-2026: «¿qué documento falta?» no
+     * contenía «qué falta» porque el sustantivo va en medio, y «qué necesito» no
+     * estaba en la lista. Las dos iban al modelo: minutos en CPU.
+     */
+    @Test
+    @DisplayName("reconoce «¿qué documento falta?» y «¿qué necesito?»")
+    void reconoceLoQueFaltaDichoPorElDocumento() {
+        assertThat(guia.puedeResponder("¿Qué documento falta?")).isTrue();
+        assertThat(guia.puedeResponder("¿qué documentos faltan?")).isTrue();
+        assertThat(guia.puedeResponder("qué necesito")).isTrue();
+        assertThat(guia.puedeResponder("¿Qué documentos necesito?")).isTrue();
+        assertThat(guia.puedeResponder("¿Qué hago?")).isTrue();
+        assertThat(guia.puedeResponder("¿Cuál es el paso actual?")).isTrue();
+        // La sugerencia rápida del panel (SupervisorPanel.tsx, QUICK_SUGGESTIONS)
+        // y la que tenía hasta el 1-10-2026.
+        assertThat(guia.puedeResponder("¿Qué me falta en el paso en el que estoy y cómo lo registro en SICOT?"))
+                .isTrue();
+        assertThat(guia.puedeResponder("¿Qué necesito hacer en el paso en el que estoy ahora mismo? Deme el paso a "
+                + "paso completo: de dónde consigo cada insumo y cómo lo registro en SICOT.")).isTrue();
+    }
+
+    @Test
+    @DisplayName("«qué necesito» y «qué hago» solo se atajan si son la pregunta entera")
+    void lasPreguntasCortasSoloSiSonLaPreguntaEntera() {
+        assertThat(guia.puedeResponder("¿qué necesito para renovar la póliza?")).isFalse();
+        assertThat(guia.puedeResponder("¿Qué hago con la factura que llegó mal?")).isFalse();
+    }
+
+    /**
+     * Una pregunta condicional trae la frase pero pide consejo sobre un caso.
+     * Antes «¿qué tengo que hacer si el contratista se atrasa?» se contestaba
+     * con la lista de pendientes, que no es lo que preguntó.
+     */
+    @Test
+    @DisplayName("una pregunta condicional («si…») se deja al modelo aunque traiga la frase")
+    void lasCondicionalesVanAlModelo() {
+        assertThat(guia.puedeResponder("¿Qué tengo que hacer si el contratista se atrasa?")).isFalse();
+        assertThat(guia.puedeResponder("¿qué me falta si ya cargué la foto?")).isFalse();
+    }
+
+    @Test
+    @DisplayName("«qué falta» ya no se encuentra dentro de «porque faltan»")
+    void queFaltaNoSeEncuentraDentroDeOtraPalabra() {
+        assertThat(guia.puedeResponder("No firmé el acta porque faltan las fotos")).isFalse();
+    }
+
+    /**
+     * El texto completo, letra por letra. Lo puede afirmar porque ya no lo
+     * escribe un modelo, y es lo que ve el supervisor cuando el contrato está en
+     * el sub-paso de la evidencia fotográfica: la guía tiene que decirle que ahí
+     * SÍ se carga la foto, igual que la guía del tutorial (guiaSubPaso.ts).
+     */
+    @Test
+    @DisplayName("en el sub-paso de la foto, el texto exacto dice cómo cargar la evidencia")
+    void elTextoExactoEnElSubPasoDeLaFoto() {
+        List<EtapaResponse> etapas = List.of(
+                etapa(3, "INSPECCIÓN — Monitoreo y Ejecución", EstadoEtapa.EN_CURSO, 25, List.of(
+                        sub("3.1", "Verificación física de la entrega en bodega", null,
+                                EstadoSubetapa.COMPLETADA, "Supervisor"),
+                        sub("3.2", "Carga de evidencia fotográfica georreferenciada",
+                                "Evidencia fotográfica con georreferenciación activa.",
+                                EstadoSubetapa.EN_CURSO, "Supervisor"),
+                        sub("3.3", "Comparación cantidad/calidad vs. ficha técnica", null,
+                                EstadoSubetapa.PENDIENTE, "Supervisor"),
+                        sub("3.4", "Firma del Informe de Supervisión (GCCON-F-031)", null,
+                                EstadoSubetapa.PENDIENTE, "Supervisor"))));
+
+        assertThat(guia.responder(etapas).orElseThrow()).isEqualTo("""
+                Está en el paso 3: INSPECCIÓN — Monitoreo y Ejecución (25% completado).
+
+                Lo que le falta aquí:
+
+                3.2 Carga de evidencia fotográfica georreferenciada  ← en curso
+                3.3 Comparación cantidad/calidad vs. ficha técnica
+                3.4 Firma del Informe de Supervisión (GCCON-F-031)
+
+                Empiece por 3.2: Carga de evidencia fotográfica georreferenciada. Evidencia fotográfica con \
+                georreferenciación activa. Responsable: Supervisor.
+
+                En SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», pulse \
+                «Cargar evidencia» y, cuando aparezca como cargada, marque el sub-paso como completado.
+
+                Si necesita detalle de alguno de estos sub-pasos —qué documento sirve de soporte, de dónde sale \
+                un insumo— pregúnteme por él y se lo explico.""");
+    }
+
+    @Test
+    @DisplayName("dice qué botón pulsar según el sub-paso: firmar, cargar la foto o marcar completado")
+    void diceQueBotonPulsarSegunElSubPaso() {
+        assertThat(GuiaDelPasoActual.comoSeRegistra(
+                sub("2.7", "Firma del Acta de Inicio (GCCON-F-018)", null, EstadoSubetapa.PENDIENTE, "Supervisor")))
+                .isEqualTo("En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «Acta de "
+                        + "Inicio» (GCCON-F-018) con los datos exactos del contrato, y usted lo revisa y lo firma con "
+                        + "su firma electrónica.");
+        // La Certificación no tiene código oficial: no se le pone ninguno.
+        assertThat(GuiaDelPasoActual.comoSeRegistra(
+                sub("5.3", "Firma de la Certificación de cumplimiento", null, EstadoSubetapa.PENDIENTE, "Supervisor")))
+                .isEqualTo("En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «Certificación "
+                        + "de cumplimiento» con los datos exactos del contrato, y usted lo revisa y lo firma con su "
+                        + "firma electrónica.");
+        assertThat(GuiaDelPasoActual.comoSeRegistra(
+                sub("2.6", "Registro de garantías vigentes", null, EstadoSubetapa.PENDIENTE, "Unidad de Contratación")))
+                .isEqualTo("En SICOT: este sub-paso lo realiza Unidad de Contratación; márquelo como completado "
+                        + "cuando le confirmen que está hecho.");
+        assertThat(GuiaDelPasoActual.comoSeRegistra(
+                sub("2.2", "Verificación de datos del contratista y NIT", null, EstadoSubetapa.PENDIENTE, "Supervisor")))
+                .isEqualTo("En SICOT: cuando lo haya hecho, márquelo como completado.");
+    }
+
+    private static SubetapaResponse sub(String codigo, String nombre, String descripcion,
+                                        EstadoSubetapa estado, String responsable) {
+        return new SubetapaResponse(1L, codigo, nombre, descripcion, estado, responsable);
+    }
 }

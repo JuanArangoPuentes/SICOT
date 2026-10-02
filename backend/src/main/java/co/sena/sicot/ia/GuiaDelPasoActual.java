@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Responde «¿en qué paso voy y qué hago ahora?» sin pasar por el modelo de IA.
@@ -58,15 +59,16 @@ public class GuiaDelPasoActual {
      * mismo problema una capa más arriba. Una lista de frases es auditable, se
      * revisa en un <i>pull request</i> y falla de forma predecible: ante la
      * duda, no encaja y la pregunta sigue su camino normal hacia el modelo.
+     *
+     * <p>Se escriben una sola vez y en castellano corriente: {@link PreguntaNormalizada}
+     * les quita tildes y signos igual que a la pregunta. Hasta el 1-10-2026 cada
+     * frase iba dos veces, con tilde y sin ella, y la que faltaba se escapaba al
+     * modelo.
      */
-    private static final List<String> SENALES = List.of(
-            "en que paso", "en qué paso", "en que etapa", "en qué etapa",
-            "que paso sigue", "qué paso sigue", "cual es el siguiente paso",
-            "cuál es el siguiente paso", "que sigue", "qué sigue",
-            "que tengo que hacer", "qué tengo que hacer", "que debo hacer",
-            "qué debo hacer", "que hago ahora", "qué hago ahora",
-            "por donde empiezo", "por dónde empiezo", "en que voy", "en qué voy",
-            "cual es mi paso", "cuál es mi paso", "que falta", "qué falta",
+    private static final Set<String> SENALES = PreguntaNormalizada.normalizarTodas(
+            "en qué paso", "en qué etapa", "qué paso sigue", "cuál es el siguiente paso", "qué sigue",
+            "qué tengo que hacer", "qué debo hacer", "qué hago ahora", "por dónde empiezo", "en qué voy",
+            "cuál es mi paso", "qué falta",
             // ── Variantes con pronombre ──────────────────────────────────
             //
             // Medido el 15 de septiembre de 2026 contra el sistema real: a la
@@ -85,7 +87,7 @@ public class GuiaDelPasoActual {
             // que asegurarse de que la forma en que la gente pregunta de verdad
             // entra por él. Se cubren los clíticos, no cada frase entera: «me
             // falta» atrapa «¿qué me falta?», «me falta para cerrar» y demás.
-            "me falta", "me hace falta", "me queda pendiente",
+            "me falta", "me hace falta", "queda pendiente",
             "falta para cerrar", "falta para terminar", "falta por hacer",
             "me toca", "me corresponde",
             // ── Órdenes cortas ───────────────────────────────────────────
@@ -95,33 +97,61 @@ public class GuiaDelPasoActual {
             // paso» pero no la orden sola, así que fue al modelo: esperó 120 s a
             // un precalentado y 163 s más a la respuesta, en un portátil sin
             // tarjeta gráfica. La respuesta era esta misma plantilla.
-            "siguiente paso", "paso siguiente", "siguiente sub-paso", "siguiente subpaso",
-            "proximo paso", "próximo paso");
-            // «qué hago» o «continuar» a secas se dejaron fuera a propósito:
-            // también aparecen en preguntas abiertas («¿qué hago si no llega la
-            // póliza?») que esta plantilla contestaría mal.
+            "siguiente paso", "paso siguiente", "siguiente sub-paso", "siguiente subpaso", "próximo paso",
+            // ── Lo que falta, dicho por el documento o por el paso ───────
+            //
+            // 1-10-2026: «¿qué documento falta?» no contenía «qué falta» (el
+            // sustantivo va en medio) y se iba al modelo: minutos en CPU. Igual
+            // «el paso en el que estoy», que es como la sugerencia rápida del
+            // panel preguntaba por el paso actual.
+            "qué necesito hacer", "qué documento falta", "qué documentos faltan", "documentos pendientes",
+            "tengo pendiente", "hay pendiente", "paso en el que estoy", "paso en que estoy", "paso actual",
+            "etapa actual");
+            // «qué hago» o «continuar» como frase suelta dentro de una pregunta
+            // se dejaron fuera a propósito: también aparecen en preguntas
+            // abiertas («¿qué hago si no llega la póliza?») que esta plantilla
+            // contestaría mal. Como pregunta COMPLETA sí son inequívocas: ver
+            // PREGUNTAS_COMPLETAS.
+
+    /**
+     * Preguntas que solo se atajan si son la pregunta entera. «¿Qué necesito?»
+     * a secas es el paso actual; «¿qué necesito para renovar la póliza?» es una
+     * pregunta abierta que el modelo contesta mejor.
+     */
+    private static final Set<String> PREGUNTAS_COMPLETAS = PreguntaNormalizada.normalizarTodas(
+            "qué necesito", "qué documentos necesito", "qué documento necesito", "qué hago", "qué hago aquí",
+            "y ahora qué", "ahora qué hago", "siguiente");
+
+    /**
+     * Sub-pasos donde el supervisor carga fotos de la entrega. Es espejo de
+     * {@code SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA} en
+     * {@code frontend/src/data/contractFlow.ts}, igual que GcconP010Plantilla lo
+     * es de STEPS_INITIAL: si allí cambia, aquí también, o la guía dirá «márquelo
+     * como completado» en un sub-paso que pide la foto antes.
+     */
+    static final Set<String> SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA = Set.of("3.1", "3.2");
 
     /**
      * ¿Es una pregunta que se puede contestar sin modelo?
      *
-     * <p>Deliberadamente conservador. Si la pregunta trae además otra cosa
-     * («¿qué debo hacer y de dónde saco el formato GCCON-F-018?»), el modelo la
-     * atiende igual: aquí solo se atajan las preguntas cuya respuesta completa
-     * es el estado del contrato.
+     * <p>Deliberadamente conservador. Una pregunta condicional («¿qué tengo que
+     * hacer si el contratista se atrasa?») trae la frase, pero lo que pide es
+     * consejo sobre un caso, no el estado del contrato: esa la atiende el
+     * modelo.
      */
     public boolean puedeResponder(String pregunta) {
-        if (pregunta == null || pregunta.isBlank()) {
+        PreguntaNormalizada p = PreguntaNormalizada.de(pregunta);
+        if (p.estaVacia()) {
             return false;
         }
-        String normalizada = pregunta.toLowerCase(Locale.ROOT).trim();
         // Una pregunta larga casi siempre trae contexto o matices que esta
         // plantilla no cubre; se deja pasar al modelo en vez de contestar de
         // más. El umbral es generoso: "acabo de recibir este contrato, ¿qué
         // tengo que hacer exactamente en el paso en el que está ahora?" cabe.
-        if (normalizada.length() > 200) {
+        if (p.largo() > 200 || p.tienePalabra("si")) {
             return false;
         }
-        return SENALES.stream().anyMatch(normalizada::contains);
+        return p.contieneAlguna(SENALES) || p.esExactamenteAlguna(PREGUNTAS_COMPLETAS);
     }
 
     /**
@@ -142,7 +172,7 @@ public class GuiaDelPasoActual {
 
         if (enCurso.isEmpty()) {
             return Optional.of("""
-                    Ya están completados los %d pasos del contrato. No queda ningún subpaso pendiente.
+                    Ya están completados los %d pasos del contrato. No queda ningún sub-paso pendiente.
 
                     Si necesita revisar algo de un paso ya cerrado, dígame cuál y se lo consulto."""
                     .formatted(etapas.size()));
@@ -177,9 +207,36 @@ public class GuiaDelPasoActual {
         if (siguiente.responsable() != null && !siguiente.responsable().isBlank()) {
             sb.append(" Responsable: %s.".formatted(siguiente.responsable().strip()));
         }
-        sb.append("\n\nSi necesita detalle de alguno de estos subpasos —qué documento sirve de soporte, "
+        sb.append("\n\n").append(comoSeRegistra(siguiente));
+        sb.append("\n\nSi necesita detalle de alguno de estos sub-pasos —qué documento sirve de soporte, "
                 + "de dónde sale un insumo— pregúnteme por él y se lo explico.");
         return Optional.of(sb.toString());
+    }
+
+    /**
+     * Qué botón pulsar en SICOT para ese sub-paso. Es la misma regla que
+     * {@code guiaDelSubPaso} en {@code frontend/src/data/guiaSubPaso.ts}: si la
+     * guía del tutorial y esta dijeran cosas distintas del mismo sub-paso, el
+     * supervisor no sabría a cuál creer.
+     */
+    static String comoSeRegistra(SubetapaResponse sub) {
+        Optional<FichaDeDocumentoFormal.Documento> documento = FichaDeDocumentoFormal.delSubpaso(sub.codigo());
+        if (documento.isPresent()) {
+            FichaDeDocumentoFormal.Documento d = documento.get();
+            return "En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «%s»%s con los datos "
+                    .formatted(d.nombre(), d.codigo() == null ? "" : " (" + d.codigo() + ")")
+                    + "exactos del contrato, y usted lo revisa y lo firma con su firma electrónica.";
+        }
+        if (SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA.contains(sub.codigo())) {
+            return "En SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», "
+                    + "pulse «Cargar evidencia» y, cuando aparezca como cargada, marque el sub-paso como completado.";
+        }
+        String responsable = sub.responsable() == null ? "" : sub.responsable().strip();
+        if (!responsable.isEmpty() && !responsable.toLowerCase(Locale.ROOT).contains("supervisor")) {
+            return "En SICOT: este sub-paso lo realiza %s; márquelo como completado cuando le confirmen que está hecho."
+                    .formatted(responsable);
+        }
+        return "En SICOT: cuando lo haya hecho, márquelo como completado.";
     }
 
     private static boolean tieneSubpasosPendientes(EtapaResponse etapa) {
