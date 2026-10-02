@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
-import { CLAVE_SERVIDOR, apiBase } from '@/services/api/client'
-import { avisoTraficoSinCifrar } from '@/services/entorno'
+import { CLAVE_SERVIDOR, ORIGEN_COMPILADO, apiBase } from '@/services/api/client'
+import { avisoTraficoSinCifrar, queUsaLaDireccionVacia } from '@/services/entorno'
 import { AvatarIcon } from './icons'
 
 type Section = 'presets' | 'manual' | 'copiloto' | 'servidor'
@@ -306,8 +306,9 @@ export default function Settings({
  *
  * <p>Guardándola aquí, el instalador es <b>un único artefacto válido para
  * cualquier despliegue</b> y cada máquina apunta al servidor que le corresponde.
- * Vacío es una elección legítima: significa «el mismo origen desde el que se
- * sirve la aplicación», que es como funciona el despliegue web con proxy.
+ * Vacío significa «la dirección con la que se compiló»: en el despliegue web con
+ * proxy es el mismo origen, pero en el APK y el instalador no (ver
+ * queUsaLaDireccionVacia).
  */
 function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.ReactNode }) {
   const [valor, setValor] = useState(() => {
@@ -354,7 +355,10 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
           type="url"
           inputMode="url"
           spellCheck={false}
-          placeholder="http://192.168.1.50:8080"
+          // https:// y sin puerto, como se despliega el servidor del Centro
+          // (ADR-009). El ejemplo anterior, http://IP:8080, era justo lo que
+          // el APK bloquea y además se saltaba el proxy con TLS.
+          placeholder="https://servidor-del-centro"
           value={valor}
           onChange={(e) => {
             setValor(e.target.value)
@@ -377,7 +381,7 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
             marginTop: 12,
             padding: '10px 14px',
             borderRadius: 10,
-            border: '1px solid var(--alert-alta)',
+            border: '1px solid var(--alert-leve)',
             background: 'var(--bg-elevated)',
             color: 'var(--text-secondary)',
             fontSize: 12.5,
@@ -408,7 +412,7 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-tech)' }}>
           {apiBase() === '' ? 'el mismo origen de la aplicación' : apiBase()}
         </span>
-        . Déjelo vacío para usar el mismo origen desde el que se sirve la aplicación.
+        . {queUsaLaDireccionVacia(ORIGEN_COMPILADO)}
       </div>
     </div>
   )
