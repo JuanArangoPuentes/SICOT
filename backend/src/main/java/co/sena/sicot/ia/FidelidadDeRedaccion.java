@@ -153,6 +153,45 @@ public final class FidelidadDeRedaccion {
         return r;
     }
 
+    /**
+     * Un preámbulo dirigido al usuario en la primera línea, hasta sus dos
+     * puntos: «Aquí tiene el texto:», «A continuación, la redacción:»,
+     * «Observaciones:».
+     */
+    private static final Pattern PREAMBULO = Pattern.compile("^(?:aqu[ií]\\s+(?:tiene|tienes|est[aá]|va|le|te"
+            + "|presento|el|la|los|las)|a\\s+continuaci[oó]n|claro|por\\s+supuesto|texto|redacci[oó]n"
+            + "|observaciones)[^:\\n]{0,80}:\\s*", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Todo el texto entre comillas, sin otras comillas dentro, con su punto final adentro o afuera. */
+    private static final Pattern ENTRE_COMILLAS = Pattern.compile("^[\"“«]([^\"“”«»]+)[\"”»](\\.?)$");
+
+    /**
+     * Quita lo que envuelve la redacción sin ser parte de ella: el markdown
+     * (negritas, títulos, viñetas), un preámbulo para el usuario y las
+     * comillas que encierran todo el texto. El prompt lo prohíbe, pero un
+     * modelo pequeño responde a veces «Aquí tiene el texto: "Se recibieron 20
+     * carpas."», y eso no trae cifras ni palabras parecidas: pasaba todas las
+     * comprobaciones y el apartado de observaciones de un acta empezaba con
+     * un mensaje para el usuario (auditoría del 02-10-2026). Lo que dice la
+     * redacción no cambia.
+     */
+    public static String quitarEnvoltorio(String redactado) {
+        if (redactado == null) {
+            return null;
+        }
+        String t = redactado.replace("**", "").replace("__", "")
+                .replaceAll("(?m)^[ \\t]*#{1,6}[ \\t]*", "")
+                .replaceAll("(?m)^[ \\t]*[-*•][ \\t]+", "")
+                .strip();
+        t = PREAMBULO.matcher(t).replaceFirst("").strip();
+        Matcher comillas = ENTRE_COMILLAS.matcher(t);
+        if (comillas.matches()) {
+            String dentro = comillas.group(1).strip();
+            t = !comillas.group(2).isEmpty() && !dentro.endsWith(".") ? dentro + "." : dentro;
+        }
+        return t;
+    }
+
     private static boolean mismasIniciales(String[] a, String[] b) {
         if (a.length != b.length) {
             return false;
