@@ -557,4 +557,91 @@ class FidelidadDeRedaccionTest {
         assertThat(fiel("No se recibieron los computadores y faltan los cargadores.",
                 "se recibieron los computadores y faltan los cargadores")).isFalse();
     }
+
+    // ── Medición del 02-10-2026: salidas reales de qwen2.5:7b ───────────────
+    //
+    // Las notas son las seis de la medición (fechas, horas, cantidades,
+    // negaciones, un nombre). Las redacciones son lo que respondió el modelo,
+    // tal cual, con el prompt de antes («antes») o el de ahora; pasan por la
+    // misma depuración que en el servicio (envoltorio, nombres, año agregado).
+
+    private static final String N1 = "El 12 de octubre de 2026 a las 9:30 a. m. recibí en el almacén 40 sillas y 5"
+            + " camas. Revisé las 40 sillas una por una: 2 tenían el tapizado rasgado y el contratista se comprometió"
+            + " a cambiarlas antes del 20 de octubre. No revisé las camas porque no había personal de almacén.";
+    private static final String N2 = "Visita de seguimiento el 07/10/2026. El avance físico va en 65% y el financiero"
+            + " en 40%. El contratista no ha entregado la planilla de seguridad social de septiembre; se le envió"
+            + " requerimiento por correo el 08/10/2026. Faltan por instalar 3 de los 12 mesones del ambiente de"
+            + " gastronomía.";
+    private static final String N4 = "revisé la factura FE-2231 por $8.750.000 del mes de septiembre, está bien"
+            + " liquidada pero no trae el soporte de pago de parafiscales. La devolví al contratista el lunes para que"
+            + " la corrija.";
+    private static final String N5 = "a las 2 pm del 15 de octubre se hizo la prueba de los 6 hornos instalados en el"
+            + " taller de panadería; 5 funcionaron y 1 no calentó. El técnico de la empresa quedó de volver el viernes."
+            + " Todavía no hay energía trifásica en el bloque B, eso lo debe resolver el Centro.";
+    private static final String N6 = "se recibieron 120 m2 de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de"
+            + " zócalo, el contratista dice que llegan la otra semana. Sin novedades en la calidad.";
+
+    private static boolean fielTrasDepurar(String redactado, String notas) {
+        return fiel(GeneracionDocumentoService.depurar(redactado, notas, List.of()), notas);
+    }
+
+    @Test
+    void lasRedaccionesRealesFielesDeLaMedicionPasan() {
+        String[][] fieles = {
+                // a temperatura 0, con el prompt de antes: el año completado y
+                // «la falta de personal» la hacían descartar
+                {N1, "En la fecha 12 de octubre de 2026, a las 9:30 a. m., se recibieron en el almacén 40 sillas y 5"
+                        + " camas. Se realizó una revisión detallada de las 40 sillas, identificándose que 2 presentaban"
+                        + " daño en el tapizado. El contratista se comprometió a efectuar los cambios necesarios antes"
+                        + " del 20 de octubre de 2026. No se procedió a la revisión de las camas debido a la falta de"
+                        + " personal de almacén."},
+                // antes
+                {N4, "Se revisó la factura FE-2231 por $8.750.000 correspondiente al mes de septiembre, encontrándose"
+                        + " bien liquidada; no obstante, carece del soporte del pago de parafiscales. Fue devuelta al"
+                        + " contratista el lunes para su corrección."},
+                // antes: «uno no alcanzó» se descartaba por perder el 1
+                {N5, "En la prueba realizada a las 14:00 del 15 de octubre, se verificaron los seis hornos instalados"
+                        + " en el taller de panadería; cinco operaron correctamente mientras que uno no alcanzó el"
+                        + " calentamiento necesario. El técnico de la empresa se comprometió a retornar el viernes para"
+                        + " solucionar dicho problema. Además, persiste la falta de energía trifásica en el bloque B,"
+                        + " cuya resolución corresponde al Centro."},
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo. Faltan 10 cajas de zócalo, según el"
+                        + " contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                // ahora: «no se han recibido 10 cajas» y «120 m²» se descartaban
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido 10 cajas de"
+                        + " zócalo, según el contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han entregado 10 cajas de"
+                        + " zócalo, según el contratista llegarán la próxima semana. La calidad no presenta novedades."},
+                {N5, "Se realizó una prueba a las 2 pm del 15 de octubre a los seis hornos instalados en el taller de"
+                        + " panadería; se verificó que cinco funcionaron correctamente y uno no calentó. El técnico de"
+                        + " la empresa se comprometió a retornar el viernes para resolver el problema. Además, aún no se"
+                        + " ha proporcionado energía trifásica al bloque B, lo cual debe ser atendido por el Centro."},
+        };
+        for (String[] par : fieles) {
+            assertThat(fielTrasDepurar(par[1], par[0])).as(par[1]).isTrue();
+        }
+    }
+
+    @Test
+    void lasRedaccionesRealesInfielesDeLaMedicionSeDescartan() {
+        String[][] alteradas = {
+                // antes: pierde las dos fechas y que el contratista no ha entregado la planilla
+                {N2, "El avance físico asciende al 65%, mientras que el financiero alcanza un 40%. Se ha enviado"
+                        + " requerimiento para la entrega de la planilla de seguridad social correspondiente a"
+                        + " septiembre. Además, se encuentran pendientes tres de los doce mesones en el área de"
+                        + " gastronomía."},
+                // ahora: pierde la fecha de la visita
+                {N2, "El avance físico se encuentra en un 65%, mientras que el financiero está en un 40%. El"
+                        + " contratista no ha presentado la planilla de seguridad social correspondiente al mes de"
+                        + " septiembre; se le había enviado requerimiento mediante correo electrónico el día 8 de"
+                        + " octubre de 2026. Se reportan faltantes de tres de los doce mesones del área gastronómica."},
+                // con una variante del prompt que se probó y no se dejó: inventa «las 40 cajas esperadas»
+                {N6, "Se recibieron 120 m² de piso laminado y 30 cajas de zócalo; no se han recibido las 40 cajas"
+                        + " esperadas, el contratista indica que el envío restante llegará la próxima semana. La"
+                        + " calidad no presenta novedades."},
+        };
+        for (String[] par : alteradas) {
+            assertThat(fielTrasDepurar(par[1], par[0])).as(par[1]).isFalse();
+        }
+    }
 }
