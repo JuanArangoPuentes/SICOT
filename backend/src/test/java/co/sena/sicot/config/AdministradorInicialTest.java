@@ -146,6 +146,33 @@ class AdministradorInicialTest {
         assertThat(guardados.getFirst().getNombre()).isEqualTo("Administrador SICOT");
     }
 
+    /**
+     * Los correos institucionales suelen escribirse con mayúsculas
+     * («Juan.Perez@…»). AuthService busca el correo en minúsculas y la columna
+     * compara por igualdad exacta: guardado tal cual, la única cuenta con
+     * privilegios del despliegue nacía sin poder iniciar sesión.
+     */
+    @Test
+    void guardaElCorreoEnMinusculasParaQueElLoginLoEncuentre() throws Exception {
+        when(repositorio.count()).thenReturn(0L);
+
+        runner(" Juan.Perez@SENA.edu.co ", PASSWORD_VALIDA, null).run();
+
+        assertThat(guardados.getFirst().getEmail()).isEqualTo("juan.perez@sena.edu.co");
+    }
+
+    @Test
+    void fallaElArranqueSiElCorreoNoTieneFormaDeCorreo() {
+        when(repositorio.count()).thenReturn(0L);
+
+        assertThatThrownBy(() -> runner("admin", PASSWORD_VALIDA, null).run())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SICOT_ADMIN_EMAIL");
+        assertThatThrownBy(() -> runner("admin@@sena.edu.co", PASSWORD_VALIDA, null).run())
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(guardados).isEmpty();
+    }
+
     private CommandLineRunner runner(String email, String password, String nombre) {
         when(repositorio.findByEmail(any())).thenReturn(Optional.empty());
         return configuracion.crearAdministradorInicial(repositorio, encoder, email, password,

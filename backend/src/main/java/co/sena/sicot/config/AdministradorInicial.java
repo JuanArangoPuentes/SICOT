@@ -12,6 +12,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.Locale;
+import java.util.regex.Pattern;
+
 /**
  * Crea la primera cuenta ADMINISTRADOR de un despliegue real.
  *
@@ -85,6 +88,18 @@ public class AdministradorInicial {
      */
     private static final int LONGITUD_MINIMA_PASSWORD = 12;
 
+    /**
+     * Forma mínima de un correo: algo, una arroba, un dominio con punto y sin
+     * espacios. No pretende validar el estándar entero; está para que un valor
+     * con un error evidente («admin», «admin@», dos arrobas) detenga el arranque
+     * con un mensaje claro en vez de crear una cuenta con la que nadie podrá
+     * entrar y que este componente, con la tabla ya no vacía, no vuelve a tocar.
+     */
+    private static final Pattern FORMA_DE_CORREO = Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
+    /** Mismo tope que la columna {@code usuarios.email} y que {@code CrearUsuarioRequest}. */
+    private static final int LONGITUD_MAXIMA_CORREO = 150;
+
     @Bean
     CommandLineRunner crearAdministradorInicial(
             UsuarioRepository usuarioRepository,
@@ -99,7 +114,13 @@ public class AdministradorInicial {
                 return;
             }
 
-            String correoLimpio = email == null ? "" : email.trim();
+            // En minúsculas, igual que UsuarioService al crear y AuthService al
+            // iniciar sesión: el login busca el correo ya convertido y la columna
+            // compara por igualdad exacta. Con «Juan.Perez@sena.edu.co» en el
+            // .env la cuenta quedaba guardada con mayúsculas y ningún inicio de
+            // sesión la encontraba; y como la tabla ya no estaba vacía, corregir
+            // la variable no servía de nada: solo quedaba un UPDATE a mano.
+            String correoLimpio = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
             if (correoLimpio.isBlank() || password == null || password.isBlank()) {
                 throw new IllegalStateException("""
                         No hay ningún usuario en la base y no se configuró el administrador inicial, \
@@ -107,6 +128,11 @@ public class AdministradorInicial {
                         crear cuentas. Defina SICOT_ADMIN_EMAIL y SICOT_ADMIN_PASSWORD en el .env del \
                         servidor y vuelva a arrancar. Una vez creada la cuenta puede retirar ambas \
                         variables: solo se usan cuando la tabla de usuarios está vacía.""");
+            }
+            if (correoLimpio.length() > LONGITUD_MAXIMA_CORREO || !FORMA_DE_CORREO.matcher(correoLimpio).matches()) {
+                throw new IllegalStateException(
+                        "SICOT_ADMIN_EMAIL no parece un correo válido (\"" + correoLimpio + "\"). Escriba la "
+                                + "dirección completa, por ejemplo nombre.apellido@sena.edu.co, y vuelva a arrancar.");
             }
             if (password.length() < LONGITUD_MINIMA_PASSWORD) {
                 throw new IllegalStateException(
