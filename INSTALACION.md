@@ -157,14 +157,30 @@ equipo de escritorio vuelve a conectar hasta instalarle la nueva.
 ## Sobre el asistente de IA
 
 El copiloto usa **Ollama** corriendo en la misma máquina, gratuito y sin enviar
-nada fuera. Es **opcional**: si no está instalado, SICOT funciona completo y las
+nada fuera. Es **opcional**: sin el modelo, SICOT funciona completo y las
 funciones de IA responden con un error honesto en vez de fingir.
 
-Si lo quiere, instale [Ollama](https://ollama.com) y descargue el modelo:
+**En el servidor (opción B)** Ollama ya viene: `docker-compose.prod.yml` lo
+levanta en su propio contenedor, sin puertos abiertos a la red. Solo falta
+descargar el modelo, una vez (unos 5 GB; queda guardado en un volumen):
 
 ```bash
-ollama pull qwen2.5:7b
+docker compose exec ollama ollama pull qwen2.5:7b
 ```
+
+No instale Ollama aparte en el servidor para SICOT: en Linux, el backend en
+Docker no alcanzaría un Ollama instalado como servicio, y la forma rápida de
+arreglarlo (`OLLAMA_HOST=0.0.0.0`) deja la IA abierta, sin contraseña, a toda la
+red del Centro. Cuente con unos 8 GB de memoria libres para la IA, además de lo
+que usa el resto de SICOT.
+
+**En la opción A**, instale [Ollama](https://ollama.com) en el propio equipo y
+descargue el modelo con `ollama pull qwen2.5:7b`.
+
+El nombre del modelo tiene que coincidir con `OLLAMA_MODEL` del `.env`
+(`qwen2.5:7b` en `.env.example`). Si descarga otro, cambie también esa línea.
+Los tiempos de espera y la memoria que retiene el modelo se ajustan en el mismo
+`.env`: están comentados en `.env.example`.
 
 Dos cosas medidas que conviene saber antes de prometerle nada a nadie:
 
@@ -187,7 +203,7 @@ El porqué de las dos decisiones, con las mediciones, está en
 | El backend no arranca y el log habla de `JWT_SECRET` | Falta esa variable en el `.env`, o no es Base64 de 32 bytes |
 | El backend no arranca y el log habla de migraciones | Volumen de PostgreSQL de una versión anterior. `docker compose down -v` lo borra (**se llevará los datos**) |
 | La aplicación carga pero no muestra nada | `VITE_API_URL` quedó en `localhost`, o el cortafuegos bloquea 8443/8080 |
-| Las funciones de IA dan 503 | Ollama no está corriendo, o el modelo no está descargado |
+| Las funciones de IA dan 503 | El log del backend lo dice al arrancar. «NO está descargado»: falta el `pull` de arriba, o `OLLAMA_MODEL` no coincide con lo descargado. «No se pudo consultar el catálogo»: el backend no alcanza a Ollama (`docker compose ps ollama` en el servidor) |
 
 Para ver qué pasa: `docker compose ps` y `docker compose logs -f backend`.
 

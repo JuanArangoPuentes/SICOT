@@ -101,6 +101,14 @@ services:
       # existe, y avisado de que no había NINGÚN respaldo.
       RESPALDO_DIRECTORIO: /respaldos
       RESPALDO_RPO_HORAS: ${RESPALDO_RPO_HORAS:-24}
+      # La IA, en el contenedor `ollama` de abajo y por la red interna. El
+      # archivo base apunta al Ollama del equipo (host.docker.internal), que en
+      # Docker Desktop funciona y en un servidor Linux no: allí ese nombre lleva
+      # a la IP del puente de Docker, y Ollama instalado como servicio escucha
+      # solo en 127.0.0.1, así que la conexión se rechazaba con Ollama en pie y
+      # el modelo descargado. Se puede apuntar a otro Ollama (por ejemplo, un
+      # equipo con GPU de la red) definiendo OLLAMA_URL en el .env.
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
     volumes:
       # La carpeta donde escribe scripts/respaldo-sicot.sh, en solo lectura: el
       # backend solo mira la fecha del respaldo más reciente, nunca escribe ni
@@ -154,6 +162,36 @@ services:
     profiles: ["tools"]
     ports: !reset []
 
+  # ── IA local (Ollama, ADR-006) ───────────────────────────────────────────
+  # En su propio contenedor y no en el servidor, por dos motivos:
+  #   - Alcance. Con Ollama en el servidor, el backend en Docker no lo alcanza
+  #     sin enlazarlo a la IP del puente de Docker (con la regla de cortafuegos
+  #     correspondiente y el orden de arranque de los dos servicios), y la salida
+  #     obvia, OLLAMA_HOST=0.0.0.0, deja un Ollama sin autenticación abierto a
+  #     toda la red del Centro.
+  #   - GPU no hace falta. El objetivo es un servidor sin GPU (ADR-006): sin
+  #     ella, Ollama corre en CPU igual dentro que fuera de un contenedor.
+  #
+  # Sin puertos publicados: solo el backend le habla, por la red interna. El
+  # modelo NO viene en la imagen; se descarga una vez y queda en el volumen:
+  #   docker compose exec ollama ollama pull qwen2.5:7b
+  # Sin el modelo, SICOT funciona y la IA responde 503 diciendo qué falta.
+  ollama:
+    image: ollama/ollama:0.32.5
+    container_name: sicot-ollama
+    restart: unless-stopped
+    volumes:
+      - sicot_ollama:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          # qwen2.5:7b ocupa unos 5 GB cargado (application.properties, keep-alive)
+          # y el contexto de las peticiones en curso suma encima. El límite deja
+          # ese margen: por debajo, el núcleo mata el proceso a mitad de una
+          # respuesta y el copiloto devuelve 503 sin causa visible. El servidor
+          # tiene que tener esta memoria libre además de la del resto de SICOT.
+          memory: 8G
+
   # ── Proxy inverso con TLS (ADR-009) ──────────────────────────────────────
   # Caddy obtiene y renueva certificados solo. Con SICOT_DOMINIO apuntando a un
   # dominio público usa ACME; con un nombre interno emite un certificado local.
@@ -196,3 +234,6 @@ services:
 volumes:
   sicot_caddy_data:
   sicot_caddy_config:
+  # Los modelos descargados (unos 5 GB). En un volumen para que una
+  # actualización de la imagen no obligue a volver a descargarlos.
+  sicot_ollama:
