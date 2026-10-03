@@ -28,7 +28,11 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.bind.ServletRequestBindingException;
+import org.springframework.web.multipart.MultipartException;
 
 import java.io.UncheckedIOException;
 import java.util.LinkedHashMap;
@@ -170,6 +174,54 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> parteFaltante(MissingServletRequestPartException ex, WebRequest request) {
         return build("Falta un campo obligatorio en la solicitud: " + ex.getRequestPartName() + ".",
                 HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * Un {@code @RequestParam} obligatorio que no vino, como el «codigo» al
+     * subir un formato. Caía en el catch-all: 500 «error interno» y una traza
+     * ERROR que parecía un fallo del backend, en vez de decir qué faltaba.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ErrorResponse> parametroFaltante(MissingServletRequestParameterException ex,
+                                                           WebRequest request) {
+        return build("Falta un campo obligatorio en la solicitud: " + ex.getParameterName() + ".",
+                HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * El resto de datos obligatorios de la petición que no llegaron (una
+     * cabecera, una cookie). El más concreto de arriba gana para los parámetros.
+     */
+    @ExceptionHandler(ServletRequestBindingException.class)
+    public ResponseEntity<ErrorResponse> datoDeLaPeticionFaltante(ServletRequestBindingException ex,
+                                                                  WebRequest request) {
+        return build("Solicitud inválida. Revise los parámetros o el cuerpo de la petición.",
+                HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * Una carga multipart que no se pudo leer: sin boundary, cortada a mitad
+     * (pasa con datos móviles desde el APK) o mal formada. Es un problema de lo
+     * que llegó, no del servidor. {@link MaxUploadSizeExceededException} es una
+     * subclase y conserva su propio manejador, más concreto.
+     */
+    @ExceptionHandler(MultipartException.class)
+    public ResponseEntity<ErrorResponse> cargaMalFormada(MultipartException ex, WebRequest request) {
+        log.debug("Carga multipart ilegible en {}: {}",
+                request.getDescription(false).replace("uri=", ""), ex.getMessage());
+        return build("La carga del archivo llegó incompleta o mal formada. Intente subirlo de nuevo.",
+                HttpStatus.BAD_REQUEST, request);
+    }
+
+    /**
+     * El cliente pidió en {@code Accept} un formato que esta ruta no produce.
+     * Se responde 406 <b>sin cuerpo</b> a propósito: el cuerpo de error es
+     * JSON, que es justamente lo que el cliente dijo no aceptar, y escribirlo
+     * volvería a fallar por la misma negociación.
+     */
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Void> formatoNoAceptable(HttpMediaTypeNotAcceptableException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE).build();
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
