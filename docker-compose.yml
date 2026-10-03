@@ -99,9 +99,15 @@ services:
       # variable pase lo que pase, el respaldo de Spring nunca se activaría, y
       # un despliegue de producción firmaría tokens con una clave publicada en
       # este repositorio. Tampoco sirve `${JWT_SECRET:-}`: una variable definida
-      # pero vacía también desactiva el respaldo. Si se define, se hereda del
-      # .env, que es lo correcto. Ver docker-compose.prod.yml, donde además pasa
-      # a ser obligatoria.
+      # pero vacía también desactiva el respaldo.
+      #
+      # Ojo: el JWT_SECRET del .env NO llega al contenedor con este archivo.
+      # Compose usa el .env solo para resolver las ${…} de aquí; al contenedor
+      # le pasa únicamente lo que se nombra en este bloque. Quien se lo pasa es
+      # docker-compose.prod.yml, donde además es obligatorio. Por eso, en el
+      # servidor, todo comando tiene que cargar ese archivo (COMPOSE_FILE en el
+      # .env, ver .env.example): un `up` con solo este deja el backend sin
+      # secreto, o en "dev" con el secreto publicado.
       # Solo los orígenes del navegador. Los de la aplicación de escritorio y del
       # APK (http://tauri.localhost, tauri://localhost) los añade SecurityConfig
       # siempre: no dependen del despliegue, y cuando vivían aquí un

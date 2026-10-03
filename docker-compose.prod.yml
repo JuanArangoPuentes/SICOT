@@ -3,6 +3,12 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
+# En el servidor, mejor que escribir los -f en cada comando: COMPOSE_FILE en el
+# .env (ver .env.example e INSTALACION.md, paso 1). Así también los comandos que
+# se escriben deprisa —una rotación de secretos, un `logs`, un `cp`— cargan este
+# archivo. Uno que lo olvide recrea el backend con el perfil, los puertos y la
+# falta de secreto del archivo de desarrollo.
+#
 # Qué cambia respecto al archivo base (pensado para desarrollo en una sola
 # máquina):
 #   - Postgres deja de publicar su puerto al host: solo el backend, que está
@@ -14,10 +20,10 @@
 #     en el servidor (con acceso restringido, p. ej. por túnel SSH), agregar
 #     `--profile tools` al comando de arriba.
 #
-# Recordatorio importante (no lo resuelve este archivo): VITE_API_URL y
-# CORS_ALLOWED_ORIGINS deben apuntar a la IP/dominio real del servidor, no a
-# "localhost" — ver .env.example. Si se cambia VITE_API_URL hay que
-# reconstruir el frontend (queda horneado en el build de Vite).
+# Recordatorio (no lo resuelve este archivo): CORS_ALLOWED_ORIGINS debe ser la
+# dirección real del servidor, https://<SICOT_DOMINIO>, no "localhost". La
+# aplicación de escritorio y el APK no hace falta añadirlos: el backend los
+# acepta siempre. VITE_API_URL, en cambio, lo fija este archivo (más abajo).
 #
 # Secretos y perfil — las tres garantías que añade este archivo:
 #

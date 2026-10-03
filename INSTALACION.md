@@ -59,7 +59,8 @@ no puede dejar como están:
 
 | Variable | Qué poner |
 | --- | --- |
-| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `COMPOSE_PATH_SEPARATOR` y `COMPOSE_FILE` | Descomente las dos líneas: `:` y `docker-compose.yml:docker-compose.prod.yml`. Con ellas, todo `docker compose …` de esta carpeta usa el archivo de producción aunque no escriba los `-f` |
+| `SPRING_PROFILES_ACTIVE` | `prod`, o déjela comentada. **Nunca** `dev` |
 | `DB_PASSWORD` | Una contraseña nueva, no la de desarrollo |
 | `JWT_SECRET` | Genérela: `openssl rand -base64 32` |
 | `SICOT_DOMINIO` | El dominio real del servidor |
@@ -71,11 +72,21 @@ no puede dejar como están:
 vacío a propósito, porque el proxy sirve la aplicación y la API desde la misma
 dirección. Lo que escriba en el `.env` para esa variable no se usa.
 
+Lo de `COMPOSE_FILE` no es comodidad. Sin él, un comando escrito deprisa sin
+los `-f` —el de rotar un secreto en plena filtración, por ejemplo— recrea el
+backend con el archivo de desarrollo: o no arranca, o arranca en `dev` con el
+secreto de sesión publicado en el repositorio, y en los dos casos con el puerto
+8080 abierto en claro fuera del proxy. Compruébelo antes de seguir:
+`docker compose config --services` tiene que listar `proxy`.
+
 ### 2. Levántelo con el archivo de producción
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
+
+Con el `COMPOSE_FILE` del paso 1 es lo mismo que
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
 
 Frente a la opción A, esto cambia tres cosas: PostgreSQL deja de publicar su
 puerto al exterior, Adminer no arranca, y un proxy Caddy termina TLS delante de
