@@ -13,7 +13,11 @@ name: sicot
 
 services:
   db:
-    image: postgres:18-alpine
+    # Versiones exactas en todas las imágenes: una nueva llega como PR de
+    # Dependabot (ecosistema docker-compose) en vez de cambiar sola en el
+    # siguiente `pull`. Las de una versión mayor de PostgreSQL además exigen
+    # migrar los datos (pg_upgrade); por eso Dependabot no las propone.
+    image: postgres:18.6-alpine
     container_name: sicot-db
     labels:
       org.opencontainers.image.title: "SICOT · PostgreSQL"
@@ -43,7 +47,7 @@ services:
           memory: 1G
 
   adminer:
-    image: adminer:4
+    image: adminer:4.17.1
     container_name: sicot-adminer
     labels:
       org.opencontainers.image.title: "SICOT · Panel PostgreSQL"

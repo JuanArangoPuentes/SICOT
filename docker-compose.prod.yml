@@ -198,7 +198,11 @@ services:
   # el certificado a Let's Encrypt por ACME, solo para un nombre público. Ver la
   # cabecera del Caddyfile.
   proxy:
-    image: caddy:2-alpine
+    # La versión exacta con la que se comprobó el comportamiento del que depende
+    # el límite de intentos fallidos (cabecera del Caddyfile: Caddy sustituye el
+    # X-Forwarded-For del cliente). Con "2-alpine" un `up --build` podía traer
+    # otro Caddy 2.x sin revisar. Al subirla, repetir esa comprobación.
+    image: caddy:2.11.4-alpine
     container_name: sicot-proxy
     restart: unless-stopped
     environment:
