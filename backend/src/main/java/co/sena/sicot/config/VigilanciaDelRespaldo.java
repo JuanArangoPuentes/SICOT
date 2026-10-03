@@ -176,13 +176,19 @@ public class VigilanciaDelRespaldo {
     }
 
     /**
-     * Fecha del archivo más reciente del directorio.
+     * Fecha del volcado más reciente del directorio.
      *
      * <p>Se mira la fecha del archivo y no un registro propio a propósito: así
      * la vigilancia funciona igual aunque el respaldo lo ejecute un cron, una
      * tarea programada de Windows o una persona a mano, sin que el script tenga
      * que colaborar de ninguna forma. Un mecanismo de vigilancia que exige
      * modificar lo vigilado es un mecanismo que se desactiva al primer cambio.
+     *
+     * <p>Pero solo cuentan los {@code .dump} con contenido, que es lo que deja
+     * un respaldo terminado (el script y el procedimiento manual de
+     * BACKUP_Y_RESTAURACION.md). Antes contaba cualquier archivo, y lo que deja
+     * un respaldo que FALLA —un volcado a medias, uno vacío, el log del cron—
+     * es siempre de esta noche: apagaba el aviso justo cuando hacía falta.
      */
     private Optional<Instant> fechaDelRespaldoMasReciente() {
         if (!Files.isDirectory(directorio)) {
@@ -191,11 +197,24 @@ public class VigilanciaDelRespaldo {
         try (Stream<Path> archivos = Files.list(directorio)) {
             return archivos
                     .filter(Files::isRegularFile)
+                    .filter(VigilanciaDelRespaldo::esUnVolcadoTerminado)
                     .map(this::fechaDe)
                     .flatMap(Optional::stream)
                     .max(Comparator.naturalOrder());
         } catch (IOException e) {
             throw new UncheckedIOException("No se pudo leer el directorio de respaldos " + directorio, e);
+        }
+    }
+
+    private static boolean esUnVolcadoTerminado(Path archivo) {
+        if (!archivo.getFileName().toString().endsWith(".dump")) {
+            return false;
+        }
+        try {
+            return Files.size(archivo) > 0;
+        } catch (IOException e) {
+            log.debug("No se pudo leer el tamaño de {}: {}", archivo, e.getMessage());
+            return false;
         }
     }
 

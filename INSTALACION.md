@@ -106,9 +106,17 @@ Esto no es opcional y el sistema no lo hace por usted. `scripts/respaldo-sicot.s
 está probado, pero alguien tiene que programarlo:
 
 ```bash
+# Una vez: el log del respaldo, escribible por el usuario que corre el cron
+sudo touch /var/log/sicot-respaldo.log && sudo chown "$USER" /var/log/sicot-respaldo.log
 crontab -e
-# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos
+# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos >> /var/log/sicot-respaldo.log 2>&1
 ```
+
+La redirección al log no es opcional. Sin ella, lo que el script escribe al
+fallar va al correo local del cron, que nadie lee; con ella, el motivo de un
+respaldo fallido queda en un archivo que se puede mirar. Un respaldo que falla
+no deja nada en la carpeta (ni un volcado a medias), así que el backend sí lo
+nota: al día siguiente avisa de que el más reciente supera el RPO.
 
 La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
 El cron se lee en la hora del servidor, y el backend comprueba el respaldo a

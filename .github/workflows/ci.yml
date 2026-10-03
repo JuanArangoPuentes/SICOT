@@ -472,6 +472,27 @@ jobs:
                        and any(.volumes[]; .target == "/respaldos" and .read_only == true)' > /dev/null \
             || { echo "::error::El backend de producción no recibe la carpeta de respaldos: la vigilancia del RPO (ADR-002) quedaría apagada."; exit 1; }
 
+  respaldo:
+    name: Script de respaldo
+    runs-on: ubuntu-latest
+
+    # El respaldo sostiene el RPO de ADR-002 y nadie lo ve fallar: corre de
+    # madrugada, en el servidor. Lo que se fija aquí es lo que deja en la
+    # carpeta cuando falla, porque esa carpeta es lo que vigila el backend: un
+    # volcado cortado que se quedaba con nombre de respaldo apagaba la alarma.
+    # Corre en segundos y sin base de datos (la prueba sustituye docker y
+    # pg_restore por dobles).
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Revisar los scripts con ShellCheck
+        # Viene instalado en la imagen del runner. Desde «warning»: los avisos
+        # de estilo («info») no dicen nada de si el script funciona.
+        run: shellcheck --severity=warning scripts/*.sh
+
+      - name: Un respaldo fallido no deja nada en la carpeta vigilada
+        run: bash scripts/prueba-respaldo-sicot.sh
+
   e2e:
     name: Extremo a extremo (Playwright · escritorio y teléfono)
     runs-on: ubuntu-latest

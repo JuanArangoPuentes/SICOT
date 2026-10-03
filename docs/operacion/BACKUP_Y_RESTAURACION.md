@@ -11,9 +11,17 @@ rota los antiguos. Programarlo a diario:
 
 La verificación no es un adorno: `pg_dump` puede terminar con código 0 y dejar
 un archivo truncado si el disco se llenó a mitad, y eso solo se descubre el día
-que hace falta restaurar. El script lee el volcado entero con `pg_restore
---list` y falla si no es válido. Conserva 14 respaldos por defecto
+que hace falta restaurar. El script lee el volcado entero con `pg_restore -f -`
+y falla si no es válido. Conserva 14 respaldos por defecto
 (`SICOT_BACKUPS_A_CONSERVAR`), para que el disco no se llene en silencio.
+
+El volcado se escribe como `sicot-<fecha>.dump.parcial` y solo pasa a llamarse
+`.dump` después de verificarlo; si algo falla, se borra. Así, en la carpeta solo
+hay respaldos que se pudieron leer enteros, y eso es lo que cuentan tanto la
+rotación como la vigilancia del backend, que solo mira los `.dump` con
+contenido. Antes un volcado cortado se quedaba con nombre de respaldo: el
+backend lo tomaba por el de anoche y no avisaba, y la rotación iba borrando los
+buenos para conservarlo.
 
 La **restauración sigue siendo manual a propósito** (ver más abajo): sobrescribe
 datos oficiales y no debe poder ocurrir por un cron mal escrito.
@@ -67,7 +75,5 @@ eso pasa.
 
 ## Qué falta (fuera de alcance de este documento)
 
-- Automatizar el backup con un cron/servicio dedicado y rotación de
-  respaldos antiguos.
 - Subir los backups a un almacenamiento fuera de la misma máquina (si el
   disco del servidor falla, un backup guardado ahí mismo no sirve).

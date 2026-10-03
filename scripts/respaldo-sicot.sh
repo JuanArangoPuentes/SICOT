@@ -73,6 +73,14 @@ mkdir -p "$DESTINO"
 
 FECHA="$(date +%Y%m%d-%H%M%S)"
 ARCHIVO="$DESTINO/sicot-$FECHA.dump"
+# El volcado se escribe con otro nombre y solo pasa a llamarse `.dump` cuando
+# ya se verificó. Antes se escribía directamente con el nombre final, y un
+# pg_dump cortado o un volcado ilegible se quedaban en la carpeta: la
+# vigilancia del backend (VigilanciaDelRespaldo) lo tomaba por el respaldo de
+# anoche y no avisaba, y la rotación, noche tras noche, borraba los buenos para
+# conservar esos. El `trap` lo borra en cualquier salida que no llegue al `mv`.
+PARCIAL="$ARCHIVO.parcial"
+trap 'rm -f "$PARCIAL"' EXIT
 
 log "Iniciando respaldo de '$BASE' (modo: $MODO)…"
 
@@ -88,14 +96,21 @@ if [[ "$MODO" == "docker" ]]; then
     #
     # SIN `-t`: un pseudo-terminal traduce saltos de línea y corrompería un
     # volcado binario de forma silenciosa — se notaría solo al restaurar.
-    docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c > "$ARCHIVO"
+    volcar() { docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c > "$PARCIAL"; }
 else
-    PGPASSWORD="${SICOT_DB_PASSWORD:-}" pg_dump         -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}"         -U "$USUARIO" -d "$BASE" -F c -f "$ARCHIVO"
+    volcar() {
+        PGPASSWORD="${SICOT_DB_PASSWORD:-}" pg_dump             -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}"             -U "$USUARIO" -d "$BASE" -F c -f "$PARCIAL"
+    }
+fi
+# Con `set -e` el script ya saldría, pero sin decir por qué: esta línea es la
+# que queda en el log del cron.
+if ! volcar; then
+    error "pg_dump falló; no se guardó ningún respaldo. Revise el espacio en disco y el estado de la base."
+    exit 4
 fi
 
-if [[ ! -s "$ARCHIVO" ]]; then
-    error "El respaldo quedó vacío: $ARCHIVO"
-    rm -f "$ARCHIVO"
+if [[ ! -s "$PARCIAL" ]]; then
+    error "El respaldo quedó vacío; no se guardó."
     exit 2
 fi
 
@@ -120,17 +135,18 @@ log "Verificando la integridad del volcado…"
 # Sin pg_restore local se usa el contenedor, pero por ENTRADA ESTÁNDAR en vez de
 # por volumen — `-i` sin `-t`, que no traduce el binario.
 if command -v pg_restore >/dev/null 2>&1; then
-    verificar() { pg_restore -f - "$ARCHIVO"; }
+    verificar() { pg_restore -f - "$PARCIAL"; }
 elif [[ "$MODO" == "docker" ]]; then
-    verificar() { docker run --rm -i postgres:18-alpine pg_restore -f - < "$ARCHIVO"; }
+    verificar() { docker run --rm -i postgres:18-alpine pg_restore -f - < "$PARCIAL"; }
 else
     error "No hay pg_restore disponible para verificar el volcado."
     exit 3
 fi
 if ! verificar > /dev/null 2>&1; then
-    error "El volcado no es legible: $ARCHIVO. NO se puede confiar en este respaldo."
+    error "El volcado no es legible: NO se puede confiar en él y no se guardó."
     exit 3
 fi
+mv "$PARCIAL" "$ARCHIVO"
 
 TAMANIO="$(du -h "$ARCHIVO" | cut -f1)"
 log "Respaldo verificado: $ARCHIVO ($TAMANIO)"
