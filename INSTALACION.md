@@ -74,7 +74,8 @@ Los valores que no puede dejar como están:
 | `SPRING_PROFILES_ACTIVE` | `prod`, o déjela comentada. **Nunca** `dev` |
 | `DB_PASSWORD` | Una contraseña nueva, no la de desarrollo |
 | `JWT_SECRET` | Genérela: `openssl rand -base64 32` |
-| `SICOT_DOMINIO` | El dominio real del servidor |
+| `SICOT_DOMINIO` | El nombre con el que se abrirá SICOT (el que el DNS del Centro resuelve a este servidor) o su IP |
+| `SICOT_TLS` | `internal` (ya viene así) si ese nombre solo existe en la red del Centro, **aunque esté bajo un dominio real** como `sena.edu.co`. Solo si el nombre es público y los puertos 80 y 443 se alcanzan desde Internet, ponga un correo de contacto: Caddy pedirá entonces el certificado a Let's Encrypt. Con un correo y un nombre interno, el sitio se queda sin certificado |
 | `CORS_ALLOWED_ORIGINS` | `https://` y el valor de `SICOT_DOMINIO`, **nunca** `localhost`. No añada la aplicación de escritorio ni el APK: el backend los acepta siempre |
 | `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | La primera cuenta de administrador |
 | `RESPALDO_DIRECTORIO` | La carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
@@ -266,9 +267,8 @@ la misma llave; el porqué está en
 
 ### Para el área de sistemas: el certificado del Centro
 
-Si el servidor se monta como describe ADR-009 **sin un dominio público** —el
-caso más probable en un Centro—, Caddy cifra con un certificado de su propia
-autoridad local. Un navegador pide confiar en él una vez. **La aplicación no:
+Con `SICOT_TLS=internal` —el valor por defecto, y el caso más probable en un
+Centro—, Caddy cifra con un certificado de su propia autoridad local. Un navegador pide confiar en él una vez. **La aplicación no:
 sin instalar esa autoridad en el teléfono, no podrá conectarse**, y lo dirá en
 la pantalla de acceso.
 
@@ -285,8 +285,9 @@ la pantalla de acceso.
    el archivo.
 4. Queda en *Credenciales de confianza → Usuario*.
 
-Solo hay que hacerlo una vez por teléfono. Si el Centro tiene un dominio con
-certificado público, nada de esto hace falta.
+Solo hay que hacerlo una vez por teléfono. Si el Centro tiene un nombre público
+y `SICOT_TLS` con un correo (certificado de Let's Encrypt), nada de esto hace
+falta.
 
 ### Lo que no hay, y por qué
 

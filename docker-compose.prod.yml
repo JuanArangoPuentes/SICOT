@@ -193,14 +193,17 @@ services:
           memory: 8G
 
   # ── Proxy inverso con TLS (ADR-009) ──────────────────────────────────────
-  # Caddy obtiene y renueva certificados solo. Con SICOT_DOMINIO apuntando a un
-  # dominio público usa ACME; con un nombre interno emite un certificado local.
+  # Caddy obtiene y renueva certificados solo. De dónde los saca lo decide
+  # SICOT_TLS: `internal` (por defecto) usa su autoridad local; un correo pide
+  # el certificado a Let's Encrypt por ACME, solo para un nombre público. Ver la
+  # cabecera del Caddyfile.
   proxy:
     image: caddy:2-alpine
     container_name: sicot-proxy
     restart: unless-stopped
     environment:
-      SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — dominio público para certificado ACME, o nombre interno/IP para uno local}
+      SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — el nombre (o la IP) con el que se abrirá SICOT}
+      SICOT_TLS: ${SICOT_TLS:-internal}
     ports:
       - "80:80"
       - "443:443"
