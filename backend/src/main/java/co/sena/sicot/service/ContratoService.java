@@ -110,13 +110,20 @@ public class ContratoService {
         contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
-        if (request.supervisorId() != null) {
-            contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
-        }
+        Usuario supervisor = request.supervisorId() != null ? buscarSupervisor(request.supervisorId()) : null;
+        contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
         registroService.registrar(guardado, "CONTRATO_CREADO",
                 "Contrato " + numero + " creado en estado BORRADOR.");
+        // Elegir al supervisor en el mismo formulario de creación es el camino
+        // habitual de Gestión, y antes no dejaba SUPERVISOR_ASIGNADO: el
+        // supervisor no recibía la alerta ni el correo (las dispara esa acción
+        // de la auditoría) y solo se avisaba si después se reasignaba con el
+        // PATCH. Ahora los dos caminos registran lo mismo.
+        if (supervisor != null) {
+            registrarAsignacion(guardado, supervisor);
+        }
         return ContratoMapper.toResponse(guardado);
     }
 
@@ -156,9 +163,19 @@ public class ContratoService {
         Usuario supervisor = buscarSupervisor(request.supervisorId());
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
-        registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
-                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        registrarAsignacion(guardado, supervisor);
         return ContratoMapper.toResponse(guardado);
+    }
+
+    /**
+     * Deja la acción SUPERVISOR_ASIGNADO en la auditoría. Es lo que, al
+     * confirmarse la transacción, dispara la regla NotificacionDeSupervisorAsignado
+     * (alerta en el panel y correo al supervisor), así que todo camino que
+     * asigne un supervisor tiene que pasar por aquí.
+     */
+    private void registrarAsignacion(Contrato contrato, Usuario supervisor) {
+        registroService.registrar(contrato, "SUPERVISOR_ASIGNADO",
+                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
     }
 
     @Transactional

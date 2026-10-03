@@ -85,6 +85,29 @@ class ContratoServiceTest {
 
         verify(registroService).registrar(nuevo, "CONTRATO_CREADO",
                 "Contrato CO1.PCCNTR.NUEVO creado en estado BORRADOR.");
+        verify(registroService, never()).registrar(any(), eq("SUPERVISOR_ASIGNADO"), any());
+    }
+
+    /**
+     * Elegir al supervisor al crear el contrato es el camino habitual de Gestión
+     * y tiene que dejar la misma acción que el PATCH: es la que dispara el aviso
+     * y el correo al supervisor.
+     */
+    @Test
+    void crearContratoConSupervisorRegistraLaAsignacion() {
+        when(contratoRepository.existsByNumeroContrato("CO1.PCCNTR.CONSUP")).thenReturn(false);
+        when(usuarioRepository.findById(7L)).thenReturn(java.util.Optional.of(supervisor(7L, true)));
+        when(contratoRepository.save(any(co.sena.sicot.entity.Contrato.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CrearContratoRequest request = new CrearContratoRequest(
+                "CO1.PCCNTR.CONSUP", "Objeto con supervisor", new BigDecimal("250000"),
+                null, null, 7L, null, null, null, null, null, null, null, null);
+
+        contratoService.crear(request);
+
+        verify(registroService).registrar(any(), eq("CONTRATO_CREADO"), any());
+        verify(registroService).registrar(any(), eq("SUPERVISOR_ASIGNADO"),
+                eq("Supervisor asignado: Supervisor 7 (sup7@soy.sena.edu.co)."));
     }
 
     @Test
@@ -156,6 +179,16 @@ class ContratoServiceTest {
                 .doesNotThrowAnyException();
 
         verify(registroService).registrar(any(), eq("ESTADO_CAMBIADO"), contains("FINALIZADO → ACTIVO"));
+    }
+
+    private static co.sena.sicot.entity.Usuario supervisor(long id, boolean activo) {
+        co.sena.sicot.entity.Usuario supervisor = new co.sena.sicot.entity.Usuario();
+        supervisor.setId(id);
+        supervisor.setNombre("Supervisor " + id);
+        supervisor.setEmail("sup" + id + "@soy.sena.edu.co");
+        supervisor.setRol(co.sena.sicot.entity.enums.Rol.SUPERVISOR);
+        supervisor.setActivo(activo);
+        return supervisor;
     }
 
     private co.sena.sicot.entity.Contrato contratoExistente() {
