@@ -54,8 +54,19 @@ que un arranque que falla diciendo qué falta.
 
 ### 1. Cree el archivo `.env`
 
-Copie `.env.example` a `.env` en esta misma carpeta y rellénelo. Los valores que
-no puede dejar como están:
+Copie `.env.example` a `.env` en esta misma carpeta, ciérrelo para que solo su
+dueño pueda leerlo y rellénelo:
+
+```bash
+cp .env.example .env && chmod 600 .env
+```
+
+El `.env` guarda en texto plano la contraseña de la base, la clave con la que se
+firman las sesiones y la del correo. Sin el `chmod`, cualquier cuenta del
+servidor puede leerlas (ver
+[`GESTION_DE_SECRETOS.md`](docs/operacion/GESTION_DE_SECRETOS.md)).
+
+Los valores que no puede dejar como están:
 
 | Variable | Qué poner |
 | --- | --- |
@@ -136,6 +147,10 @@ nada. El compromiso de recuperación quedaba siendo una intención.
 
 El detalle de restauración está en
 [`docs/operacion/BACKUP_Y_RESTAURACION.md`](docs/operacion/BACKUP_Y_RESTAURACION.md).
+Ahí está también lo que este respaldo **no** cubre y hay que guardar aparte, una
+vez y fuera del servidor: el `.env` y la autoridad de certificados de Caddy.
+Sin esa autoridad, un servidor reinstalado genera otra, y ningún teléfono ni
+equipo de escritorio vuelve a conectar hasta instalarle la nueva.
 
 ---
 

@@ -100,6 +100,15 @@ if [[ "$quedo" =~ ^sicot-[0-9]{8}-[0-9]{6}\.dump$ ]]; then
 else
     falla "se esperaba un único sicot-*.dump nuevo y quedó: $quedo"
 fi
+# Git Bash en Windows no refleja los permisos de Unix: allí no se comprueba.
+if [[ "$(uname -s)" != MINGW* && "$(uname -s)" != MSYS* && -n "$quedo" ]]; then
+    permisos="$(stat -c %a "$TRABAJO/destino/$quedo")"
+    if [[ "$permisos" == 600 ]]; then
+        ok "solo lo puede leer quien corre el respaldo (600)"
+    else
+        falla "el volcado quedó con permisos $permisos: cualquier cuenta del servidor puede leer la base entera"
+    fi
+fi
 
 if [[ $fallos -gt 0 ]]; then
     echo "$fallos comprobación(es) fallida(s)."

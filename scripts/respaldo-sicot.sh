@@ -33,6 +33,13 @@
 
 set -euo pipefail
 
+# Los volcados llevan la base entera —contratos, documentos, hashes de
+# contraseña—. Con el umask habitual (022) quedaban legibles por cualquier
+# cuenta del servidor; con 077 solo los lee quien corre el cron. La carpeta, si
+# ya existe, conserva sus permisos: el backend solo necesita listarla para ver
+# la fecha del último respaldo, no leer su contenido.
+umask 077
+
 CONTENEDOR="${SICOT_DB_CONTAINER:-sicot-db}"
 BASE="${SICOT_DB_NAME:-sicot}"
 USUARIO="${SICOT_DB_USER:-sicot}"
