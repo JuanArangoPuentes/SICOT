@@ -471,6 +471,20 @@ jobs:
                      | .environment.RESPALDO_DIRECTORIO == "/respaldos"
                        and any(.volumes[]; .target == "/respaldos" and .read_only == true)' > /dev/null \
             || { echo "::error::El backend de producción no recibe la carpeta de respaldos: la vigilancia del RPO (ADR-002) quedaría apagada."; exit 1; }
+          # El entorno de ensayo restaura datos de producción en un portátil y
+          # termina con `down -v`. Tiene que ser un proyecto aparte, con su
+          # propio volumen montado donde PostgreSQL 18 guarda los datos, y sin
+          # publicar nada fuera del propio equipo. Sin `name:` heredaba el
+          # proyecto de desarrollo: el restore caía sobre la base de desarrollo
+          # y el `down -v` la borraba.
+          ENSAYO_JWT_SECRET=relleno-solo-para-ci \
+            docker compose -f docker-compose.yml -f docker-compose.ensayo.yml config --format json \
+            | jq -e '.name == "sicot-ensayo"
+                     and all(.volumes[]; .name | startswith("sicot-ensayo_"))
+                     and ([.services.db.volumes[] | [.source, .target]] == [["sicot_ensayo_db_data", "/var/lib/postgresql"]])
+                     and all(.services[]; all(.ports[]?; .host_ip == "127.0.0.1"))
+                     and .services.backend.environment.JWT_SECRET != null' > /dev/null \
+            || { echo "::error::docker-compose.ensayo.yml podría tocar el entorno de desarrollo o exponer los datos restaurados."; exit 1; }
 
   respaldo:
     name: Script de respaldo
