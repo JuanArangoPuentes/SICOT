@@ -161,6 +161,13 @@ public class ContratoService {
     public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
         Contrato contrato = buscar(id);
         Usuario supervisor = buscarSupervisor(request.supervisorId());
+        if (contrato.getSupervisor() != null && contrato.getSupervisor().getId().equals(supervisor.getId())) {
+            // Ya es su supervisor: no hay asignación nueva que auditar ni que
+            // avisar. Como cada asignación avisa por sí misma (ver
+            // NotificacionDeSupervisorAsignado), repetir la misma elección le
+            // mandaría otra vez la alerta y el correo de «se le asignó».
+            return ContratoMapper.toResponse(contrato);
+        }
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         registrarAsignacion(guardado, supervisor);

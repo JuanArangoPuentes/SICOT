@@ -207,6 +207,74 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     }
 
     /**
+     * La fila de la tarea es la memoria de idempotencia. La purga diaria la
+     * borraba a los 30 días y el aviso de «contrato vencido», documentado como
+     * único, volvía cada 31 días mientras el contrato siguiera ACTIVO. Se
+     * simula el paso del tiempo envejeciendo las filas por JDBC
+     * ({@code fecha_actualizacion} la gestiona @UpdateTimestamp).
+     */
+    @Test
+    void laPurgaNoHaceQueUnContratoActivoVuelvaARecibirLosMismosAvisos() throws Exception {
+        long contratoId = contratoActivoQueVenceEn(-1);
+        assertThat(motor.evaluarCalendario(LocalDate.now(reloj))).isPositive();
+        ejecutor.procesarPendientes();
+        int alertasIniciales = alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS).size();
+
+        envejecerTodasLasTareas(Duration.ofDays(31));
+        almacen.purgarResueltas();
+
+        assertThat(motor.evaluarCalendario(LocalDate.now(reloj)))
+                .as("ningún aviso se repite: sus claves siguen en la tabla")
+                .isZero();
+        ejecutor.procesarPendientes();
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS))
+                .hasSize(alertasIniciales);
+    }
+
+    /** Cuando el contrato deja de estar ACTIVO ya no hay nada que repetir: la retención normal vuelve. */
+    @Test
+    void laPurgaSiBorraLasTareasDeUnContratoQueYaNoEstaActivo() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = contratoActivoQueVenceEn(-1);
+        motor.evaluarCalendario(LocalDate.now(reloj));
+        ejecutor.procesarPendientes();
+        mockMvc.perform(patch("/api/contratos/{id}/estado", contratoId)
+                        .header("Authorization", "Bearer " + gestion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"FINALIZADO\"}"))
+                .andExpect(status().isOk());
+
+        envejecerTodasLasTareas(Duration.ofDays(31));
+
+        assertThat(almacen.purgarResueltas()).isPositive();
+        assertThat(tareaRepository.findAll()).isEmpty();
+    }
+
+    /**
+     * Pasar el contrato de A a B y devolverlo a A son tres asignaciones y las
+     * tres avisan. Con el correo del supervisor en la clave, A no se enteraba
+     * la segunda vez. Repetir la misma elección, en cambio, no es una
+     * asignación nueva.
+     */
+    @Test
+    void cadaAsignacionAvisaAunqueVuelvaAQuienYaLoTuvo() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long supervisorA = idDe("supervisor@soy.sena.edu.co", "Supervisor123*");
+        long supervisorB = crearSupervisor("otro.supervisor@soy.sena.edu.co");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.REASIGNA", LocalDate.now(reloj).plusMonths(6));
+
+        asignar(gestion, contratoId, supervisorA);
+        asignar(gestion, contratoId, supervisorB);
+        asignar(gestion, contratoId, supervisorA);
+        asignar(gestion, contratoId, supervisorA);
+
+        assertThat(tareaRepository.findAll())
+                .filteredOn(t -> t.getTipo() == TipoTareaAutomatizada.CREAR_ALERTA)
+                .as("A, B y otra vez A; la cuarta no cambió nada")
+                .hasSize(3);
+    }
+
+    /**
      * Una tarea que quedó EN_PROCESO porque el proceso murió a mitad tiene que
      * volver a la cola. Es la fuga clásica de toda cola basada en estado, y solo
      * se manifiesta tras el primer reinicio brusco en producción.
@@ -311,6 +379,33 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(respuesta).get("id").asLong();
+    }
+
+    private void envejecerTodasLasTareas(Duration antiguedad) {
+        jdbc.update("UPDATE tareas_automatizadas SET fecha_actualizacion = ?",
+                Timestamp.from(Instant.now().minus(antiguedad)));
+    }
+
+    private void asignar(String token, long contratoId, long supervisorId) throws Exception {
+        mockMvc.perform(patch("/api/contratos/{id}/supervisor", contratoId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"supervisorId\":" + supervisorId + "}"))
+                .andExpect(status().isOk());
+    }
+
+    private long crearSupervisor(String email) throws Exception {
+        String admin = login("administrador@soy.sena.edu.co", "Admin123*");
+        String creado = mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Otro Supervisor","email":"%s","password":"ClaveTest123",
+                                 "telefono":"3000000000","rol":"SUPERVISOR"}
+                                """.formatted(email)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(creado).get("id").asLong();
     }
 
     private long idDe(String email, String password) throws Exception {
