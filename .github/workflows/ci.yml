@@ -509,6 +509,53 @@ jobs:
                      and all(.services[]; all(.ports[]?; .host_ip == "127.0.0.1"))
                      and .services.backend.environment.JWT_SECRET != null' > /dev/null \
             || { echo "::error::docker-compose.ensayo.yml podría tocar el entorno de desarrollo o exponer los datos restaurados."; exit 1; }
+          # ADR-009: en producción el proxy es el ÚNICO servicio con puertos
+          # publicados. Cualquier otro sería un camino sin cifrar hacia los
+          # mismos datos —o, con Ollama, una IA sin autenticación abierta a la
+          # red del Centro—, y nadie lo vigila.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json \
+            | jq -e '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] == ["proxy"]' > /dev/null \
+            || { echo "::error::En producción hay otro servicio, además del proxy, con puertos publicados (ADR-009)."; exit 1; }
+
+      - name: Validar el Caddyfile
+        # Ni `nginx -t` ni `config` miran el Caddyfile, y un error en él solo
+        # aparecía al arrancar el proxy en el servidor. `caddy validate` lo
+        # carga como lo haría el contenedor, con las dos formas de certificado
+        # (autoridad local y ACME con correo), y con la MISMA imagen de Caddy
+        # que despliega docker-compose.prod.yml.
+        env:
+          DB_PASSWORD: valor-de-relleno-para-ci
+          JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
+          SICOT_DOMINIO: sicot.ci.invalid
+          RESPALDO_DIRECTORIO: /srv/sicot/respaldos
+        run: |
+          imagen="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json | jq -r '.services.proxy.image')"
+          for tls in internal ci@ejemplo.invalid; do
+            echo "SICOT_TLS=$tls"
+            docker run --rm \
+              -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+              -e SICOT_DOMINIO=sicot.ci.invalid \
+              -e SICOT_TLS="$tls" \
+              "$imagen" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done
+
+      - name: Comprobar que los puertos coinciden entre Caddy, nginx y los Dockerfile
+        # Ya pasó: el Caddyfile mandaba la SPA al 80 mientras nginx escuchaba en
+        # el 8443, y en producción caía toda la aplicación con la API sana. Los
+        # tres archivos se validan bien por separado; lo que falla es que no
+        # coincidan.
+        run: |
+          caddy_frontend="$(grep -oP 'reverse_proxy frontend:\K[0-9]+' Caddyfile | sort -u)"
+          nginx_listen="$(grep -oP '^\s*listen \K[0-9]+' frontend/nginx.conf.template | sort -u)"
+          expose_frontend="$(grep -oP '^EXPOSE \K[0-9]+' frontend/Dockerfile)"
+          caddy_backend="$(grep -oP 'reverse_proxy backend:\K[0-9]+' Caddyfile | sort -u)"
+          expose_backend="$(grep -oP '^EXPOSE \K[0-9]+' backend/Dockerfile)"
+          echo "frontend: Caddy=$caddy_frontend nginx=$nginx_listen EXPOSE=$expose_frontend · backend: Caddy=$caddy_backend EXPOSE=$expose_backend"
+          if [ "$caddy_frontend" != "$nginx_listen" ] || [ "$nginx_listen" != "$expose_frontend" ] \
+             || [ "$caddy_backend" != "$expose_backend" ]; then
+            echo "::error::El Caddyfile reenvía a un puerto en el que no escucha el servicio."
+            exit 1
+          fi
 
   respaldo:
     name: Script de respaldo
