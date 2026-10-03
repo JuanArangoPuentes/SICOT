@@ -161,6 +161,17 @@ class AdministradorInicialTest {
         assertThat(guardados.getFirst().getEmail()).isEqualTo("juan.perez@sena.edu.co");
     }
 
+    /** Más de 72 bytes: BCrypt la rechazaría con un error que no dice qué cambiar. */
+    @Test
+    void rechazaUnaContrasenaQueNoCabeEnBcrypt() {
+        when(repositorio.count()).thenReturn(0L);
+
+        assertThatThrownBy(() -> runner("admin@sena.edu.co", "x".repeat(73), null).run())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("72 bytes");
+        assertThat(guardados).isEmpty();
+    }
+
     @Test
     void fallaElArranqueSiElCorreoNoTieneFormaDeCorreo() {
         when(repositorio.count()).thenReturn(0L);

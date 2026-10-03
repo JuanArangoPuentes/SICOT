@@ -3,6 +3,7 @@ package co.sena.sicot.config;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.repository.UsuarioRepository;
+import co.sena.sicot.security.LimiteDeBcrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -139,6 +140,13 @@ public class AdministradorInicial {
                         "SICOT_ADMIN_PASSWORD debe tener al menos " + LONGITUD_MINIMA_PASSWORD
                                 + " caracteres: es la cuenta con más privilegios del sistema. "
                                 + "Genere una con `openssl rand -base64 24`.");
+            }
+            if (!LimiteDeBcrypt.cabe(password)) {
+                // Sin esta comprobación BCrypt rechaza la contraseña con una
+                // excepción genérica y el arranque muere sin decir qué cambiar.
+                throw new IllegalStateException("SICOT_ADMIN_PASSWORD supera los " + LimiteDeBcrypt.MAXIMO_BYTES
+                        + " bytes que admite BCrypt. `openssl rand -base64 24` genera una de 32 caracteres, "
+                        + "que cabe con holgura.");
             }
 
             Usuario admin = new Usuario();

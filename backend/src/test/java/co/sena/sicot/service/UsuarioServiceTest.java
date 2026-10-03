@@ -19,6 +19,8 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,6 +69,39 @@ class UsuarioServiceTest {
         assertThat(response.rol()).isEqualTo(Rol.SUPERVISOR);
         assertThat(response.activo()).isTrue();
         assertThat(response.email()).isEqualTo("nuevo@soy.sena.edu.co");
+    }
+
+    /**
+     * 40 caracteres pasan la validación del DTO, pero con eñes son 80 bytes y
+     * BCrypt los rechaza: antes eso salía como 500 «error interno».
+     */
+    @Test
+    void crearConUnaContrasenaQueNoCabeEnBcryptDiceQueCorregir() {
+        when(usuarioRepository.existsByEmail(any())).thenReturn(false);
+
+        CrearUsuarioRequest request = new CrearUsuarioRequest(
+                "Nuevo Supervisor", "nuevo@soy.sena.edu.co", "ñ".repeat(40), "3000000000", Rol.SUPERVISOR);
+
+        assertThatThrownBy(() -> usuarioService.crear(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("72 bytes");
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void actualizarConUnaContrasenaQueNoCabeEnBcryptDiceQueCorregir() {
+        Usuario existente = new Usuario();
+        existente.setId(7L);
+        existente.setRol(Rol.SUPERVISOR);
+        when(usuarioRepository.findById(7L)).thenReturn(Optional.of(existente));
+
+        ActualizarUsuarioRequest request = new ActualizarUsuarioRequest(
+                "Nombre", "email@soy.sena.edu.co", "ñandú-".repeat(10), "3000000000", Rol.SUPERVISOR);
+
+        assertThatThrownBy(() -> usuarioService.actualizar(7L, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("72 bytes");
+        verify(passwordEncoder, never()).encode(any());
     }
 
     @Test

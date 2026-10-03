@@ -12,6 +12,7 @@ import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.UsuarioMapper;
 import co.sena.sicot.repository.UsuarioRepository;
+import co.sena.sicot.security.LimiteDeBcrypt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -54,6 +55,7 @@ public class UsuarioService {
         if (usuarioRepository.existsByEmail(email)) {
             throw new BusinessException("Ya existe un usuario con el email " + email + ".");
         }
+        verificarQueCabeEnBcrypt(request.password());
         Usuario usuario = new Usuario();
         usuario.setNombre(request.nombre().trim());
         usuario.setEmail(email);
@@ -71,6 +73,7 @@ public class UsuarioService {
         if (usuarioRepository.existsByEmailAndIdNot(email, id)) {
             throw new BusinessException("Ya existe un usuario con el email " + email + ".");
         }
+        verificarQueCabeEnBcrypt(request.password());
         // Cambiar el rol del último administrador lo deja fuera de /api/usuarios,
         // que es el único camino para volver a crear o promover a alguien: el
         // sistema quedaría sin forma de recuperarse por la API.
@@ -97,6 +100,18 @@ public class UsuarioService {
         }
         usuario.setActivo(request.activo());
         return UsuarioMapper.toResponse(usuarioRepository.save(usuario));
+    }
+
+    /**
+     * La validación del DTO cuenta caracteres y BCrypt cuenta bytes: una
+     * contraseña de menos de 72 caracteres con varias tildes puede pasar la
+     * primera y reventar la segunda. Se comprueba antes de codificar para
+     * responder con un 400 que diga qué corregir en vez de un 500.
+     */
+    private void verificarQueCabeEnBcrypt(String password) {
+        if (!LimiteDeBcrypt.cabe(password)) {
+            throw new BusinessException(LimiteDeBcrypt.MENSAJE);
+        }
     }
 
     /**
