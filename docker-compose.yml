@@ -136,6 +136,19 @@ services:
       # Docker Desktop de Windows/Mac ya funciona sin eso).
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      # Ajustes de la IA que dependen de la máquina (ver .env.example). Sin
+      # valor a propósito: así Compose los pasa solo si el .env los define, y si
+      # no, el backend usa los de application.properties. Antes no se pasaban, y
+      # un OLLAMA_TIMEOUT_SECONDS subido en el .env de un servidor lento se
+      # ignoraba sin aviso. Con un valor por defecto aquí habría dos sitios con
+      # el mismo número, que acabarían diciendo cosas distintas.
+      OLLAMA_TIMEOUT_SECONDS:
+      OLLAMA_KEEP_ALIVE:
+      OLLAMA_MAX_CONCURRENTES:
+      OLLAMA_PETICIONES_POR_MINUTO:
+      OLLAMA_TEMPERATURA:
+      OLLAMA_MAX_TOKENS:
+      OLLAMA_NUM_CTX:
       # Motor de automatizaciones. Sin estas líneas el motor solo era
       # configurable editando este archivo: application.properties las lee del
       # entorno, pero Compose no las pasaba, así que dentro del contenedor
