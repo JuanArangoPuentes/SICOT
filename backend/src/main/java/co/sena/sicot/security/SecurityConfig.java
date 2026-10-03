@@ -26,6 +26,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Configuration
 @EnableWebSecurity
@@ -199,6 +200,23 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder(fuerza);
     }
 
+    /**
+     * Orígenes de las aplicaciones empaquetadas con Tauri: el APK y el
+     * instalador de escritorio no se sirven desde un puerto, sino desde un
+     * origen propio del webview —{@code http://tauri.localhost} en Android y
+     * Windows, {@code tauri://localhost} en macOS y Linux—.
+     *
+     * <p>Se añaden siempre, y no desde CORS_ALLOWED_ORIGINS, porque no dependen
+     * del despliegue. Antes sólo estaban en el valor por defecto de esa
+     * variable, y el .env de producción, que pide «la dirección real», los
+     * pisaba: el navegador seguía funcionando (allí la SPA y la API comparten
+     * origen) y el APK recibía un rechazo en el preflight que la pantalla de
+     * acceso sólo podía explicar como un certificado sin instalar. Aceptarlos no
+     * abre nada a un sitio web: la sesión viaja en la cabecera Authorization, que
+     * una página de otro origen no tiene.
+     */
+    private static final List<String> ORIGENES_DE_LAS_APLICACIONES = List.of("http://tauri.localhost", "tauri://localhost");
+
     @Bean
     public CorsConfigurationSource corsConfigurationSource(
             @Value("${sicot.cors.allowed-origins}") String allowedOrigins) {
@@ -218,7 +236,9 @@ public class SecurityConfig {
                     "sicot.cors.allowed-origins quedó vacío: el frontend no podría hablar con esta API. "
                             + "Defina CORS_ALLOWED_ORIGINS con la URL real del frontend.");
         }
-        config.setAllowedOrigins(origenes);
+        config.setAllowedOrigins(Stream.concat(origenes.stream(), ORIGENES_DE_LAS_APLICACIONES.stream())
+                .distinct()
+                .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         // Retry-After también: la app de escritorio siempre llama entre orígenes

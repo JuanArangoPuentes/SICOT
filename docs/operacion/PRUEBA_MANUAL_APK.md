@@ -20,7 +20,11 @@ compilado en la máquina: es lo que va a instalar el supervisor.
   del anfitrión (`-gpu host`): con renderizado por software aparecen ANR que no
   son de la aplicación.
 - Un servidor de SICOT montado con Caddy (ADR-009) y su raíz instalada en el
-  teléfono, como describe `INSTALACION.md`.
+  teléfono, como describe `INSTALACION.md`. Con el `.env` **de producción**, el
+  que tiene `CORS_ALLOWED_ORIGINS` con la dirección real y no el de desarrollo:
+  los valores por defecto de desarrollo aceptan orígenes que un servidor no
+  tiene, y una prueba contra ellos no vería un rechazo CORS al APK mientras el
+  navegador sigue funcionando.
 - El supervisor con firma electrónica asignada y un contrato con documentos.
 - Para el 8 al 10, el contrato en el Paso 3 (los sub-pasos 3.1 y 3.2 son los que
   piden fotos de la entrega) y, si se quiere ver la ubicación en la evidencia, la

@@ -63,14 +63,13 @@ no puede dejar como están:
 | `DB_PASSWORD` | Una contraseña nueva, no la de desarrollo |
 | `JWT_SECRET` | Genérela: `openssl rand -base64 32` |
 | `SICOT_DOMINIO` | El dominio real del servidor |
-| `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` | La dirección real, **nunca** `localhost` |
+| `CORS_ALLOWED_ORIGINS` | `https://` y el valor de `SICOT_DOMINIO`, **nunca** `localhost`. No añada la aplicación de escritorio ni el APK: el backend los acepta siempre |
 | `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | La primera cuenta de administrador |
 | `RESPALDO_DIRECTORIO` | La carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
 
-Lo de `VITE_API_URL` merece un aviso, porque es el error que más tiempo cuesta
-diagnosticar: el frontend se compila con esa dirección **incrustada dentro**. Si
-queda `localhost`, la aplicación carga pero no habla con el backend desde
-ninguna otra máquina, y no da ningún error que apunte a la causa.
+`VITE_API_URL` no se toca en el servidor: `docker-compose.prod.yml` lo deja
+vacío a propósito, porque el proxy sirve la aplicación y la API desde la misma
+dirección. Lo que escriba en el `.env` para esa variable no se usa.
 
 ### 2. Levántelo con el archivo de producción
 
