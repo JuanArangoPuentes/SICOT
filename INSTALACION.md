@@ -73,12 +73,12 @@ Los valores que no puede dejar como están:
 | `COMPOSE_PATH_SEPARATOR` y `COMPOSE_FILE` | Descomente las dos líneas: `:` y `docker-compose.yml:docker-compose.prod.yml`. Con ellas, todo `docker compose …` de esta carpeta usa el archivo de producción aunque no escriba los `-f` |
 | `SPRING_PROFILES_ACTIVE` | `prod`, o déjela comentada. **Nunca** `dev` |
 | `DB_PASSWORD` | Una contraseña nueva, no la de desarrollo |
-| `JWT_SECRET` | Genérela: `openssl rand -base64 32` |
+| `JWT_SECRET` | Genérela: `openssl rand -base64 48` |
 | `SICOT_DOMINIO` | El nombre con el que se abrirá SICOT (el que el DNS del Centro resuelve a este servidor) o su IP |
 | `SICOT_TLS` | `internal` (ya viene así) si ese nombre solo existe en la red del Centro, **aunque esté bajo un dominio real** como `sena.edu.co`. Solo si el nombre es público y los puertos 80 y 443 se alcanzan desde Internet, ponga un correo de contacto: Caddy pedirá entonces el certificado a Let's Encrypt. Con un correo y un nombre interno, el sitio se queda sin certificado |
 | `CORS_ALLOWED_ORIGINS` | `https://` y el valor de `SICOT_DOMINIO`, **nunca** `localhost`. No añada la aplicación de escritorio ni el APK: el backend los acepta siempre |
-| `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | La primera cuenta de administrador |
-| `RESPALDO_DIRECTORIO` | La carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
+| `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | Descomente las dos líneas: la primera cuenta de administrador (ver paso 3) |
+| `RESPALDO_DIRECTORIO` | Descomente la línea: la carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
 
 `VITE_API_URL` no se toca en el servidor: `docker-compose.prod.yml` lo deja
 vacío a propósito, porque el proxy sirve la aplicación y la API desde la misma
@@ -100,9 +100,11 @@ docker compose up -d --build
 Con el `COMPOSE_FILE` del paso 1 es lo mismo que
 `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
 
-Frente a la opción A, esto cambia tres cosas: PostgreSQL deja de publicar su
-puerto al exterior, Adminer no arranca, y un proxy Caddy termina TLS delante de
-todo (ver [`docs/decisiones/ADR-009-terminacion-tls.md`](docs/decisiones/ADR-009-terminacion-tls.md)).
+Frente a la opción A, esto cambia cuatro cosas: PostgreSQL deja de publicar su
+puerto al exterior, Adminer no arranca, Ollama corre en su propio contenedor
+(ver [«Sobre el asistente de IA»](#sobre-el-asistente-de-ia)) y un proxy Caddy
+termina TLS delante de todo (ver
+[`docs/decisiones/ADR-009-terminacion-tls.md`](docs/decisiones/ADR-009-terminacion-tls.md)).
 
 ### 3. Entre y cambie la contraseña
 
