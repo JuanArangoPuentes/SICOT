@@ -181,6 +181,32 @@ class ContratoServiceTest {
         verify(registroService).registrar(any(), eq("ESTADO_CAMBIADO"), contains("FINALIZADO → ACTIVO"));
     }
 
+    /** /api/usuarios lista también a los inactivos: elegir uno dejaba el contrato a cargo de nadie. */
+    @Test
+    void asignarUnSupervisorDesactivadoSeRechaza() {
+        when(contratoRepository.findById(1L)).thenReturn(java.util.Optional.of(contratoExistente()));
+        when(usuarioRepository.findById(8L)).thenReturn(java.util.Optional.of(supervisor(8L, false)));
+
+        assertThatThrownBy(() -> contratoService.asignarSupervisor(1L, new AsignarSupervisorRequest(8L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("está desactivado");
+        verify(registroService, never()).registrar(any(), any(), any());
+    }
+
+    /** Repetir la misma elección no es una asignación nueva: ni auditoría ni otro aviso. */
+    @Test
+    void asignarAlQueYaEsElSupervisorNoRegistraNada() {
+        co.sena.sicot.entity.Usuario actual = supervisor(7L, true);
+        co.sena.sicot.entity.Contrato contrato = contratoExistente();
+        contrato.setSupervisor(actual);
+        when(contratoRepository.findById(1L)).thenReturn(java.util.Optional.of(contrato));
+        when(usuarioRepository.findById(7L)).thenReturn(java.util.Optional.of(actual));
+
+        contratoService.asignarSupervisor(1L, new AsignarSupervisorRequest(7L));
+
+        verify(registroService, never()).registrar(any(), any(), any());
+    }
+
     private static co.sena.sicot.entity.Usuario supervisor(long id, boolean activo) {
         co.sena.sicot.entity.Usuario supervisor = new co.sena.sicot.entity.Usuario();
         supervisor.setId(id);

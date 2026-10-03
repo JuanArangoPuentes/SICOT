@@ -6,11 +6,13 @@ import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
 import co.sena.sicot.dto.usuario.EnviarCredencialesRequest;
 import co.sena.sicot.dto.usuario.EnviarCredencialesResponse;
 import co.sena.sicot.dto.usuario.UsuarioResponse;
+import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.UsuarioMapper;
+import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.LimiteDeBcrypt;
 import org.slf4j.Logger;
@@ -20,21 +22,27 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UsuarioService {
 
     private static final Logger log = LoggerFactory.getLogger(UsuarioService.class);
 
+    /** Los demás se resumen en «y N más»: el mensaje tiene que caber en un aviso. */
+    private static final int MAX_CONTRATOS_EN_MENSAJE = 10;
+
     private final UsuarioRepository usuarioRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
+    private final ContratoRepository contratoRepository;
 
     public UsuarioService(UsuarioRepository usuarioRepository, PasswordEncoder passwordEncoder,
-                          EmailService emailService) {
+                          EmailService emailService, ContratoRepository contratoRepository) {
         this.usuarioRepository = usuarioRepository;
         this.passwordEncoder = passwordEncoder;
         this.emailService = emailService;
+        this.contratoRepository = contratoRepository;
     }
 
     @Transactional(readOnly = true)
@@ -81,6 +89,9 @@ public class UsuarioService {
             verificarQueNoEsElUltimoAdministrador(usuario,
                     "No se puede cambiar el rol del único administrador del sistema.");
         }
+        if (usuario.getRol() == Rol.SUPERVISOR && request.rol() != Rol.SUPERVISOR) {
+            verificarQueNoSupervisaContratosAbiertos(usuario, "quitarle el rol de supervisor a");
+        }
         usuario.setNombre(request.nombre().trim());
         usuario.setEmail(email);
         usuario.setTelefono(request.telefono().trim());
@@ -101,6 +112,7 @@ public class UsuarioService {
         if (!request.activo()) {
             verificarQueNoEsElUltimoAdministrador(usuario,
                     "No se puede desactivar el único administrador del sistema.");
+            verificarQueNoSupervisaContratosAbiertos(usuario, "desactivar a");
         }
         if (usuario.isActivo() && !request.activo()) {
             // Mientras está inactiva el filtro ya la rechaza; esto es para que
@@ -121,6 +133,39 @@ public class UsuarioService {
         if (!LimiteDeBcrypt.cabe(password)) {
             throw new BusinessException(LimiteDeBcrypt.MENSAJE);
         }
+    }
+
+    /**
+     * Impide dejar contratos en curso a cargo de alguien que ya no puede
+     * supervisarlos.
+     *
+     * <p>Desactivar a un supervisor, o quitarle el rol, no avisaba de nada: sus
+     * contratos seguían asignados a una persona que no puede iniciar sesión, el
+     * aviso de asignación y el resumen semanal iban a una cuenta muerta y nadie
+     * podía firmar los documentos del contrato, sin que el sistema lo dijera en
+     * ningún momento. Ahora la operación se rechaza nombrando los contratos que
+     * hay que reasignar antes.
+     *
+     * <p>Si lo urgente es cortar el acceso de una cuenta comprometida, no hace
+     * falta esperar a reasignar: restablecer la contraseña cierra al momento
+     * todas sus sesiones (ver {@code Usuario.revocarSesiones}).
+     */
+    private void verificarQueNoSupervisaContratosAbiertos(Usuario usuario, String accion) {
+        List<Contrato> abiertos = contratoRepository.findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(
+                usuario.getId(), SeguimientoService.ABIERTOS);
+        if (abiertos.isEmpty()) {
+            return;
+        }
+        String numeros = abiertos.stream()
+                .limit(MAX_CONTRATOS_EN_MENSAJE)
+                .map(Contrato::getNumeroContrato)
+                .collect(Collectors.joining(", "));
+        if (abiertos.size() > MAX_CONTRATOS_EN_MENSAJE) {
+            numeros += " y " + (abiertos.size() - MAX_CONTRATOS_EN_MENSAJE) + " más";
+        }
+        throw new BusinessException("No se puede " + accion + " " + usuario.getNombre() + ": tiene asignados "
+                + abiertos.size() + " contrato(s) en curso (" + numeros + "). Reasígnelos a otro supervisor "
+                + "y vuelva a intentarlo.");
     }
 
     /**

@@ -222,6 +222,14 @@ public class ContratoService {
         if (supervisor.getRol() != Rol.SUPERVISOR) {
             throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
         }
+        // /api/usuarios lista también las cuentas desactivadas, así que Gestión
+        // podía elegir a alguien que ya no puede iniciar sesión: el contrato
+        // quedaba a cargo de una cuenta muerta, el aviso iba a nadie y ningún
+        // documento podía firmarlo su supervisor, sin que nada lo dijera.
+        if (!supervisor.isActivo()) {
+            throw new BusinessException("El supervisor seleccionado (" + supervisor.getNombre()
+                    + ") está desactivado. Elija un supervisor activo.");
+        }
         return supervisor;
     }
 }

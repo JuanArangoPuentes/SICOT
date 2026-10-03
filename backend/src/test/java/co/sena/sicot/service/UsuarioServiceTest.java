@@ -4,6 +4,7 @@ import co.sena.sicot.dto.usuario.ActualizarUsuarioRequest;
 import co.sena.sicot.dto.usuario.CambiarEstadoUsuarioRequest;
 import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
 import co.sena.sicot.dto.usuario.EnviarCredencialesRequest;
+import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.BusinessException;
@@ -15,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +37,9 @@ class UsuarioServiceTest {
 
     @Mock
     private EmailService emailService;
+
+    @Mock
+    private co.sena.sicot.repository.ContratoRepository contratoRepository;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -227,5 +232,57 @@ class UsuarioServiceTest {
         supervisor.setRol(Rol.SUPERVISOR);
         supervisor.setActivo(true);
         return supervisor;
+    }
+
+    /**
+     * Desactivar a un supervisor dejaba sus contratos en curso a cargo de una
+     * cuenta que no puede entrar, sin que nada lo dijera. Se rechaza nombrando
+     * los contratos que hay que reasignar antes.
+     */
+    @Test
+    void desactivarAUnSupervisorConContratosEnCursoSeRechazaYLosNombra() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(contratoRepository.findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(any(), any()))
+                .thenReturn(List.of(contrato("CO1.PCCNTR.111"), contrato("CO1.PCCNTR.222")));
+
+        assertThatThrownBy(() -> usuarioService.cambiarEstado(5L, new CambiarEstadoUsuarioRequest(false)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("2 contrato(s) en curso")
+                .hasMessageContaining("CO1.PCCNTR.111, CO1.PCCNTR.222");
+        assertThat(supervisor.isActivo()).isTrue();
+    }
+
+    @Test
+    void quitarleElRolASupervisorConContratosEnCursoSeRechaza() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(contratoRepository.findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(any(), any()))
+                .thenReturn(List.of(contrato("CO1.PCCNTR.111")));
+
+        ActualizarUsuarioRequest aGestion = new ActualizarUsuarioRequest(
+                "Supervisor", "sup@soy.sena.edu.co", null, "3000000000", Rol.GESTION);
+
+        assertThatThrownBy(() -> usuarioService.actualizar(5L, aGestion))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("quitarle el rol de supervisor")
+                .hasMessageContaining("CO1.PCCNTR.111");
+    }
+
+    @Test
+    void desactivarAUnSupervisorSinContratosEnCursoSePermite() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var respuesta = usuarioService.cambiarEstado(5L, new CambiarEstadoUsuarioRequest(false));
+
+        assertThat(respuesta.activo()).isFalse();
+    }
+
+    private static Contrato contrato(String numero) {
+        Contrato contrato = new Contrato();
+        contrato.setNumeroContrato(numero);
+        return contrato;
     }
 }
