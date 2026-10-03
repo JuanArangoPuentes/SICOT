@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -117,6 +118,58 @@ class JwtAuthenticationFilterIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isUnauthorized());
     }
 
+    /**
+     * Ante una cuenta que se sospecha comprometida, el administrador restablece
+     * la contraseña. Antes eso no cortaba nada: quien tuviera el token seguía
+     * operando hasta ocho horas más. Ahora el token anterior deja de valer en la
+     * siguiente petición, y la contraseña nueva funciona.
+     */
+    @Test
+    void restablecerLaContrasenaCierraLasSesionesAbiertasConLaAnterior() throws Exception {
+        String tokenAdmin = login("administrador@soy.sena.edu.co", "Admin123*");
+        long id = crearSupervisor(tokenAdmin, "por.restablecer@soy.sena.edu.co");
+        String tokenAnterior = login("por.restablecer@soy.sena.edu.co", "ClaveTest123");
+
+        actualizarSupervisor(tokenAdmin, id, "por.restablecer@soy.sena.edu.co", "\"ClaveNueva456\"");
+
+        mockMvc.perform(get("/api/contratos").header("Authorization", "Bearer " + tokenAnterior))
+                .andExpect(status().isUnauthorized());
+        String tokenNuevo = login("por.restablecer@soy.sena.edu.co", "ClaveNueva456");
+        mockMvc.perform(get("/api/contratos").header("Authorization", "Bearer " + tokenNuevo))
+                .andExpect(status().isOk());
+    }
+
+    /** Corregir el nombre o el teléfono no es motivo para sacar a nadie del sistema. */
+    @Test
+    void editarLaCuentaSinTocarLaContrasenaNoCierraLaSesion() throws Exception {
+        String tokenAdmin = login("administrador@soy.sena.edu.co", "Admin123*");
+        long id = crearSupervisor(tokenAdmin, "por.editar@soy.sena.edu.co");
+        String token = login("por.editar@soy.sena.edu.co", "ClaveTest123");
+
+        actualizarSupervisor(tokenAdmin, id, "por.editar@soy.sena.edu.co", "null");
+
+        mockMvc.perform(get("/api/contratos").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    /**
+     * Desactivar ya cortaba el acceso porque el filtro mira {@code activo}; lo
+     * que faltaba es que reactivar la cuenta no devolviera la vida a los tokens
+     * que tenía antes.
+     */
+    @Test
+    void reactivarUnaCuentaNoResucitaLosTokensAnteriores() throws Exception {
+        String tokenAdmin = login("administrador@soy.sena.edu.co", "Admin123*");
+        long id = crearSupervisor(tokenAdmin, "por.reactivar@soy.sena.edu.co");
+        String tokenAnterior = login("por.reactivar@soy.sena.edu.co", "ClaveTest123");
+
+        cambiarEstado(tokenAdmin, id, false);
+        cambiarEstado(tokenAdmin, id, true);
+
+        mockMvc.perform(get("/api/contratos").header("Authorization", "Bearer " + tokenAnterior))
+                .andExpect(status().isUnauthorized());
+    }
+
     @Test
     void unaCabeceraQueNoEsBearerSeIgnoraYLaPeticionQuedaSinAutenticar() throws Exception {
         String token = login(SUPERVISOR, CLAVE_SUPERVISOR);
@@ -147,6 +200,40 @@ class JwtAuthenticationFilterIntegrationTest extends PruebaDeIntegracion {
         usuario.setEmail(email);
         usuario.setRol(rol);
         return usuario;
+    }
+
+    private long crearSupervisor(String tokenAdmin, String email) throws Exception {
+        String creado = mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Supervisor de sesiones","email":"%s",
+                                 "password":"ClaveTest123","telefono":"3000000000","rol":"SUPERVISOR"}
+                                """.formatted(email)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(creado).get("id").asLong();
+    }
+
+    /** @param passwordJson la contraseña ya como literal JSON, o {@code null} para no cambiarla */
+    private void actualizarSupervisor(String tokenAdmin, long id, String email, String passwordJson)
+            throws Exception {
+        mockMvc.perform(put("/api/usuarios/{id}", id)
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Supervisor de sesiones editado","email":"%s","password":%s,
+                                 "telefono":"3000000001","rol":"SUPERVISOR"}
+                                """.formatted(email, passwordJson)))
+                .andExpect(status().isOk());
+    }
+
+    private void cambiarEstado(String tokenAdmin, long id, boolean activo) throws Exception {
+        mockMvc.perform(patch("/api/usuarios/{id}/estado", id)
+                        .header("Authorization", "Bearer " + tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"activo\":" + activo + "}"))
+                .andExpect(status().isOk());
     }
 
     private String login(String email, String password) throws Exception {

@@ -39,6 +39,13 @@ public class Usuario {
     @Column(nullable = false)
     private boolean activo = true;
 
+    /**
+     * Viaja en cada JWT; un token con otra versión ya no autentica. Ver
+     * {@code V19__version_de_credenciales.sql} y {@link #revocarSesiones()}.
+     */
+    @Column(name = "version_credenciales", nullable = false)
+    private long versionCredenciales;
+
     @CreationTimestamp
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private Instant fechaCreacion;
@@ -67,6 +74,15 @@ public class Usuario {
 
     public boolean isActivo() { return activo; }
     public void setActivo(boolean activo) { this.activo = activo; }
+
+    public long getVersionCredenciales() { return versionCredenciales; }
+
+    /**
+     * Invalida todos los tokens emitidos hasta ahora para esta cuenta: el
+     * filtro JWT los rechaza en la siguiente petición. Se llama al cambiar la
+     * contraseña y al desactivar la cuenta.
+     */
+    public void revocarSesiones() { this.versionCredenciales++; }
 
     public Instant getFechaCreacion() { return fechaCreacion; }
     public Instant getFechaActualizacion() { return fechaActualizacion; }

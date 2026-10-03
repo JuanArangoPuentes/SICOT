@@ -87,6 +87,10 @@ public class UsuarioService {
         usuario.setRol(request.rol());
         if (request.password() != null && !request.password().isBlank()) {
             usuario.setPassword(passwordEncoder.encode(request.password()));
+            // Restablecer la contraseña es lo que se hace ante una cuenta que
+            // se sospecha comprometida: los tokens emitidos con la anterior
+            // tienen que dejar de valer ya, no dentro de ocho horas.
+            usuario.revocarSesiones();
         }
         return UsuarioMapper.toResponse(usuarioRepository.save(usuario));
     }
@@ -97,6 +101,11 @@ public class UsuarioService {
         if (!request.activo()) {
             verificarQueNoEsElUltimoAdministrador(usuario,
                     "No se puede desactivar el único administrador del sistema.");
+        }
+        if (usuario.isActivo() && !request.activo()) {
+            // Mientras está inactiva el filtro ya la rechaza; esto es para que
+            // reactivarla no resucite los tokens que tenía antes.
+            usuario.revocarSesiones();
         }
         usuario.setActivo(request.activo());
         return UsuarioMapper.toResponse(usuarioRepository.save(usuario));

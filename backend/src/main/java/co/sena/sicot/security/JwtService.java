@@ -21,6 +21,9 @@ public class JwtService {
      */
     private static final int MINIMO_BYTES = 32;
 
+    /** Ver {@code Usuario#revocarSesiones()}. */
+    private static final String CLAIM_VERSION_CREDENCIALES = "versionCredenciales";
+
     private final SecretKey key;
     private final long expirationMs;
 
@@ -82,6 +85,7 @@ public class JwtService {
                 .claim("usuarioId", usuario.getId())
                 .claim("nombre", usuario.getNombre())
                 .claim("rol", usuario.getRol().name())
+                .claim(CLAIM_VERSION_CREDENCIALES, usuario.getVersionCredenciales())
                 .issuedAt(now)
                 .expiration(exp)
                 .signWith(key)
@@ -92,9 +96,28 @@ public class JwtService {
         return claims(token).getSubject();
     }
 
-    public boolean isTokenValid(String token, String email) {
+    /**
+     * Firma y expiración las comprueba ya el parser; aquí se mira que el token
+     * sea de esta cuenta y de sus credenciales actuales. Sin la versión, un
+     * restablecimiento de contraseña dejaba seguir operando a quien tuviera un
+     * token anterior hasta que caducara, ocho horas después.
+     */
+    public boolean isTokenValid(String token, Usuario usuario) {
         Claims claims = claims(token);
-        return claims.getSubject().equals(email) && claims.getExpiration().after(new Date());
+        return claims.getSubject().equals(usuario.getEmail())
+                && claims.getExpiration().after(new Date())
+                && versionDeCredenciales(claims) == usuario.getVersionCredenciales();
+    }
+
+    /**
+     * Los tokens emitidos antes de V19 no traen la versión y valen como 0, que
+     * es la versión con la que esa migración dejó a todas las cuentas: así el
+     * despliegue no cierra la sesión de nadie, y el primer cambio de contraseña
+     * los invalida igual que a los nuevos.
+     */
+    private static long versionDeCredenciales(Claims claims) {
+        Number version = claims.get(CLAIM_VERSION_CREDENCIALES, Number.class);
+        return version == null ? 0L : version.longValue();
     }
 
     private Claims claims(String token) {
