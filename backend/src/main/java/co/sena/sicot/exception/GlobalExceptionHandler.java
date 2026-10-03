@@ -1,7 +1,9 @@
 package co.sena.sicot.exception;
 
-import co.sena.sicot.exception.AccesoDenegadoException;
+import co.sena.sicot.entity.Usuario;
+import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.ia.IaNoDisponibleException;
+import co.sena.sicot.security.SecurityUtils;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,15 +39,36 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /**
+     * Mismo texto para «no existe» y «existe pero no es suyo». El código ya era
+     * el mismo (404), pero el mensaje no: un id inexistente decía «Contrato con
+     * id 999 no fue encontrado(a).» y uno ajeno, este. Recorriendo ids, un
+     * supervisor sabía cuáles existían y eran de otros, que es justo lo que
+     * {@code SecurityUtils.verificarAccesoAlContrato} promete ocultar.
+     */
+    private static final String SIN_ACCESO = "El recurso solicitado no existe o no tiene acceso a él.";
+
+    /**
+     * Para un SUPERVISOR, una búsqueda por id que no encuentra nada responde
+     * igual que un recurso ajeno (ver {@link #SIN_ACCESO}). Gestión y
+     * Administración no están restringidas por contrato, así que para ellas no
+     * hay nada que ocultar y conservan el mensaje concreto.
+     */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> notFound(ResourceNotFoundException ex, WebRequest request) {
+        Usuario actual = SecurityUtils.currentUsuario();
+        if (ex.esBusquedaPorId() && actual != null && actual.getRol() == Rol.SUPERVISOR) {
+            log.debug("No encontrado (sin filtrar existencia) en {}: {}",
+                    request.getDescription(false).replace("uri=", ""), ex.getMessage());
+            return build(SIN_ACCESO, HttpStatus.NOT_FOUND, request);
+        }
         return build(ex.getMessage(), HttpStatus.NOT_FOUND, request);
     }
 
     @ExceptionHandler(AccesoDenegadoException.class)
     public ResponseEntity<ErrorResponse> accesoDenegado(AccesoDenegadoException ex, WebRequest request) {
         log.debug("Acceso denegado (sin filtrar existencia) en {}: {}", request.getDescription(false).replace("uri=", ""), ex.getMessage());
-        return build("El recurso solicitado no existe o no tiene acceso a él.", HttpStatus.NOT_FOUND, request);
+        return build(SIN_ACCESO, HttpStatus.NOT_FOUND, request);
     }
 
     @ExceptionHandler(BusinessException.class)
