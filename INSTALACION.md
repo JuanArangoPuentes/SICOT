@@ -95,8 +95,10 @@ todo (ver [`docs/decisiones/ADR-009-terminacion-tls.md`](docs/decisiones/ADR-009
 ### 3. Entre y cambie la contraseña
 
 Con la base vacía, el backend crea la cuenta que declaró en `SICOT_ADMIN_*`.
-Entre con ella y **cámbiela desde el panel de administración**. Después puede
-retirar esas dos variables del `.env`: solo se usan cuando no hay ningún usuario.
+Entre con ella y **cámbiela desde el panel de administración**. Después retire
+esas dos variables del `.env`: solo se usan cuando no hay ningún usuario, y
+Compose sigue funcionando sin ellas (actualizar, ver logs, sacar la raíz de la
+CA para los teléfonos).
 
 ### 4. Programe el respaldo
 

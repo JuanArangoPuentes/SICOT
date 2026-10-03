@@ -443,11 +443,14 @@ jobs:
         # no cuadra. Las variables obligatorias del perfil de producción se
         # rellenan con valores de relleno: aquí se valida la estructura, no los
         # secretos.
+        #
+        # SICOT_ADMIN_EMAIL y SICOT_ADMIN_PASSWORD NO se rellenan, a propósito:
+        # la guía pide retirarlas tras el primer arranque, y este paso comprueba
+        # que Compose siga funcionando sin ellas. Cuando eran obligatorias, el
+        # servidor que seguía la guía no podía ni actualizar.
         env:
           DB_PASSWORD: valor-de-relleno-para-ci
           JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
-          SICOT_ADMIN_EMAIL: ci@ejemplo.invalid
-          SICOT_ADMIN_PASSWORD: relleno-solo-para-ci-1234
           # El proxy con TLS de ADR-009 exige un dominio explícito: sin él, el
           # despliegue no sabría para qué nombre pedir certificado. Aquí solo se
           # valida la estructura del archivo, así que basta un nombre de relleno.

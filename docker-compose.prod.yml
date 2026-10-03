@@ -73,12 +73,18 @@ services:
       # Administrador inicial: obligatorio en el PRIMER arranque de una base
       # vacía. Sin él, el despliegue quedaría inaccesible — DataInitializer solo
       # siembra cuentas en los perfiles dev/test, POST /api/usuarios exige rol
-      # ADMINISTRADOR y el login es el único endpoint público. El backend lo
-      # comprueba y se niega a arrancar (ver AdministradorInicial); esto lo
-      # detiene antes, en `docker compose up`, con un mensaje más claro.
-      # Una vez creada la cuenta, ambas variables pueden retirarse del .env.
-      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:?Defina SICOT_ADMIN_EMAIL en el .env — es la cuenta de administrador con la que se entra por primera vez}
-      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:?Defina SICOT_ADMIN_PASSWORD en el .env con al menos 12 caracteres — genérela con `openssl rand -base64 24` y cámbiela desde la aplicación tras el primer ingreso}
+      # ADMINISTRADOR y el login es el único endpoint público.
+      #
+      # Opcionales AQUÍ, a propósito, aunque el primer arranque las necesite.
+      # Antes eran `:?` y Compose las exige en CADA comando que carga el
+      # proyecto (up, ps, logs, cp…), no solo en el primero: quien seguía la guía
+      # y las retiraba del .env tras crear la cuenta ya no podía actualizar ni
+      # sacar la raíz de la CA para los teléfonos sin volver a escribir la
+      # contraseña inicial, y dejarla ahí para siempre. La garantía no se pierde:
+      # con la tabla de usuarios vacía y sin ellas, el backend se niega a
+      # arrancar y dice qué definir (AdministradorInicial, ADR-011).
+      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:-}
+      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:-}
       # Vigilancia del respaldo (ADR-002, VigilanciaDelRespaldo). LITERAL y no
       # interpolada, a propósito: dentro del contenedor el backend busca SIEMPRE
       # en /respaldos, que es donde el montaje de abajo pone la carpeta del
