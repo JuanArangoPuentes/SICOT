@@ -159,6 +159,19 @@ public class UsuarioService {
      */
     public EnviarCredencialesResponse enviarCredenciales(Long id, EnviarCredencialesRequest request) {
         Usuario usuario = buscar(id);
+        // El cuerpo trae la contraseña en claro y nada garantizaba que fuera la
+        // guardada: un error al escribirla, o dos administradores restableciendo
+        // la misma cuenta a la vez, mandaban por correo una contraseña que no
+        // funciona, y nadie se enteraba hasta que el supervisor quedaba
+        // bloqueado. Se responde como un envío no realizado, con el motivo, para
+        // que la pantalla lo muestre tal cual en vez de culpar a la red.
+        if (!passwordEncoder.matches(request.password(), usuario.getPassword())) {
+            log.warn("No se enviaron credenciales a {}: la contraseña indicada no es la guardada.",
+                    usuario.getEmail());
+            return new EnviarCredencialesResponse(false,
+                    "No se envió el correo: la contraseña indicada no es la que tiene guardada la cuenta. "
+                            + "Restablézcala de nuevo y envíe la que quede asignada.");
+        }
         try {
             emailService.enviarCredenciales(usuario.getEmail(), usuario.getNombre(), request.password());
             return new EnviarCredencialesResponse(true, null);

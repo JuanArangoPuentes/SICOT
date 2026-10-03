@@ -3,6 +3,7 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.usuario.ActualizarUsuarioRequest;
 import co.sena.sicot.dto.usuario.CambiarEstadoUsuarioRequest;
 import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
+import co.sena.sicot.dto.usuario.EnviarCredencialesRequest;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.BusinessException;
@@ -31,6 +32,9 @@ class UsuarioServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private EmailService emailService;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -183,5 +187,45 @@ class UsuarioServiceTest {
 
         assertThat(response.nombre()).isEqualTo("Administrador SICOT");
         assertThat(response.rol()).isEqualTo(Rol.ADMINISTRADOR);
+    }
+
+    /**
+     * Mandar por correo una contraseña distinta de la guardada es entregarle al
+     * supervisor una credencial que no funciona sin que nadie lo sepa.
+     */
+    @Test
+    void enviarCredencialesConUnaContrasenaQueNoEsLaGuardadaNoEnviaNada() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(passwordEncoder.matches("OtraClave123", "$2a$04$guardado")).thenReturn(false);
+
+        var respuesta = usuarioService.enviarCredenciales(5L, new EnviarCredencialesRequest("OtraClave123"));
+
+        assertThat(respuesta.enviado()).isFalse();
+        assertThat(respuesta.error()).contains("no es la que tiene guardada");
+        verify(emailService, never()).enviarCredenciales(any(), any(), any());
+    }
+
+    @Test
+    void enviarCredencialesConLaContrasenaGuardadaLaEnvia() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(passwordEncoder.matches("ClaveTest123", "$2a$04$guardado")).thenReturn(true);
+
+        var respuesta = usuarioService.enviarCredenciales(5L, new EnviarCredencialesRequest("ClaveTest123"));
+
+        assertThat(respuesta.enviado()).isTrue();
+        verify(emailService).enviarCredenciales("sup@soy.sena.edu.co", "Supervisor", "ClaveTest123");
+    }
+
+    private static Usuario supervisorConHash(String hash) {
+        Usuario supervisor = new Usuario();
+        supervisor.setId(5L);
+        supervisor.setNombre("Supervisor");
+        supervisor.setEmail("sup@soy.sena.edu.co");
+        supervisor.setPassword(hash);
+        supervisor.setRol(Rol.SUPERVISOR);
+        supervisor.setActivo(true);
+        return supervisor;
     }
 }
