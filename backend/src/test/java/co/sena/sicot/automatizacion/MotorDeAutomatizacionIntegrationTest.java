@@ -335,7 +335,10 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
         assertThat(tareaRepository.findById(id))
                 .get()
                 .satisfies(t -> assertThat(t.getEstado()).isEqualTo(EstadoTareaAutomatizada.COMPLETADA));
-        assertThat(alertaRepository.findByContratoIsNullOrderByFechaCreacionDesc()).hasSize(1);
+        assertThat(alertaRepository.findAllByOrderByFechaCreacionDesc(TODAS))
+                .filteredOn(a -> a.getContrato() == null)
+                .as("el resumen del periodo no pertenece a ningún contrato")
+                .hasSize(1);
     }
 
     /** La pantalla de operación existe y solo la ve ADMINISTRADOR. */

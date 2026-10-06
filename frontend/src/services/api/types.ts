@@ -215,7 +215,6 @@ export interface DocumentoResponse {
   formatoNombre: string | null
   nombre: string
   tipo: TipoDocumento
-  rutaArchivo: string
   estado: EstadoDocumento
   tamanioBytes: number | null
   generadoPorIa: boolean

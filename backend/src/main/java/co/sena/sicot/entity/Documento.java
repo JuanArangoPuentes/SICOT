@@ -49,9 +49,6 @@ public class Documento {
     @Column(nullable = false, length = 20)
     private TipoDocumento tipo;
 
-    @Column(name = "ruta_archivo", length = 500)
-    private String rutaArchivo;
-
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private EstadoDocumento estado = EstadoDocumento.PENDIENTE;
@@ -170,9 +167,6 @@ public class Documento {
 
     public TipoDocumento getTipo() { return tipo; }
     public void setTipo(TipoDocumento tipo) { this.tipo = tipo; }
-
-    public String getRutaArchivo() { return rutaArchivo; }
-    public void setRutaArchivo(String rutaArchivo) { this.rutaArchivo = rutaArchivo; }
 
     public EstadoDocumento getEstado() { return estado; }
     public void setEstado(EstadoDocumento estado) { this.estado = estado; }

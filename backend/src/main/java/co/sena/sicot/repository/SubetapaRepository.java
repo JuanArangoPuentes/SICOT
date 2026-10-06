@@ -14,8 +14,6 @@ public interface SubetapaRepository extends JpaRepository<Subetapa, Long> {
 
     List<Subetapa> findByEtapaIdOrderByCodigoAsc(Long etapaId);
 
-    List<Subetapa> findByEtapaContratoIdOrderByCodigoAsc(Long contratoId);
-
     /**
      * Busca una subetapa exigiendo que pertenezca al contrato indicado.
      *

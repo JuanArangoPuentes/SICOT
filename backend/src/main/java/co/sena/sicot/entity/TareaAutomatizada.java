@@ -121,7 +121,6 @@ public class TareaAutomatizada {
     public Contrato getContrato() { return contrato; }
     public void setContrato(Contrato contrato) { this.contrato = contrato; }
 
-    public String getClaveIdempotencia() { return claveIdempotencia; }
     public void setClaveIdempotencia(String claveIdempotencia) { this.claveIdempotencia = claveIdempotencia; }
 
     public String getPayload() { return payload; }
@@ -131,7 +130,6 @@ public class TareaAutomatizada {
     public void setEstado(EstadoTareaAutomatizada estado) { this.estado = estado; }
 
     public int getIntentos() { return intentos; }
-    public void setIntentos(int intentos) { this.intentos = intentos; }
 
     public Instant getEjecutarEn() { return ejecutarEn; }
     public void setEjecutarEn(Instant ejecutarEn) { this.ejecutarEn = ejecutarEn; }

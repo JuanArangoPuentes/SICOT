@@ -45,7 +45,6 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
                 fmt.nombre,
                 d.nombre,
                 d.tipo,
-                d.rutaArchivo,
                 d.estado,
                 d.tamanioBytes,
                 d.generadoPorIa,
