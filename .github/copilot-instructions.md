@@ -50,18 +50,25 @@ Nunca modificar por comodidad algo que ya funciona.
 
 * React 19
 * ReactDOM 19
-* TypeScript 5.7
-* Vite 8
+* TypeScript
+* Vite
 * Tailwind CSS v4
+* React Router (ver §5)
 * Recharts
 * Fetch API
 * Node.js 22
 * puerto de desarrollo: 8443
 
+> **Las versiones exactas no se copian aquí.** La lista de arriba se quedó
+> anunciando Spring Boot 3.5.12 meses después de que el pom declarara otra, y un
+> agente que se fía de este archivo razona sobre una versión que no existe en el
+> proyecto. La fuente de verdad es `frontend/package.json` y `backend/pom.xml`:
+> léalos cuando la versión importe.
+
 ## Backend
 
 * Java 25
-* Spring Boot 3.5.12
+* Spring Boot 3
 * Spring Web
 * Spring Data JPA
 * Hibernate
@@ -70,7 +77,7 @@ Nunca modificar por comodidad algo que ya funciona.
 * BCrypt
 * Flyway
 * Maven
-* PostgreSQL 18.4
+* PostgreSQL 18
 
 ## Base de datos
 
@@ -102,13 +109,16 @@ No agregar ni reemplazar:
 * React Query
 * Redux
 * Zustand
-* react-router
 * Prisma
 * Node backend
 * otro ORM
 * otro framework frontend
 
-salvo que exista una razón técnica real y se apruebe explícitamente.
+salvo que exista una razón técnica real y esté escrita en un ADR.
+
+React Router **sí** está en el proyecto desde
+[ADR-007](../docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md): no es una
+dependencia que haya que quitar ni evitar (ver §5).
 
 La capa HTTP del frontend utiliza `fetch`.
 
@@ -116,25 +126,36 @@ La capa HTTP del frontend utiliza `fetch`.
 
 # 5. Frontend
 
-El frontend utiliza navegación manual mediante el estado `Screen` de `App.tsx`.
+La vista activa vive en la URL, con **React Router**
+([ADR-007](../docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md),
+aceptada). `frontend/src/main.tsx` monta `<BrowserRouter>` y
+`frontend/src/App.tsx` declara las rutas:
 
-No existe react-router.
+| Ruta | Quién entra | Vistas |
+| --- | --- | --- |
+| `/login` | cualquiera | — |
+| `/supervisor/:vista` | SUPERVISOR | `bandeja`, `contrato`, `alertas`, `documentos`, `registros` |
+| `/gestion` | GESTION | una sola pantalla, sin sub-vista en la URL |
+| `/admin/:vista` | ADMINISTRADOR | `dashboard`, `seguimiento`, `documentos`, `usuarios`, `firmas` |
 
-Las pantallas principales incluyen:
+Reglas que ya están implementadas y hay que conservar:
 
-```text
-login
-supervisor-panel
-gestion-panel
-admin-panel
-```
+1. `/supervisor` y `/admin` redirigen a su vista por defecto (`bandeja`,
+   `dashboard`); la raíz y cualquier ruta desconocida van al panel del rol de la
+   sesión, o a `/login` si no hay sesión.
+2. Entrar a la ruta de otro rol **redirige**, no muestra un error. La URL no es
+   un control de acceso: la autoridad sobre permisos es el backend.
+3. Una `:vista` desconocida cae en la vista por defecto en vez de romper
+   (`vistaValida` en `App.tsx`).
+4. `BrowserRouter` y no `HashRouter`: nginx sirve `index.html` para cualquier
+   ruta profunda (`try_files` en `frontend/nginx.conf.template`), así que entrar
+   directo a una URL funciona. Si se añade una ruta, esa configuración tiene que
+   seguir cubriéndola.
 
-Son exactamente los cuatro valores del tipo `Screen` en
-`frontend/src/types/domain.ts`. (Existió una pantalla `supervisor-welcome`; se
-eliminó porque mostraba "no tiene contrato asignado" durante el instante en que
-la consulta real todavía estaba en curso.)
-
-No sustituir esta arquitectura por react-router sin aprobación explícita.
+**Ya no existe el tipo `Screen`** ni la navegación por estado que describía la
+versión anterior de esta sección. Si encuentra una instrucción que diga «no
+existe react-router» o que mande quitar rutas, está leyendo documentación vieja:
+mándese por ADR-007.
 
 ---
 
@@ -577,7 +598,16 @@ Actualmente están conectadas al backend:
 * **catálogo documental del administrador** (formatos: subida, descarga y borrado reales);
 * **notificación/entrega real de credenciales por correo**;
 * **alerta de cronograma tipo semáforo**, computada en vivo desde las fechas reales del
-  contrato.
+  contrato;
+* **enrutado por URL con enlaces profundos compartibles** (React Router, ADR-007 — ver §5);
+* **empaquetado de escritorio y de Android con Tauri 2**: `frontend/src-tauri` está
+  versionado, el instalador de Windows se construye con `npm run tauri:build`
+  (destinos `nsis` y `msi` en `tauri.conf.json`) y el APK se arma y se firma en
+  `.github/workflows/android.yml` y `publicar-apk.yml`. Decidido en
+  [ADR-012](../docs/decisiones/ADR-012-aplicacion-movil.md) y
+  [ADR-013](../docs/decisiones/ADR-013-firma-y-distribucion-del-apk.md), las dos
+  aceptadas. **No desaconseje tocar `src-tauri` ni diga que la aplicación de
+  escritorio no existe.**
 
 ---
 
@@ -599,7 +629,10 @@ Estas funcionalidades NO tienen backend funcional y NO deben fingirse como reale
   sugerir lo contrario);
 * firma electrónica con un proveedor PKI externo real (lo actual es una referencia interna de
   SICOT, no una integración con infraestructura nacional de firma);
-* empaquetado de escritorio (Tauri) para el rol SUPERVISOR;
+* funcionamiento sin conexión de la aplicación de escritorio o del APK: las dos hablan
+  con el backend por HTTP y no funcionan sin red, por decisión de
+  [ADR-001](../docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md) (el
+  empaquetado en sí **sí** está hecho, ver §17);
 * que el Copiloto **ejecute** algo: no firma, no genera documentos, no marca sub-pasos ni cambia
   ajustes o datos. Una orden en el chat solo devuelve una acción que abre la pantalla donde el
   supervisor decide; el prompt le prohíbe al modelo decir que hizo algo.
@@ -894,7 +927,9 @@ Piezas reales del paquete `co.sena.sicot.ia`:
   contrato (valor, fechas, días que quedan, `Cronograma`). `CopilotoChatService` las consulta
   antes de llamar a Ollama. El flujo de firma lo dice `FlujoDeFirma`, un solo texto para la
   ficha, la guía, las órdenes y el prompt.
-* `PdfTextExtractor`, `SimplePdfWriter` — lectura y escritura real de PDF.
+* `PdfTextExtractor`, `PdfInstitucional` — lectura y escritura real de PDF, las dos en
+  `co.sena.sicot.ia`. `PdfInstitucional` sustituyó al antiguo `SimplePdfWriter`: arma el PDF
+  con la cabecera, el pie y las tablas del formato institucional, no un texto suelto.
 
 Reglas al trabajar sobre la IA:
 
