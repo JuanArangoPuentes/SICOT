@@ -63,28 +63,6 @@ Desde la raíz del repo:
 docker compose up -d --build
 ```
 
-### ⚠️ Primera vez después del `git pull` que consolidó las migraciones
-
-Si ya habías levantado el proyecto antes de esa consolidación, tu volumen de
-PostgreSQL recuerda las 9 migraciones antiguas y **el backend no arrancará**:
-
-```
-FlywayValidateException: Migration checksum mismatch for migration version 1
-Detected applied migration not resolved locally: 2. (…3, 4, 5, 6, 7, 8)
-```
-
-Hay que borrar ese volumen para que Flyway parta de cero con las dos migraciones
-actuales:
-
-```bash
-docker compose down -v
-docker compose up --build -d
-docker compose ps
-```
-
-`down -v` borra **solo** el volumen local de este proyecto. No se ejecuta nunca
-sobre una base con información que se quiera conservar.
-
 Esto levanta 4 contenedores (agrupados en Docker Desktop bajo el proyecto **sicot**):
 
 | Contenedor | URL | Qué es |
@@ -107,6 +85,10 @@ docker compose logs -f backend    # seguir logs de un servicio
 docker compose down               # apagar
 docker compose down -v            # apagar y borrar también los datos de Postgres
 ```
+
+La `-v` del último comando borra el volumen de la base. Aquí no importa, porque
+los datos son de desarrollo; en el servidor del Centro ese comando no se usa
+nunca (ver [`INSTALACION.md`](./INSTALACION.md) § «Si algo no arranca»).
 
 ## Despliegue en producción (multi-máquina)
 
