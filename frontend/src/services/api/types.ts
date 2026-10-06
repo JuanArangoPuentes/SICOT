@@ -124,6 +124,37 @@ export interface CrearContratoRequest {
   centroCosto?: string | null
 }
 
+/**
+ * Cuerpo de `PUT /api/contratos/{id}` — la corrección de los datos generales.
+ *
+ * Es un reemplazo completo, no un parche: el backend asigna todos estos campos
+ * con lo que llegue, así que un campo omitido se guarda como null. Quien lo use
+ * tiene que mandar siempre el contrato entero, no solo lo que cambió.
+ *
+ * No lleva `supervisorId`: el supervisor se cambia con
+ * `PATCH /api/contratos/{id}/supervisor`, que es lo único que avisa al
+ * supervisor nuevo.
+ */
+export interface ActualizarContratoRequest {
+  numeroContrato: string
+  objeto: string
+  valor: number
+  fechaInicio: string | null
+  fechaFin: string | null
+  tipoContrato?: string | null
+  contratista?: string | null
+  contratistaNit?: string | null
+  representanteLegal?: string | null
+  lugarEjecucion?: string | null
+  numeroRegistroPresupuestal?: string | null
+  fechaRegistroPresupuestal?: string | null
+  centroCosto?: string | null
+}
+
+export interface CambiarEstadoContratoRequest {
+  estado: EstadoContrato
+}
+
 export interface ContratoResponse {
   id: number
   numeroContrato: string

@@ -18,6 +18,8 @@ import { contrato, sesionGestion } from '@/test/dobles'
 vi.mock('@/services/contratoService', () => ({
   getContratos: vi.fn(),
   crearContrato: vi.fn(),
+  actualizarContrato: vi.fn(),
+  cambiarEstadoContrato: vi.fn(),
 }))
 vi.mock('@/services/usuarioService', () => ({
   getUsuarios: vi.fn(),
@@ -137,5 +139,120 @@ describe('GestionPanel', () => {
     expect(await screen.findByText(/Analizando 1 documento/)).toBeInTheDocument()
     expect(screen.queryByText(/Subiendo/)).not.toBeInTheDocument()
     expect(screen.queryByText(/\d+\s*%/)).not.toBeInTheDocument()
+  })
+
+  /**
+   * Activar y corregir el contrato.
+   *
+   * Hasta el 06-10-2026 esta pantalla solo hacía GET y POST: todo contrato
+   * creado se quedaba en BORRADOR para siempre, y como las cuatro reglas de
+   * calendario del motor parten de los contratos ACTIVO, ninguna evaluaba nada.
+   * Un error de tecleo en el valor o en la vigencia tampoco se podía corregir
+   * desde ninguna pantalla, aunque el `PUT` existiera.
+   */
+  describe('activar y corregir el contrato', () => {
+    it('ofrece activar solo los contratos en borrador', async () => {
+      const { getContratos } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([
+        contrato({ id: 1, numeroContrato: 'CTMA-2026-0001', estado: 'BORRADOR' }),
+        contrato({ id: 2, numeroContrato: 'CTMA-2026-0002', estado: 'ACTIVO' }),
+      ])
+
+      montar()
+
+      // Un solo botón «Activar» para dos contratos: el que está en borrador.
+      await waitFor(() => expect(screen.getAllByTitle(/^Activar el contrato/)).toHaveLength(1))
+      expect(screen.getByTitle('Activar el contrato CTMA-2026-0001')).toBeInTheDocument()
+      expect(screen.getAllByTitle(/^Corregir los datos generales/)).toHaveLength(2)
+    })
+
+    it('al confirmar la activación lleva el contrato a ACTIVO y recarga la tabla', async () => {
+      const { getContratos, cambiarEstadoContrato } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([contrato({ estado: 'BORRADOR' })])
+      vi.mocked(cambiarEstadoContrato).mockResolvedValue(contrato({ estado: 'ACTIVO' }))
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Activar el contrato CTMA-2026-0184'))
+      // El diálogo no activa nada al abrirse: la decisión es del botón.
+      expect(cambiarEstadoContrato).not.toHaveBeenCalled()
+      const consultasAntes = vi.mocked(getContratos).mock.calls.length
+      fireEvent.click(screen.getByRole('button', { name: 'Activar el contrato' }))
+
+      await waitFor(() => expect(cambiarEstadoContrato).toHaveBeenCalledWith(1, 'ACTIVO'))
+      // Una consulta más: la tabla se recarga para que el estado que se ve sea
+      // el que quedó guardado, no el que se supone.
+      await waitFor(() => expect(vi.mocked(getContratos).mock.calls.length).toBe(consultasAntes + 1))
+    })
+
+    /**
+     * El `PUT` reemplaza el contrato completo: si el formulario manda solo lo
+     * que cambió, el backend guarda null en todo lo demás y corregir la fecha
+     * de fin borraría el NIT, el representante legal y el registro
+     * presupuestal — los datos con los que se redactan los documentos.
+     */
+    it('al corregir manda también los campos que no se tocaron', async () => {
+      const { getContratos, actualizarContrato } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([contrato()])
+      vi.mocked(actualizarContrato).mockResolvedValue(contrato())
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Corregir los datos generales de CTMA-2026-0184'))
+      fireEvent.change(screen.getByDisplayValue('2026-09-30'), { target: { value: '2026-10-31' } })
+      fireEvent.click(screen.getByText('Guardar los cambios'))
+
+      await waitFor(() =>
+        expect(actualizarContrato).toHaveBeenCalledWith(1, {
+          numeroContrato: 'CTMA-2026-0184',
+          objeto: 'Suministro e instalación de mobiliario para las aulas',
+          valor: 184_500_000,
+          fechaInicio: '2026-03-02',
+          fechaFin: '2026-10-31',
+          tipoContrato: 'Suministro de Bienes',
+          contratista: 'Maderas del Norte S.A.S.',
+          contratistaNit: '900123456-7',
+          representanteLegal: 'María Restrepo',
+          lugarEjecucion: 'Centro Tecnológico del Mobiliario',
+          numeroRegistroPresupuestal: 'RP-2026-118',
+          fechaRegistroPresupuestal: '2026-02-20',
+          centroCosto: 'CTMA-01',
+        }),
+      )
+    })
+
+    /**
+     * El centro de costo guardado puede no estar en la lista de opciones (otra
+     * versión de la lista, o lo que leyó la IA). Un <select> que no contiene su
+     * propio valor lo pierde al guardar sin que nadie lo note.
+     */
+    it('conserva un centro de costo que no está en la lista de opciones', async () => {
+      const { getContratos } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([contrato({ centroCosto: '920599 — CTMA Metalmecánica' })])
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Corregir los datos generales de CTMA-2026-0184'))
+
+      expect(screen.getByDisplayValue('920599 — CTMA Metalmecánica')).toBeInTheDocument()
+    })
+
+    it('si el backend rechaza la corrección lo dice y no cierra el formulario', async () => {
+      const { getContratos, actualizarContrato } = await import('@/services/contratoService')
+      const { ApiError } = await import('@/services/api/client')
+      vi.mocked(getContratos).mockResolvedValue([contrato()])
+      vi.mocked(actualizarContrato).mockRejectedValue(
+        new ApiError(400, 'La fecha de fin no puede ser anterior a la fecha de inicio.'),
+      )
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Corregir los datos generales de CTMA-2026-0184'))
+      fireEvent.change(screen.getByDisplayValue('2026-09-30'), { target: { value: '2026-01-01' } })
+      fireEvent.click(screen.getByText('Guardar los cambios'))
+
+      expect(await screen.findByText(/La fecha de fin no puede ser anterior/)).toBeInTheDocument()
+      expect(screen.getByText('Guardar los cambios')).toBeInTheDocument()
+    })
   })
 })

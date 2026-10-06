@@ -61,6 +61,24 @@ server.registerTool(
     json(await sicotFetch(`/api/contratos/${contratoId}/supervisor`, { method: "PATCH", body: { supervisorId } })),
 );
 
+// Un contrato nace en BORRADOR y solo los ACTIVO entran en las reglas de
+// calendario del motor (LectorDeContratos.vigentes). Sin esta herramienta, un
+// contrato creado desde aquí se quedaba en BORRADOR para siempre: ninguna
+// alerta de vencimiento ni de cronograma lo miraba nunca.
+server.registerTool(
+  "cambiar_estado_contrato",
+  {
+    description:
+      "Cambia el estado de un contrato (BORRADOR, ACTIVO, SUSPENDIDO, FINALIZADO, CANCELADO). " +
+      "Requiere rol GESTION o ADMINISTRADOR. Es una decisión de la persona a cargo del contrato: " +
+      "pregúntale antes de cambiar un estado, no lo deduzcas del avance de las etapas. " +
+      "Volver a BORRADOR no existe y el backend lo rechaza.",
+    inputSchema: { contratoId: z.number().int(), estado: z.enum(ESTADO_CONTRATO) },
+  },
+  async ({ contratoId, estado }) =>
+    json(await sicotFetch(`/api/contratos/${contratoId}/estado`, { method: "PATCH", body: { estado } })),
+);
+
 // ─── Etapas / subetapas ─────────────────────────────────────────────────────
 
 server.registerTool(
