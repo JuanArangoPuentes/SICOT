@@ -36,9 +36,14 @@ const CONTRACT_TYPES = ['Suministro de Bienes', 'Compraventa', 'Servicios', 'Obr
 // la mayor parte del ancho y ninguna columna baja de lo que necesita.
 //
 // La séptima columna (ACCIONES) se añadió con la corrección y la activación del
-// contrato: hasta entonces la tabla solo se podía mirar.
+// contrato: hasta entonces la tabla solo se podía mirar. Al entrar se llevó el
+// poco ancho libre que quedaba y el objeto bajó a 195 px, así que la prueba de
+// extremo a extremo que vigila esos 200 px falló: los mínimos sumaban 900 px más
+// 60 px de separaciones sobre los 976 px que mide el contenedor a 1280 px. Se
+// recortó lo que cada columna podía ceder sin apretar su contenido y el mínimo
+// del objeto subió a 210 px, para que el margen no dependa del ancho sobrante.
 const COLUMNAS_REGISTRO =
-  'minmax(140px, 1.2fr) minmax(190px, 2.6fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr) minmax(100px, 0.9fr) minmax(130px, 1.1fr) minmax(130px, 1fr)'
+  'minmax(130px, 1.2fr) minmax(210px, 2.6fr) minmax(110px, 1.2fr) minmax(85px, 0.8fr) minmax(95px, 0.9fr) minmax(115px, 1.1fr) minmax(120px, 1fr)'
 
 // Las 6 etapas reales del procedimiento GCCON-P-010, espejo de
 // `GcconP010Plantilla` en el backend.
