@@ -1,19 +1,22 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-09-09 contra el código. 14 controladores, 44 endpoints.** La fila 43 (`/api/ia/plantillas`) se añadió el 2026-09-30 sin repetir esa revisión completa: el conteo de arriba es el de entonces, y el comando de abajo da el actual.
+**Revisado el 2026-10-06 contra el código: 15 controladores, 47 endpoints.**
 
-> Este documento se verifica a mano, así que se queda viejo en cuanto alguien
-> añade una ruta. La comprobación es un comando, y conviene correrla antes de
-> confiar en la tabla:
+> Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
+> `InventarioDeEndpointsTest` compara los `@*Mapping` de
+> `backend/src/main/java/co/sena/sicot/controller/` con las filas de esta tabla y
+> falla cuando se añade una ruta sin documentarla aquí:
 >
 > ```bash
-> grep -rhoE '@(Get|Post|Put|Patch|Delete)Mapping' backend/src/main/java/co/sena/sicot/controller/ | wc -l
+> cd backend && ./mvnw -o -q test -Dtest=InventarioDeEndpointsTest
 > ```
 >
-> Si ese número no es 44, la tabla está desactualizada. La fuente de verdad
-> ejecutable es Swagger (`/swagger-ui.html`), que se genera del código; esta
-> tabla existe para lo que Swagger no muestra: **dónde** se comprueba el acceso
-> de cada ruta, que en SICOT unas veces es `@PreAuthorize` y otras una llamada a
+> Lo que la prueba **no** puede comprobar es si la columna «Control de acceso
+> real» dice la verdad; eso sigue siendo lectura humana. La fuente de verdad
+> ejecutable de la forma de cada ruta es Swagger (`/swagger-ui.html`), que se
+> genera del código; esta tabla existe para lo que Swagger no muestra: **dónde**
+> se comprueba el acceso de cada ruta, que en SICOT unas veces es
+> `@PreAuthorize` y otras una llamada a
 > `SecurityUtils.verificarAccesoAlContrato` dentro del servicio.
 
 | # | Controlador | Método | Ruta | Rol en `@PreAuthorize` | Control de acceso real | Éxito | Forma de respuesta |
@@ -31,43 +34,49 @@
 | 11 | ContratoController | PUT | /api/contratos/{id} | GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `ContratoResponse` |
 | 12 | ContratoController | PATCH | /api/contratos/{id}/supervisor | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
-| 13b | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
-| 14 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
-| 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
-| 16 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
-| 17 | SubetapaController | PATCH | /api/subetapas/{id}/estado | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `SubetapaResponse` |
-| 18 | DocumentoController | GET | /api/contratos/{contratoId}/documentos | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `List<DocumentoResponse>` |
-| 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso (el SUPERVISOR, solo en su contrato) | **201** | `DocumentoResponse` |
-| 20 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
-| 20b | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
-| 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar (cuerpo: `tipo`, `notas`, `datos` por clave, `redactarConIa` y, desde el 30-09-2026, `tablas`: filas de obligaciones, amparos u órdenes de pago; en el Informe Final, órdenes que se leen como cifras y no suman el total pagado → 400) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoGeneradoResponse` (los campos de `DocumentoResponse` más `observaciones`, `observacionesRedactadasConIa`, `motivoNotasTalCual` y `huellaDelBorrador`) |
-| 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (`?huellaRevisada=` obligatorio para lo generado por SICOT: solo firma si el borrador sigue siendo el revisado; opcional en lo cargado) | SUPERVISOR | @PreAuthorize + Service verifica que sea el supervisor asignado del contrato, también en lo cargado | 200 | `DocumentoResponse` |
-| 23 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat (cuerpo: `pregunta`, `historial` y, desde el 2026-10-02, `idSolicitud` opcional —el reintento con el mismo id recibe la respuesta del primer intento en vez de otra inferencia— y `revisarPaso` opcional 1..6 —revisión consultiva antes de cerrar el paso, con las instrucciones armadas en el servidor—) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse`: `respuesta`, `fuente` (`SISTEMA` si la armó SICOT sin modelo, `MODELO` si la escribió Ollama) y `accion` (pantalla que el supervisor puede abrir con un botón, o `null`; ninguna firma, marca ni genera) |
-| 23b | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/precalentar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato **antes de encolar** (desde el 2026-10-02; antes respondía 202 a cualquier id) | **202** | vacío |
-| 24 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
-| 25 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |
-| 26 | FormatoDocumentalController | POST | /api/formatos | ADMINISTRADOR | @PreAuthorize en método | 200 | `FormatoDocumentalResponse` |
-| 27 | FormatoDocumentalController | GET | /api/formatos/{id}/archivo | (autenticado) | @PreAuthorize en clase | 200 | `byte[]` (archivo) |
-| 28 | FormatoDocumentalController | DELETE | /api/formatos/{id} | ADMINISTRADOR | @PreAuthorize en método | **204** | `void` |
-| 29 | FirmaElectronicaController | GET | /api/firmas | ADMINISTRADOR | @PreAuthorize en clase | 200 | `List<FirmaResponse>` |
-| 30 | FirmaElectronicaController | GET | /api/firmas/mia | (autenticado) | @PreAuthorize("isAuthenticated()") | 200 | `MiFirmaResponse` |
-| 31 | FirmaElectronicaController | POST | /api/firmas | ADMINISTRADOR | @PreAuthorize en clase | **201** | `FirmaResponse` |
-| 32 | FirmaElectronicaController | PATCH | /api/firmas/{id}/estado | ADMINISTRADOR | @PreAuthorize en clase | 200 | `FirmaResponse` |
-| 33 | AlertaController | GET | /api/contratos/{contratoId}/alertas | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `List<AlertaResponse>` |
-| 34 | AlertaController | GET | /api/alertas | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `List<AlertaResponse>` |
-| 35 | AlertaController | PATCH | /api/alertas/{id}/leida | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `AlertaResponse` |
-| 36 | RegistroController | GET | /api/contratos/{contratoId}/registros | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `List<RegistroResponse>` |
-| 37 | RegistroController | GET | /api/registros | ADMINISTRADOR | @PreAuthorize | 200 | `List<RegistroResponse>` |
-| 38 | ListaChequeoController | GET | /api/listas-chequeo | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<ListaChequeoResumen>` |
-| 39 | ListaChequeoController | GET | /api/listas-chequeo/{codigo} | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `ListaChequeoDetalle` |
-| 40 | AutomatizacionController | GET | /api/automatizaciones/estado | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `EstadoDelMotorResponse` |
-| 41 | AutomatizacionController | GET | /api/automatizaciones/tareas | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `List<TareaAutomatizadaResponse>` |
-| 42 | AutomatizacionController | POST | /api/automatizaciones/evaluar | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `{"tareasEncoladas": n}` |
-| 43 | IAController | GET | /api/ia/plantillas | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<PlantillaDocumentoResponse>`: los `campos` y las `tablas` (con sus columnas y si son del contrato) que pide cada formato |
+| 14 | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
+| 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
+| 16 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
+| 17 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
+| 18 | SubetapaController | PATCH | /api/subetapas/{id}/estado | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `SubetapaResponse` |
+| 19 | DocumentoController | GET | /api/contratos/{contratoId}/documentos | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `List<DocumentoResponse>` |
+| 20 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso (el SUPERVISOR, solo en su contrato) | **201** | `DocumentoResponse` |
+| 21 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
+| 22 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
+| 23 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar (cuerpo: `tipo`, `notas`, `datos` por clave, `redactarConIa` y, desde el 30-09-2026, `tablas`: filas de obligaciones, amparos u órdenes de pago; en el Informe Final, órdenes que se leen como cifras y no suman el total pagado → 400) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoGeneradoResponse` (los campos de `DocumentoResponse` más `observaciones`, `observacionesRedactadasConIa`, `motivoNotasTalCual` y `huellaDelBorrador`) |
+| 24 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (`?huellaRevisada=` obligatorio para lo generado por SICOT: solo firma si el borrador sigue siendo el revisado; opcional en lo cargado) | SUPERVISOR | @PreAuthorize + Service verifica que sea el supervisor asignado del contrato, también en lo cargado | 200 | `DocumentoResponse` |
+| 25 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat (cuerpo: `pregunta`, `historial` y, desde el 2026-10-02, `idSolicitud` opcional —el reintento con el mismo id recibe la respuesta del primer intento en vez de otra inferencia— y `revisarPaso` opcional 1..6 —revisión consultiva antes de cerrar el paso, con las instrucciones armadas en el servidor—) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse`: `respuesta`, `fuente` (`SISTEMA` si la armó SICOT sin modelo, `MODELO` si la escribió Ollama) y `accion` (pantalla que el supervisor puede abrir con un botón, o `null`; ninguna firma, marca ni genera) |
+| 26 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/precalentar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato **antes de encolar** (desde el 2026-10-02; antes respondía 202 a cualquier id) | **202** | vacío |
+| 27 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
+| 28 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |
+| 29 | FormatoDocumentalController | POST | /api/formatos | ADMINISTRADOR | @PreAuthorize en método | 200 | `FormatoDocumentalResponse` |
+| 30 | FormatoDocumentalController | GET | /api/formatos/{id}/archivo | (autenticado) | @PreAuthorize en clase | 200 | `byte[]` (archivo) |
+| 31 | FormatoDocumentalController | DELETE | /api/formatos/{id} | ADMINISTRADOR | @PreAuthorize en método | **204** | `void` |
+| 32 | FirmaElectronicaController | GET | /api/firmas | ADMINISTRADOR | @PreAuthorize en clase | 200 | `List<FirmaResponse>` |
+| 33 | FirmaElectronicaController | GET | /api/firmas/mia | (autenticado) | @PreAuthorize("isAuthenticated()") | 200 | `MiFirmaResponse` |
+| 34 | FirmaElectronicaController | POST | /api/firmas | ADMINISTRADOR | @PreAuthorize en clase | **201** | `FirmaResponse` |
+| 35 | FirmaElectronicaController | PATCH | /api/firmas/{id}/estado | ADMINISTRADOR | @PreAuthorize en clase | 200 | `FirmaResponse` |
+| 36 | AlertaController | GET | /api/contratos/{contratoId}/alertas | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `List<AlertaResponse>` |
+| 37 | AlertaController | GET | /api/alertas | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `List<AlertaResponse>` |
+| 38 | AlertaController | PATCH | /api/alertas/{id}/leida | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `AlertaResponse` |
+| 39 | RegistroController | GET | /api/contratos/{contratoId}/registros | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `List<RegistroResponse>` |
+| 40 | RegistroController | GET | /api/registros | ADMINISTRADOR | @PreAuthorize | 200 | `List<RegistroResponse>` |
+| 41 | ListaChequeoController | GET | /api/listas-chequeo | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<ListaChequeoResumen>` |
+| 42 | ListaChequeoController | GET | /api/listas-chequeo/{codigo} | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `ListaChequeoDetalle` |
+| 43 | AutomatizacionController | GET | /api/automatizaciones/estado | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `EstadoDelMotorResponse` |
+| 44 | AutomatizacionController | GET | /api/automatizaciones/tareas | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `List<TareaAutomatizadaResponse>` |
+| 45 | AutomatizacionController | POST | /api/automatizaciones/evaluar | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `{"tareasEncoladas": n}` |
+| 46 | IAController | GET | /api/ia/plantillas | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<PlantillaDocumentoResponse>`: los `campos` y las `tablas` (con sus columnas y si son del contrato) que pide cada formato |
+| 47 | SeguimientoController | GET | /api/seguimiento/supervisores | ADMINISTRADOR | @PreAuthorize en método | 200 | `SeguimientoResponse`: `supervisores` y `contratosSinSupervisor`. Reúne contratos de todos los supervisores, así que no hay control por contrato que aplicar: el rol es el control |
 
 ---
 
-## Observaciones clave para la tarea 5 (pruebas IDOR)
+## Dónde se comprueba el acceso, caso por caso
+
+Esta sección se escribió en septiembre de 2026 para preparar las pruebas de
+acceso a recursos ajenos (IDOR) y se mantiene porque sigue siendo el resumen más
+útil de las asimetrías del control de acceso. Las referencias a números de línea
+son del momento en que se escribió: tómelas como pista, no como dirección.
 
 1. **Controladores SIN `@PreAuthorize`** (protegidos en service):
    - `EtapaController` — líneas 15-37: 2 endpoints, acceso verificado en `EtapaService.listarPorContrato`/`obtenerEtapaDeContrato`

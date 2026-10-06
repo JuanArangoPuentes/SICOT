@@ -204,11 +204,16 @@ El porqué de las dos decisiones, con las mediciones, está en
 | Síntoma | Dónde mirar |
 | --- | --- |
 | El backend no arranca y el log habla de `JWT_SECRET` | Falta esa variable en el `.env`, o no es Base64 de 32 bytes |
-| El backend no arranca y el log habla de migraciones | Volumen de PostgreSQL de una versión anterior. `docker compose down -v` lo borra (**se llevará los datos**) |
-| La aplicación carga pero no muestra nada | `VITE_API_URL` quedó en `localhost`, o el cortafuegos bloquea 8443/8080 |
+| El backend no arranca y el log habla de migraciones | Una migración falló a medias o su checksum cambió. **No borre nada.** Guarde `docker compose logs backend > migracion.log` y siga [`docs/operacion/BACKUP_Y_RESTAURACION.md`](docs/operacion/BACKUP_Y_RESTAURACION.md): la base sigue ahí y el respaldo del paso 4 permite volver atrás |
+| La aplicación carga pero no muestra nada | El cortafuegos bloquea 443 o 80, los dos únicos puertos que publica el proxy. `VITE_API_URL` no es la causa en el servidor: en producción va vacío a propósito |
 | Las funciones de IA dan 503 | El log del backend lo dice al arrancar. «NO está descargado»: falta el `pull` de arriba, o `OLLAMA_MODEL` no coincide con lo descargado. «No se pudo consultar el catálogo»: el backend no alcanza a Ollama (`docker compose ps ollama` en el servidor) |
 
 Para ver qué pasa: `docker compose ps` y `docker compose logs -f backend`.
+
+En el servidor del Centro **nunca** se usa `docker compose down -v`: esa `-v`
+borra el volumen con los contratos, los documentos firmados y la auditoría. Solo
+tiene sentido en la opción A, donde los datos son de prueba. Para reiniciar
+servicios en producción basta `docker compose restart` o `down` sin `-v`.
 
 ---
 

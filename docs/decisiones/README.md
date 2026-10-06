@@ -6,9 +6,9 @@ discutió— si no estuvieran escritas.
 
 ## Por qué existen
 
-SICOT tiene un horizonte de tres a cuatro años y lo sostiene un equipo pequeño
-que va a rotar. La persona que mantenga este sistema en 2029 casi con seguridad
-no es ninguna de las que lo escribió. Un comentario en el código explica *qué*
+SICOT tiene un horizonte de tres a cuatro años y hoy lo construye una sola
+persona. La persona que mantenga este sistema en 2029 casi con seguridad no es
+la que lo escribió. Un comentario en el código explica *qué*
 hace una línea; un ADR explica *por qué el sistema es así y no de las otras dos
 formas que también funcionaban*.
 
