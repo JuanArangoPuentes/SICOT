@@ -552,10 +552,10 @@ la aplicación, no por una migración. Antes de borrar algo:
 1. verificar IDs;
 2. comprobar relaciones;
 3. comprobar foreign keys;
-4. confirmar con el equipo si la base es compartida.
+4. confirmar que la base es local y no la de un servidor.
 
-Nunca se borran datos con SQL directo: la base es responsabilidad de quien la
-administra (ver §33).
+Nunca se borran datos con SQL directo: se borra usando la aplicación, que deja
+su registro de auditoría (ver §33).
 
 ---
 
@@ -1035,18 +1035,23 @@ La estabilidad tiene prioridad sobre cualquier mejora estética o refactorizaci�
 
 ---
 
-# 33. Propiedad de áreas del proyecto
+# 33. Áreas que piden cuidado aparte
 
-SICOT lo desarrolla un equipo. Estas áreas tienen responsable asignado: no se
-modifican sin coordinar con esa persona, aunque el cambio parezca trivial.
+SICOT lo construye una sola persona: aquí no hay responsables a quienes pedir
+permiso ni equipo con quien coordinar. Estas áreas piden cuidado por lo que pasa
+si se tocan mal, no por de quién son.
 
-| Área | Responsable | Regla |
+| Área | Por qué | Regla |
 |---|---|---|
-| `backend/src/main/resources/db/migration/` | Juliana | Ninguna migración nueva, renombrada ni editada sin ella. Tampoco SQL directo contra la base. |
-| `.vscode/settings.json` | Juliana | Es configuración compartida del entorno Java. |
+| `backend/src/main/resources/db/migration/` | Una migración aplicada sobre datos reales no se deshace, y Flyway rechaza el arranque si cambia el checksum de una ya aplicada | Nunca se edita ni se renombra una migración existente: los cambios de esquema entran como una migración nueva. Tampoco SQL directo contra la base |
+| `docs/decisiones/` | Un ADR fija el rumbo; contradecirlo en el código deja al proyecto con dos verdades | Si el trabajo necesita desviarse de un ADR, se escribe un ADR que lo sustituya; no se cambia el código y se deja el ADR viejo en pie |
+| `.github/workflows/` | Son la única comprobación automática antes de mergear | Un workflow que se desactiva «para que pase» deja de proteger justo cuando hace falta |
 
-Si un trabajo necesita un cambio de esquema, **se reporta y se espera** — no se
-resuelve por la vía rápida.
+Estas tres rutas están además en `.github/CODEOWNERS`, así que un PR que las
+toque pide revisión explícita.
+
+Si un trabajo necesita un cambio de esquema, se hace con una migración nueva y
+se dice en el PR qué cambia y por qué.
 
 Configuración personal (preferencias del editor, ajustes de herramientas de IA)
 va en archivos locales ignorados por git, nunca en archivos versionados.

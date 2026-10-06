@@ -1,4 +1,19 @@
-# Flota Orca de SICOT
+# Flota Orca de SICOT (histórico)
+
+> **Esto es historia, no instrucciones.** La flota Orca se cerró el 4 de
+> septiembre de 2026, cuando se integró la última de sus seis tareas. SICOT lo
+> construye una sola persona: no hay flota de agentes ni equipo con quien
+> coordinar, y nada de lo que sigue describe cómo se trabaja hoy.
+>
+> Se conserva porque los seis briefs de `tareas/` cuentan qué se cambió en el
+> código y por qué, y eso sigue sirviendo para entender decisiones que todavía
+> están en el repositorio. El contrato del agente también explica por qué varias
+> reglas del proyecto están escritas como están.
+>
+> El script `sync-worktrees.sh` se borró: suponía una rama base `develop` que ya
+> no es la de integración y sobrescribía el `.claude/settings.local.json` de cada
+> worktree, así que ejecutarlo hoy pisaría permisos de un entorno que no es el
+> suyo. Los comandos que lo mencionan más abajo no funcionan.
 
 Orca ejecuta varios agentes en paralelo, cada uno en su propio **git worktree**
 sobre este repositorio. Este directorio es la configuración versionada de esa
@@ -16,7 +31,7 @@ eso vive en `docs/` y no en `.claude/`, que está ignorado por git a propósito.
 docs/orca/
 ├── README.md               este archivo: cómo se opera la flota y en qué estado está
 ├── CONTRATO_DEL_AGENTE.md  reglas comunes a todos los agentes
-├── sync-worktrees.sh       propaga la configuración a cada worktree
+├── sync-worktrees.sh       (borrado) propagaba la configuración a cada worktree
 └── tareas/
     └── NN-<rama-git>.md    un brief por rama — la fuente de verdad de cada tarea
 ```

@@ -27,29 +27,30 @@ honesto.
 Dentro del backend corre además el **motor de automatizaciones** (ADR-008): un
 módulo que genera las alertas del sistema —vencimientos, atrasos de cronograma,
 asignación de supervisor, integridad de documentos— sin ninguna herramienta
-externa. Reglas en Java, cola persistente en la misma base, y el modelo local
-solo para redactar. Detalle en [`backend/README.md §9`](./backend/README.md).
+externa. Reglas en Java, cola persistente en la misma base y plantillas para los
+textos: **el motor no llama al modelo de IA**, así que las alertas funcionan en
+un servidor sin Ollama instalado. Detalle en
+[`backend/README.md §9`](./backend/README.md).
 
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3.5.12 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
 | [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
 | [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
-| [`docs/orca/`](./docs/orca) | Configuración de la flota de agentes y resultado de cada tarea | — |
-| [`docs/AUDITORIA_2026-09-08.md`](./docs/AUDITORIA_2026-09-08.md) | Auditoría técnica: qué se midió, qué está bien y los hallazgos con su evidencia | — |
-| [`docs/REVISION_ARQUITECTURA_2026-09-08.md`](./docs/REVISION_ARQUITECTURA_2026-09-08.md) | Revisión crítica de arquitectura y qué se corrigió | — |
-| [`docs/historico/`](./docs/historico) | Reportes de fases ya cerradas y auditorías de datos pasadas | — |
+| [`docs/formatos/`](./docs/formatos) | Qué se decidió para cada formato institucional al armarlo desde SICOT | — |
+| [`docs/historico/`](./docs/historico) | Fotos de una fecha: auditorías, revisiones y fases cerradas. No describen el SICOT de hoy | [Histórico](./docs/historico/README.md) |
 
-## Correr todo con Docker — entorno estándar del equipo
+## Correr todo con Docker — entorno de trabajo estándar
 
-> **Decisión del equipo (26 ago 2026):** el entorno de trabajo es este.
+> **Decidido el 26 de agosto de 2026:** el entorno de trabajo es este.
 > La base de datos de desarrollo es la del contenedor `sicot-db` (**puerto 5433**),
-> no un PostgreSQL instalado a mano. Así todos trabajamos contra el mismo esquema
-> con un solo comando, y no hay que instalar ni versionar nada por separado.
+> no un PostgreSQL instalado a mano. Así el esquema con el que se trabaja sale
+> siempre de las migraciones del repositorio, con un solo comando y sin instalar
+> ni versionar nada por separado.
 
 La base de datos se crea y versiona con Flyway desde el backend. Una instalacion
 nueva aplica el esquema de `backend/src/main/resources/db/migration` y no carga
@@ -128,7 +129,7 @@ Backup/restauración de la base de datos: ver
 2. Backend: `cd backend && mvn spring-boot:run` → http://localhost:8080
 3. Frontend: `cd frontend && npm install && npm run dev` → http://localhost:8443
 
-> ⚠️ **Este modo NO es el entorno estándar del equipo** — ver la sección de Docker arriba.
+> ⚠️ **Este modo NO es el entorno estándar** — ver la sección de Docker arriba.
 > Úselo solo para depurar el backend desde el IDE.
 >
 > **Son dos bases de datos distintas, no la misma vista desde dos puertos.** El Postgres
@@ -220,7 +221,7 @@ porque necesita backend, PostgreSQL y las cuentas del perfil `dev`; se corre a m
 
 ## Distribución a los usuarios finales
 
-> **Decisión del equipo (26 ago 2026):** los instaladores se publican como **GitHub Releases**
+> **Decidido el 26 de agosto de 2026:** los instaladores se publican como **GitHub Releases**
 > de este repositorio. No se usa GitHub Pages ni una página de descarga aparte.
 
 El motivo es la trazabilidad: en un sistema institucional hay que poder responder *"¿qué versión
@@ -286,12 +287,12 @@ sigue fuera de alcance por [`ADR-001`](./docs/decisiones/ADR-001-bifurcamiento-d
 
 Cómo compilarlo y qué cadena de herramientas exige está en
 [`frontend/README.md`](./frontend/README.md). El estado medido de la interfaz en un teléfono, con
-el antes y el después, en [la auditoría del 16 de septiembre](./docs/AUDITORIA_MOVIL_2026-09-16.md).
+el antes y el después, en [la auditoría del 16 de septiembre](./docs/historico/AUDITORIA_MOVIL_2026-09-16.md).
 
 ## Herramientas de desarrollo asistido (opcional)
 
-El repo no versiona la maquinaria de asistentes de IA — es regenerable y no todo el equipo usa
-el mismo. Si quiere los flujos de trabajo de GSD sobre este proyecto:
+El repo no versiona la maquinaria de asistentes de IA — es regenerable, y el
+asistente que se use es una elección de cada máquina. Si quiere los flujos de trabajo de GSD sobre este proyecto:
 
 ```bash
 npx @opengsd/gsd-core@latest --local --claude

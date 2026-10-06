@@ -2,7 +2,9 @@
 
 Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contratos** (SENA — Centro Tecnológico del Mobiliario).
 
-Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
+Spring Boot 3 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI. Las
+versiones exactas están en [`pom.xml`](./pom.xml), que es donde no pueden
+quedarse viejas.
 
 > ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos, auditoría, **Copiloto IA real (Ollama)** — extracción de datos de contrato, chat conversacional con memoria, redacción de documentos formales —, firma electrónica (referencia interna) y entrega de credenciales por correo. Pendiente: integración SECOP II y OCR de documentos escaneados.
 
@@ -258,14 +260,16 @@ Algo pasa en SICOT                    El calendario avanza
                         │   pool propio, reintentos exponenciales
          ┌──────────────┼──────────────┐
          ▼              ▼              ▼
-   CrearAlerta    EnviarCorreo   RedactarResumenIA
+   CrearAlerta    EnviarCorreo   RedaccionDeResumen
          │              │              │
-    AlertaService  EmailService   OllamaClient
+    AlertaService  EmailService    plantillas
+                                 (sin OllamaClient)
 ```
 
 **Las cuatro reglas invariantes** (ADR-008): ninguna regla escribe a la base
-directamente; la regla decide y la IA solo redacta; una regla es una clase con su
-prueba; toda tarea es idempotente por clave.
+directamente; la regla decide y la acción solo redacta, con plantillas y nunca
+con el modelo (ver la nota de abajo); una regla es una clase con su prueba; toda
+tarea es idempotente por clave.
 
 ### Las reglas que hay hoy
 
@@ -284,7 +288,7 @@ prueba; toda tarea es idempotente por clave.
 > probados sostenía los hechos sin alterarlos — las cifras están en la sección
 > «Revisión» de [ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
 > Ahora el resumen se compone con plantillas, y el motor completo funciona en un
-> equipo sin Ollama instalado. El modelo local sigue en SICOT para el chat del
+> servidor sin Ollama instalado. El modelo local sigue en SICOT para el chat del
 > copiloto y la extracción de datos de un PDF (§ correspondiente), donde su
 > trabajo no es repetir cifras.
 
