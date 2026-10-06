@@ -276,6 +276,7 @@ jobs:
               --scanners vuln \
               --severity CRITICAL,HIGH \
               --ignore-unfixed \
+              --ignorefile /proyecto/.trivyignore \
               --exit-code 1 \
               --no-progress \
               --skip-dirs node_modules \
@@ -452,10 +453,12 @@ jobs:
             docker run --rm \
               -v /var/run/docker.sock:/var/run/docker.sock \
               -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+              -v "$PWD/.trivyignore:/sicot/.trivyignore:ro" \
               aquasec/trivy:0.74.0 image \
                 --scanners vuln \
                 --severity CRITICAL,HIGH \
                 --ignore-unfixed \
+                --ignorefile /sicot/.trivyignore \
                 --exit-code 1 \
                 --no-progress \
                 "$imagen"
@@ -474,7 +477,10 @@ jobs:
         # servidor que seguía la guía no podía ni actualizar.
         env:
           DB_PASSWORD: valor-de-relleno-para-ci
-          JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
+          # En claro y no en base64 a propósito: `config` no valida el secreto,
+          # y una cadena base64 de 48 bytes es indistinguible de un secreto real
+          # para gitleaks, que la marcaba y tumbaba el análisis de seguridad.
+          JWT_SECRET: relleno-solo-para-ci-no-es-un-secreto
           # El proxy con TLS de ADR-009 exige un dominio explícito: sin él, el
           # despliegue no sabría para qué nombre pedir certificado. Aquí solo se
           # valida la estructura del archivo, así que basta un nombre de relleno.
@@ -525,7 +531,10 @@ jobs:
         # que despliega docker-compose.prod.yml.
         env:
           DB_PASSWORD: valor-de-relleno-para-ci
-          JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
+          # En claro y no en base64 a propósito: `config` no valida el secreto,
+          # y una cadena base64 de 48 bytes es indistinguible de un secreto real
+          # para gitleaks, que la marcaba y tumbaba el análisis de seguridad.
+          JWT_SECRET: relleno-solo-para-ci-no-es-un-secreto
           SICOT_DOMINIO: sicot.ci.invalid
           RESPALDO_DIRECTORIO: /srv/sicot/respaldos
         run: |

@@ -1,0 +1,25 @@
+# Vulnerabilidades que Trivy reporta y que aquí se dejan pasar, siempre con el
+# motivo y con fecha de caducidad. Una excepción sin caducidad se vuelve
+# permanente sin que nadie lo decida: cuando llega la fecha, la compuerta vuelve
+# a ponerse roja y hay que mirarla otra vez.
+#
+# Formato: <ID> exp:AAAA-MM-DD
+
+# CVE-2026-47884 — CRITICAL en org.springframework:spring-webmvc 6.2.19.
+# Ejecución remota de código a través de una limitación de ruta indebida en
+# XsltView. Trivy da como única versión corregida la 7.0.9 de Spring Framework,
+# que pertenece a Spring Boot 4: la línea 6.2 ya no recibe parches gratuitos
+# desde que terminó el soporte OSS de Spring Boot 3.5 el 30-06-2026, así que no
+# existe una versión a la que adelantarse desde el pom, como se hace con el
+# resto (ver el bloque «ADELANTOS AL PARENT» en backend/pom.xml).
+#
+# Por qué SICOT no es explotable por esta vía hoy: XsltView solo es alcanzable
+# si la aplicación declara un XsltViewResolver o devuelve una XsltView, y SICOT
+# no tiene ninguna vista del lado del servidor. Es una API REST
+# (@RestController) que responde JSON y archivos; no hay un solo
+# ViewResolver declarado, y «xslt» no aparece en ninguna parte del código
+# (comprobado con grep sobre backend/src el 06-10-2026).
+#
+# El arreglo de verdad es la migración que propone la ADR-014, y esta fecha
+# existe para forzar esa decisión en vez de dejar la excepción indefinida.
+CVE-2026-47884 exp:2026-11-15
