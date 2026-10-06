@@ -27,7 +27,9 @@ falla() { echo "  FALLA $*"; fallos=$((fallos + 1)); }
 
 # $1: cómo termina pg_dump (bien | mal); $2: cómo termina la verificación.
 preparar() {
-    rm -rf "$TRABAJO/bin" "$TRABAJO/destino"
+    # ${TRABAJO:?} y no $TRABAJO: si la variable llegara vacía, el borrado
+    # recursivo caería sobre /bin y /destino de la máquina (ShellCheck SC2115).
+    rm -rf "${TRABAJO:?}/bin" "${TRABAJO:?}/destino"
     mkdir -p "$TRABAJO/bin" "$TRABAJO/destino"
     # Un respaldo bueno de la noche anterior, que nada de lo que pase hoy debe
     # tapar ni borrar.
