@@ -41,14 +41,27 @@ public class EmailService {
         return remitenteConfigurado != null && !remitenteConfigurado.isBlank();
     }
 
+    /**
+     * Correo con los datos de acceso, tanto al crear la cuenta como al
+     * restablecer la contraseña.
+     *
+     * <p>Antes pedía «cambiala la primera vez que ingreses», pero SICOT no tiene
+     * ninguna pantalla ni endpoint para que una persona cambie su propia
+     * contraseña: era una instrucción del propio sistema imposible de cumplir.
+     * El texto dice lo que de verdad se puede hacer, que es pedirle al
+     * administrador una nueva, y lo que eso provoca.
+     */
     public void enviarCredenciales(String destinatario, String nombre, String password) {
         enviar(destinatario,
                 "SICOT — Credenciales de acceso",
                 "Hola " + nombre + ",\n\n"
-                        + "Se creó tu cuenta en SICOT (Sistema Inteligente para la Gestión y Acompañamiento de Contratos).\n\n"
+                        + "Estos son tus datos de acceso a SICOT (Sistema Inteligente para la Gestión y "
+                        + "Acompañamiento de Contratos).\n\n"
                         + "Correo: " + destinatario + "\n"
-                        + "Contraseña temporal: " + password + "\n\n"
-                        + "Por seguridad, cambiala la primera vez que ingreses al sistema.\n\n"
+                        + "Contraseña: " + password + "\n\n"
+                        + "La contraseña la asignó el administrador de SICOT. Si necesitas cambiarla, o crees que "
+                        + "otra persona la conoce, pídele que te asigne una nueva: al hacerlo se cierran las "
+                        + "sesiones abiertas con la anterior.\n\n"
                         + "— SICOT · Centro Tecnológico del Mobiliario (SENA)");
     }
 

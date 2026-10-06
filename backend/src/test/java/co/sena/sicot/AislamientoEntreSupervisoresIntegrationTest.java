@@ -531,6 +531,41 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .isEqualTo(codigoInexistente);
     }
 
+    /**
+     * El código ya era el mismo, pero el mensaje no: «Contrato con id 999 no
+     * fue encontrado(a).» frente a «no existe o no tiene acceso». Recorriendo
+     * ids, el texto decía qué existía y era de otros supervisores.
+     */
+    @Test
+    void unRecursoAjenoYUnoInexistenteDanElMismoMensaje() throws Exception {
+        assertThat(mensajeDe(get("/api/contratos/{id}", 999_999_999L)))
+                .isEqualTo(mensajeDe(get("/api/contratos/{id}", contratoAId)))
+                .doesNotContain("999999999");
+        assertThat(mensajeDe(patch("/api/alertas/{id}/leida", 999_999_999L)))
+                .isEqualTo(mensajeDe(patch("/api/alertas/{id}/leida", alertaAId)));
+        assertThat(mensajeDe(get("/api/contratos/{contratoId}/documentos/{id}/archivo", contratoBId, 999_999_999L)))
+                .isEqualTo(mensajeDe(get("/api/contratos/{contratoId}/documentos/{id}/archivo",
+                        contratoAId, docAPendienteId)));
+    }
+
+    /** Gestión no está restringida por contrato: no hay nada que ocultarle y conserva el detalle. */
+    @Test
+    void gestionConservaElMensajeConcretoDeUnContratoInexistente() throws Exception {
+        String cuerpo = mockMvc.perform(get("/api/contratos/{id}", 999_999_999L)
+                        .header("Authorization", "Bearer " + tokenGestion))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(mensajeDeError(cuerpo)).contains("999999999");
+    }
+
+    private String mensajeDe(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder peticion)
+            throws Exception {
+        String cuerpo = mockMvc.perform(peticion.header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        return mensajeDeError(cuerpo);
+    }
+
     @Test
     void firmarUnDocumentoAjenoNoDebeRevelarSiYaEstaFirmado() throws Exception {
         String mensajePendiente = mensajeDeError(mockMvc.perform(

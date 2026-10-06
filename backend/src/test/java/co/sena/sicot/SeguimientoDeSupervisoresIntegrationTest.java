@@ -17,6 +17,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.nio.charset.StandardCharsets;
@@ -59,6 +60,9 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
 
     @Autowired
     private SubetapaRepository subetapaRepository;
+
+    @Autowired
+    private JdbcTemplate jdbc;
 
     private String tokenAdmin;
     private String tokenGestion;
@@ -240,6 +244,11 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
     /**
      * Revisión del 24-09-2026: si a la cuenta asignada se le cambia el rol, su
      * contrato abierto no aparecía en ninguna lista del seguimiento.
+     *
+     * <p>Desde la auditoría del 02-10-2026 la API ya no deja quitarle el rol a
+     * quien tiene contratos en curso (UsuarioService), así que ese estado solo
+     * puede venir de datos anteriores; se reproduce escribiendo el rol por
+     * JDBC. El seguimiento tiene que seguir mostrándolo.
      */
     @Test
     void unContratoCuyoSupervisorDejoDeSerloAparaceSinSupervisor() throws Exception {
@@ -249,7 +258,8 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
                         .content("""
                                 {"nombre":"Ana Con Firma","email":"%s","telefono":"3000000000","rol":"GESTION"}
                                 """.formatted(EMAIL_CON)))
-                .andExpect(status().isOk());
+                .andExpect(status().isBadRequest());
+        jdbc.update("UPDATE usuarios SET rol = 'GESTION' WHERE id = ?", idConFirma);
 
         JsonNode sin = seguimiento(tokenAdmin).get("contratosSinSupervisor");
         assertThat(sin).anySatisfy(c -> assertThat(c.get("id").asLong()).isEqualTo(contratoId));
