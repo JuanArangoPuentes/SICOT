@@ -1009,7 +1009,6 @@ modifican sin coordinar con esa persona, aunque el cambio parezca trivial.
 |---|---|---|
 | `backend/src/main/resources/db/migration/` | Juliana | Ninguna migración nueva, renombrada ni editada sin ella. Tampoco SQL directo contra la base. |
 | `.vscode/settings.json` | Juliana | Es configuración compartida del entorno Java. |
-| `backend/direct-dependencies.txt` | Juliana | Se regenera desde el `pom.xml`; no editar a mano. |
 
 Si un trabajo necesita un cambio de esquema, **se reporta y se espera** — no se
 resuelve por la vía rápida.
