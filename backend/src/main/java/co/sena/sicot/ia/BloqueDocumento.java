@@ -192,6 +192,14 @@ public sealed interface BloqueDocumento {
                     alineacion, gris, centrarVertical);
         }
 
+        /**
+         * Hoy ningún documento la llama, y se mantiene a propósito: es la única
+         * forma de encender el {@code gris} que {@code PdfInstitucional} sí
+         * pinta (#D9D9D9, el de los encabezados de tabla de los formatos). Si se
+         * borrara, habría que borrar también el componente del record y su rama
+         * en el renderizador, y con ellos el fondo de encabezado que los
+         * formatos del SENA llevan de verdad.
+         */
         public Celda conFondoGris() {
             return new Celda(tramos, columnas, filas, alineacion, true, centrarVertical);
         }

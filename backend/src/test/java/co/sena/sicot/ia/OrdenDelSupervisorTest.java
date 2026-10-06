@@ -64,7 +64,7 @@ class OrdenDelSupervisorTest {
 
     private static DocumentoResponse documento(long id, long subetapaId, Instant fechaFirma) {
         return new DocumentoResponse(id, 1L, subetapaId, null, null, null, "Documento " + id, TipoDocumento.PDF,
-                null, fechaFirma == null ? EstadoDocumento.PENDIENTE : EstadoDocumento.APROBADO, 1000L, true,
+                fechaFirma == null ? EstadoDocumento.PENDIENTE : EstadoDocumento.APROBADO, 1000L, true,
                 fechaFirma == null ? null : "FIRMA-1", fechaFirma, null, null, "Alex Zapata", Instant.now(), null,
                 null, null);
     }

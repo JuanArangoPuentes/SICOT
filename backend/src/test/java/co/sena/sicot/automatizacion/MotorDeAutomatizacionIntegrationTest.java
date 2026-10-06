@@ -3,10 +3,12 @@ package co.sena.sicot.automatizacion;
 import co.sena.sicot.PruebaDeIntegracion;
 import co.sena.sicot.dto.auth.AuthResponse;
 import co.sena.sicot.entity.enums.EstadoTareaAutomatizada;
+import co.sena.sicot.entity.enums.OrigenRegistro;
 import co.sena.sicot.entity.enums.PrioridadAlerta;
 import co.sena.sicot.entity.enums.TipoAlerta;
 import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.repository.AlertaRepository;
+import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.repository.TareaAutomatizadaRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -76,6 +78,9 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     private AlertaRepository alertaRepository;
 
     @Autowired
+    private RegistroRepository registroRepository;
+
+    @Autowired
     private JdbcTemplate jdbc;
 
     /** Los listados por contrato llevan tope desde la auditoría; aquí se pide todo. */
@@ -112,6 +117,36 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
                 .containsExactlyInAnyOrder(TipoAlerta.VENCIMIENTO, TipoAlerta.VENCIMIENTO, TipoAlerta.CRONOGRAMA);
         assertThat(tareaRepository.findAll())
                 .allSatisfy(t -> assertThat(t.getEstado()).isEqualTo(EstadoTareaAutomatizada.COMPLETADA));
+    }
+
+    /**
+     * Las alertas del motor dejan constancia en el expediente, con el actor
+     * SISTEMA.
+     *
+     * <p>Es lo que pide ADR-008 al justificar la columna {@code registros.origen}:
+     * distinguir «lo hizo una persona» de «lo hizo el sistema» es parte de lo que
+     * hace revisable un expediente. Hasta el 06-10-2026 ninguna acción del motor
+     * escribía ahí —{@code registrarDelSistema} no tenía un solo llamador— y la
+     * columna solo contenía USUARIO: ante un «nunca me avisaron», el expediente
+     * no tenía prueba de que SICOT hubiera avisado.
+     */
+    @Test
+    void cadaAlertaDelMotorDejaConstanciaConElActorSistema() throws Exception {
+        long contratoId = contratoActivoQueVenceEn(10);
+
+        motor.evaluarCalendario(LocalDate.now(reloj));
+        ejecutor.procesarPendientes();
+
+        assertThat(registroRepository.findByContratoIdOrderByFechaDesc(contratoId, TODAS))
+                .filteredOn(r -> "ALERTA_EMITIDA".equals(r.getAccion()))
+                .as("una constancia por cada una de las tres alertas emitidas")
+                .hasSize(3)
+                .allSatisfy(r -> {
+                    assertThat(r.getOrigen()).isEqualTo(OrigenRegistro.SISTEMA);
+                    assertThat(r.getUsuario())
+                            .as("no se atribuye a ninguna persona: no la hubo")
+                            .isNull();
+                });
     }
 
     /**
@@ -300,7 +335,10 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
         assertThat(tareaRepository.findById(id))
                 .get()
                 .satisfies(t -> assertThat(t.getEstado()).isEqualTo(EstadoTareaAutomatizada.COMPLETADA));
-        assertThat(alertaRepository.findByContratoIsNullOrderByFechaCreacionDesc()).hasSize(1);
+        assertThat(alertaRepository.findAllByOrderByFechaCreacionDesc(TODAS))
+                .filteredOn(a -> a.getContrato() == null)
+                .as("el resumen del periodo no pertenece a ningún contrato")
+                .hasSize(1);
     }
 
     /** La pantalla de operación existe y solo la ve ADMINISTRADOR. */

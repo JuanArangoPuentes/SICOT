@@ -61,6 +61,24 @@ server.registerTool(
     json(await sicotFetch(`/api/contratos/${contratoId}/supervisor`, { method: "PATCH", body: { supervisorId } })),
 );
 
+// Un contrato nace en BORRADOR y solo los ACTIVO entran en las reglas de
+// calendario del motor (LectorDeContratos.vigentes). Sin esta herramienta, un
+// contrato creado desde aquí se quedaba en BORRADOR para siempre: ninguna
+// alerta de vencimiento ni de cronograma lo miraba nunca.
+server.registerTool(
+  "cambiar_estado_contrato",
+  {
+    description:
+      "Cambia el estado de un contrato (BORRADOR, ACTIVO, SUSPENDIDO, FINALIZADO, CANCELADO). " +
+      "Requiere rol GESTION o ADMINISTRADOR. Es una decisión de la persona a cargo del contrato: " +
+      "pregúntale antes de cambiar un estado, no lo deduzcas del avance de las etapas. " +
+      "Volver a BORRADOR no existe y el backend lo rechaza.",
+    inputSchema: { contratoId: z.number().int(), estado: z.enum(ESTADO_CONTRATO) },
+  },
+  async ({ contratoId, estado }) =>
+    json(await sicotFetch(`/api/contratos/${contratoId}/estado`, { method: "PATCH", body: { estado } })),
+);
+
 // ─── Etapas / subetapas ─────────────────────────────────────────────────────
 
 server.registerTool(
@@ -103,6 +121,39 @@ server.registerTool(
   "listar_formatos",
   { description: "Lista el catálogo de formatos documentales oficiales cargados por el Administrador.", inputSchema: {} },
   async () => json(await sicotFetch("/api/formatos")),
+);
+
+// ─── Listas de chequeo ──────────────────────────────────────────────────────
+//
+// El catálogo documental más autoritativo del proyecto (8 listas oficiales
+// transcritas de los formatos del SENA) y, hasta ahora, el que no le llegaba a
+// nadie: ningún cliente consultaba /api/listas-chequeo. Es de solo lectura, así
+// que exponerlo aquí es lo más barato que le da uso real — a un asistente le
+// sirve para responder «qué documentos exige este trámite» sin inventarlos.
+
+const TIPO_LISTA_CHEQUEO = ["MODALIDAD_SELECCION", "TRAMITE_CONTRACTUAL", "TRAMITE_PAGO"] as const;
+
+server.registerTool(
+  "listar_listas_chequeo",
+  {
+    description:
+      "Lista el catálogo de listas de chequeo oficiales del SENA (índice: código, nombre, versión y totales). " +
+      "Filtrable por tipo de trámite. Usa esto antes de responder qué documentos exige un trámite: " +
+      "los requisitos salen del catálogo, no de tu memoria.",
+    inputSchema: { tipo: z.enum(TIPO_LISTA_CHEQUEO).optional() },
+  },
+  async ({ tipo }) => json(await sicotFetch("/api/listas-chequeo", { query: { tipo } })),
+);
+
+server.registerTool(
+  "obtener_lista_chequeo",
+  {
+    description:
+      "Obtiene una lista de chequeo completa por su código (GCCON-F-026, GCCON-F-049, GCCON-F-051, " +
+      "GCCON-F-052, GCCON-F-053, GCCON-F-055, GCCON-F-056, GRF-F-088), con sus etapas y sus ítems.",
+    inputSchema: { codigo: z.string().describe("Código del formato, p. ej. GCCON-F-053") },
+  },
+  async ({ codigo }) => json(await sicotFetch(`/api/listas-chequeo/${encodeURIComponent(codigo)}`)),
 );
 
 // ─── Usuarios ────────────────────────────────────────────────────────────────

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
 import { Chip } from '@/components/ui'
 import {
-  IconAlertTriangle,
   IconClipboardList,
   IconDownload,
   IconFileText,
@@ -166,8 +165,6 @@ export default function AdminPanel({
     }
   }
 
-  const formatosObsoletos = formatos.filter((f) => f.estado === 'OBSOLETO').length
-
   const navGroups: NavGroup[] = [
     {
       label: 'Administración',
@@ -283,18 +280,23 @@ export default function AdminPanel({
                 value={errorDatos ? '—' : String(users.filter((u) => u.activo).length)}
                 hint={errorDatos ? 'Dato no disponible' : `${users.length} registrados en total`}
               />
+              {/* Antes aquí había dos indicadores de formatos: «Formatos
+                  vigentes N/N» y «Formatos obsoletos 0», este último en verde
+                  con la pista «Requieren reemplazo por una versión vigente».
+                  Ninguno podía valer otra cosa: FormatoDocumentalService fija
+                  siempre VIGENTE al cargar un formato y no existe ninguna forma
+                  —ni endpoint, ni pantalla— de marcar uno como obsoleto. Así
+                  que el panel afirmaba, en verde, haber comprobado algo que no
+                  comprueba nadie: si CompromISO publica una versión nueva de un
+                  formato, el administrador seguiría viendo «0 obsoletos»
+                  mientras los supervisores descargan la versión vieja. Queda el
+                  total, que sí es un dato real. El indicador vuelve el día que
+                  haya una manera de marcar la obsolescencia. */}
               <Widget
                 icon={<IconFileText size={17} />}
-                label="Formatos vigentes"
-                value={errorDatos ? '—' : `${formatos.filter((f) => f.estado === 'VIGENTE').length}/${formatos.length}`}
-                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados'}
-              />
-              <Widget
-                icon={<IconAlertTriangle size={17} />}
-                label="Formatos obsoletos"
-                value={errorDatos ? '—' : String(formatosObsoletos)}
-                hint={errorDatos ? 'Dato no disponible' : 'Requieren reemplazo por una versión vigente'}
-                tone={errorDatos ? undefined : formatosObsoletos ? 'warn' : 'ok'}
+                label="Formatos documentales"
+                value={errorDatos ? '—' : String(formatos.length)}
+                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados en el catálogo'}
               />
             </div>
 

@@ -38,11 +38,6 @@ import java.util.regex.Pattern;
  */
 public final class FidelidadDeRedaccion {
 
-    /**
-     * Un número tal como se escribe en Colombia: «120.450.000», «2,5», «71204».
-     * La primera alternativa reconoce los miles con punto antes que un decimal.
-     */
-    private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?");
     private static final Pattern PALABRA = Pattern.compile("[\\p{L}]+");
     private static final Pattern MILES = Pattern.compile("\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?");
 
@@ -1153,15 +1148,6 @@ public final class FidelidadDeRedaccion {
         return r;
     }
 
-    /** Los valores en letras de un texto sin normalizar (se mantiene para quien lo usa). */
-    static List<String> valoresEnLetras(String texto) {
-        List<String> r = new ArrayList<>();
-        for (String v : valoresEnOrden(texto == null ? "" : normalizar(texto).replaceAll("\\d", " "))) {
-            r.add(v);
-        }
-        return r;
-    }
-
     // ── Números escritos en letras ──────────────────────────────────────────
 
     private static final java.util.Map<String, Long> VALOR_DE_LA_PALABRA = valoresDeLasPalabras();
@@ -1937,18 +1923,6 @@ public final class FidelidadDeRedaccion {
             if (p.length() >= 4) {
                 r.add(p);
             }
-        }
-        return r;
-    }
-
-    private static List<String> cifras(String texto) {
-        List<String> r = new ArrayList<>();
-        if (texto == null) {
-            return r;
-        }
-        Matcher m = NUMERO.matcher(texto);
-        while (m.find()) {
-            r.add(valorCanonico(m.group()));
         }
         return r;
     }

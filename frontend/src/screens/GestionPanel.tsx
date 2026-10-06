@@ -16,7 +16,7 @@ import {
 } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
-import { getContratos, crearContrato } from '@/services/contratoService'
+import { getContratos, crearContrato, actualizarContrato, cambiarEstadoContrato } from '@/services/contratoService'
 import { getUsuarios } from '@/services/usuarioService'
 import { extraerDatosContrato, subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
@@ -34,8 +34,11 @@ const CONTRACT_TYPES = ['Suministro de Bienes', 'Compraventa', 'Servicios', 'Obr
 // el contenedor mide 976 px y al objeto le quedaban 63 px, una palabra por
 // línea (medido el 24-09-2026). Con mínimos y proporciones, el objeto se lleva
 // la mayor parte del ancho y ninguna columna baja de lo que necesita.
+//
+// La séptima columna (ACCIONES) se añadió con la corrección y la activación del
+// contrato: hasta entonces la tabla solo se podía mirar.
 const COLUMNAS_REGISTRO =
-  'minmax(140px, 1.2fr) minmax(200px, 3fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr) minmax(100px, 0.9fr) minmax(130px, 1.1fr)'
+  'minmax(140px, 1.2fr) minmax(190px, 2.6fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr) minmax(100px, 0.9fr) minmax(130px, 1.1fr) minmax(130px, 1fr)'
 
 // Las 6 etapas reales del procedimiento GCCON-P-010, espejo de
 // `GcconP010Plantilla` en el backend.
@@ -72,6 +75,9 @@ const ESTADO_ROW: Record<EstadoContrato, { label: string; type: ChipType }> = {
 }
 
 const mapContratoRow = (c: ContratoResponse) => ({
+  // El contrato tal como lo devolvió la API: lo necesitan las acciones de la
+  // fila, que mandan de vuelta al backend campos que la tabla no pinta.
+  contrato: c,
   id: c.numeroContrato,
   object: c.objeto,
   supervisor: c.supervisorNombre ?? '— Sin asignar —',
@@ -101,6 +107,74 @@ const parseVigencia = (texto: string): { inicio: string | null; fin: string | nu
   if (!fechas || fechas.length < 2) return { inicio: null, fin: null }
   return { inicio: toIso(fechas[0]), fin: toIso(fechas[1]) }
 }
+
+// Formulario de corrección de los datos generales. Todos los campos son texto
+// porque vienen de <input>; se convierten al enviar.
+//
+// Lleva TODOS los campos que acepta el PUT, aunque alguno no se vaya a tocar:
+// `ContratoService.actualizar` asigna el contrato completo con lo que llegue,
+// así que un campo que no se mande se guardaría como null y la corrección de la
+// vigencia borraría, por ejemplo, el NIT del contratista.
+interface FormularioDeContrato {
+  numeroContrato: string
+  objeto: string
+  valor: string
+  fechaInicio: string
+  fechaFin: string
+  tipoContrato: string
+  contratista: string
+  contratistaNit: string
+  representanteLegal: string
+  lugarEjecucion: string
+  numeroRegistroPresupuestal: string
+  fechaRegistroPresupuestal: string
+  centroCosto: string
+}
+
+const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
+  numeroContrato: c.numeroContrato,
+  objeto: c.objeto,
+  valor: String(c.valor ?? ''),
+  fechaInicio: c.fechaInicio ?? '',
+  fechaFin: c.fechaFin ?? '',
+  tipoContrato: c.tipoContrato ?? '',
+  contratista: c.contratista ?? '',
+  contratistaNit: c.contratistaNit ?? '',
+  representanteLegal: c.representanteLegal ?? '',
+  lugarEjecucion: c.lugarEjecucion ?? '',
+  numeroRegistroPresupuestal: c.numeroRegistroPresupuestal ?? '',
+  fechaRegistroPresupuestal: c.fechaRegistroPresupuestal ?? '',
+  centroCosto: c.centroCosto ?? '',
+})
+
+// El valor guardado puede no estar en la lista de opciones: lo escribió otro
+// contrato, otra versión de la lista o la extracción con IA. Se añade como
+// opción en vez de descartarlo, porque un <select> que no contiene su propio
+// valor lo pierde al guardar sin que nadie lo note.
+// Campos de texto de la corrección, en el orden en que los busca quien compara
+// el registro contra el documento en papel.
+const CAMPOS_DE_TEXTO: { label: string; campo: keyof FormularioDeContrato; mono: boolean }[] = [
+  { label: 'Número de contrato', campo: 'numeroContrato', mono: true },
+  { label: 'Objeto', campo: 'objeto', mono: false },
+  { label: 'Contratista', campo: 'contratista', mono: false },
+  { label: 'NIT o CC del contratista', campo: 'contratistaNit', mono: true },
+  { label: 'Representante legal', campo: 'representanteLegal', mono: false },
+  { label: 'Valor', campo: 'valor', mono: true },
+  { label: 'Lugar de ejecución', campo: 'lugarEjecucion', mono: false },
+  { label: 'Número de registro presupuestal', campo: 'numeroRegistroPresupuestal', mono: true },
+]
+
+// Fechas con <input type="date"> y no con el campo de texto «dd/mm/aaaa –
+// dd/mm/aaaa» de la creación: ese formato libre existe porque la extracción con
+// IA devuelve texto, y aquí no hay nada que interpretar.
+const CAMPOS_DE_FECHA: { label: string; campo: keyof FormularioDeContrato }[] = [
+  { label: 'Inicio de la vigencia', campo: 'fechaInicio' },
+  { label: 'Fin de la vigencia', campo: 'fechaFin' },
+  { label: 'Fecha del registro presupuestal', campo: 'fechaRegistroPresupuestal' },
+]
+
+const opcionesCon = (opciones: readonly string[], valor: string): string[] =>
+  valor && !opciones.includes(valor) ? [valor, ...opciones] : [...opciones]
 
 // AAAA-MM-DD (lo que devuelve la IA) -> DD/MM/AAAA (lo que espera el campo de vigencia)
 const isoADisplay = (iso: string | null | undefined): string => {
@@ -136,6 +210,15 @@ export default function GestionPanel({
   const [supervisores, setSupervisores] = useState<SupervisorOption[]>([])
   const [busyCrear, setBusyCrear] = useState(false)
   const [errorCrear, setErrorCrear] = useState('')
+
+  // Corrección de los datos generales y activación del contrato
+  const [contratoEnEdicion, setContratoEnEdicion] = useState<ContratoResponse | null>(null)
+  const [edicion, setEdicion] = useState<FormularioDeContrato | null>(null)
+  const [busyEditar, setBusyEditar] = useState(false)
+  const [errorEditar, setErrorEditar] = useState('')
+  const [contratoParaActivar, setContratoParaActivar] = useState<ContratoResponse | null>(null)
+  const [busyActivar, setBusyActivar] = useState(false)
+  const [errorActivar, setErrorActivar] = useState('')
 
   // Campos de la ficha (datos que se persisten en el backend)
   const [idContrato, setIdContrato] = useState('')
@@ -178,6 +261,11 @@ export default function GestionPanel({
       cancelado = true
     }
   }, [])
+
+  const recargarContratos = async () => {
+    const lista = await getContratos()
+    setContratos(lista.map(mapContratoRow))
+  }
 
   const openUpload = () => {
     setShowModal(true)
@@ -295,8 +383,7 @@ export default function GestionPanel({
       setUploadState('done')
       const sup = supervisores.find((s) => String(s.id) === supervisor)
       setLastProcessedContract({ id: creado.numeroContrato, supervisor: sup?.nombre ?? '— Sin asignar —' })
-      const lista = await getContratos()
-      setContratos(lista.map(mapContratoRow))
+      await recargarContratos()
       setTimeout(() => {
         setShowModal(false)
       }, 1200)
@@ -305,6 +392,80 @@ export default function GestionPanel({
       setUploadState('review')
     } finally {
       setBusyCrear(false)
+    }
+  }
+
+  const abrirEdicion = (c: ContratoResponse) => {
+    setContratoEnEdicion(c)
+    setEdicion(formularioDe(c))
+    setErrorEditar('')
+  }
+
+  const cerrarEdicion = () => {
+    setContratoEnEdicion(null)
+    setEdicion(null)
+    setErrorEditar('')
+  }
+
+  const guardarEdicion = async () => {
+    if (!contratoEnEdicion || !edicion || busyEditar) return
+    const num = edicion.numeroContrato.trim()
+    const obj = edicion.objeto.trim()
+    const val = parseValor(edicion.valor)
+    if (!num) {
+      setErrorEditar('El número del contrato es obligatorio.')
+      return
+    }
+    if (!obj) {
+      setErrorEditar('El objeto del contrato es obligatorio.')
+      return
+    }
+    if (val == null) {
+      setErrorEditar('El valor debe ser un número mayor que cero.')
+      return
+    }
+    setBusyEditar(true)
+    setErrorEditar('')
+    try {
+      // Las fechas van tal cual: el <input type="date"> ya entrega AAAA-MM-DD,
+      // que es lo que espera el backend. La coherencia entre inicio y fin la
+      // valida él y su mensaje es el que se muestra aquí.
+      await actualizarContrato(contratoEnEdicion.id, {
+        numeroContrato: num,
+        objeto: obj,
+        valor: val,
+        fechaInicio: edicion.fechaInicio || null,
+        fechaFin: edicion.fechaFin || null,
+        tipoContrato: edicion.tipoContrato.trim() || null,
+        contratista: edicion.contratista.trim() || null,
+        contratistaNit: edicion.contratistaNit.trim() || null,
+        representanteLegal: edicion.representanteLegal.trim() || null,
+        lugarEjecucion: edicion.lugarEjecucion.trim() || null,
+        numeroRegistroPresupuestal: edicion.numeroRegistroPresupuestal.trim() || null,
+        fechaRegistroPresupuestal: edicion.fechaRegistroPresupuestal || null,
+        centroCosto: edicion.centroCosto.trim() || null,
+      })
+      await recargarContratos()
+      cerrarEdicion()
+    } catch (e) {
+      setErrorEditar(e instanceof ApiError ? e.message : 'No se pudo guardar el contrato.')
+    } finally {
+      setBusyEditar(false)
+    }
+  }
+
+  const activarContrato = async () => {
+    if (!contratoParaActivar || busyActivar) return
+    setBusyActivar(true)
+    setErrorActivar('')
+    try {
+      await cambiarEstadoContrato(contratoParaActivar.id, 'ACTIVO')
+      await recargarContratos()
+      setContratoParaActivar(null)
+    } catch (e) {
+      setErrorActivar(e instanceof ApiError ? e.message : 'No se pudo activar el contrato.')
+    } finally {
+      setBusyActivar(false)
     }
   }
 
@@ -450,6 +611,7 @@ export default function GestionPanel({
             <span>ESTADO</span>
             <span>VALOR</span>
             <span>VIGENCIA</span>
+            <span>ACCIONES</span>
           </div>
           {/* Empty state */}
           {contratos.length === 0 && (
@@ -466,7 +628,7 @@ export default function GestionPanel({
           {/* Data rows */}
           {contratos.map((c) => (
             <div
-              key={c.id}
+              key={c.contrato.id}
               className="tabla-fila"
               style={{
                 display: 'grid',
@@ -517,6 +679,35 @@ export default function GestionPanel({
               </span>
               <span data-col="Vigencia" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                 {c.vigencia}
+              </span>
+              <span data-col="Acciones" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  className="btn-ghost"
+                  onClick={() => abrirEdicion(c.contrato)}
+                  style={{ padding: '5px 10px', fontSize: 11.5 }}
+                  title={`Corregir los datos generales de ${c.id}`}
+                >
+                  Editar
+                </button>
+                {/* Solo desde BORRADOR: es la única transición de contrato que el
+                    backend tiene confirmada (TransicionesDeEstado.validarContrato
+                    cierra «volver a BORRADOR» y deja el resto sin definir). Lo que
+                    hace un contrato activo ya pasado el BORRADOR —suspenderlo,
+                    finalizarlo— no se ofrece aquí porque no se sabe con qué
+                    trámite del Centro se corresponde. */}
+                {c.contrato.estado === 'BORRADOR' && (
+                  <button
+                    className="btn-green"
+                    onClick={() => {
+                      setContratoParaActivar(c.contrato)
+                      setErrorActivar('')
+                    }}
+                    style={{ padding: '5px 10px', fontSize: 11.5 }}
+                    title={`Activar el contrato ${c.id}`}
+                  >
+                    Activar
+                  </button>
+                )}
               </span>
             </div>
           ))}
@@ -881,6 +1072,180 @@ export default function GestionPanel({
               )}
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* Corrección de los datos generales (PUT /api/contratos/{id}) */}
+      {contratoEnEdicion && edicion && (
+        <Modal title={`Corregir ${contratoEnEdicion.numeroContrato}`} onClose={cerrarEdicion} width={520}>
+          {/* Se dice que lo vacío queda vacío porque estos campos alimentan los
+              documentos del supervisor: un campo en blanco sale como pendiente
+              en el documento, no lo rellena nadie. */}
+          <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+            Se guarda exactamente lo que escriba aquí. Lo que deje vacío queda vacío en el contrato y aparecerá como
+            pendiente en los documentos que se generen con él. El supervisor asignado no se cambia desde esta ventana.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {CAMPOS_DE_TEXTO.map((f) => (
+              <div key={f.campo}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>
+                <input
+                  type="text"
+                  value={edicion[f.campo]}
+                  onChange={(e) => setEdicion({ ...edicion, [f.campo]: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    fontFamily: f.mono ? 'var(--font-mono)' : 'inherit',
+                    fontSize: 13,
+                  }}
+                />
+              </div>
+            ))}
+            {CAMPOS_DE_FECHA.map((f) => (
+              <div key={f.campo}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>
+                <input
+                  type="date"
+                  value={edicion[f.campo]}
+                  onChange={(e) => setEdicion({ ...edicion, [f.campo]: e.target.value })}
+                  style={{ width: '100%', padding: '8px 12px', fontFamily: 'var(--font-mono)', fontSize: 13 }}
+                />
+              </div>
+            ))}
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo de contrato</div>
+              <select
+                value={edicion.tipoContrato}
+                onChange={(e) => setEdicion({ ...edicion, tipoContrato: e.target.value })}
+              >
+                <option value="">— Sin especificar —</option>
+                {opcionesCon(CONTRACT_TYPES, edicion.tipoContrato).map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Centro de costo</div>
+              <select
+                value={edicion.centroCosto}
+                onChange={(e) => setEdicion({ ...edicion, centroCosto: e.target.value })}
+              >
+                <option value="">— Sin especificar —</option>
+                {opcionesCon(CENTROS_COSTO, edicion.centroCosto).map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {errorEditar && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                border: '1px solid var(--chip-red)',
+                background: 'var(--chip-red-bg)',
+                borderRadius: 8,
+                fontSize: 12.5,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {errorEditar}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              onClick={cerrarEdicion}
+              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn-green"
+              onClick={guardarEdicion}
+              disabled={busyEditar}
+              style={{
+                flex: 2,
+                padding: '10px 0',
+                fontSize: 13,
+                minWidth: 170,
+                opacity: busyEditar ? 0.6 : 1,
+                cursor: busyEditar ? 'default' : 'pointer',
+              }}
+            >
+              {busyEditar ? 'Guardando…' : 'Guardar los cambios'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Activación del contrato (PATCH /api/contratos/{id}/estado) */}
+      {contratoParaActivar && (
+        <Modal title="Activar el contrato" onClose={() => setContratoParaActivar(null)} width={460}>
+          <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+            El contrato <strong>{contratoParaActivar.numeroContrato}</strong> pasa de borrador a activo.
+          </p>
+          {/* Lo que se afirma aquí es lo que el motor hace de verdad: las cuatro
+              reglas de calendario parten de LectorDeContratos.vigentes(), que
+              solo devuelve los ACTIVO. Los umbrales son los de
+              sicot.automatizacion.dias-de-aviso-previo, configurables. */}
+          <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+            Desde ese momento SICOT vigila su plazo: los avisos de vencimiento próximo (por defecto 30, 15 y 7 días
+            antes del fin de la vigencia), el de contrato vencido y el de cronograma atrasado solo miran los contratos
+            activos. Mientras siga en borrador, SICOT no emite ninguno.
+          </p>
+          <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '0 0 4px', lineHeight: 1.6 }}>
+            Cuándo corresponde activarlo lo decide usted: SICOT no supone en qué paso del GCCON-P-010 ocurre. Volver a
+            borrador no es posible.
+          </p>
+
+          {errorActivar && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                border: '1px solid var(--chip-red)',
+                background: 'var(--chip-red-bg)',
+                borderRadius: 8,
+                fontSize: 12.5,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {errorActivar}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              onClick={() => setContratoParaActivar(null)}
+              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn-green"
+              onClick={activarContrato}
+              disabled={busyActivar}
+              style={{
+                flex: 2,
+                padding: '10px 0',
+                fontSize: 13,
+                minWidth: 170,
+                opacity: busyActivar ? 0.6 : 1,
+                cursor: busyActivar ? 'default' : 'pointer',
+              }}
+            >
+              {busyActivar ? 'Activando…' : 'Activar el contrato'}
+            </button>
+          </div>
         </Modal>
       )}
     </AppShell>
