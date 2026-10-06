@@ -150,6 +150,27 @@ class VigilanciaDelRespaldoTest {
         assertThat(valorDe(registro)).isEqualTo(-1);
     }
 
+    /**
+     * Lo que no es un respaldo terminado no cuenta como respaldo, por reciente
+     * que sea. Antes valía cualquier archivo: el volcado a medias de un
+     * respaldo que falló esa misma noche, un archivo vacío o el log del cron
+     * dejado en la carpeta apagaban el aviso de RPO justo cuando el respaldo
+     * había dejado de funcionar.
+     */
+    @Test
+    void soloCuentaUnVolcadoTerminadoYNoVacio(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261001-020000.dump", Duration.ofHours(50));
+        crearRespaldoDeHace(directorio, "sicot-20261003-020000.dump.parcial", Duration.ofHours(2));
+        crearRespaldoDeHace(directorio, "sicot-respaldo.log", Duration.ofHours(2));
+        Path vacio = Files.createFile(directorio.resolve("sicot-20261003-030000.dump"));
+        Files.setLastModifiedTime(vacio, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
+        MeterRegistry registro = new SimpleMeterRegistry();
+
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+
+        assertThat(valorDe(registro)).isEqualTo(50);
+    }
+
     private void crearRespaldoDeHace(Path directorio, String nombre, Duration antiguedad) throws IOException {
         Path archivo = Files.writeString(directorio.resolve(nombre), "contenido de prueba");
         Files.setLastModifiedTime(archivo, FileTime.from(Instant.now().minus(antiguedad)));

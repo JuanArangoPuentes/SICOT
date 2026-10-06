@@ -46,13 +46,22 @@ menos 32 bytes; 48 va sobrado). Para contraseñas, `openssl rand -base64 24`.
 Rotar **no es solo cambiar la línea del `.env`**. Cada credencial tiene un efecto
 distinto y algunas exigen un paso adicional.
 
+> **Los comandos llevan los `-f` a propósito.** Un `docker compose up` sin el
+> archivo de producción recrea el backend con el de desarrollo, que no le pasa
+> `JWT_SECRET` ni la carpeta de respaldos y publica el 8080 en claro: el backend
+> no arranca o, si el `.env` dice `dev`, arranca firmando sesiones con el
+> secreto publicado en el repositorio. Si el `.env` del servidor tiene
+> `COMPOSE_FILE` (INSTALACION.md, paso 1) basta `docker compose`, pero en un
+> incidente no se da nada por supuesto. `--no-deps` evita que Compose recree
+> también la base.
+
 ### `JWT_SECRET`
 
 ```bash
 # 1. Generar y reemplazar la línea en .env
 openssl rand -base64 48
-# 2. Reiniciar solo el backend
-docker compose up -d --force-recreate backend
+# 2. Recrear solo el backend, con el archivo de producción
+docker compose -f docker-compose.yml -f docker-compose.prod.yml   up -d --force-recreate --no-deps backend
 ```
 
 **Efecto:** todas las sesiones abiertas se invalidan al instante. Todo el mundo
@@ -72,8 +81,8 @@ al backend sin poder conectarse.
 docker exec -it sicot-db psql -U sicot -d sicot \
   -c "ALTER USER sicot WITH PASSWORD 'la-nueva';"
 # 2. Actualizar DB_PASSWORD en .env con ese mismo valor
-# 3. Reiniciar el backend
-docker compose up -d --force-recreate backend
+# 3. Recrear el backend, con el archivo de producción
+docker compose -f docker-compose.yml -f docker-compose.prod.yml   up -d --force-recreate --no-deps backend
 ```
 
 **Efecto:** corte de servicio de unos segundos mientras el backend reinicia.

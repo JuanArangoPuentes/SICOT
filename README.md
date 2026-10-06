@@ -113,37 +113,28 @@ docker compose down -v            # apagar y borrar también los datos de Postgr
 El comando de arriba (`docker compose up`) está pensado para desarrollo en una
 sola máquina: publica el puerto de Postgres y levanta Adminer sin
 autenticación, cosas razonables en un laptop de desarrollo pero no en un
-servidor real. Para un despliegue de verdad (accesible desde otras máquinas
-de la red o de Internet):
+servidor real. El procedimiento completo para un servidor está en
+[`INSTALACION.md`](./INSTALACION.md) (opción B); en resumen, se despliega con
+[`docker-compose.prod.yml`](./docker-compose.prod.yml) encima del archivo base:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Esto añade (ver [`docker-compose.prod.yml`](./docker-compose.prod.yml)):
-- Postgres deja de publicar su puerto al host — solo el backend le habla,
-  por la red interna de Docker.
+Esto añade:
+- Un proxy Caddy que termina TLS y es el único servicio con puertos
+  publicados (80 y 443, [ADR-009](./docs/decisiones/ADR-009-terminacion-tls.md)).
+  Postgres, el backend y el frontend solo se alcanzan por la red interna de
+  Docker.
 - Adminer no arranca por defecto (agregar `--profile tools` al comando de
   arriba para usarlo puntualmente).
+- `DB_PASSWORD`, `JWT_SECRET`, `SICOT_DOMINIO` y `RESPALDO_DIRECTORIO`
+  obligatorias, y el perfil `prod` fijado de forma literal.
 
-Antes de levantar así, en el `.env` de esta carpeta:
-1. Fijar `SPRING_PROFILES_ACTIVE=prod`. `docker-compose.prod.yml` ya lo fija de
-   forma literal y además es el valor por defecto de la aplicación desde
-   [ADR-011](./docs/decisiones/ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md);
-   se escribe igual en el `.env` para que quede a la vista de quien opere el
-   servidor qué perfil está corriendo. Evita que se creen las cuentas de prueba
-   y restringe Swagger — ver `backend/src/main/resources/application-prod.properties`.
-2. Fijar `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` a la IP/dominio **real** del
-   servidor, no `localhost` — de lo contrario el frontend, ya compilado con
-   `localhost` incrustado, no podrá hablarle al backend desde ninguna otra
-   máquina. Ver los comentarios en [`.env.example`](./.env.example).
-3. Si alguien no puede conectarse desde otra máquina de la red (síntoma
-   típico: "no me conecta a la base de datos" o el navegador se cuelga
-   cargando), revisar primero el Firewall de Windows/Linux de la máquina que
-   corre Docker Desktop — debe permitir conexiones entrantes en los puertos
-   publicados (8443, 8080). El puerto de Postgres ya no es alcanzable desde
-   fuera con el override de producción, así que no debería intentarse
-   conectar ahí directamente.
+En el `.env` del servidor conviene descomentar `COMPOSE_FILE` (ver
+[`.env.example`](./.env.example)): así cualquier `docker compose …` de esa
+carpeta carga el archivo de producción aunque se olviden los `-f`, y un comando
+escrito deprisa no recrea el backend con la configuración de desarrollo.
 
 Backup/restauración de la base de datos: ver
 [`docs/operacion/BACKUP_Y_RESTAURACION.md`](./docs/operacion/BACKUP_Y_RESTAURACION.md).

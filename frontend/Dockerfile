@@ -1,5 +1,10 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:22-alpine AS build
+# Imágenes base fijadas por versión exacta, no por rama ("22-alpine"). Una rama
+# flotante cambia por debajo sin que nadie lo revise y, peor, puede dejar de
+# moverse sin que nadie lo note: así quedó esta imagen en nginx 1.27, una rama
+# cerrada que ya no recibía parches. Ahora una versión nueva llega como PR de
+# Dependabot (ecosistema docker) y el CI escanea la imagen resultante con Trivy.
+FROM node:22.23.3-alpine AS build
 
 # Usuario no-root también aquí, no sólo en la imagen final. La etapa de build se
 # descarta, así que el riesgo no es lo que quede publicado: es que este es el
@@ -30,7 +35,11 @@ RUN npm run build
 # Imagen "unprivileged": nginx corre como usuario no-root desde el arranque
 # (mismo patrón que backend/Dockerfile). Funciona sin cambios porque ya
 # escuchamos en el puerto 8443, no privilegiado.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+#
+# 1.30 es la rama estable mantenida. La 1.27 que había aquí se cerró en 2025 y
+# su imagen dejó de reconstruirse, con nginx y Alpine incluidos: esta imagen
+# sirve la SPA que guarda el JWT y seguía sin parches sin que nada lo señalara.
+FROM nginxinc/nginx-unprivileged:1.30.5-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
