@@ -438,12 +438,16 @@ export default function VistaDocumentos({
             DOCUMENTOS DEL CONTRATO
           </div>
           {docsContrato.map((doc) => {
+            // Solo dos estados posibles: nada en el backend asigna
+            // EstadoDocumento.RECHAZADO —no hay endpoint de aprobación ni de
+            // rechazo— así que la rama «Rechazado» que había aquí no se
+            // ejecutaba nunca. Si algún día existe ese trámite, vuelve con él y
+            // no antes: una etiqueta que ningún camino produce hace creer que la
+            // revisión de documentos ya está implementada.
             const estado =
               doc.estado === 'APROBADO'
                 ? { text: 'Disponible', type: 'done' as const }
-                : doc.estado === 'RECHAZADO'
-                  ? { text: 'Rechazado', type: 'conflicto' as const }
-                  : { text: 'Pendiente', type: 'pending' as const }
+                : { text: 'Pendiente', type: 'pending' as const }
             return (
               <div
                 key={doc.id}
