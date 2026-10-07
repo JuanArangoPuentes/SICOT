@@ -63,3 +63,51 @@ Una regeneración con `tauri android init` o un cambio de wry pueden quitar esa
 declaración, y ninguna prueba automática lo vería.
 
 Si algo de la tabla no pasa, la versión no se publica hasta saber por qué.
+
+## Cómo montar el emulador, si no hay teléfono a mano
+
+La preparación de arriba pide un servidor con Caddy y su raíz instalada en el
+teléfono. Esto es lo mismo sobre un emulador, comprobado el 07-10-2026; no
+reemplaza la prueba en un teléfono real (lo que un emulador no puede imitar
+está en la nota del punto 8), pero deja correr la mayor parte de la tabla sin
+depender de tener uno.
+
+El emulador alcanza el equipo anfitrión en `10.0.2.2`. Caddy necesita un
+NOMBRE y no esa IP: para un sitio declarado por IP tiene que reconocerla en la
+dirección local de la conexión, y detrás del NAT de Docker eso no ocurre —el
+saludo TLS se cae sin certificado—. Con un nombre, el emulador lo resuelve por
+su fichero `hosts`.
+
+```bash
+# 1. El proxy, contra la pila de desarrollo ya levantada.
+docker run -d --name sicot-apk-proxy --network sicot_default -p 443:443 -p 80:80   -e SICOT_DOMINIO=sicot.centro.test -e SICOT_TLS=internal   -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.4-alpine
+
+# 2. El emulador, con la partición de sistema escribible para poder
+#    tocar `hosts`. `-gpu host` es lo que pide la preparación.
+emulator -avd <nombre> -gpu host -writable-system -no-boot-anim
+
+# 3. El nombre del servidor, dentro del emulador.
+adb root && adb remount && adb reboot && adb root && adb remount
+adb shell 'echo "10.0.2.2 sicot.centro.test" >> /system/etc/hosts'
+
+# 4. La raíz de Caddy, como autoridad instalada por el usuario — que es como
+#    la tendría el teléfono de un supervisor, y lo que el APK de publicación
+#    acepta (ver app/src/main/res/xml/network_security_config.xml).
+docker cp sicot-apk-proxy:/data/caddy/pki/authorities/local/root.crt ./caddy-root.crt
+adb shell locksettings set-pin 1234     # Android exige bloqueo de pantalla
+H=$(openssl x509 -inform PEM -subject_hash_old -in caddy-root.crt -noout)
+adb push caddy-root.crt /data/local/tmp/
+adb shell "mkdir -p /data/misc/user/0/cacerts-added   && cp /data/local/tmp/caddy-root.crt /data/misc/user/0/cacerts-added/$H.0   && chmod 644 /data/misc/user/0/cacerts-added/$H.0   && chown system:system /data/misc/user/0/cacerts-added/$H.0"
+```
+
+Después, en Configuración › Servidor del APK: `https://sicot.centro.test`.
+
+Dos avisos sobre el APK que se instala:
+
+- Los emuladores corrientes son `x86_64` y el APK que publica el CI es
+  `aarch64`: hay que compilar `--target x86_64`. En Windows, si el paso de
+  enlaces simbólicos falla, la vuelta está en `frontend/README.md`.
+- Sin las variables de firma, la compilación de publicación sale **sin firmar**
+  y no se instala (ADR-013). Para la prueba sirve firmarla con el almacén de
+  depuración del SDK; lo que esa firma no permite comprobar es el punto 1,
+  instalar encima de la versión anterior publicada, que exige la llave real.
