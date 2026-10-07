@@ -274,11 +274,21 @@ h6 {
 }
 
 /* ── Form elements ── */
-input[type='text'],
-input[type='email'],
-input[type='password'],
-input[type='date'],
-input[type='number'] {
+
+/* Se enumeran los tipos que NO se pintan, no los que sí.
+   Con la lista al revés —text, email, password, date, number— quedaba fuera
+   cualquier tipo que no estuviera escrito, y el navegador lo pintaba con su
+   propio estilo claro: fondo blanco y texto casi del mismo color, ilegible
+   sobre el tema oscuro. Pasaba en los dos campos que usan otro tipo, y el
+   peor era `type="url"`, el de la dirección del servidor en Configuración:
+   es lo PRIMERO que escribe un supervisor al instalar el APK, y no podía
+   leer lo que estaba escribiendo (visto en el emulador el 07-10-2026).
+   Enumerando las excepciones, un campo nuevo nace con el estilo correcto y
+   solo hay que tocar esta lista para dejar uno fuera a propósito: los que
+   siguen tienen interfaz propia del sistema y pintarlos los rompería. */
+input:not([type='file']):not([type='range']):not([type='color']):not([type='checkbox']):not([type='radio']):not(
+    [type='submit']
+  ):not([type='reset']):not([type='button']):not([type='image']) {
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
