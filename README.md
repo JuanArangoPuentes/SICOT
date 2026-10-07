@@ -209,7 +209,7 @@ del valor.
 
 Las reglas de estabilidad, alcance y "no inventar" que gobiernan este repo están en
 [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) y aplican a cualquier
-persona o agente que contribuya. Su §33 define además qué áreas tienen responsable asignado.
+persona o agente que contribuya. Su §33 define además qué áreas piden cuidado aparte.
 
 ## Integración continua
 

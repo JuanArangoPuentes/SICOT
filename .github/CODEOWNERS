@@ -1,10 +1,8 @@
 # Revisión por defecto de todo el repositorio.
 #
-# Con un equipo pequeño y rotativo, esto no reparte trabajo: garantiza que
-# ningún cambio se mergee sin que alguien con contexto lo haya visto. Cuando
-# los roles del semillero estén definidos, conviene repartir por área — por
-# ejemplo, quien sostenga la base de datos como dueño de
-# backend/src/main/resources/db/migration/.
+# SICOT lo construye una sola persona, así que esto no reparte trabajo entre
+# nadie: obliga a que las rutas de abajo pidan revisión explícita en el PR, en
+# vez de entrar en medio de un diff grande sin que nadie las haya mirado.
 
 *   @JuanArangoPuentes
 

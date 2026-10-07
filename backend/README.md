@@ -133,7 +133,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 |---|---|---|
 | `Fatal error compiling: error: release version 25 not supported` | La máquina tiene un JDK anterior (p. ej. 21). El proyecto compila con `--release 25` | Instalar JDK 25 (`winget install EclipseAdoptium.Temurin.25.JDK`) y apuntar `JAVA_HOME` ahí. El build vía Docker no se ve afectado: usa su propia imagen JDK 25 |
 | `Found more than one migration with version 1` | `target/classes` conserva una migración Flyway vieja que ya se eliminó del código fuente (Maven no borra artefactos huérfanos al renombrar un archivo) | `mvn clean` antes de volver a arrancar. **Correr `mvn clean` siempre después de un pull que consolide o renombre migraciones** |
-| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | Coordinar con quien administra la base antes de tocar `flyway_schema_history`; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
+| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | No editar `flyway_schema_history` a mano; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
 | `IaNoDisponibleException` al usar el Copiloto | Ollama no está corriendo | `ollama serve` en la misma máquina que el backend, y verificar `OLLAMA_URL` |
 
 ## 5. Autenticación
@@ -230,7 +230,7 @@ siempre corre. Para ejecutarla a mano, con la base del proyecto arriba:
 SICOT_IT_DB_URL=jdbc:postgresql://localhost:5432/sicot SICOT_IT_DB_USERNAME=sicot SICOT_IT_DB_PASSWORD=sicot_dev_password mvn test -Dtest=EsquemaPostgreSqlIntegrationTest
 ```
 
-No toca los datos del equipo: trabaja sobre un esquema desechable
+No toca los datos de la base de desarrollo: trabaja sobre un esquema desechable
 (`sicot_verificacion_esquema`) que borra y recrea en cada corrida; el esquema
 `public` queda intacto.
 
