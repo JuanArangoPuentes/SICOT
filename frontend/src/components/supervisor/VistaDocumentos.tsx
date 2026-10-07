@@ -227,11 +227,24 @@ export default function VistaDocumentos({
         </div>
       )}
 
+      {/* El resultado de una descarga se pega arriba de la lista.
+
+          Antes se pintaba aquí y se quedaba aquí. Pero el botón «Descargar»
+          está en la tarjeta de cada documento, y con catorce documentos la
+          lista mide varias pantallas: quien descargaba uno de abajo volvía del
+          «Guardar como» del sistema y no veía nada, ni el «quedó guardado» ni
+          el motivo del fallo. Es el mismo síntoma mudo que MDL-184 vino a
+          quitar, con el mensaje escrito y fuera de la pantalla (visto en el
+          emulador el 07-10-2026). `sticky` lo deja visible sin mover la lista
+          de sitio, que es lo que haría un salto al principio. */}
       {errorDescarga && (
         <div
           role="alert"
           className="card"
           style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 2,
             padding: '12px 15px',
             marginBottom: 14,
             borderColor: 'var(--alert-critica)',
@@ -248,6 +261,9 @@ export default function VistaDocumentos({
           role="status"
           className="card"
           style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 2,
             padding: '12px 15px',
             marginBottom: 14,
             borderColor: 'var(--accent)',
