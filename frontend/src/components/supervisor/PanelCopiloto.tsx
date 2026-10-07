@@ -166,10 +166,17 @@ export default function PanelCopiloto({
         </div>
       </div>
 
-      {/* Mensajes */}
+      {/* Mensajes.
+
+          `minHeight: 0` no es decorativo: un hijo flexible no se encoge por
+          debajo de su contenido salvo que se diga, y sin eso esta lista empuja
+          hacia abajo el compositor en lugar de desplazarse ella. Es la mitad
+          del arreglo del panel recortado en pantalla estrecha; la otra mitad
+          es el tope de altura de `.split-aside` en index.css. */}
       <div
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           padding: '14px 14px 8px',
           display: 'flex',

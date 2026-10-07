@@ -911,6 +911,24 @@ input[type='radio'] {
     width: 100% !important;
     border-left: none !important;
     border-top: 1px solid var(--border);
+    /* En columna el aside deja de tener la altura de la pantalla y pasa a
+       repartirla con el contenido. Conservaba el `flex-shrink: 0` y la altura
+       de su contenido que trae en línea, así que crecía con la conversación
+       hasta pasarse del alto del `.split-panel` — que recorta con
+       `overflow: hidden` y no desplaza—. El compositor del Copiloto (el campo,
+       el botón de enviar y las sugerencias) es lo último de la columna, así
+       que era lo primero que quedaba fuera, y entonces no había forma de
+       volver a escribirle: ni desplazando, ni ocultando y mostrando el panel,
+       ni cambiando de pestaña y volviendo. Con pocos mensajes cabía, así que
+       la pantalla se rompía justo cuando empezaba a usarse. Visto en el
+       emulador el 07-10-2026, con el APK de publicación.
+
+       El tope es del 60 % para que el panel siga debajo del contenido y no lo
+       tape —es el mismo reparto que ya se ve con la conversación corta—, y el
+       `min-height: 0` es lo que permite que la lista de mensajes se encoja y
+       desplace en vez de empujar al compositor. */
+    max-height: 60% !important;
+    min-height: 0 !important;
   }
 }
 @media (max-width: 1000px) {
