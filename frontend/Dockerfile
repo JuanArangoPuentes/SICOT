@@ -47,6 +47,20 @@ FROM nginxinc/nginx-unprivileged:1.30.5-alpine
 # el `USER root` de arriba sería el último y la imagen final correría como root
 # —justo lo que la variante "unprivileged" viene a evitar.
 USER root
+
+# La imagen base trae libtiff 4.7.1-r0, con CVE-2026-4775 (HIGH): ejecución de
+# código o caída por un desbordamiento de entero con signo. Alpine ya publicó
+# 4.7.2-r0, así que este arreglo es gratis — no es el caso de Spring, donde la
+# versión corregida está detrás de una versión mayor de pago en esfuerzo. Lo
+# que no se puede es esperar a que nginx reconstruya su imagen: el escaneo de
+# imágenes es un chequeo obligatorio y hasta entonces no entra ningún PR.
+#
+# Se sube SOLO ese paquete y no `apk upgrade` entero, a propósito: así el resto
+# de la imagen sigue siendo exactamente la que publica nginx, que es lo que la
+# etiqueta fijada promete, y el día que falle se sabrá por qué. Cuando la rama
+# 1.30 traiga 4.7.2-r0 o posterior, esta línea sobra y se quita.
+RUN apk add --no-cache "tiff>=4.7.2-r0"
+
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
 # `envsubst` todo lo que haya en templates/ y deja el resultado en conf.d. Es lo
