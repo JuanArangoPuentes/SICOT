@@ -54,39 +54,65 @@ que un arranque que falla diciendo qué falta.
 
 ### 1. Cree el archivo `.env`
 
-Copie `.env.example` a `.env` en esta misma carpeta y rellénelo. Los valores que
-no puede dejar como están:
+Copie `.env.example` a `.env` en esta misma carpeta, ciérrelo para que solo su
+dueño pueda leerlo y rellénelo:
+
+```bash
+cp .env.example .env && chmod 600 .env
+```
+
+El `.env` guarda en texto plano la contraseña de la base, la clave con la que se
+firman las sesiones y la del correo. Sin el `chmod`, cualquier cuenta del
+servidor puede leerlas (ver
+[`GESTION_DE_SECRETOS.md`](docs/operacion/GESTION_DE_SECRETOS.md)).
+
+Los valores que no puede dejar como están:
 
 | Variable | Qué poner |
 | --- | --- |
-| `SPRING_PROFILES_ACTIVE` | `prod` |
+| `COMPOSE_PATH_SEPARATOR` y `COMPOSE_FILE` | Descomente las dos líneas: `:` y `docker-compose.yml:docker-compose.prod.yml`. Con ellas, todo `docker compose …` de esta carpeta usa el archivo de producción aunque no escriba los `-f` |
+| `SPRING_PROFILES_ACTIVE` | `prod`, o déjela comentada. **Nunca** `dev` |
 | `DB_PASSWORD` | Una contraseña nueva, no la de desarrollo |
-| `JWT_SECRET` | Genérela: `openssl rand -base64 32` |
-| `SICOT_DOMINIO` | El dominio real del servidor |
-| `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` | La dirección real, **nunca** `localhost` |
-| `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | La primera cuenta de administrador |
-| `RESPALDO_DIRECTORIO` | La carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
+| `JWT_SECRET` | Genérela: `openssl rand -base64 48` |
+| `SICOT_DOMINIO` | El nombre con el que se abrirá SICOT (el que el DNS del Centro resuelve a este servidor) o su IP |
+| `SICOT_TLS` | `internal` (ya viene así) si ese nombre solo existe en la red del Centro, **aunque esté bajo un dominio real** como `sena.edu.co`. Solo si el nombre es público y los puertos 80 y 443 se alcanzan desde Internet, ponga un correo de contacto: Caddy pedirá entonces el certificado a Let's Encrypt. Con un correo y un nombre interno, el sitio se queda sin certificado |
+| `CORS_ALLOWED_ORIGINS` | `https://` y el valor de `SICOT_DOMINIO`, **nunca** `localhost`. No añada la aplicación de escritorio ni el APK: el backend los acepta siempre |
+| `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` | Descomente las dos líneas: la primera cuenta de administrador (ver paso 3) |
+| `RESPALDO_DIRECTORIO` | Descomente la línea: la carpeta **del servidor** donde se guardarán los respaldos. Créela antes de arrancar (`mkdir -p /ruta/a/respaldos`): sin ella el sistema no arranca (ver paso 4) |
 
-Lo de `VITE_API_URL` merece un aviso, porque es el error que más tiempo cuesta
-diagnosticar: el frontend se compila con esa dirección **incrustada dentro**. Si
-queda `localhost`, la aplicación carga pero no habla con el backend desde
-ninguna otra máquina, y no da ningún error que apunte a la causa.
+`VITE_API_URL` no se toca en el servidor: `docker-compose.prod.yml` lo deja
+vacío a propósito, porque el proxy sirve la aplicación y la API desde la misma
+dirección. Lo que escriba en el `.env` para esa variable no se usa.
+
+Lo de `COMPOSE_FILE` no es comodidad. Sin él, un comando escrito deprisa sin
+los `-f` —el de rotar un secreto en plena filtración, por ejemplo— recrea el
+backend con el archivo de desarrollo: o no arranca, o arranca en `dev` con el
+secreto de sesión publicado en el repositorio, y en los dos casos con el puerto
+8080 abierto en claro fuera del proxy. Compruébelo antes de seguir:
+`docker compose config --services` tiene que listar `proxy`.
 
 ### 2. Levántelo con el archivo de producción
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose up -d --build
 ```
 
-Frente a la opción A, esto cambia tres cosas: PostgreSQL deja de publicar su
-puerto al exterior, Adminer no arranca, y un proxy Caddy termina TLS delante de
-todo (ver [`docs/decisiones/ADR-009-terminacion-tls.md`](docs/decisiones/ADR-009-terminacion-tls.md)).
+Con el `COMPOSE_FILE` del paso 1 es lo mismo que
+`docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build`.
+
+Frente a la opción A, esto cambia cuatro cosas: PostgreSQL deja de publicar su
+puerto al exterior, Adminer no arranca, Ollama corre en su propio contenedor
+(ver [«Sobre el asistente de IA»](#sobre-el-asistente-de-ia)) y un proxy Caddy
+termina TLS delante de todo (ver
+[`docs/decisiones/ADR-009-terminacion-tls.md`](docs/decisiones/ADR-009-terminacion-tls.md)).
 
 ### 3. Entre y cambie la contraseña
 
 Con la base vacía, el backend crea la cuenta que declaró en `SICOT_ADMIN_*`.
-Entre con ella y **cámbiela desde el panel de administración**. Después puede
-retirar esas dos variables del `.env`: solo se usan cuando no hay ningún usuario.
+Entre con ella y **cámbiela desde el panel de administración**. Después retire
+esas dos variables del `.env`: solo se usan cuando no hay ningún usuario, y
+Compose sigue funcionando sin ellas (actualizar, ver logs, sacar la raíz de la
+CA para los teléfonos).
 
 ### 4. Programe el respaldo
 
@@ -94,9 +120,17 @@ Esto no es opcional y el sistema no lo hace por usted. `scripts/respaldo-sicot.s
 está probado, pero alguien tiene que programarlo:
 
 ```bash
+# Una vez: el log del respaldo, escribible por el usuario que corre el cron
+sudo touch /var/log/sicot-respaldo.log && sudo chown "$USER" /var/log/sicot-respaldo.log
 crontab -e
-# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos
+# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos >> /var/log/sicot-respaldo.log 2>&1
 ```
+
+La redirección al log no es opcional. Sin ella, lo que el script escribe al
+fallar va al correo local del cron, que nadie lee; con ella, el motivo de un
+respaldo fallido queda en un archivo que se puede mirar. Un respaldo que falla
+no deja nada en la carpeta (ni un volcado a medias), así que el backend sí lo
+nota: al día siguiente avisa de que el más reciente supera el RPO.
 
 La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
 El cron se lee en la hora del servidor, y el backend comprueba el respaldo a
@@ -116,20 +150,40 @@ nada. El compromiso de recuperación quedaba siendo una intención.
 
 El detalle de restauración está en
 [`docs/operacion/BACKUP_Y_RESTAURACION.md`](docs/operacion/BACKUP_Y_RESTAURACION.md).
+Ahí está también lo que este respaldo **no** cubre y hay que guardar aparte, una
+vez y fuera del servidor: el `.env` y la autoridad de certificados de Caddy.
+Sin esa autoridad, un servidor reinstalado genera otra, y ningún teléfono ni
+equipo de escritorio vuelve a conectar hasta instalarle la nueva.
 
 ---
 
 ## Sobre el asistente de IA
 
 El copiloto usa **Ollama** corriendo en la misma máquina, gratuito y sin enviar
-nada fuera. Es **opcional**: si no está instalado, SICOT funciona completo y las
+nada fuera. Es **opcional**: sin el modelo, SICOT funciona completo y las
 funciones de IA responden con un error honesto en vez de fingir.
 
-Si lo quiere, instale [Ollama](https://ollama.com) y descargue el modelo:
+**En el servidor (opción B)** Ollama ya viene: `docker-compose.prod.yml` lo
+levanta en su propio contenedor, sin puertos abiertos a la red. Solo falta
+descargar el modelo, una vez (unos 5 GB; queda guardado en un volumen):
 
 ```bash
-ollama pull qwen2.5:7b
+docker compose exec ollama ollama pull qwen2.5:7b
 ```
+
+No instale Ollama aparte en el servidor para SICOT: en Linux, el backend en
+Docker no alcanzaría un Ollama instalado como servicio, y la forma rápida de
+arreglarlo (`OLLAMA_HOST=0.0.0.0`) deja la IA abierta, sin contraseña, a toda la
+red del Centro. Cuente con unos 8 GB de memoria libres para la IA, además de lo
+que usa el resto de SICOT.
+
+**En la opción A**, instale [Ollama](https://ollama.com) en el propio equipo y
+descargue el modelo con `ollama pull qwen2.5:7b`.
+
+El nombre del modelo tiene que coincidir con `OLLAMA_MODEL` del `.env`
+(`qwen2.5:7b` en `.env.example`). Si descarga otro, cambie también esa línea.
+Los tiempos de espera y la memoria que retiene el modelo se ajustan en el mismo
+`.env`: están comentados en `.env.example`.
 
 Dos cosas medidas que conviene saber antes de prometerle nada a nadie:
 
@@ -150,11 +204,16 @@ El porqué de las dos decisiones, con las mediciones, está en
 | Síntoma | Dónde mirar |
 | --- | --- |
 | El backend no arranca y el log habla de `JWT_SECRET` | Falta esa variable en el `.env`, o no es Base64 de 32 bytes |
-| El backend no arranca y el log habla de migraciones | Volumen de PostgreSQL de una versión anterior. `docker compose down -v` lo borra (**se llevará los datos**) |
-| La aplicación carga pero no muestra nada | `VITE_API_URL` quedó en `localhost`, o el cortafuegos bloquea 8443/8080 |
-| Las funciones de IA dan 503 | Ollama no está corriendo, o el modelo no está descargado |
+| El backend no arranca y el log habla de migraciones | Una migración falló a medias o su checksum cambió. **No borre nada.** Guarde `docker compose logs backend > migracion.log` y siga [`docs/operacion/BACKUP_Y_RESTAURACION.md`](docs/operacion/BACKUP_Y_RESTAURACION.md): la base sigue ahí y el respaldo del paso 4 permite volver atrás |
+| La aplicación carga pero no muestra nada | El cortafuegos bloquea 443 o 80, los dos únicos puertos que publica el proxy. `VITE_API_URL` no es la causa en el servidor: en producción va vacío a propósito |
+| Las funciones de IA dan 503 | El log del backend lo dice al arrancar. «NO está descargado»: falta el `pull` de arriba, o `OLLAMA_MODEL` no coincide con lo descargado. «No se pudo consultar el catálogo»: el backend no alcanza a Ollama (`docker compose ps ollama` en el servidor) |
 
 Para ver qué pasa: `docker compose ps` y `docker compose logs -f backend`.
+
+En el servidor del Centro **nunca** se usa `docker compose down -v`: esa `-v`
+borra el volumen con los contratos, los documentos firmados y la auditoría. Solo
+tiene sentido en la opción A, donde los datos son de prueba. Para reiniciar
+servicios en producción basta `docker compose restart` o `down` sin `-v`.
 
 ---
 
@@ -215,9 +274,8 @@ la misma llave; el porqué está en
 
 ### Para el área de sistemas: el certificado del Centro
 
-Si el servidor se monta como describe ADR-009 **sin un dominio público** —el
-caso más probable en un Centro—, Caddy cifra con un certificado de su propia
-autoridad local. Un navegador pide confiar en él una vez. **La aplicación no:
+Con `SICOT_TLS=internal` —el valor por defecto, y el caso más probable en un
+Centro—, Caddy cifra con un certificado de su propia autoridad local. Un navegador pide confiar en él una vez. **La aplicación no:
 sin instalar esa autoridad en el teléfono, no podrá conectarse**, y lo dirá en
 la pantalla de acceso.
 
@@ -234,8 +292,9 @@ la pantalla de acceso.
    el archivo.
 4. Queda en *Credenciales de confianza → Usuario*.
 
-Solo hay que hacerlo una vez por teléfono. Si el Centro tiene un dominio con
-certificado público, nada de esto hace falta.
+Solo hay que hacerlo una vez por teléfono. Si el Centro tiene un nombre público
+y `SICOT_TLS` con un correo (certificado de Let's Encrypt), nada de esto hace
+falta.
 
 ### Lo que no hay, y por qué
 

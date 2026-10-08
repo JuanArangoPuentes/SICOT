@@ -182,7 +182,15 @@ public class RedaccionDeResumen implements AccionDeTarea {
                     }
                 }
                 case "SUBETAPA_REVERTIDA" -> revertidas++;
-                case "DOCUMENTO_GENERADO" -> generados++;
+                // Solo los documentos nuevos. Cancelar la revisión o pulsar
+                // «Usar mis notas tal cual» rearma el mismo borrador y deja
+                // otro registro («… regenerado por SICOT …»): contarlos todos
+                // decía «se generaron 2 documentos» cuando había uno.
+                case "DOCUMENTO_GENERADO" -> {
+                    if (!descripcion.contains(" regenerado ")) {
+                        generados++;
+                    }
+                }
                 case "DOCUMENTO_FIRMADO" -> firmados++;
                 case "DOCUMENTO_CARGADO" -> cargados++;
                 case "ESTADO_CAMBIADO" -> ultimoEstado = descripcion;
@@ -199,10 +207,13 @@ public class RedaccionDeResumen implements AccionDeTarea {
         if (revertidas > 0) {
             frases.add(revertidas == 1 ? "se revirtió una subetapa" : "se revirtieron " + revertidas + " subetapas");
         }
+        // «En SICOT» y no «con el copiloto»: el documento lo arma SICOT con
+        // los datos del contrato (ADR-008); el modelo, cuando interviene, solo
+        // redacta las observaciones. Atribuírselo entero era teatro de IA.
         if (generados > 0) {
             frases.add(generados == 1
-                    ? "se generó un documento con el copiloto"
-                    : "se generaron " + generados + " documentos con el copiloto");
+                    ? "se generó un documento en SICOT"
+                    : "se generaron " + generados + " documentos en SICOT");
         }
         if (firmados > 0) {
             frases.add(firmados == 1 ? "se firmó un documento" : "se firmaron " + firmados + " documentos");

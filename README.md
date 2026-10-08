@@ -27,29 +27,30 @@ honesto.
 Dentro del backend corre además el **motor de automatizaciones** (ADR-008): un
 módulo que genera las alertas del sistema —vencimientos, atrasos de cronograma,
 asignación de supervisor, integridad de documentos— sin ninguna herramienta
-externa. Reglas en Java, cola persistente en la misma base, y el modelo local
-solo para redactar. Detalle en [`backend/README.md §9`](./backend/README.md).
+externa. Reglas en Java, cola persistente en la misma base y plantillas para los
+textos: **el motor no llama al modelo de IA**, así que las alertas funcionan en
+un servidor sin Ollama instalado. Detalle en
+[`backend/README.md §9`](./backend/README.md).
 
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3.5.12 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
 | [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
 | [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
-| [`docs/orca/`](./docs/orca) | Configuración de la flota de agentes y resultado de cada tarea | — |
-| [`docs/AUDITORIA_2026-09-08.md`](./docs/AUDITORIA_2026-09-08.md) | Auditoría técnica: qué se midió, qué está bien y los hallazgos con su evidencia | — |
-| [`docs/REVISION_ARQUITECTURA_2026-09-08.md`](./docs/REVISION_ARQUITECTURA_2026-09-08.md) | Revisión crítica de arquitectura y qué se corrigió | — |
-| [`docs/historico/`](./docs/historico) | Reportes de fases ya cerradas y auditorías de datos pasadas | — |
+| [`docs/formatos/`](./docs/formatos) | Qué se decidió para cada formato institucional al armarlo desde SICOT | — |
+| [`docs/historico/`](./docs/historico) | Fotos de una fecha: auditorías, revisiones y fases cerradas. No describen el SICOT de hoy | [Histórico](./docs/historico/README.md) |
 
-## Correr todo con Docker — entorno estándar del equipo
+## Correr todo con Docker — entorno de trabajo estándar
 
-> **Decisión del equipo (26 ago 2026):** el entorno de trabajo es este.
+> **Decidido el 26 de agosto de 2026:** el entorno de trabajo es este.
 > La base de datos de desarrollo es la del contenedor `sicot-db` (**puerto 5433**),
-> no un PostgreSQL instalado a mano. Así todos trabajamos contra el mismo esquema
-> con un solo comando, y no hay que instalar ni versionar nada por separado.
+> no un PostgreSQL instalado a mano. Así el esquema con el que se trabaja sale
+> siempre de las migraciones del repositorio, con un solo comando y sin instalar
+> ni versionar nada por separado.
 
 La base de datos se crea y versiona con Flyway desde el backend. Una instalacion
 nueva aplica el esquema de `backend/src/main/resources/db/migration` y no carga
@@ -62,28 +63,6 @@ Desde la raíz del repo:
 ```bash
 docker compose up -d --build
 ```
-
-### ⚠️ Primera vez después del `git pull` que consolidó las migraciones
-
-Si ya habías levantado el proyecto antes de esa consolidación, tu volumen de
-PostgreSQL recuerda las 9 migraciones antiguas y **el backend no arrancará**:
-
-```
-FlywayValidateException: Migration checksum mismatch for migration version 1
-Detected applied migration not resolved locally: 2. (…3, 4, 5, 6, 7, 8)
-```
-
-Hay que borrar ese volumen para que Flyway parta de cero con las dos migraciones
-actuales:
-
-```bash
-docker compose down -v
-docker compose up --build -d
-docker compose ps
-```
-
-`down -v` borra **solo** el volumen local de este proyecto. No se ejecuta nunca
-sobre una base con información que se quiera conservar.
 
 Esto levanta 4 contenedores (agrupados en Docker Desktop bajo el proyecto **sicot**):
 
@@ -108,42 +87,37 @@ docker compose down               # apagar
 docker compose down -v            # apagar y borrar también los datos de Postgres
 ```
 
+La `-v` del último comando borra el volumen de la base. Aquí no importa, porque
+los datos son de desarrollo; en el servidor del Centro ese comando no se usa
+nunca (ver [`INSTALACION.md`](./INSTALACION.md) § «Si algo no arranca»).
+
 ## Despliegue en producción (multi-máquina)
 
 El comando de arriba (`docker compose up`) está pensado para desarrollo en una
 sola máquina: publica el puerto de Postgres y levanta Adminer sin
 autenticación, cosas razonables en un laptop de desarrollo pero no en un
-servidor real. Para un despliegue de verdad (accesible desde otras máquinas
-de la red o de Internet):
+servidor real. El procedimiento completo para un servidor está en
+[`INSTALACION.md`](./INSTALACION.md) (opción B); en resumen, se despliega con
+[`docker-compose.prod.yml`](./docker-compose.prod.yml) encima del archivo base:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Esto añade (ver [`docker-compose.prod.yml`](./docker-compose.prod.yml)):
-- Postgres deja de publicar su puerto al host — solo el backend le habla,
-  por la red interna de Docker.
+Esto añade:
+- Un proxy Caddy que termina TLS y es el único servicio con puertos
+  publicados (80 y 443, [ADR-009](./docs/decisiones/ADR-009-terminacion-tls.md)).
+  Postgres, el backend y el frontend solo se alcanzan por la red interna de
+  Docker.
 - Adminer no arranca por defecto (agregar `--profile tools` al comando de
   arriba para usarlo puntualmente).
+- `DB_PASSWORD`, `JWT_SECRET`, `SICOT_DOMINIO` y `RESPALDO_DIRECTORIO`
+  obligatorias, y el perfil `prod` fijado de forma literal.
 
-Antes de levantar así, en el `.env` de esta carpeta:
-1. Fijar `SPRING_PROFILES_ACTIVE=prod`. `docker-compose.prod.yml` ya lo fija de
-   forma literal y además es el valor por defecto de la aplicación desde
-   [ADR-011](./docs/decisiones/ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md);
-   se escribe igual en el `.env` para que quede a la vista de quien opere el
-   servidor qué perfil está corriendo. Evita que se creen las cuentas de prueba
-   y restringe Swagger — ver `backend/src/main/resources/application-prod.properties`.
-2. Fijar `VITE_API_URL` y `CORS_ALLOWED_ORIGINS` a la IP/dominio **real** del
-   servidor, no `localhost` — de lo contrario el frontend, ya compilado con
-   `localhost` incrustado, no podrá hablarle al backend desde ninguna otra
-   máquina. Ver los comentarios en [`.env.example`](./.env.example).
-3. Si alguien no puede conectarse desde otra máquina de la red (síntoma
-   típico: "no me conecta a la base de datos" o el navegador se cuelga
-   cargando), revisar primero el Firewall de Windows/Linux de la máquina que
-   corre Docker Desktop — debe permitir conexiones entrantes en los puertos
-   publicados (8443, 8080). El puerto de Postgres ya no es alcanzable desde
-   fuera con el override de producción, así que no debería intentarse
-   conectar ahí directamente.
+En el `.env` del servidor conviene descomentar `COMPOSE_FILE` (ver
+[`.env.example`](./.env.example)): así cualquier `docker compose …` de esa
+carpeta carga el archivo de producción aunque se olviden los `-f`, y un comando
+escrito deprisa no recrea el backend con la configuración de desarrollo.
 
 Backup/restauración de la base de datos: ver
 [`docs/operacion/BACKUP_Y_RESTAURACION.md`](./docs/operacion/BACKUP_Y_RESTAURACION.md).
@@ -155,7 +129,7 @@ Backup/restauración de la base de datos: ver
 2. Backend: `cd backend && mvn spring-boot:run` → http://localhost:8080
 3. Frontend: `cd frontend && npm install && npm run dev` → http://localhost:8443
 
-> ⚠️ **Este modo NO es el entorno estándar del equipo** — ver la sección de Docker arriba.
+> ⚠️ **Este modo NO es el entorno estándar** — ver la sección de Docker arriba.
 > Úselo solo para depurar el backend desde el IDE.
 >
 > **Son dos bases de datos distintas, no la misma vista desde dos puertos.** El Postgres
@@ -235,7 +209,7 @@ del valor.
 
 Las reglas de estabilidad, alcance y "no inventar" que gobiernan este repo están en
 [`.github/copilot-instructions.md`](./.github/copilot-instructions.md) y aplican a cualquier
-persona o agente que contribuya. Su §33 define además qué áreas tienen responsable asignado.
+persona o agente que contribuya. Su §33 define además qué áreas piden cuidado aparte.
 
 ## Integración continua
 
@@ -247,7 +221,7 @@ porque necesita backend, PostgreSQL y las cuentas del perfil `dev`; se corre a m
 
 ## Distribución a los usuarios finales
 
-> **Decisión del equipo (26 ago 2026):** los instaladores se publican como **GitHub Releases**
+> **Decidido el 26 de agosto de 2026:** los instaladores se publican como **GitHub Releases**
 > de este repositorio. No se usa GitHub Pages ni una página de descarga aparte.
 
 El motivo es la trazabilidad: en un sistema institucional hay que poder responder *"¿qué versión
@@ -313,12 +287,12 @@ sigue fuera de alcance por [`ADR-001`](./docs/decisiones/ADR-001-bifurcamiento-d
 
 Cómo compilarlo y qué cadena de herramientas exige está en
 [`frontend/README.md`](./frontend/README.md). El estado medido de la interfaz en un teléfono, con
-el antes y el después, en [la auditoría del 16 de septiembre](./docs/AUDITORIA_MOVIL_2026-09-16.md).
+el antes y el después, en [la auditoría del 16 de septiembre](./docs/historico/AUDITORIA_MOVIL_2026-09-16.md).
 
 ## Herramientas de desarrollo asistido (opcional)
 
-El repo no versiona la maquinaria de asistentes de IA — es regenerable y no todo el equipo usa
-el mismo. Si quiere los flujos de trabajo de GSD sobre este proyecto:
+El repo no versiona la maquinaria de asistentes de IA — es regenerable, y el
+asistente que se use es una elección de cada máquina. Si quiere los flujos de trabajo de GSD sobre este proyecto:
 
 ```bash
 npx @opengsd/gsd-core@latest --local --claude

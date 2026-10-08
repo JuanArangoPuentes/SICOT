@@ -11,6 +11,7 @@ import co.sena.sicot.entity.enums.EstadoDocumento;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
+import co.sena.sicot.ia.EstampaDeFirma;
 import co.sena.sicot.mapper.DocumentoMapper;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.FirmaElectronicaRepository;
@@ -41,12 +42,13 @@ public class DocumentoService {
     private final RegistroService registroService;
     private final ArchivoValidator archivoValidator;
     private final LectorDeCaptura lectorDeCaptura;
+    private final EstampaDeFirma estampaDeFirma;
 
     public DocumentoService(DocumentoRepository documentoRepository, ContratoService contratoService,
                              SubetapaRepository subetapaRepository, FirmaElectronicaRepository firmaElectronicaRepository,
                              FormatoDocumentalRepository formatoDocumentalRepository,
                              RegistroService registroService, ArchivoValidator archivoValidator,
-                             LectorDeCaptura lectorDeCaptura) {
+                             LectorDeCaptura lectorDeCaptura, EstampaDeFirma estampaDeFirma) {
         this.documentoRepository = documentoRepository;
         this.contratoService = contratoService;
         this.subetapaRepository = subetapaRepository;
@@ -55,6 +57,7 @@ public class DocumentoService {
         this.registroService = registroService;
         this.archivoValidator = archivoValidator;
         this.lectorDeCaptura = lectorDeCaptura;
+        this.estampaDeFirma = estampaDeFirma;
     }
 
     /**
@@ -87,6 +90,12 @@ public class DocumentoService {
                 : nombre.trim();
         if (nombreLimpio == null || nombreLimpio.isBlank()) {
             throw new BusinessException("El nombre del documento es obligatorio.");
+        }
+        // «�» (U+FFFD) es lo que queda de un nombre enviado en otra codificación
+        // que UTF-8: dos cargas del 21-09-2026 quedaron como «supervisi�n» y así
+        // se descargaban. Mejor rechazarlo con un mensaje que guardarlo dañado.
+        if (nombreLimpio.indexOf('�') >= 0 || nombreLimpio.chars().anyMatch(Character::isISOControl)) {
+            throw new BusinessException("El nombre del documento tiene caracteres no válidos; escríbalo de nuevo.");
         }
         if (archivo == null || archivo.isEmpty()) {
             throw new BusinessException("Debe seleccionar un archivo para cargar.");
@@ -174,9 +183,16 @@ public class DocumentoService {
      * posterior del contenido. Se calcula sobre los bytes que hay en ese
      * instante, dentro de la misma transacción que escribe la firma, para que
      * no exista ninguna ventana entre lo que se midió y lo que se firmó.
+     *
+     * @param huellaRevisada SHA-256 del borrador que el supervisor leyó antes de
+     *                       firmar. Si el contenido ya no es ese —otra pestaña o un
+     *                       reintento lo regeneró entre medias—, no se firma: se habría
+     *                       firmado una redacción que nadie leyó (revisión del
+     *                       29-09-2026). Obligatoria para lo que genera SICOT; para un
+     *                       documento cargado puede ser {@code null}.
      */
     @Transactional
-    public DocumentoResponse firmar(Long id) {
+    public DocumentoResponse firmar(Long id, String huellaRevisada) {
         Documento documento = documentoRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Documento", id));
         SecurityUtils.verificarAccesoAlContrato(documento.getContrato());
@@ -185,6 +201,20 @@ public class DocumentoService {
         }
         if (documento.getContenido() == null || documento.getContenido().length == 0) {
             throw new BusinessException("Este documento no tiene contenido: no hay nada que firmar.");
+        }
+        // Un borrador generado se regenera sobre la misma fila (un reintento,
+        // otra pestaña), así que sin la huella de lo que se revisó se firmaba lo
+        // que hubiera en la fila en ese instante: quizá los datos de otra
+        // petición, que quien firma nunca vio (auditoría del 02-10-2026).
+        if (documento.isGeneradoPorIa() && (huellaRevisada == null || huellaRevisada.isBlank())) {
+            throw new BusinessException("Falta indicar qué borrador revisó: un documento que genera SICOT solo se"
+                    + " firma junto con la huella del borrador que se le mostró. Vuelva a firmar el paso para ver"
+                    + " el borrador actual.");
+        }
+        if (huellaRevisada != null && !huellaRevisada.isBlank()
+                && !huellaRevisada.strip().equalsIgnoreCase(HuellaDeDocumento.calcular(documento.getContenido()))) {
+            throw new BusinessException("El borrador cambió desde que lo revisó: se volvió a generar en otra"
+                    + " pestaña o en un intento anterior. Vuelva a firmar el paso para ver la redacción actual.");
         }
         // Dos actas firmadas del mismo paso son dos documentos oficiales que
         // pueden contradecirse. Pasaba si quedaba un borrador de un intento
@@ -199,16 +229,63 @@ public class DocumentoService {
                     + "Un documento firmado no se reemplaza firmando otro.");
         }
         var usuario = SecurityUtils.currentUsuario();
+        // Los documentos de un contrato los firma solo su supervisor asignado.
+        // Un documento formal que genera SICOT lleva además su nombre en el
+        // bloque de firma, y la firma se estampa encima: que la firmara otra
+        // persona —un administrador con firma propia— dejaba su nombre
+        // estampado en el hueco del supervisor (revisión del 28-09-2026). Hasta
+        // la auditoría del 02-10-2026 la regla valía solo para los generados:
+        // un acta cargada por Gestión la podía firmar cualquier administrador,
+        // y quedaba aprobada e inmutable sin que el supervisor la viera.
+        //
+        // Tres casos, según la revisión del 29-09-2026: sin supervisor asignado
+        // el administrador podía firmarlo sobre «[dato pendiente: supervisor]»;
+        // y si Gestión reasignaba el contrato, el supervisor nuevo firmaba un
+        // borrador que llevaba impreso el nombre del anterior. Por eso se mira
+        // también para quién se generó (queda en el PDF), no solo quién es
+        // el supervisor hoy. Regenerar el borrador lo pone a nombre del actual.
+        var supervisor = documento.getContrato().getSupervisor();
+        if (supervisor == null) {
+            throw new BusinessException(documento.isGeneradoPorIa()
+                    ? "El contrato no tiene supervisor asignado, y un documento generado lleva el nombre del"
+                            + " supervisor en su bloque de firma. Asigne el supervisor y vuelva a generarlo."
+                    : "El contrato no tiene supervisor asignado, y sus documentos solo los firma su supervisor.");
+        }
+        if (!supervisor.getId().equals(usuario.getId())) {
+            throw new BusinessException("Este documento lo firma el supervisor del contrato (" + supervisor.getNombre()
+                    + (documento.isGeneradoPorIa() ? "): su nombre es el que aparece en el bloque de firma." : ")."));
+        }
+        if (documento.isGeneradoPorIa()) {
+            Long previsto = estampaDeFirma.firmantePrevisto(documento.getContenido());
+            if (previsto != null && !previsto.equals(usuario.getId())) {
+                throw new BusinessException("Este borrador se generó cuando el supervisor del contrato era otra"
+                        + " persona, y lleva su nombre en el bloque de firma. Vuelva a generarlo para que lleve el suyo.");
+            }
+        }
         FirmaElectronica firma = firmaElectronicaRepository.findFirstByUsuarioIdAndActivaTrue(usuario.getId())
                 .orElseThrow(() -> new BusinessException(
                         "No tiene una firma electrónica activa asignada. Solicítela al Administrador."));
 
+        Instant ahora = Instant.now();
+        // Los documentos que genera SICOT llevan la firma visible: se estampa
+        // en el hueco que el PDF reservó para ella ANTES de calcular la
+        // huella, así que lo que queda registrado como firmado es el PDF con
+        // la firma ya puesta. Un PDF cargado desde fuera se firma tal cual. Si
+        // la estampa falla, estampar lanza y no se firma: el documento sigue
+        // pendiente y se puede regenerar, en vez de quedar firmado sin firma
+        // visible y sin arreglo (auditoría del 02-10-2026).
+        if (documento.isGeneradoPorIa() && "application/pdf".equalsIgnoreCase(documento.getContentType())) {
+            byte[] estampado = estampaDeFirma.estampar(documento.getContenido(), usuario.getNombre(),
+                    firma.getFirmaId(), ahora);
+            documento.setContenido(estampado);
+            documento.setTamanioBytes((long) estampado.length);
+        }
         String huella = HuellaDeDocumento.calcular(documento.getContenido());
 
         documento.setFirmaId(firma.getFirmaId());
         documento.setFirmaHashSha256(huella);
         documento.setFirmadoPor(usuario);
-        documento.setFechaFirma(Instant.now());
+        documento.setFechaFirma(ahora);
         documento.setEstado(EstadoDocumento.APROBADO);
         Documento guardado = documentoRepository.save(documento);
 

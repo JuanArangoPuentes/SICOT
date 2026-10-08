@@ -99,7 +99,6 @@ table {
   --border: #2a3b4e;
   --border-soft: #223244;
   --border-active: #3fc55a;
-  --grid-line: rgba(63, 197, 90, 0.05);
 
   --accent: #3fc55a;
   --accent-emphasis: #2fa347;
@@ -179,34 +178,6 @@ h6 {
   margin: 0;
 }
 
-/* ── Cuadrícula técnica ── */
-.grid-bg {
-  background-color: var(--bg-base);
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-.grid-bg-animated {
-  background-color: var(--bg-base);
-  background-image:
-    linear-gradient(var(--grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
-  background-size: 32px 32px;
-  animation: gridPulse 6s ease-in-out infinite;
-}
-
-@keyframes gridPulse {
-  0%,
-  100% {
-    opacity: 0.75;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* ── Typography ── */
 .font-display {
   font-family: var(--font-display);
@@ -214,11 +185,6 @@ h6 {
 .font-mono {
   font-family: var(--font-mono);
 }
-.text-tech {
-  font-family: var(--font-mono);
-  color: var(--accent-tech);
-}
-
 /* ── Cards ── */
 .card {
   background: var(--bg-card);
@@ -231,24 +197,6 @@ h6 {
 }
 .card:hover {
   border-color: var(--accent-line);
-  box-shadow: var(--shadow-md);
-}
-
-/* Tarjeta con franja de estado a la izquierda */
-.card-doc {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  border-left: 3px solid var(--accent);
-  box-shadow: var(--shadow-sm);
-  transition:
-    border-color var(--t),
-    box-shadow var(--t),
-    transform var(--t);
-}
-.card-doc:hover {
-  border-color: var(--accent);
-  transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
@@ -326,11 +274,21 @@ h6 {
 }
 
 /* ── Form elements ── */
-input[type='text'],
-input[type='email'],
-input[type='password'],
-input[type='date'],
-input[type='number'] {
+
+/* Se enumeran los tipos que NO se pintan, no los que sí.
+   Con la lista al revés —text, email, password, date, number— quedaba fuera
+   cualquier tipo que no estuviera escrito, y el navegador lo pintaba con su
+   propio estilo claro: fondo blanco y texto casi del mismo color, ilegible
+   sobre el tema oscuro. Pasaba en los dos campos que usan otro tipo, y el
+   peor era `type="url"`, el de la dirección del servidor en Configuración:
+   es lo PRIMERO que escribe un supervisor al instalar el APK, y no podía
+   leer lo que estaba escribiendo (visto en el emulador el 07-10-2026).
+   Enumerando las excepciones, un campo nuevo nace con el estilo correcto y
+   solo hay que tocar esta lista para dejar uno fuera a propósito: los que
+   siguen tienen interfaz propia del sistema y pintarlos los rompería. */
+input:not([type='file']):not([type='range']):not([type='color']):not([type='checkbox']):not([type='radio']):not(
+    [type='submit']
+  ):not([type='reset']):not([type='button']):not([type='image']) {
   background: var(--bg-input);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -433,34 +391,6 @@ input[type='radio'] {
   font-weight: 600;
   letter-spacing: 0.02em;
   white-space: nowrap;
-}
-
-/* ── Tabs (secundarias dentro de una vista) ── */
-.tab-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 8px 8px 0 0;
-  padding: 11px 18px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-family: var(--font-ui);
-  transition:
-    color var(--t),
-    border-color var(--t),
-    background var(--t);
-}
-.tab-btn:hover {
-  color: var(--text-secondary);
-  background: var(--accent-soft);
-}
-.tab-btn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-  font-weight: 600;
-  background: var(--accent-soft);
 }
 
 /* ══ ARMAZÓN DE APLICACIÓN — barra lateral izquierda + cabecera ══════════════ */
@@ -910,67 +840,6 @@ input[type='radio'] {
   border: 1px solid var(--accent-line);
 }
 
-/* ── Alerts ── */
-@keyframes blinkSlow {
-  0%,
-  100% {
-    opacity: 0.78;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@keyframes blinkFast {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-.blink-slow {
-  animation: blinkSlow 1.5s ease-in-out infinite;
-}
-.blink-fast {
-  animation: blinkFast 0.7s ease-in-out infinite;
-}
-
-.alert-glow-ring {
-  box-shadow:
-    0 0 0 3px var(--accent-glow),
-    0 0 12px var(--accent-glow);
-  border-radius: 50%;
-}
-
-/* ── Tooltip de etapa (legado) ── */
-.stage-seg {
-  position: relative;
-  cursor: pointer;
-}
-.stage-tip {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  min-width: 180px;
-  background: var(--bg-surface);
-  border: 1px solid var(--accent-line);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--text-secondary);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--t);
-  z-index: 30;
-  box-shadow: var(--shadow-md);
-}
-.stage-seg:hover .stage-tip {
-  opacity: 1;
-}
-
 /* ── Avatar ── */
 @keyframes breathe {
   0%,
@@ -1009,21 +878,12 @@ input[type='radio'] {
 
 /* ── Accesibilidad de movimiento ── */
 @media (prefers-reduced-motion: reduce) {
-  .blink-slow,
-  .blink-fast,
   .avatar-float {
     animation: none;
   }
   * {
     transition-duration: 50ms !important;
   }
-}
-.no-hover *:hover {
-  transition: none !important;
-}
-.no-hover .blink-slow,
-.no-hover .blink-fast {
-  animation: none;
 }
 
 /* ── Scrollbar ── */
@@ -1051,6 +911,24 @@ input[type='radio'] {
     width: 100% !important;
     border-left: none !important;
     border-top: 1px solid var(--border);
+    /* En columna el aside deja de tener la altura de la pantalla y pasa a
+       repartirla con el contenido. Conservaba el `flex-shrink: 0` y la altura
+       de su contenido que trae en línea, así que crecía con la conversación
+       hasta pasarse del alto del `.split-panel` — que recorta con
+       `overflow: hidden` y no desplaza—. El compositor del Copiloto (el campo,
+       el botón de enviar y las sugerencias) es lo último de la columna, así
+       que era lo primero que quedaba fuera, y entonces no había forma de
+       volver a escribirle: ni desplazando, ni ocultando y mostrando el panel,
+       ni cambiando de pestaña y volviendo. Con pocos mensajes cabía, así que
+       la pantalla se rompía justo cuando empezaba a usarse. Visto en el
+       emulador el 07-10-2026, con el APK de publicación.
+
+       El tope es del 60 % para que el panel siga debajo del contenido y no lo
+       tape —es el mismo reparto que ya se ve con la conversación corta—, y el
+       `min-height: 0` es lo que permite que la lista de mensajes se encoja y
+       desplace en vez de empujar al compositor. */
+    max-height: 60% !important;
+    min-height: 0 !important;
   }
 }
 @media (max-width: 1000px) {

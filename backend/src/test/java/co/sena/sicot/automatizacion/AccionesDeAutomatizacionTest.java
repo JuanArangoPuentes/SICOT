@@ -1,5 +1,6 @@
 package co.sena.sicot.automatizacion;
 
+import co.sena.sicot.automatizacion.acciones.CreacionDeAlerta;
 import co.sena.sicot.automatizacion.acciones.EnvioDeCorreo;
 import co.sena.sicot.automatizacion.acciones.RedaccionDeResumen;
 import co.sena.sicot.entity.Registro;
@@ -10,6 +11,7 @@ import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.service.AlertaService;
 import co.sena.sicot.service.EmailService;
+import co.sena.sicot.service.RegistroService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -67,12 +69,17 @@ class AccionesDeAutomatizacionTest {
     @Mock
     private AlertaService alertaService;
 
+    @Mock
+    private RegistroService registroService;
+
     private EnvioDeCorreo envioDeCorreo;
+    private CreacionDeAlerta creacionDeAlerta;
     private RedaccionDeResumen redaccionDeResumen;
 
     @BeforeEach
     void prepararAcciones() {
-        envioDeCorreo = new EnvioDeCorreo(emailService, payloadJson);
+        envioDeCorreo = new EnvioDeCorreo(emailService, registroService, payloadJson);
+        creacionDeAlerta = new CreacionDeAlerta(alertaService, lectorDeContratos, registroService, payloadJson);
         redaccionDeResumen = new RedaccionDeResumen(
                 lectorDeContratos, registroRepository, alertaService, payloadJson);
     }
@@ -120,6 +127,76 @@ class AccionesDeAutomatizacionTest {
         assertThatThrownBy(() -> envioDeCorreo.ejecutar(tareaDeCorreo()))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Connection refused");
+    }
+
+    /**
+     * El actor SISTEMA de ADR-008, que justifica la columna
+     * {@code registros.origen} porque distinguir «lo hizo una persona» de «lo
+     * hizo el sistema» es parte de lo que hace revisable un expediente. Hasta el
+     * 06-10-2026 ninguna acción del motor lo escribía: ante un «nunca me
+     * avisaron», el expediente no tenía prueba de que SICOT hubiera avisado.
+     *
+     * <p>El cuerpo del correo no entra en la constancia: repite datos del
+     * contrato que ya están en el expediente y haría ilegible la bitácora.
+     */
+    @Test
+    void dejaConstanciaDelCorreoEnviadoConElActorSistema() {
+        when(emailService.estaConfigurado()).thenReturn(true);
+
+        envioDeCorreo.ejecutar(tareaDeCorreo());
+
+        ArgumentCaptor<String> descripcion = ArgumentCaptor.forClass(String.class);
+        verify(registroService).registrarDelSistema(eq(7L), eq("CORREO_ENVIADO"), descripcion.capture());
+        assertThat(descripcion.getValue())
+                .contains("ana@soy.sena.edu.co")
+                .contains("SICOT — Asignación")
+                .contains("supervisor-asignado")
+                .doesNotContain("Cuerpo del mensaje.");
+    }
+
+    /** Sin SMTP no hubo envío, así que no puede haber constancia de uno. */
+    @Test
+    void sinCorreoConfiguradoNoDejaConstanciaDeUnEnvioQueNoOcurrio() {
+        when(emailService.estaConfigurado()).thenReturn(false);
+
+        envioDeCorreo.ejecutar(tareaDeCorreo());
+
+        verify(registroService, never()).registrarDelSistema(any(Long.class), anyString(), anyString());
+    }
+
+    // -- CreacionDeAlerta ---------------------------------------------------
+
+    @Test
+    void laAlertaEmitidaPorElMotorQuedaEnLaAuditoriaDelContrato() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+
+        ResultadoDeAccion resultado = creacionDeAlerta.ejecutar(tareaDeAlerta());
+
+        assertThat(resultado.ejecutada()).isTrue();
+        verify(alertaService).crearDelSistema(7L, TipoAlerta.VENCIMIENTO, PrioridadAlerta.ALTA,
+                "El contrato CT-2026-001 vence en 7 días.");
+        ArgumentCaptor<String> descripcion = ArgumentCaptor.forClass(String.class);
+        verify(registroService).registrarDelSistema(eq(7L), eq("ALERTA_EMITIDA"), descripcion.capture());
+        assertThat(descripcion.getValue())
+                .contains("VENCIMIENTO")
+                .contains("vencimiento-proximo")
+                .contains("El contrato CT-2026-001 vence en 7 días.");
+    }
+
+    /**
+     * Un contrato borrado entre encolar y ejecutar no produce alerta, así que
+     * tampoco constancia: registrar «SICOT avisó» de un aviso que no se creó
+     * sería exactamente la clase de falsedad que la auditoría existe para evitar.
+     */
+    @Test
+    void siElContratoDesaparecioNoRegistraUnAvisoQueNoSeEmitio() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.empty());
+
+        ResultadoDeAccion resultado = creacionDeAlerta.ejecutar(tareaDeAlerta());
+
+        assertThat(resultado.ejecutada()).isFalse();
+        verify(alertaService, never()).crearDelSistema(anyLong(), any(), any(), anyString());
+        verify(registroService, never()).registrarDelSistema(any(Long.class), anyString(), anyString());
     }
 
     // -- RedaccionDeResumen -------------------------------------------------
@@ -255,16 +332,25 @@ class AccionesDeAutomatizacionTest {
     }
 
     /**
-     * Un documento que el supervisor pidió al copiloto es actividad del
-     * expediente y se cuenta como tal. Hasta el 21-09-2026 la generación no
-     * dejaba registro, así que el resumen no tenía cómo saberlo.
+     * Un documento generado es actividad del expediente y se cuenta como tal.
+     * Hasta el 21-09-2026 la generación no dejaba registro, así que el resumen
+     * no tenía cómo saberlo.
+     *
+     * <p>2-10-2026: el resumen decía «se generaron 2 documentos con el
+     * copiloto» por un solo borrador rearmado tras cancelar la revisión, y
+     * atribuía al modelo un documento que arma SICOT. Las descripciones son
+     * las que escribe GeneracionDocumentoService.
      */
     @Test
-    void unDocumentoGeneradoConElCopilotoSeCuentaEnElResumen() {
+    void unDocumentoGeneradoSeCuentaUnaVezYSeAtribuyeASicot() {
         when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
         when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
                 .thenReturn(List.of(
-                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado con el copiloto."),
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) regenerado por SICOT con los "
+                                + "datos del contrato en la subetapa 2.7; queda pendiente de firma."),
+                        registro("DOCUMENTO_GENERADO", "Acta de Inicio (GCCON-F-018) generado por SICOT con los "
+                                + "datos del contrato; las observaciones del supervisor se redactaron con el copiloto "
+                                + "en la subetapa 2.7; queda pendiente de firma."),
                         registro("DOCUMENTO_CARGADO", "Documento «soporte.pdf» cargado.")));
 
         redaccionDeResumen.ejecutar(tareaDeResumen());
@@ -272,7 +358,9 @@ class AccionesDeAutomatizacionTest {
         ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
         verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
         assertThat(texto.getValue())
-                .contains("se generó un documento con el copiloto")
+                .contains("se generó un documento en SICOT")
+                .doesNotContain("se generaron 2")
+                .doesNotContain("con el copiloto")
                 .contains("se cargó un documento");
     }
 
@@ -361,6 +449,13 @@ class AccionesDeAutomatizacionTest {
         return new TareaEnEjecucion(1L, "supervisor-asignado", TipoTareaAutomatizada.ENVIAR_CORREO, 7L,
                 payloadJson.escribir(new PayloadDeTarea.EnviarCorreo(
                         "ana@soy.sena.edu.co", "SICOT — Asignación", "Cuerpo del mensaje.")));
+    }
+
+    private TareaEnEjecucion tareaDeAlerta() {
+        return new TareaEnEjecucion(3L, "vencimiento-proximo", TipoTareaAutomatizada.CREAR_ALERTA, 7L,
+                payloadJson.escribir(new PayloadDeTarea.CrearAlerta(
+                        TipoAlerta.VENCIMIENTO, PrioridadAlerta.ALTA,
+                        "El contrato CT-2026-001 vence en 7 días.")));
     }
 
     private TareaEnEjecucion tareaDeResumen() {

@@ -3,6 +3,8 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.usuario.ActualizarUsuarioRequest;
 import co.sena.sicot.dto.usuario.CambiarEstadoUsuarioRequest;
 import co.sena.sicot.dto.usuario.CrearUsuarioRequest;
+import co.sena.sicot.dto.usuario.EnviarCredencialesRequest;
+import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.BusinessException;
@@ -14,11 +16,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -29,6 +34,12 @@ class UsuarioServiceTest {
 
     @Mock
     private PasswordEncoder passwordEncoder;
+
+    @Mock
+    private EmailService emailService;
+
+    @Mock
+    private co.sena.sicot.repository.ContratoRepository contratoRepository;
 
     @InjectMocks
     private UsuarioService usuarioService;
@@ -67,6 +78,39 @@ class UsuarioServiceTest {
         assertThat(response.rol()).isEqualTo(Rol.SUPERVISOR);
         assertThat(response.activo()).isTrue();
         assertThat(response.email()).isEqualTo("nuevo@soy.sena.edu.co");
+    }
+
+    /**
+     * 40 caracteres pasan la validación del DTO, pero con eñes son 80 bytes y
+     * BCrypt los rechaza: antes eso salía como 500 «error interno».
+     */
+    @Test
+    void crearConUnaContrasenaQueNoCabeEnBcryptDiceQueCorregir() {
+        when(usuarioRepository.existsByEmail(any())).thenReturn(false);
+
+        CrearUsuarioRequest request = new CrearUsuarioRequest(
+                "Nuevo Supervisor", "nuevo@soy.sena.edu.co", "ñ".repeat(40), "3000000000", Rol.SUPERVISOR);
+
+        assertThatThrownBy(() -> usuarioService.crear(request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("72 bytes");
+        verify(passwordEncoder, never()).encode(any());
+    }
+
+    @Test
+    void actualizarConUnaContrasenaQueNoCabeEnBcryptDiceQueCorregir() {
+        Usuario existente = new Usuario();
+        existente.setId(7L);
+        existente.setRol(Rol.SUPERVISOR);
+        when(usuarioRepository.findById(7L)).thenReturn(Optional.of(existente));
+
+        ActualizarUsuarioRequest request = new ActualizarUsuarioRequest(
+                "Nombre", "email@soy.sena.edu.co", "ñandú-".repeat(10), "3000000000", Rol.SUPERVISOR);
+
+        assertThatThrownBy(() -> usuarioService.actualizar(7L, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("72 bytes");
+        verify(passwordEncoder, never()).encode(any());
     }
 
     @Test
@@ -148,5 +192,97 @@ class UsuarioServiceTest {
 
         assertThat(response.nombre()).isEqualTo("Administrador SICOT");
         assertThat(response.rol()).isEqualTo(Rol.ADMINISTRADOR);
+    }
+
+    /**
+     * Mandar por correo una contraseña distinta de la guardada es entregarle al
+     * supervisor una credencial que no funciona sin que nadie lo sepa.
+     */
+    @Test
+    void enviarCredencialesConUnaContrasenaQueNoEsLaGuardadaNoEnviaNada() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(passwordEncoder.matches("OtraClave123", "$2a$04$guardado")).thenReturn(false);
+
+        var respuesta = usuarioService.enviarCredenciales(5L, new EnviarCredencialesRequest("OtraClave123"));
+
+        assertThat(respuesta.enviado()).isFalse();
+        assertThat(respuesta.error()).contains("no es la que tiene guardada");
+        verify(emailService, never()).enviarCredenciales(any(), any(), any());
+    }
+
+    @Test
+    void enviarCredencialesConLaContrasenaGuardadaLaEnvia() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(passwordEncoder.matches("ClaveTest123", "$2a$04$guardado")).thenReturn(true);
+
+        var respuesta = usuarioService.enviarCredenciales(5L, new EnviarCredencialesRequest("ClaveTest123"));
+
+        assertThat(respuesta.enviado()).isTrue();
+        verify(emailService).enviarCredenciales("sup@soy.sena.edu.co", "Supervisor", "ClaveTest123");
+    }
+
+    private static Usuario supervisorConHash(String hash) {
+        Usuario supervisor = new Usuario();
+        supervisor.setId(5L);
+        supervisor.setNombre("Supervisor");
+        supervisor.setEmail("sup@soy.sena.edu.co");
+        supervisor.setPassword(hash);
+        supervisor.setRol(Rol.SUPERVISOR);
+        supervisor.setActivo(true);
+        return supervisor;
+    }
+
+    /**
+     * Desactivar a un supervisor dejaba sus contratos en curso a cargo de una
+     * cuenta que no puede entrar, sin que nada lo dijera. Se rechaza nombrando
+     * los contratos que hay que reasignar antes.
+     */
+    @Test
+    void desactivarAUnSupervisorConContratosEnCursoSeRechazaYLosNombra() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(contratoRepository.findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(any(), any()))
+                .thenReturn(List.of(contrato("CO1.PCCNTR.111"), contrato("CO1.PCCNTR.222")));
+
+        assertThatThrownBy(() -> usuarioService.cambiarEstado(5L, new CambiarEstadoUsuarioRequest(false)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("2 contrato(s) en curso")
+                .hasMessageContaining("CO1.PCCNTR.111, CO1.PCCNTR.222");
+        assertThat(supervisor.isActivo()).isTrue();
+    }
+
+    @Test
+    void quitarleElRolASupervisorConContratosEnCursoSeRechaza() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(contratoRepository.findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(any(), any()))
+                .thenReturn(List.of(contrato("CO1.PCCNTR.111")));
+
+        ActualizarUsuarioRequest aGestion = new ActualizarUsuarioRequest(
+                "Supervisor", "sup@soy.sena.edu.co", null, "3000000000", Rol.GESTION);
+
+        assertThatThrownBy(() -> usuarioService.actualizar(5L, aGestion))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("quitarle el rol de supervisor")
+                .hasMessageContaining("CO1.PCCNTR.111");
+    }
+
+    @Test
+    void desactivarAUnSupervisorSinContratosEnCursoSePermite() {
+        Usuario supervisor = supervisorConHash("$2a$04$guardado");
+        when(usuarioRepository.findById(5L)).thenReturn(Optional.of(supervisor));
+        when(usuarioRepository.save(any(Usuario.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        var respuesta = usuarioService.cambiarEstado(5L, new CambiarEstadoUsuarioRequest(false));
+
+        assertThat(respuesta.activo()).isFalse();
+    }
+
+    private static Contrato contrato(String numero) {
+        Contrato contrato = new Contrato();
+        contrato.setNumeroContrato(numero);
+        return contrato;
     }
 }

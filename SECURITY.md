@@ -18,8 +18,8 @@ Escriba directamente a **jarangop8@soy.sena.edu.co** con:
 
 **Compromiso de respuesta:** acuse de recibo en 5 días hábiles y una primera
 valoración —si es válido, qué tan grave y cuándo se corrige— en 15 días
-hábiles. Este proyecto lo sostiene un equipo muy pequeño; el plazo es realista,
-no aspiracional.
+hábiles. Este proyecto lo sostiene una sola persona; el plazo es realista, no
+aspiracional.
 
 ## Alcance
 

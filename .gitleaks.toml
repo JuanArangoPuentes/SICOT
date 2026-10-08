@@ -80,6 +80,10 @@ regexes = [
   # Del escenario de SeguimientoDeSupervisoresIntegrationTest (24-09-2026):
   # crea dos supervisores de prueba con esta clave y entra con ellos.
   '''Seguimiento123''',
+  # De DocumentoFormalDeExtremoAExtremoIntegrationTest (02-10-2026): el caso que
+  # comprueba que un administrador no puede firmar el documento de un contrato
+  # ajeno crea con esta clave la cuenta a la que se reasigna la supervisión.
+  '''Reasignado123''',
 
   # Contraseñas de las cuentas demo, documentadas en `backend/README.md` y
   # declaradas fuera de alcance en `SECURITY.md`. `DataInitializer` sólo las

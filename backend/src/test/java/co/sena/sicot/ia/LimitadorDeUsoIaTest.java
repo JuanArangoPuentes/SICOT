@@ -178,4 +178,145 @@ class LimitadorDeUsoIaTest {
         // Y todas terminaron: o entraron, o fueron rechazadas con 429.
         assertThat(rechazos.get()).isBetween(0, 3);
     }
+
+    // ── En exclusiva: la redacción de un documento no comparte el modelo ────
+
+    /** Lanza en otro hilo una inferencia que dura hasta que se suelte el pestillo. */
+    private Thread inferenciaEnCurso(LimitadorDeUsoIa limitador, CountDownLatch dentro, CountDownLatch soltar) {
+        Thread hilo = new Thread(() -> limitador.ejecutar("precalentado", () -> {
+            dentro.countDown();
+            try {
+                soltar.await(10, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return "ok";
+        }));
+        hilo.start();
+        return hilo;
+    }
+
+    @Test
+    void enExclusivaEsperaAQueTermineLaInferenciaEnCurso() throws Exception {
+        LimitadorDeUsoIa limitador = new LimitadorDeUsoIa(2, 100);
+        CountDownLatch dentro = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        inferenciaEnCurso(limitador, dentro, soltar);
+        assertThat(dentro.await(5, TimeUnit.SECONDS)).isTrue();
+
+        new Thread(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            soltar.countDown();
+        }).start();
+
+        // Con dos permisos, una ejecución normal habría entrado al momento a
+        // repartirse el modelo con la que está en curso; esta espera a que acabe.
+        long inicio = System.nanoTime();
+        assertThat(limitador.ejecutarEnExclusiva("redaccion", java.time.Duration.ofSeconds(5), () -> "redactado"))
+                .isEqualTo("redactado");
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - inicio)).isGreaterThanOrEqualTo(150);
+    }
+
+    @Test
+    void enExclusivaSeRindeConUn429SiLaInferenciaEnCursoNoTermina() throws Exception {
+        LimitadorDeUsoIa limitador = new LimitadorDeUsoIa(2, 100);
+        CountDownLatch dentro = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        inferenciaEnCurso(limitador, dentro, soltar);
+        assertThat(dentro.await(5, TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThatThrownBy(() -> limitador.ejecutarEnExclusiva("redaccion",
+                    java.time.Duration.ofMillis(200), () -> "redactado"))
+                    .isInstanceOf(IaOcupadaException.class);
+        } finally {
+            soltar.countDown();
+        }
+    }
+
+    @Test
+    void mientrasLaRedaccionEsperaSuTurnoNoSeCuelaOtraInferencia() throws Exception {
+        LimitadorDeUsoIa limitador = new LimitadorDeUsoIa(2, 100);
+        CountDownLatch dentro = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        inferenciaEnCurso(limitador, dentro, soltar);
+        assertThat(dentro.await(5, TimeUnit.SECONDS)).isTrue();
+        Thread redaccion = new Thread(() -> limitador.ejecutarEnExclusiva("redaccion",
+                java.time.Duration.ofSeconds(10), () -> "redactado"));
+        redaccion.start();
+        try {
+            Thread.sleep(200);
+            // Queda un permiso libre, pero el semáforo es justo: un
+            // precalentado que llega ahora espera detrás de la redacción en vez
+            // de quitarle el turno, y se rinde con un 429.
+            assertThatThrownBy(() -> limitador.ejecutar("precalentado", () -> "ok"))
+                    .isInstanceOf(IaOcupadaException.class);
+        } finally {
+            soltar.countDown();
+        }
+        redaccion.join(5000);
+        assertThat(redaccion.isAlive()).isFalse();
+    }
+
+    @Test
+    void mientrasSeRedactaEnExclusivaNoEmpiezaOtraInferencia() throws Exception {
+        LimitadorDeUsoIa limitador = new LimitadorDeUsoIa(2, 100);
+        CountDownLatch dentro = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        Thread redaccion = new Thread(() -> limitador.ejecutarEnExclusiva("redaccion",
+                java.time.Duration.ofSeconds(5), () -> {
+                    dentro.countDown();
+                    try {
+                        soltar.await(10, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    return "redactado";
+                }));
+        redaccion.start();
+        assertThat(dentro.await(5, TimeUnit.SECONDS)).isTrue();
+        try {
+            // El precalentado que llega a mitad de la redacción se rechaza en
+            // vez de quitarle la CPU.
+            assertThatThrownBy(() -> limitador.ejecutar("precalentado", () -> "ok"))
+                    .isInstanceOf(IaOcupadaException.class);
+        } finally {
+            soltar.countDown();
+        }
+        redaccion.join(5000);
+
+        // Al terminar devuelve todos los permisos: caben dos a la vez otra vez.
+        CountDownLatch dosDentro = new CountDownLatch(2);
+        CountDownLatch soltarDos = new CountDownLatch(1);
+        inferenciaEnCurso(limitador, dosDentro, soltarDos);
+        inferenciaEnCurso(limitador, dosDentro, soltarDos);
+        assertThat(dosDentro.await(5, TimeUnit.SECONDS)).isTrue();
+        soltarDos.countDown();
+    }
+
+    @Test
+    void sinCupoElRechazoDiceQueLaIaEstabaOcupadaYNoQueElUsuarioPreguntoDeMas() throws Exception {
+        LimitadorDeUsoIa limitador = new LimitadorDeUsoIa(1, 100);
+        CountDownLatch dentro = new CountDownLatch(1);
+        CountDownLatch soltar = new CountDownLatch(1);
+        inferenciaEnCurso(limitador, dentro, soltar);
+        assertThat(dentro.await(5, TimeUnit.SECONDS)).isTrue();
+        try {
+            assertThatThrownBy(() -> limitador.ejecutar("pregunta", () -> "ok"))
+                    .isInstanceOf(IaOcupadaException.class);
+        } finally {
+            soltar.countDown();
+        }
+
+        // El tope por usuario sigue siendo un 429 de otro tipo.
+        LimitadorDeUsoIa conTope = new LimitadorDeUsoIa(5, 1);
+        autenticarComo(1);
+        conTope.ejecutar("pregunta", () -> "ok");
+        assertThatThrownBy(() -> conTope.ejecutar("pregunta", () -> "ok"))
+                .isInstanceOf(DemasiadasSolicitudesException.class)
+                .isNotInstanceOf(IaOcupadaException.class);
+    }
 }

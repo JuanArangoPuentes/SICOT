@@ -38,14 +38,62 @@ const FILTROS: Record<string, { name: string; extensions: string[] }> = {
   csv: { name: 'Hoja de cálculo CSV', extensions: ['csv'] },
   docx: { name: 'Documento de Word', extensions: ['docx'] },
   xlsx: { name: 'Libro de Excel', extensions: ['xlsx'] },
+  // Sin estos, una foto de evidencia caía en «sin filtro» y el sistema podía
+  // proponer guardarla con otro tipo.
+  jpg: { name: 'Imagen JPEG', extensions: ['jpg', 'jpeg'] },
+  jpeg: { name: 'Imagen JPEG', extensions: ['jpg', 'jpeg'] },
+  png: { name: 'Imagen PNG', extensions: ['png'] },
+}
+
+/**
+ * El teléfono no dejó escribir el archivo: sin espacio, una ubicación que no
+ * admite escritura… Es distinto de que no llegara del servidor: intentarlo de
+ * nuevo en un momento no lo arregla, y decir eso sería engañar. Los plugins de
+ * Tauri rechazan con un texto, no con un Error, así que el motivo se conserva
+ * aquí para mostrarlo tal cual.
+ */
+export class ErrorAlGuardar extends Error {
+  constructor(motivo: string) {
+    super(motivo)
+    this.name = 'ErrorAlGuardar'
+  }
 }
 
 export async function guardarArchivo(contenido: Blob, nombreArchivo: string): Promise<ResultadoGuardado> {
   if (enAplicacionEmpaquetada() && enAndroid()) {
-    return guardarEnAndroid(contenido, nombreArchivo)
+    try {
+      return await guardarEnAndroid(contenido, nombreArchivo)
+    } catch (e) {
+      throw new ErrorAlGuardar(typeof e === 'string' ? e : e instanceof Error ? e.message : String(e))
+    }
   }
   descargarComoNavegador(contenido, nombreArchivo)
   return 'navegador'
+}
+
+/**
+ * Pone el archivo delante del usuario para leerlo: el borrador completo de un
+ * documento antes de firmarlo.
+ *
+ * En el navegador se abre en otra pestaña, con su visor de PDF. Si el
+ * navegador bloquea la pestaña, se descarga como siempre. En la aplicación
+ * empaquetada se guarda igual que una descarga: el APK no tiene un visor al
+ * que entregarle el archivo sin añadir otro plugin, y en el instalador de
+ * escritorio la descarga ya funciona; quien llama dice dónde quedó.
+ */
+export async function abrirArchivo(contenido: Blob, nombreArchivo: string): Promise<ResultadoGuardado | 'abierto'> {
+  if (enAplicacionEmpaquetada()) return guardarArchivo(contenido, nombreArchivo)
+  const url = URL.createObjectURL(contenido)
+  const pestana = window.open(url, '_blank')
+  if (!pestana) {
+    URL.revokeObjectURL(url)
+    descargarComoNavegador(contenido, nombreArchivo)
+    return 'navegador'
+  }
+  // La pestaña necesita la dirección mientras carga el PDF; liberarla en el
+  // acto la dejaba en blanco.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  return 'abierto'
 }
 
 async function guardarEnAndroid(contenido: Blob, nombreArchivo: string): Promise<ResultadoGuardado> {

@@ -23,8 +23,6 @@ public interface AlertaRepository extends JpaRepository<Alerta, Long> {
      */
     List<Alerta> findByContratoIdOrderByFechaCreacionDesc(Long contratoId, Pageable limite);
 
-    List<Alerta> findByContratoIsNullOrderByFechaCreacionDesc();
-
     // Pageable (no un List sin límite): las alertas se acumulan con el uso
     // normal del sistema y sin tope terminarían cargando toda la tabla.
     List<Alerta> findAllByOrderByFechaCreacionDesc(Pageable pageable);

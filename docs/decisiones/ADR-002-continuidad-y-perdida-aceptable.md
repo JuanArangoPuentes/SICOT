@@ -36,7 +36,8 @@ de todo ese día**. Ese es el costo declarado de correr sobre un solo host, y se
 asume a conciencia.
 
 Un respaldo solo cuenta si se ha leído entero: el script ejecuta
-`pg_restore --list` sobre cada volcado. Un `pg_dump` puede terminar con código 0
+`pg_restore -f -` sobre cada volcado (hasta el 28-09-2026 era `pg_restore
+--list`, que solo lee el índice y aprobaba un volcado cortado al 60 %). Un `pg_dump` puede terminar con código 0
 y dejar un archivo truncado si el disco se llenó a mitad, y eso **solo se
 descubre el día que hace falta restaurar**.
 

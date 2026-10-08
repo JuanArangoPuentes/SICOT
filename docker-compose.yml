@@ -13,7 +13,11 @@ name: sicot
 
 services:
   db:
-    image: postgres:18-alpine
+    # Versiones exactas en todas las imágenes: una nueva llega como PR de
+    # Dependabot (ecosistema docker-compose) en vez de cambiar sola en el
+    # siguiente `pull`. Las de una versión mayor de PostgreSQL además exigen
+    # migrar los datos (pg_upgrade); por eso Dependabot no las propone.
+    image: postgres:18.6-alpine
     container_name: sicot-db
     labels:
       org.opencontainers.image.title: "SICOT · PostgreSQL"
@@ -43,7 +47,7 @@ services:
           memory: 1G
 
   adminer:
-    image: adminer:4
+    image: adminer:4.17.1
     container_name: sicot-adminer
     labels:
       org.opencontainers.image.title: "SICOT · Panel PostgreSQL"
@@ -99,15 +103,20 @@ services:
       # variable pase lo que pase, el respaldo de Spring nunca se activaría, y
       # un despliegue de producción firmaría tokens con una clave publicada en
       # este repositorio. Tampoco sirve `${JWT_SECRET:-}`: una variable definida
-      # pero vacía también desactiva el respaldo. Si se define, se hereda del
-      # .env, que es lo correcto. Ver docker-compose.prod.yml, donde además pasa
-      # a ser obligatoria.
-      # Los dos ultimos origenes son la aplicacion de escritorio del supervisor,
-      # no un navegador: una app empaquetada con Tauri se sirve desde un origen
-      # propio del webview (http://tauri.localhost en Windows, tauri://localhost
-      # en macOS y Linux). Sin ellos el backend rechaza sus peticiones y la app
-      # solo puede decir "no se pudo conectar con el servidor".
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443,http://tauri.localhost,tauri://localhost}
+      # pero vacía también desactiva el respaldo.
+      #
+      # Ojo: el JWT_SECRET del .env NO llega al contenedor con este archivo.
+      # Compose usa el .env solo para resolver las ${…} de aquí; al contenedor
+      # le pasa únicamente lo que se nombra en este bloque. Quien se lo pasa es
+      # docker-compose.prod.yml, donde además es obligatorio. Por eso, en el
+      # servidor, todo comando tiene que cargar ese archivo (COMPOSE_FILE en el
+      # .env, ver .env.example): un `up` con solo este deja el backend sin
+      # secreto, o en "dev" con el secreto publicado.
+      # Solo los orígenes del navegador. Los de la aplicación de escritorio y del
+      # APK (http://tauri.localhost, tauri://localhost) los añade SecurityConfig
+      # siempre: no dependen del despliegue, y cuando vivían aquí un
+      # CORS_ALLOWED_ORIGINS del .env los borraba sin aviso.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443}
       # Administrador inicial — solo se usa en un despliegue con perfil distinto
       # de "dev" y solo si la tabla de usuarios está vacía. En desarrollo no
       # hacen falta: las cuentas de prueba las siembra DataInitializer. Ver
@@ -123,14 +132,33 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
-      # Ollama corre en el HOST (no en un contenedor propio — necesitaría GPU
-      # pasada al contenedor, mucho más complejo). "localhost" desde dentro
+      # En desarrollo, Ollama corre en el EQUIPO, que es donde cada uno ya lo
+      # tiene instalado y con el modelo descargado. "localhost" desde dentro
       # del contenedor apunta al contenedor mismo, así que se usa el nombre
-      # especial que Docker resuelve al host. extra_hosts de abajo es lo que
-      # hace que ese nombre funcione también en Docker nativo de Linux (en
-      # Docker Desktop de Windows/Mac ya funciona sin eso).
+      # especial que Docker resuelve al equipo. En Docker Desktop (Windows/Mac)
+      # eso llega al Ollama del equipo tal cual.
+      #
+      # En Docker nativo de Linux NO basta: extra_hosts de abajo hace que el
+      # nombre resuelva, pero a la IP del puente de Docker, y Ollama instalado
+      # como servicio escucha solo en 127.0.0.1, así que rechaza la conexión.
+      # Por eso el servidor no usa esto: docker-compose.prod.yml le da a Ollama
+      # su propio contenedor (que en un equipo sin GPU corre en CPU igual que
+      # fuera).
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      # Ajustes de la IA que dependen de la máquina (ver .env.example). Sin
+      # valor a propósito: así Compose los pasa solo si el .env los define, y si
+      # no, el backend usa los de application.properties. Antes no se pasaban, y
+      # un OLLAMA_TIMEOUT_SECONDS subido en el .env de un servidor lento se
+      # ignoraba sin aviso. Con un valor por defecto aquí habría dos sitios con
+      # el mismo número, que acabarían diciendo cosas distintas.
+      OLLAMA_TIMEOUT_SECONDS:
+      OLLAMA_KEEP_ALIVE:
+      OLLAMA_MAX_CONCURRENTES:
+      OLLAMA_PETICIONES_POR_MINUTO:
+      OLLAMA_TEMPERATURA:
+      OLLAMA_MAX_TOKENS:
+      OLLAMA_NUM_CTX:
       # Motor de automatizaciones. Sin estas líneas el motor solo era
       # configurable editando este archivo: application.properties las lee del
       # entorno, pero Compose no las pasaba, así que dentro del contenedor

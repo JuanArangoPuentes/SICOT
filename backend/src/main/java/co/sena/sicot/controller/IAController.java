@@ -1,7 +1,9 @@
 package co.sena.sicot.controller;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
+import co.sena.sicot.dto.ia.PlantillaDocumentoResponse;
 import co.sena.sicot.ia.ExtraccionContratoService;
+import co.sena.sicot.ia.PlantillaDocumentoIA;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -11,12 +13,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Comparator;
 import java.util.List;
 
 @RestController
@@ -52,5 +56,35 @@ public class IAController {
     @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<ExtraccionContratoResponse> extraerContrato(@RequestParam("archivos") List<MultipartFile> archivos) {
         return ResponseEntity.ok(extraccionContratoService.extraer(archivos));
+    }
+
+    @Operation(summary = "Documentos formales que SICOT arma y los datos que pide cada uno",
+            description = "Los datos listados no están en el contrato (factura, póliza, cédulas…). El supervisor "
+                    + "los envía en POST /api/contratos/{id}/documentos/generar, campo «datos»; las tablas que se "
+                    + "llenan fila por fila (obligaciones, amparos, órdenes de pago), en el campo «tablas». Lo que "
+                    + "falte sale en el PDF como «[dato pendiente…]».")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Catálogo de documentos"),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/plantillas")
+    public List<PlantillaDocumentoResponse> plantillas() {
+        return PlantillaDocumentoIA.CATALOGO.values().stream()
+                .sorted(Comparator.comparing(PlantillaDocumentoIA::clave))
+                .map(p -> new PlantillaDocumentoResponse(p.clave(), p.codigo(), p.nombre(), p.llevaObservaciones(),
+                        p.campos().stream()
+                                .map(c -> new PlantillaDocumentoResponse.Campo(c.clave(), c.etiqueta(), c.ejemplo(),
+                                        c.opcional(), PlantillaDocumentoIA.dependeDe(c.clave()),
+                                        PlantillaDocumentoIA.esPorDocumento(c.clave()), c.largo()))
+                                .toList(),
+                        p.tablas().stream()
+                                .map(t -> new PlantillaDocumentoResponse.Tabla(t.clave(), t.etiqueta(), t.ayuda(),
+                                        t.columnas().stream()
+                                                .map(col -> new PlantillaDocumentoResponse.Columna(col.etiqueta(),
+                                                        col.ejemplo(), col.delContrato()))
+                                                .toList()))
+                                .toList()))
+                .toList();
     }
 }

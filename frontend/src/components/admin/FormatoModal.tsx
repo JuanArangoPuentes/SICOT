@@ -82,7 +82,15 @@ export function FormatoModal({
           type="text"
           value={codigo}
           disabled={esNuevoVersion}
-          onChange={(e) => setCodigo(e.target.value)}
+          // Cada campo limpia el aviso al escribir. Los tres se validan al
+          // pulsar «Cargar formato» y el aviso se quedaba fijo: quien ponía el
+          // nombre que le faltaba seguía leyendo «El nombre del formato es
+          // obligatorio» con el nombre ya escrito delante, y lo mismo al
+          // elegir el archivo. Es el patrón que ya usa Configuración.
+          onChange={(e) => {
+            setCodigo(e.target.value)
+            setError('')
+          }}
           placeholder="GCCON-F-031"
           style={{
             width: '100%',
@@ -96,7 +104,10 @@ export function FormatoModal({
         <input
           type="text"
           value={nombre}
-          onChange={(e) => setNombre(e.target.value)}
+          onChange={(e) => {
+            setNombre(e.target.value)
+            setError('')
+          }}
           placeholder="Informe de supervisión"
           style={{ width: '100%', padding: '9px 10px' }}
         />
@@ -105,7 +116,10 @@ export function FormatoModal({
         <input
           type="file"
           accept=".pdf,.docx,.xlsx"
-          onChange={(e) => setArchivo(e.target.files?.[0] ?? null)}
+          onChange={(e) => {
+            setArchivo(e.target.files?.[0] ?? null)
+            setError('')
+          }}
           style={{ width: '100%', fontSize: 13, color: 'var(--text-secondary)' }}
         />
       </Field>

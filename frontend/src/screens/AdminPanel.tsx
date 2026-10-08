@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
-import { Chip, Field, Modal, type ChipType } from '@/components/ui'
+import { Chip } from '@/components/ui'
 import {
-  IconAlertTriangle,
-  IconCheckCircle,
   IconClipboardList,
   IconDownload,
   IconFileText,
   IconGrid,
-  IconLock,
   IconSignature,
   IconTrash,
   IconUpload,
@@ -16,26 +13,12 @@ import {
 } from '@/components/icons'
 import SeguimientoSupervisores, { ResumenSeguimiento } from '@/components/admin/SeguimientoSupervisores'
 import { getSeguimiento } from '@/services/seguimientoService'
-import type {
-  AuthResponse,
-  EstadoFormato,
-  FirmaResponse,
-  FormatoDocumentalResponse,
-  Rol,
-  SeguimientoResponse,
-  UsuarioResponse,
-} from '@/services/api/types'
+import type { AuthResponse, FormatoDocumentalResponse, SeguimientoResponse } from '@/services/api/types'
 import type { AdminTab } from '@/types/domain'
-import {
-  getUsuarios,
-  crearUsuario,
-  actualizarUsuario,
-  cambiarEstadoUsuario,
-  enviarCredenciales,
-} from '@/services/usuarioService'
+import { getUsuarios, cambiarEstadoUsuario } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
-import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
-import { getFirmas, crearFirma, cambiarEstadoFirma } from '@/services/firmaService'
+import { getFormatos, eliminarFormato, descargarFormato } from '@/services/formatoService'
+import { getFirmas, cambiarEstadoFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { formatBytes, formatFecha } from '@/services/format'
 import { GridRow, MiniBtn, SectionHead, Widget } from '@/components/admin/piezas'
@@ -43,16 +26,9 @@ import { FormatoModal } from '@/components/admin/FormatoModal'
 import { ResetPasswordModal } from '@/components/admin/ResetPasswordModal'
 import { NewUserModal } from '@/components/admin/NewUserModal'
 import { NewFirmaModal } from '@/components/admin/NewFirmaModal'
-import {
-  FORMATO_CHIP,
-  ROL_CARGO,
-  ROL_LABEL,
-  mapFirma,
-  mapUser,
-  randomPassword,
-  type FirmaRow,
-  type UserRow,
-} from '@/components/admin/tipos'
+import AvisoDeGuardado from '@/components/AvisoDeGuardado'
+import { useGuardadoDeArchivo } from '@/hooks/useGuardadoDeArchivo'
+import { FORMATO_CHIP, mapFirma, mapUser, type FirmaRow, type UserRow } from '@/components/admin/tipos'
 
 export default function AdminPanel({
   vista,
@@ -93,6 +69,7 @@ export default function AdminPanel({
   // eliminar formato). Antes se tragaban en silencio: se hacía clic y no pasaba
   // absolutamente nada, sin explicación.
   const [errorAccion, setErrorAccion] = useState('')
+  const descarga = useGuardadoDeArchivo()
 
   const [seguimiento, setSeguimiento] = useState<SeguimientoResponse | null>(null)
   const [errorSeguimiento, setErrorSeguimiento] = useState('')
@@ -116,12 +93,6 @@ export default function AdminPanel({
   const cargarFormatos = () => {
     getFormatos()
       .then(setFormatos)
-      .catch(() => setErrorDatos(true))
-  }
-
-  const cargarFirmas = () => {
-    getFirmas()
-      .then((lista) => setFirmas(lista.map(mapFirma)))
       .catch(() => setErrorDatos(true))
   }
 
@@ -193,8 +164,6 @@ export default function AdminPanel({
       setErrorAccion(`No se pudo eliminar el formato ${f.codigo}.`)
     }
   }
-
-  const formatosObsoletos = formatos.filter((f) => f.estado === 'OBSOLETO').length
 
   const navGroups: NavGroup[] = [
     {
@@ -311,18 +280,23 @@ export default function AdminPanel({
                 value={errorDatos ? '—' : String(users.filter((u) => u.activo).length)}
                 hint={errorDatos ? 'Dato no disponible' : `${users.length} registrados en total`}
               />
+              {/* Antes aquí había dos indicadores de formatos: «Formatos
+                  vigentes N/N» y «Formatos obsoletos 0», este último en verde
+                  con la pista «Requieren reemplazo por una versión vigente».
+                  Ninguno podía valer otra cosa: FormatoDocumentalService fija
+                  siempre VIGENTE al cargar un formato y no existe ninguna forma
+                  —ni endpoint, ni pantalla— de marcar uno como obsoleto. Así
+                  que el panel afirmaba, en verde, haber comprobado algo que no
+                  comprueba nadie: si CompromISO publica una versión nueva de un
+                  formato, el administrador seguiría viendo «0 obsoletos»
+                  mientras los supervisores descargan la versión vieja. Queda el
+                  total, que sí es un dato real. El indicador vuelve el día que
+                  haya una manera de marcar la obsolescencia. */}
               <Widget
                 icon={<IconFileText size={17} />}
-                label="Formatos vigentes"
-                value={errorDatos ? '—' : `${formatos.filter((f) => f.estado === 'VIGENTE').length}/${formatos.length}`}
-                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados'}
-              />
-              <Widget
-                icon={<IconAlertTriangle size={17} />}
-                label="Formatos obsoletos"
-                value={errorDatos ? '—' : String(formatosObsoletos)}
-                hint={errorDatos ? 'Dato no disponible' : 'Requieren reemplazo por una versión vigente'}
-                tone={errorDatos ? undefined : formatosObsoletos ? 'warn' : 'ok'}
+                label="Formatos documentales"
+                value={errorDatos ? '—' : String(formatos.length)}
+                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados en el catálogo'}
               />
             </div>
 
@@ -388,6 +362,7 @@ export default function AdminPanel({
                 </button>
               }
             />
+            <AvisoDeGuardado aviso={descarga.aviso} error={descarga.error} />
             <div className="card" style={{ overflow: 'hidden' }}>
               <GridRow header cols="140px 1fr 80px 150px 150px 250px">
                 <span>CÓDIGO</span>
@@ -426,7 +401,11 @@ export default function AdminPanel({
                   </span>
                   <Chip text={FORMATO_CHIP[f.estado].label} type={FORMATO_CHIP[f.estado].type} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <MiniBtn onClick={() => descargarFormato(f.id, f.nombreArchivo).catch(() => {})}>
+                    <MiniBtn
+                      onClick={() =>
+                        void descarga.guardar(f.nombreArchivo, () => descargarFormato(f.id, f.nombreArchivo))
+                      }
+                    >
                       <IconDownload size={11} /> Descargar
                     </MiniBtn>
                     <MiniBtn

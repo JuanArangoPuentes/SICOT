@@ -25,7 +25,6 @@ public record DocumentoResponse(
         String formatoNombre,
         String nombre,
         TipoDocumento tipo,
-        String rutaArchivo,
         EstadoDocumento estado,
         Long tamanioBytes,
         boolean generadoPorIa,

@@ -1,6 +1,8 @@
 // Tipos de dominio compartidos por toda la aplicación SICOT.
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
 
+import type { AccionCopiloto } from '@/services/api/types'
+
 // Vistas de cada panel. Son los segmentos que aparecen en la URL
 // (/supervisor/alertas, /admin/usuarios) — ver docs/decisiones/ADR-007.
 //
@@ -10,7 +12,7 @@
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 
 export type AdminTab = 'dashboard' | 'seguimiento' | 'documentos' | 'usuarios' | 'firmas'
-export type UploadState = 'idle' | 'uploading' | 'analyzing' | 'detect' | 'review' | 'done'
+export type UploadState = 'idle' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {
   id: string
@@ -37,4 +39,20 @@ export interface Step {
 export interface ChatMsg {
   role: 'ai' | 'user'
   text: string
+  /**
+   * De dónde sale un mensaje del Copiloto. Decide cuáles le llegan al modelo
+   * como conversación previa (ver services/historialCopiloto.ts) y cuáles
+   * llevan en pantalla la marca «Respuesta del sistema».
+   *
+   * - `'modelo'`: la respuesta del modelo a una pregunta.
+   * - `'sistema'`: la respuesta que el servidor armó sin modelo (fichas de
+   *   documento, guía del paso, órdenes). Se marca, para no presentar como IA
+   *   lo que es texto fijo, y no se le reenvía al modelo.
+   * - `'guia'`: la guía de un sub-paso, armada con el procedimiento.
+   * - sin origen: lo que SICOT escribe por su cuenta (bienvenida, avisos,
+   *   errores, cierres de paso). No es conversación y no se le manda.
+   */
+  origen?: 'modelo' | 'sistema' | 'guia'
+  /** Lo que la respuesta ofrece abrir: se pinta como botón y solo se ejecuta al pulsarlo. */
+  accion?: AccionCopiloto
 }

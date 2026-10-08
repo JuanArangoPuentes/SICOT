@@ -30,7 +30,22 @@ public class CopilotoController {
     }
 
     @Operation(summary = "Preguntar algo al Copiloto IA sobre este contrato",
-            description = "Respuesta real de Ollama, anclada a los datos del contrato y al estado real de sus etapas — no es una respuesta prescrita.")
+            description = """
+                    Lo que tiene respuesta fija lo contesta SICOT sin modelo (fuente = SISTEMA): las órdenes
+                    («llévame al paso 3», «genera el acta de inicio»), la ficha de cada documento formal, el
+                    paso en el que va el supervisor y los datos del contrato (valor, fechas, días que quedan,
+                    cronograma). Las preguntas abiertas las responde Ollama (fuente = MODELO), anclado a los
+                    datos del contrato y al estado real de sus etapas.
+
+                    `accion`, si viene, es la pantalla que el supervisor puede abrir desde la respuesta.
+                    Ninguna acción firma, marca, genera ni modifica nada: la interfaz la muestra como un
+                    botón y solo abre esa pantalla cuando él lo toca.
+
+                    `idSolicitud` (opcional): el cliente lo genera por pregunta y lo repite en el reintento;
+                    el reintento recibe la respuesta del primer intento en vez de lanzar otra inferencia.
+                    `revisarPaso` (opcional, 1..6): la petición es la revisión consultiva antes de cerrar
+                    ese paso y `pregunta` trae solo lo que describió el supervisor; las instrucciones las
+                    arma el servidor.""")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Respuesta del Copiloto",
                     content = @Content(schema = @Schema(implementation = ChatResponse.class))),
@@ -50,8 +65,7 @@ public class CopilotoController {
     @PostMapping("/chat")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
     public ResponseEntity<ChatResponse> chat(@PathVariable Long contratoId, @Valid @RequestBody ChatRequest request) {
-        String respuesta = copilotoChatService.responder(contratoId, request.pregunta(), request.historial());
-        return ResponseEntity.ok(new ChatResponse(respuesta));
+        return ResponseEntity.ok(copilotoChatService.atender(contratoId, request));
     }
 
     @Operation(summary = "Precalentar el contexto de este contrato en el modelo",
@@ -64,6 +78,9 @@ public class CopilotoController {
                     sobre el mismo contrato tarda 0,8 s en esa fase, porque Ollama reutiliza el prefijo
                     cacheado. Llamando aquí al abrir la ficha, esa espera transcurre mientras el
                     supervisor lee la pantalla en vez de mientras espera una respuesta.
+
+                    El acceso al contrato se comprueba antes de encolar: un contrato ajeno o inexistente
+                    responde 404 y no encola nada.
 
                     No garantiza nada: si Ollama no está disponible, se registra y ya. El copiloto
                     sigue funcionando sin esto, solo que más lento la primera vez.""")

@@ -9,6 +9,14 @@ node_modules/
 dist/
 target/
 
+# Salidas de `mvn dependency:list`/`dependency:tree`. Estuvo versionada una
+# (`backend/direct-dependencies.txt`) y acabó siendo un inventario de
+# dependencias con meses de atraso y secuencias de color ANSI dentro: quien
+# revisara CVE o licencias con ella habría decidido sobre versiones falsas. Si
+# hace falta ese inventario, se genera en el momento o como artefacto de CI.
+direct-dependencies.txt
+dependency-tree.txt
+
 # --- Herramientas de agentes de IA (locales, no se comparten) -----------------
 # Se ignora TODO .claude/ salvo `launch.json`, que sí es configuración del
 # proyecto (define cómo se arranca el frontend).

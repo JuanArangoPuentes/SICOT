@@ -124,6 +124,37 @@ export interface CrearContratoRequest {
   centroCosto?: string | null
 }
 
+/**
+ * Cuerpo de `PUT /api/contratos/{id}` — la corrección de los datos generales.
+ *
+ * Es un reemplazo completo, no un parche: el backend asigna todos estos campos
+ * con lo que llegue, así que un campo omitido se guarda como null. Quien lo use
+ * tiene que mandar siempre el contrato entero, no solo lo que cambió.
+ *
+ * No lleva `supervisorId`: el supervisor se cambia con
+ * `PATCH /api/contratos/{id}/supervisor`, que es lo único que avisa al
+ * supervisor nuevo.
+ */
+export interface ActualizarContratoRequest {
+  numeroContrato: string
+  objeto: string
+  valor: number
+  fechaInicio: string | null
+  fechaFin: string | null
+  tipoContrato?: string | null
+  contratista?: string | null
+  contratistaNit?: string | null
+  representanteLegal?: string | null
+  lugarEjecucion?: string | null
+  numeroRegistroPresupuestal?: string | null
+  fechaRegistroPresupuestal?: string | null
+  centroCosto?: string | null
+}
+
+export interface CambiarEstadoContratoRequest {
+  estado: EstadoContrato
+}
+
 export interface ContratoResponse {
   id: number
   numeroContrato: string
@@ -184,7 +215,6 @@ export interface DocumentoResponse {
   formatoNombre: string | null
   nombre: string
   tipo: TipoDocumento
-  rutaArchivo: string
   estado: EstadoDocumento
   tamanioBytes: number | null
   generadoPorIa: boolean
@@ -250,10 +280,105 @@ export interface GenerarDocumentoRequest {
    * apartado queda marcado como pendiente en vez de inventarse.
    */
   notas?: string | null
+  /**
+   * Datos del documento que el contrato no tiene —factura, póliza, cédulas…—,
+   * por clave (ver `PlantillaDocumento.campos`). Los que falten salen en el PDF
+   * como «[dato pendiente…]», en rojo, en vez de inventarse.
+   */
+  datos?: Record<string, string>
+  /**
+   * false: las observaciones van tal como el supervisor las escribió, sin
+   * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
+   */
+  redactarConIa?: boolean
+  /**
+   * Filas de las tablas del formato (ver `PlantillaDocumento.tablas`). Una
+   * tabla sin filas sale en el PDF como «[dato pendiente…]».
+   */
+  tablas?: TablasDelDocumento
+}
+
+/**
+ * El documento recién generado y cómo quedaron sus observaciones. El panel
+ * muestra la redacción del Copiloto antes de firmar: ninguna comprobación
+ * automática ve que cambie el sujeto de una frase, y quien firma sí.
+ */
+export interface DocumentoGeneradoResponse extends DocumentoResponse {
+  /** El texto que quedó en el apartado de observaciones, o null si no hay. */
+  observaciones: string | null
+  /** Si ese texto lo redactó el Copiloto (false: son las notas tal cual). */
+  observacionesRedactadasConIa: boolean
+  /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
+  motivoNotasTalCual: string | null
+  /**
+   * SHA-256 del borrador tal como quedó. Se devuelve al firmar para que se
+   * firme exactamente lo que el supervisor leyó.
+   */
+  huellaDelBorrador: string
+}
+
+/** Un turno de la conversación previa que se le manda al Copiloto. */
+export interface ChatTurno {
+  rol: 'user' | 'ai'
+  texto: string
+}
+
+/** Pregunta al Copiloto (POST /api/contratos/{id}/copiloto/chat). */
+export interface ChatRequest {
+  /** Lo que escribió el supervisor; en una revisión del paso, solo su descripción. */
+  pregunta: string
+  historial?: ChatTurno[]
+  /**
+   * Uno por pregunta, generado aquí. El reintento automático al volver de
+   * segundo plano repite el mismo: el servidor reconoce la pregunta y devuelve
+   * la inferencia que sigue en curso o la ya calculada, en vez de lanzar otra.
+   */
+  idSolicitud?: string
+  /**
+   * Paso (1..6) que el supervisor quiere cerrar: la petición es la revisión
+   * consultiva de ese paso. Las instrucciones de la revisión las arma el
+   * servidor; el cliente no las escribe.
+   */
+  revisarPaso?: number
+}
+
+/** Quién escribió la respuesta: SICOT con datos fijos, sin modelo, o el modelo de IA. */
+export type FuenteRespuestaCopiloto = 'SISTEMA' | 'MODELO'
+
+export type TipoAccionCopiloto =
+  | 'IR_A_PASO'
+  | 'IR_A_SUBPASO'
+  | 'ABRIR_DOCUMENTO'
+  | 'ABRIR_EVIDENCIA'
+  | 'MOSTRAR_ALERTAS'
+  | 'MOSTRAR_DOCUMENTOS'
+  | 'DESCARGAR_DOCUMENTO'
+  | 'IR_A_CONFIGURACION'
+
+/**
+ * La pantalla que el Copiloto ofrece abrir junto a su respuesta. Ninguna
+ * acción firma, marca ni genera nada: solo lleva a donde el supervisor decide.
+ * La interfaz la pinta como un botón con `etiqueta` y la ejecuta solo cuando
+ * él lo pulsa, nunca al llegar la respuesta.
+ */
+export interface AccionCopiloto {
+  tipo: TipoAccionCopiloto
+  paso: number | null
+  /** Código de la subetapa, «N.M». */
+  subpaso: string | null
+  /** Clave del catálogo de documentos del backend (ACTA_INICIO…). */
+  documentoTipo: string | null
+  /** Solo en DESCARGAR_DOCUMENTO, y de un documento que existe. */
+  documentoId: number | null
+  etiqueta: string
 }
 
 export interface ChatResponse {
   respuesta: string
+  // Opcionales a propósito: el APK y el instalador de escritorio pueden hablar
+  // con un servidor anterior al 02-10-2026, que solo manda `respuesta`.
+  fuente?: FuenteRespuestaCopiloto
+  accion?: AccionCopiloto | null
 }
 
 // ─── Alertas ─────────────────────────────────────────────────────────────────
@@ -400,3 +525,45 @@ export interface SeguimientoResponse {
   contratosSinSupervisor: ContratoSeguimiento[]
   generadoEn: string
 }
+
+/** Un documento formal que SICOT arma y los datos que pide que el contrato no tiene (GET /api/ia/plantillas). */
+export interface PlantillaDocumento {
+  tipo: string
+  codigo: string
+  nombre: string
+  /** Si el formato tiene un apartado donde van las notas del supervisor. */
+  llevaObservaciones: boolean
+  /**
+   * `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no
+   * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
+   * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
+   * cambia en cada documento (número de informe, factura…), así que no se
+   * recuerda para el siguiente. `largo`: es un párrafo (el cumplimiento del
+   * SIGA), no un dato de una línea.
+   */
+  campos: Array<{
+    clave: string
+    etiqueta: string
+    ejemplo: string
+    opcional: boolean
+    dependeDe: string | null
+    porDocumento: boolean
+    largo?: boolean
+  }>
+  /**
+   * Tablas del formato que se llenan fila por fila (obligaciones, amparos,
+   * órdenes de pago). En cada columna, `delContrato` dice si lo escrito es del
+   * contrato (el texto de la obligación) y se ofrece en el siguiente documento,
+   * o de este (lo hecho en el periodo) y no se arrastra. Opcional para tolerar
+   * un backend anterior al 30-09-2026, que no las enviaba.
+   */
+  tablas?: Array<{
+    clave: string
+    etiqueta: string
+    ayuda: string
+    columnas: Array<{ etiqueta: string; ejemplo: string; delContrato: boolean }>
+  }>
+}
+
+/** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
+export type TablasDelDocumento = Record<string, string[][]>
