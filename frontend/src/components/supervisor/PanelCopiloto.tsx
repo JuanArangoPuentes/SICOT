@@ -12,7 +12,7 @@
 // confirmar. Ese estado gobierna también el recorrido de etapas, así que vive
 // en el panel y esta columna solo lo presenta.
 
-import type { RefObject } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { AvatarIcon, IconArrowRight, IconChevron } from '@/components/icons'
 import type { ChatMsg, Step } from '@/types/domain'
 import type { AccionCopiloto, ContratoResponse } from '@/services/api/types'
@@ -86,6 +86,20 @@ export default function PanelCopiloto({
     : revisando
       ? `${confirmar} sin esperar la revisión`
       : `${confirmar} sin revisión`
+
+  // La lista se abre por el último mensaje, no por el primero.
+  //
+  // Mientras el panel desbordaba la pantalla esto no se notaba: no había
+  // desplazamiento que colocar. Al acotarlo, la lista empezó a abrirse arriba
+  // del todo, así que quien oculta el Copiloto para mirar el contrato y lo
+  // vuelve a mostrar se encontraba el mensaje de bienvenida y la conversación
+  // aparentemente perdida. Se desplaza al final al montar y cada vez que
+  // llega un mensaje, que es donde la persona estaba mirando.
+  const listaDeMensajes = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const lista = listaDeMensajes.current
+    if (lista) lista.scrollTop = lista.scrollHeight
+  }, [chatMsgs.length, pensando])
 
   return (
     <div
@@ -174,6 +188,7 @@ export default function PanelCopiloto({
           del arreglo del panel recortado en pantalla estrecha; la otra mitad
           es el tope de altura de `.split-aside` en index.css. */}
       <div
+        ref={listaDeMensajes}
         style={{
           flex: 1,
           minHeight: 0,
