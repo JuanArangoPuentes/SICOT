@@ -1041,6 +1041,24 @@ export default function SupervisorPanel({
     setTutorialMode(true)
   }
 
+  // Llevar la pantalla hasta el sub-paso que se acaba de abrir.
+  //
+  // `goToSubStep` cambiaba de pestaña, expandía el paso y lo marcaba como
+  // activo, pero dejaba el recorrido donde estuviera — casi siempre arriba del
+  // todo. En un monitor el sub-paso suele quedar a la vista igual; en un
+  // teléfono no: «Ir a firmar» en Documentos, o «Abrir la carga de fotos» del
+  // Copiloto, dejaban al supervisor ante los seis pasos plegados, teniendo que
+  // buscar a mano a dónde lo acababan de llevar (visto en el emulador el
+  // 08-10-2026). El sub-paso se pinta DESPUÉS de expandir su paso, así que se
+  // busca en el siguiente fotograma y no en el mismo.
+  useEffect(() => {
+    if (!activeSubStep || tab !== 'contrato') return
+    const fotograma = requestAnimationFrame(() => {
+      document.querySelector('.substep-row.active-tutorial')?.scrollIntoView({ block: 'center' })
+    })
+    return () => cancelAnimationFrame(fotograma)
+  }, [activeSubStep, tab])
+
   const irAPaso = (stepId: number) => {
     setTab('contrato')
     setExpandedSteps(new Set([stepId]))
