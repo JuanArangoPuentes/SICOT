@@ -23,3 +23,23 @@
 # El arreglo de verdad es la migración que propone la ADR-014, y esta fecha
 # existe para forzar esa decisión en vez de dejar la excepción indefinida.
 CVE-2026-47884 exp:2026-11-15
+
+# CVE-2026-47890 — CRITICAL en org.springframework:spring-webmvc 6.2.19.
+# Corrupción del flujo en Server-Sent Events (SSE) cuando la respuesta pasa por
+# resolución de vistas. Misma historia que la anterior y a tres días de
+# distancia: la única versión corregida es Spring Framework 7.0.9, que es
+# Spring Boot 4, y la línea 6.2 ya no recibe parches gratuitos. Dos críticas en
+# el mismo artefacto en tres días es la señal de que esto no se arregla
+# añadiendo excepciones.
+#
+# Por qué SICOT no es explotable por esta vía hoy: hacen falta las dos cosas a
+# la vez, SSE y resolución de vistas, y no hay ninguna. Sobre backend/src, el
+# 08-10-2026: ni `SseEmitter`, ni `text/event-stream`, ni `ServerSentEvent`, ni
+# `Flux<` (el proyecto no usa WebFlux); y tampoco `ViewResolver`, `ModelAndView`
+# ni un solo `@Controller` — todo son `@RestController` que responden JSON y
+# archivos.
+#
+# Caduca el mismo día que la anterior a propósito: las dos salen de la misma
+# causa, así que la decisión que hay que tomar —la ADR-014— es una sola y
+# conviene que la compuerta la reclame de una vez.
+CVE-2026-47890 exp:2026-11-15
