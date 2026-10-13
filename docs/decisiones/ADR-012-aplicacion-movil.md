@@ -26,7 +26,7 @@ pasó con "instalación local":
 | **C. Aplicación nativa aparte (React Native, Flutter)** | Segunda base de código, con su propio ciclo de vida |
 
 El punto de partida, medido antes de decidir nada
-([auditoría del 16 de septiembre](../AUDITORIA_MOVIL_2026-09-16.md)): la interfaz
+([auditoría del 16 de septiembre](../historico/AUDITORIA_MOVIL_2026-09-16.md)): la interfaz
 no estaba adaptada a una pantalla estrecha en absoluto. En las once pantallas el
 ancho desplazable era igual al visible, de modo que lo que se salía del borde no
 se podía alcanzar con ningún gesto. Un supervisor no podía siquiera iniciar
