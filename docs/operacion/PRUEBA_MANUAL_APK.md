@@ -5,7 +5,7 @@ extremo del CI corren en un navegador con tamaño de teléfono. Comprueban que l
 interfaz cabe y que las tareas funcionan en el navegador. Lo que **no** pueden
 ver es lo que hace distinto el envoltorio de Android, y el 18 de septiembre de
 2026 cinco de doce tareas del supervisor estaban rotas justo ahí, cuatro de ellas
-sin ningún mensaje ([auditoría, apéndice del 18](../AUDITORIA_MOVIL_2026-09-16.md)).
+sin ningún mensaje ([auditoría, apéndice del 18](../historico/AUDITORIA_MOVIL_2026-09-16.md)).
 
 Esta lista es la forma de no volver a descubrirlo en el teléfono de un
 supervisor. Está escrita como lo que es —una comprobación a mano— y no disfrazada
@@ -35,25 +35,37 @@ compilado en la máquina: es lo que va a instalar el supervisor.
 
 ## La lista
 
-| # | Qué hacer | Qué tiene que pasar |
-| --- | --- | --- |
-| 1 | Instalar el APK encima de la versión anterior | Se instala sin desinstalar y conserva la dirección del servidor |
-| 2 | Escribir una dirección `http://` en Servidor | Aviso de que Android bloquea las conexiones sin cifrar, **antes** de intentar entrar. Con el campo vacío, el pie dice qué dirección se usaría y que en el teléfono es el propio teléfono |
-| 3 | Entrar con la dirección `https://` del Centro | Abre la bandeja del supervisor |
-| 4 | Documentos → «Descargar» sobre un acta firmada | Se abre «Guardar como» del sistema; el PDF queda en Descargas y se abre en el visor; SICOT dice que quedó guardado |
-| 5 | Registros → «Descargar registros (CSV)» | Igual que el 4, con un CSV que abre en una hoja de cálculo |
-| 6 | Escribir en el campo del copiloto | El teclado **no** tapa el campo, el botón de enviar ni las sugerencias |
-| 7 | Preguntar al copiloto, salir a otra aplicación un par de minutos y volver | Si la respuesta no llegó, SICOT dice que se cortó por salir de la aplicación y vuelve a preguntar solo; la respuesta aparece |
-| 8 | En el sub-paso 3.1 o 3.2, «Tomar foto de la entrega» | Se abre directamente la cámara, **no** la galería. Al cargar la foto, la evidencia dice cuándo se tomó y, si la cámara guarda la ubicación, dónde |
-| 9 | Repetir el 8 sin permiso de cámara: negarlo cuando Android lo pida, o quitarlo en Ajustes › Aplicaciones › SICOT › Permisos | SICOT dice que no se tomó ninguna foto, cómo activar el permiso y que puede usar «Elegir una foto» |
-| 10 | En el mismo sub-paso, «Elegir una foto» | Se abre el selector del sistema y la foto queda cargada; si llegó sin ubicación, SICOT lo dice en vez de omitirlo |
-| 11 | «Firmar documento» en el documento con observaciones y, mientras el Copiloto redacta, salir a otra aplicación o apagar la pantalla un par de minutos | Al volver, SICOT dice que la conexión se cortó por salir de la aplicación —no culpa al Copiloto ni al servidor— y no firma nada por su cuenta: el sub-paso sigue abierto |
-| 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar |
-| 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación |
-| 14 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT |
-| 15 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece |
-| 16 | Cerrar sesión | Vuelve a la pantalla de acceso |
-| 17 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece |
+**La columna «Resultado» se rellena al recorrerla, con la fecha.** La fecha no es
+decoración: un resultado vale para el código que había ese día, así que cuando
+una parte de la aplicación cambia después, su punto vuelve a quedar en el aire y
+se recorre otra vez. Un punto sin fecha es un punto que nadie ha comprobado,
+aunque el código parezca correcto.
+
+Los resultados de abajo son los del recorrido del **7 y 8 de octubre de 2026**,
+hecho sobre un emulador Android 14 con el APK de publicación `x86_64` firmado
+con el almacén de depuración, detrás de Caddy, tal como describe la sección
+siguiente. Están informados día por día en MDL-247. **A 13-10-2026: 12 pasan, 1
+pasa a medias y 4 siguen sin recorrer.**
+
+| # | Qué hacer | Qué tiene que pasar | Resultado |
+| --- | --- | --- | --- |
+| 1 | Instalar el APK encima de la versión anterior | Se instala sin desinstalar y conserva la dirección del servidor | Sin recorrer — exige la llave real de publicación |
+| 2 | Escribir una dirección `http://` en Servidor | Aviso de que Android bloquea las conexiones sin cifrar, **antes** de intentar entrar. Con el campo vacío, el pie dice qué dirección se usaría y que en el teléfono es el propio teléfono | Pasa · 07-10-2026 |
+| 3 | Entrar con la dirección `https://` del Centro | Abre la bandeja del supervisor | Pasa · 07-10-2026 |
+| 4 | Documentos → «Descargar» sobre un acta firmada | Se abre «Guardar como» del sistema; el PDF queda en Descargas y se abre en el visor; SICOT dice que quedó guardado | Pasa · 07-10-2026 |
+| 5 | Registros → «Descargar registros (CSV)» | Igual que el 4, con un CSV que abre en una hoja de cálculo | Pasa · 07-10-2026 |
+| 6 | Escribir en el campo del copiloto | El teclado **no** tapa el campo, el botón de enviar ni las sugerencias | Pasa · 07-10-2026 — **a recomprobar**: `3ae6cb7` cambió ese panel el 08-10 |
+| 7 | Preguntar al copiloto, salir a otra aplicación un par de minutos y volver | Si la respuesta no llegó, SICOT dice que se cortó por salir de la aplicación y vuelve a preguntar solo; la respuesta aparece | Pasa · 08-10-2026 |
+| 8 | En el sub-paso 3.1 o 3.2, «Tomar foto de la entrega» | Se abre directamente la cámara, **no** la galería. Al cargar la foto, la evidencia dice cuándo se tomó y, si la cámara guarda la ubicación, dónde | Pasa · 08-10-2026 — la cámara se abrió de verdad, confirmado con el `mCurrentFocus` del sistema |
+| 9 | Repetir el 8 sin permiso de cámara: negarlo cuando Android lo pida, o quitarlo en Ajustes › Aplicaciones › SICOT › Permisos | SICOT dice que no se tomó ninguna foto, cómo activar el permiso y que puede usar «Elegir una foto» | Pasa · 08-10-2026 |
+| 10 | En el mismo sub-paso, «Elegir una foto» | Se abre el selector del sistema y la foto queda cargada; si llegó sin ubicación, SICOT lo dice en vez de omitirlo | Pasa · 08-10-2026 |
+| 11 | «Firmar documento» en el documento con observaciones y, mientras el Copiloto redacta, salir a otra aplicación o apagar la pantalla un par de minutos | Al volver, SICOT dice que la conexión se cortó por salir de la aplicación —no culpa al Copiloto ni al servidor— y no firma nada por su cuenta: el sub-paso sigue abierto | Sin recorrer — exige el Informe de Supervisión (3.4) pendiente de firmar |
+| 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar | Sin recorrer — mismo requisito que el 11 |
+| 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación | A medias · 08-10-2026 — falla después de cerrar sesión (ver abajo) |
+| 14 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT | Pasa · 08-10-2026 |
+| 15 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece | Pasa · 08-10-2026 |
+| 16 | Cerrar sesión | Vuelve a la pantalla de acceso | Pasa · 08-10-2026 |
+| 17 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece | Sin recorrer |
 
 El 8 vigila algo que se rompe sin ruido: desde Android 11, la aplicación solo
 ve la cámara si el manifiesto declara la consulta `IMAGE_CAPTURE` en
@@ -62,7 +74,33 @@ galería sin avisar y la foto llega sin ubicación (lo que pasó el 23-09-2026).
 Una regeneración con `tauri android init` o un cambio de wry pueden quitar esa
 declaración, y ninguna prueba automática lo vería.
 
-Si algo de la tabla no pasa, la versión no se publica hasta saber por qué.
+Si algo de la tabla no pasa, la versión no se publica hasta saber por qué. Un
+punto «sin recorrer» tampoco es un punto que pase: la compuerta está cumplida
+cuando los 17 tienen resultado y fecha.
+
+## Fallos conocidos, abiertos
+
+Lo que el recorrido encontró y no se arregló. Queda escrito aquí porque hasta
+ahora solo existía en el informe del día, y un fallo que solo vive en un informe
+se pierde.
+
+- **El botón «atrás» después de cerrar sesión** — es lo que deja el punto 13 a
+  medias. En un arranque limpio sale de la aplicación como debe. Tras cerrar
+  sesión, en cambio, cada pulsación se consume navegando a una ruta del panel
+  que el guardia de sesión devuelve a `/login`: no cambia nada en pantalla y
+  parece que el teléfono se quedó atascado. El arreglo toca la pila de historial
+  del WebView y no es de una línea. Observado el 08-10-2026.
+- **El cargador de formatos de Administración usa el selector nativo**, con su
+  `Choose File / No file chosen` en inglés y sin el estilo del resto de la
+  aplicación. Observado el 08-10-2026.
+- **Tres arreglos del 08-10-2026 siguen sin recomprobar sobre el APK**:
+  `3ae6cb7` (la lista del Copiloto abría por el primer mensaje y la conversación
+  parecía perdida), `c2ed895` (el aviso de «falta el nombre» seguía en pantalla
+  con el nombre ya escrito) y `ec55172` («Ir a firmar» desplegaba el sub-paso sin
+  mover la pantalla). Los tres defectos se vieron en el emulador, pero su arreglo
+  no se volvió a instalar: el último recorrido con el APK reconstruido es el del
+  7 de octubre. Por eso el punto 6 vuelve a estar en el aire — `3ae6cb7` corrige
+  un efecto secundario del arreglo de ese mismo punto.
 
 ## Cómo montar el emulador, si no hay teléfono a mano
 
