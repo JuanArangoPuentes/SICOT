@@ -7,6 +7,8 @@ import co.sena.sicot.entity.Documento;
 import co.sena.sicot.ia.GeneracionDocumentoService;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DocumentoService;
+import co.sena.sicot.service.NombreDeDescarga;
+import co.sena.sicot.exception.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -16,7 +18,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -26,7 +27,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -109,7 +109,7 @@ public class DocumentoController {
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "403", description = "Sin acceso a este contrato",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Documento no encontrado",
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado o sin archivo guardado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
@@ -117,11 +117,17 @@ public class DocumentoController {
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long contratoId, @PathVariable Long id) {
         Documento documento = documentoService.buscarConContenido(id);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename(documento.getNombre(), StandardCharsets.UTF_8)
-                .build();
+        // Un documento sin contenido se servía como 200 con cero bytes, y el
+        // navegador guardaba un «.pdf» vacío que el lector daba por dañado
+        // (así bajaron tres archivos de las filas de demostración sin archivo,
+        // auditoría del 28-09-2026). Un 404 con el motivo es lo honesto.
+        if (documento.getContenido() == null || documento.getContenido().length == 0) {
+            throw new ResourceNotFoundException("El documento «" + documento.getNombre()
+                    + "» no tiene archivo guardado: se registró sin contenido y no hay nada que descargar.");
+        }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        NombreDeDescarga.cabecera(documento.getNombre(), documento.getContentType()))
                 // Estado de integridad en la propia descarga, para que una
                 // auditoría automatizada pueda comprobarlo sin una segunda
                 // petición. La verificación legible para una persona está en
@@ -155,11 +161,17 @@ public class DocumentoController {
     }
 
     @Operation(summary = "Generar (redactar) un documento formal con el Copiloto IA a partir de los datos reales del contrato",
-            description = "Crea el documento en estado PENDIENTE — el supervisor lo revisa y firma después con POST /{id}/firmar.")
+            description = "Crea el documento en estado PENDIENTE — el supervisor lo revisa y firma después con "
+                    + "POST /{id}/firmar. Si las observaciones las redactó el Copiloto "
+                    + "(observacionesRedactadasConIa), el cliente debe mostrarlas antes de firmar y firmar con "
+                    + "?huellaRevisada=<huellaDelBorrador>. Con redactarConIa=false van las notas tal cual.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Documento generado",
-                    content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
-            @ApiResponse(responseCode = "400", description = "Datos inválidos",
+            @ApiResponse(responseCode = "200", description = "Documento generado, con cómo quedaron sus observaciones",
+                    content = @Content(schema = @Schema(
+                            implementation = co.sena.sicot.dto.documento.DocumentoGeneradoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos: un dato o una celda demasiado largos, "
+                    + "una tabla con más filas o columnas de las que admite, o, en el Informe Final, órdenes de pago "
+                    + "que no suman el valor total pagado (cuando todas se leen como cifras)",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
@@ -174,27 +186,40 @@ public class DocumentoController {
     })
     @PostMapping("/generar")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
-    public ResponseEntity<DocumentoResponse> generar(@PathVariable Long contratoId,
-                                                     @Valid @RequestBody GenerarDocumentoRequest request) {
-        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(), request.notas()));
+    public ResponseEntity<co.sena.sicot.dto.documento.DocumentoGeneradoResponse> generar(
+            @PathVariable Long contratoId, @Valid @RequestBody GenerarDocumentoRequest request) {
+        return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(),
+                request.notas(), request.datos(), request.tablas(), !Boolean.FALSE.equals(request.redactarConIa())));
     }
 
-    @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual")
+    @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual",
+            description = "Solo lo firma el supervisor asignado al contrato. Un documento generado por SICOT exige "
+                    + "?huellaRevisada= (la huellaDelBorrador que devolvió la generación): solo se firma si el "
+                    + "borrador sigue siendo el que el supervisor revisó; sin ella o con otra, 400. En un documento "
+                    + "cargado es opcional.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Documento firmado",
                     content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "No se puede firmar: ya está firmado o sin contenido, "
+                    + "falta la huella del borrador revisado o ya no es ese, quien firma no es el supervisor del "
+                    + "contrato, no tiene firma electrónica activa o no se pudo poner la firma visible",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Sin rol SUPERVISOR/ADMINISTRADOR o no es el supervisor del contrato o sin firma asignada",
+            @ApiResponse(responseCode = "403", description = "Sin rol SUPERVISOR",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Documento no encontrado",
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado, o de un contrato que no es el asignado a este supervisor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
     })
     @PostMapping("/{id}/firmar")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
-    public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id) {
-        return ResponseEntity.ok(documentoService.firmar(id));
+    // Solo SUPERVISOR: los documentos de un contrato los firma su supervisor
+    // asignado, y Gestión solo asigna usuarios con ese rol. El servicio lo
+    // vuelve a comprobar contra el contrato (auditoría del 02-10-2026).
+    @PreAuthorize("hasRole('SUPERVISOR')")
+    public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id,
+                                                    @RequestParam(required = false) String huellaRevisada) {
+        return ResponseEntity.ok(documentoService.firmar(id, huellaRevisada));
     }
 }

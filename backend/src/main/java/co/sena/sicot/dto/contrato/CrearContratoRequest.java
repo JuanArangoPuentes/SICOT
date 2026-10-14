@@ -31,8 +31,11 @@ public record CrearContratoRequest(
 
         @NotNull(message = "El valor del contrato es obligatorio.")
         @DecimalMin(value = "0.01", message = "El valor debe ser mayor a cero.")
-        @Digits(integer = 16, fraction = 2,
-                message = "El valor del contrato admite máximo 16 dígitos enteros y 2 decimales.")
+        // 12 dígitos: hasta donde los documentos escriben el valor en letras
+        // (NumeroEnLetras). Con 16 se registraba un valor con el que el Acta
+        // de Inicio no se podía generar (auditoría del 02-10-2026).
+        @Digits(integer = 12, fraction = 2,
+                message = "El valor del contrato admite máximo 12 dígitos enteros y 2 decimales.")
         BigDecimal valor,
 
         LocalDate fechaInicio,

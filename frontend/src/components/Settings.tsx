@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
-import { CLAVE_SERVIDOR, apiBase } from '@/services/api/client'
-import { avisoTraficoSinCifrar } from '@/services/entorno'
+import { CLAVE_SERVIDOR, ORIGEN_COMPILADO, apiBase } from '@/services/api/client'
+import { avisoTraficoSinCifrar, queUsaLaDireccionVacia } from '@/services/entorno'
 import { AvatarIcon } from './icons'
 
 type Section = 'presets' | 'manual' | 'copiloto' | 'servidor'
@@ -179,41 +179,11 @@ export default function Settings({
               onChange={(e) => patch({ transitionMs: Number(e.target.value) })}
             />
           </Field>
-          <Toggle label="Parpadeo en alertas" value={prefs.blinkAlerts} onChange={(v) => patch({ blinkAlerts: v })} />
-          <Toggle label="Efectos hover" value={prefs.hoverEffects} onChange={(v) => patch({ hoverEffects: v })} />
-
-          {sectionTitle('4. NOTIFICACIONES')}
-          <Field label={`Duración de alertas — ${prefs.alertDurationS}s`}>
-            <input
-              type="range"
-              min={3}
-              max={10}
-              value={prefs.alertDurationS}
-              onChange={(e) => patch({ alertDurationS: Number(e.target.value) })}
-            />
-          </Field>
-          <Field label="Posición">
-            <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {(
-                [
-                  ['top-right', 'Arriba derecha'],
-                  ['top-center', 'Arriba centro'],
-                  ['bottom-right', 'Abajo derecha'],
-                ] as const
-              ).map(([p, l]) => (
-                <label key={p} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="pos"
-                    checked={prefs.alertPosition === p}
-                    onChange={() => patch({ alertPosition: p })}
-                  />
-                  {l}
-                </label>
-              ))}
-            </div>
-          </Field>
-          <Toggle label="Sonido de notificación" value={prefs.sound} onChange={(v) => patch({ sound: v })} />
+          {/* Aquí había «Parpadeo en alertas», «Efectos hover» y una sección de
+              Notificaciones (duración, posición y sonido). Ninguno movía nada:
+              SICOT no tiene avisos emergentes ni sonidos, ninguna alerta
+              parpadea desde el rediseño del 27-08, y «Efectos hover» solo
+              quitaba la animación del cambio de color, no el cambio. */}
 
           {/* Las preferencias se guardan solas en cuanto cambian (ver prefs.tsx),
               así que no hay un botón "Guardar": tenerlo sugeriría que sin pulsarlo
@@ -282,35 +252,20 @@ export default function Settings({
               style={{ width: '100%', padding: '9px 10px' }}
             />
           </Field>
-          <Field label="Tono de comunicación">
-            <div style={{ display: 'flex', gap: 14, fontSize: 13, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
-              {(
-                [
-                  ['formal', 'Formal y directo'],
-                  ['amable', 'Amable y detallado'],
-                  ['tecnico', 'Conciso y técnico'],
-                ] as const
-              ).map(([t, l]) => (
-                <label key={t} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="tono"
-                    checked={prefs.avatarTone === t}
-                    onChange={() => patch({ avatarTone: t })}
-                  />
-                  {l}
-                </label>
-              ))}
-            </div>
-          </Field>
+          {/* No hay «Tono de comunicación»: el que hubo se guardaba y nunca
+              llegaba al modelo. Para que llegara habría que alargar el prompt
+              de cada pregunta, un coste que un modelo pequeño en CPU nota. */}
 
           {sectionTitle('MODO DE PRESENCIA')}
           <div style={{ display: 'grid', gap: 8 }}>
             {(
               [
                 ['ghost', 'Ghost', 'Oculto. Solo aparece en el panel Copiloto o durante un tutorial.'],
-                ['follower', 'Follower', 'Avatar flotante en la esquina inferior derecha; clic para abrir el chat.'],
-                ['guide', 'Guide', 'Tutorial asistido: el avatar se posiciona junto a cada elemento y lo explica.'],
+                [
+                  'follower',
+                  'Follower',
+                  'En el panel del supervisor, un avatar flotante en la esquina inferior derecha; al pulsarlo abre el Copiloto del contrato.',
+                ],
               ] as const
             ).map(([m, label, desc]) => (
               <button
@@ -338,51 +293,6 @@ export default function Settings({
   )
 }
 
-function Toggle({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '8px 0',
-        fontSize: 13,
-        color: 'var(--text-secondary)',
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        style={{
-          width: 40,
-          height: 22,
-          borderRadius: 999,
-          border: '1px solid var(--border)',
-          cursor: 'pointer',
-          background: value ? 'var(--accent)' : 'var(--bg-input)',
-          position: 'relative',
-          transition: 'background var(--t)',
-        }}
-      >
-        <span
-          style={{
-            position: 'absolute',
-            top: 2,
-            left: value ? 20 : 2,
-            width: 16,
-            height: 16,
-            borderRadius: '50%',
-            background: value ? 'var(--on-accent)' : 'var(--text-muted)',
-            transition: 'left var(--t)',
-          }}
-        />
-      </button>
-    </label>
-  )
-}
-
 /**
  * Dirección del servidor del Centro.
  *
@@ -396,8 +306,9 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
  *
  * <p>Guardándola aquí, el instalador es <b>un único artefacto válido para
  * cualquier despliegue</b> y cada máquina apunta al servidor que le corresponde.
- * Vacío es una elección legítima: significa «el mismo origen desde el que se
- * sirve la aplicación», que es como funciona el despliegue web con proxy.
+ * Vacío significa «la dirección con la que se compiló»: en el despliegue web con
+ * proxy es el mismo origen, pero en el APK y el instalador no (ver
+ * queUsaLaDireccionVacia).
  */
 function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.ReactNode }) {
   const [valor, setValor] = useState(() => {
@@ -444,7 +355,10 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
           type="url"
           inputMode="url"
           spellCheck={false}
-          placeholder="http://192.168.1.50:8080"
+          // https:// y sin puerto, como se despliega el servidor del Centro
+          // (ADR-009). El ejemplo anterior, http://IP:8080, era justo lo que
+          // el APK bloquea y además se saltaba el proxy con TLS.
+          placeholder="https://servidor-del-centro"
           value={valor}
           onChange={(e) => {
             setValor(e.target.value)
@@ -467,7 +381,7 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
             marginTop: 12,
             padding: '10px 14px',
             borderRadius: 10,
-            border: '1px solid var(--alert-alta)',
+            border: '1px solid var(--alert-leve)',
             background: 'var(--bg-elevated)',
             color: 'var(--text-secondary)',
             fontSize: 12.5,
@@ -498,7 +412,7 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
         <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--accent-tech)' }}>
           {apiBase() === '' ? 'el mismo origen de la aplicación' : apiBase()}
         </span>
-        . Déjelo vacío para usar el mismo origen desde el que se sirve la aplicación.
+        . {queUsaLaDireccionVacia(ORIGEN_COMPILADO)}
       </div>
     </div>
   )

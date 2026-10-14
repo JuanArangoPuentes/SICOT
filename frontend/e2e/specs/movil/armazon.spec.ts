@@ -135,6 +135,74 @@ test.describe('armazón en pantalla estrecha', () => {
   })
 })
 
+test.describe('Copiloto en pantalla estrecha', () => {
+  // El panel del Copiloto es una columna lateral que en estrecho pasa a ir
+  // debajo del contenido. Con la conversación corta cabía entero, así que la
+  // pantalla parecía correcta; en cuanto crecía, el compositor —campo, botón
+  // de enviar y sugerencias, que es lo último de la columna— se salía del
+  // recorte del contenedor y dejaba de existir para el supervisor: no lo
+  // alcanzaba desplazando, ni ocultando y volviendo a mostrar el panel, ni
+  // cambiando de pestaña. Es decir, el Copiloto se rompía justo al usarlo.
+  // Encontrado a mano en el emulador el 07-10-2026 con el APK de publicación;
+  // ninguna prueba lo veía porque todas hablaban con una conversación vacía.
+  test('el compositor sigue al alcance cuando la conversación crece', async ({ page }) => {
+    test.setTimeout(90_000)
+    await entrarComo(page, 'SUPERVISOR')
+    await page.goto('/supervisor/contrato')
+
+    const campo = page.getByRole('textbox', { name: 'Mensaje para el Copiloto' })
+    const enviar = page.getByRole('button', { name: 'Enviar al Copiloto' })
+    await expect(campo).toBeVisible({ timeout: 15_000 })
+
+    // «¿En qué paso voy?» la resuelve el backend sin pasar por el modelo, así
+    // que la conversación crece deprisa y la prueba no depende de que Ollama
+    // esté arriba ni de qué datos tenga el contrato sembrado. Cuatro idas y
+    // venidas bastan para pasar del alto de un teléfono.
+    //
+    // Entre una y otra se espera a que el compositor vuelva a su texto de
+    // reposo: mientras el Copiloto responde dice «Esperando respuesta», y
+    // enviar encima dejaría la prueba midiendo una conversación más corta de
+    // lo que cree.
+    const PREGUNTA = 'en qué paso voy'
+    for (let i = 0; i < 4; i++) {
+      await campo.fill(PREGUNTA)
+      await enviar.click()
+      await expect(page.getByText(PREGUNTA, { exact: true })).toHaveCount(i + 1)
+      await expect(campo).toHaveAttribute('placeholder', /Pregunte/, { timeout: 30_000 })
+    }
+
+    // La medida se toma desde la página y no con `toBeInViewport`, a
+    // propósito: `fill` y `click` desplazan el elemento hasta dejarlo a la
+    // vista antes de actuar, y un contenedor con `overflow: hidden` SÍ se
+    // desplaza por código aunque el dedo no pueda moverlo. Con ese atajo la
+    // prueba veía el compositor justo donde el supervisor no lo tenía. Por eso
+    // se devuelve el desplazamiento a cero —lo único que el supervisor puede
+    // ver— y se mide ahí.
+    //
+    // El recorte del contenedor es la condición de fondo: si `.split-panel`
+    // tiene más contenido del que muestra, hay algo dentro a lo que no se
+    // llega, sea el compositor o lo que venga después.
+    const medida = await page.evaluate(() => {
+      const panel = document.querySelector('.split-panel') as HTMLElement
+      panel.scrollTop = 0
+      const compositor = document.querySelector('[aria-label="Mensaje para el Copiloto"]') as HTMLElement
+      return {
+        recorte: panel.scrollHeight - panel.clientHeight,
+        bordeInferior: Math.round(compositor.getBoundingClientRect().bottom),
+        alto: window.innerHeight,
+      }
+    })
+    expect(
+      medida.recorte,
+      `el panel esconde ${medida.recorte} px a los que no se llega desplazando`,
+    ).toBeLessThanOrEqual(1)
+    expect(
+      medida.bordeInferior,
+      `el campo del Copiloto acaba en ${medida.bordeInferior} px, fuera de una pantalla de ${medida.alto} px`,
+    ).toBeLessThanOrEqual(medida.alto)
+  })
+})
+
 test.describe('modales en pantalla estrecha', () => {
   // La auditoría del 16 de septiembre dejó los modales anotados como pendientes
   // y no como aprobados, porque medirlos exige recorrer el flujo que los abre.

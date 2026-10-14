@@ -2,7 +2,9 @@
 
 Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contratos** (SENA — Centro Tecnológico del Mobiliario).
 
-Spring Boot 3.5.12 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI.
+Spring Boot 3 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI. Las
+versiones exactas están en [`pom.xml`](./pom.xml), que es donde no pueden
+quedarse viejas.
 
 > ⚠️ **Fase actual:** monolito modular con autenticación JWT, CRUD de usuarios/contratos, flujo de etapas GCCON-P-010, alertas, documentos, auditoría, **Copiloto IA real (Ollama)** — extracción de datos de contrato, chat conversacional con memoria, redacción de documentos formales —, firma electrónica (referencia interna) y entrega de credenciales por correo. Pendiente: integración SECOP II y OCR de documentos escaneados.
 
@@ -131,7 +133,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 |---|---|---|
 | `Fatal error compiling: error: release version 25 not supported` | La máquina tiene un JDK anterior (p. ej. 21). El proyecto compila con `--release 25` | Instalar JDK 25 (`winget install EclipseAdoptium.Temurin.25.JDK`) y apuntar `JAVA_HOME` ahí. El build vía Docker no se ve afectado: usa su propia imagen JDK 25 |
 | `Found more than one migration with version 1` | `target/classes` conserva una migración Flyway vieja que ya se eliminó del código fuente (Maven no borra artefactos huérfanos al renombrar un archivo) | `mvn clean` antes de volver a arrancar. **Correr `mvn clean` siempre después de un pull que consolide o renombre migraciones** |
-| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | Coordinar con quien administra la base antes de tocar `flyway_schema_history`; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
+| `Migration checksum mismatch` / `Detected applied migration not resolved locally` | La base local trae un historial de Flyway anterior a la consolidación de migraciones | No editar `flyway_schema_history` a mano; sobre una base local desechable, lo más simple es recrearla (`docker compose down -v`) |
 | `IaNoDisponibleException` al usar el Copiloto | Ollama no está corriendo | `ollama serve` en la misma máquina que el backend, y verificar `OLLAMA_URL` |
 
 ## 5. Autenticación
@@ -155,7 +157,7 @@ SPRING_PROFILES_ACTIVE=dev java -jar target/sicot-backend-0.1.0.jar
 | POST | `/api/contratos/{id}/documentos` (multipart, carga real) | GESTION, ADMINISTRADOR |
 | GET | `/api/contratos/{id}/documentos/{docId}/archivo` (descarga real) | autenticados |
 | POST | `/api/contratos/{id}/documentos/generar` (redacta el documento con IA) | SUPERVISOR, ADMINISTRADOR |
-| POST | `/api/contratos/{id}/documentos/{docId}/firmar` | SUPERVISOR asignado, ADMINISTRADOR |
+| POST | `/api/contratos/{id}/documentos/{docId}/firmar` (lo generado exige `?huellaRevisada=`) | SUPERVISOR asignado |
 | POST | `/api/contratos/{id}/copiloto/chat` (chat real sobre Ollama) | SUPERVISOR asignado, ADMINISTRADOR |
 | POST | `/api/ia/extraer-contrato` (multipart PDF; propone campos, **no persiste**) | GESTION, ADMINISTRADOR |
 | GET/PATCH | `/api/contratos/{id}/alertas`, `/api/alertas/{id}/leida` | autenticados |
@@ -228,7 +230,7 @@ siempre corre. Para ejecutarla a mano, con la base del proyecto arriba:
 SICOT_IT_DB_URL=jdbc:postgresql://localhost:5432/sicot SICOT_IT_DB_USERNAME=sicot SICOT_IT_DB_PASSWORD=sicot_dev_password mvn test -Dtest=EsquemaPostgreSqlIntegrationTest
 ```
 
-No toca los datos del equipo: trabaja sobre un esquema desechable
+No toca los datos de la base de desarrollo: trabaja sobre un esquema desechable
 (`sicot_verificacion_esquema`) que borra y recrea en cada corrida; el esquema
 `public` queda intacto.
 
@@ -258,14 +260,16 @@ Algo pasa en SICOT                    El calendario avanza
                         │   pool propio, reintentos exponenciales
          ┌──────────────┼──────────────┐
          ▼              ▼              ▼
-   CrearAlerta    EnviarCorreo   RedactarResumenIA
+   CrearAlerta    EnviarCorreo   RedaccionDeResumen
          │              │              │
-    AlertaService  EmailService   OllamaClient
+    AlertaService  EmailService    plantillas
+                                 (sin OllamaClient)
 ```
 
 **Las cuatro reglas invariantes** (ADR-008): ninguna regla escribe a la base
-directamente; la regla decide y la IA solo redacta; una regla es una clase con su
-prueba; toda tarea es idempotente por clave.
+directamente; la regla decide y la acción solo redacta, con plantillas y nunca
+con el modelo (ver la nota de abajo); una regla es una clase con su prueba; toda
+tarea es idempotente por clave.
 
 ### Las reglas que hay hoy
 
@@ -284,7 +288,7 @@ prueba; toda tarea es idempotente por clave.
 > probados sostenía los hechos sin alterarlos — las cifras están en la sección
 > «Revisión» de [ADR-008](../docs/decisiones/ADR-008-motor-de-automatizaciones.md).
 > Ahora el resumen se compone con plantillas, y el motor completo funciona en un
-> equipo sin Ollama instalado. El modelo local sigue en SICOT para el chat del
+> servidor sin Ollama instalado. El modelo local sigue en SICOT para el chat del
 > copiloto y la extracción de datos de un PDF (§ correspondiente), donde su
 > trabajo no es repetir cifras.
 

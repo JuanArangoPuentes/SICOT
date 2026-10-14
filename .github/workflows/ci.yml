@@ -276,6 +276,7 @@ jobs:
               --scanners vuln \
               --severity CRITICAL,HIGH \
               --ignore-unfixed \
+              --ignorefile /proyecto/.trivyignore \
               --exit-code 1 \
               --no-progress \
               --skip-dirs node_modules \
@@ -438,16 +439,48 @@ jobs:
         # generada, con la que arrancaría de verdad, y no el archivo fuente.
         run: docker run --rm sicot-frontend:ci nginx -t
 
+      - name: Escanear las imágenes con Trivy
+        # El escaneo de dependencias de arriba mira el árbol del repositorio
+        # (`trivy fs`): ve las librerías de Maven y npm, pero no lo que trae la
+        # imagen base —nginx, OpenSSL, musl, la JRE—, que es lo que de verdad
+        # se despliega. Así pudo quedarse el frontend en nginx 1.27, una rama
+        # cerrada y sin parches, sin que ninguna compuerta lo dijera. Mismos
+        # criterios que allí (CRITICAL/HIGH con arreglo publicado) y misma
+        # versión de Trivy; la caché evita bajar su base dos veces.
+        run: |
+          for imagen in sicot-backend:ci sicot-frontend:ci; do
+            echo "::group::$imagen"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$HOME/.cache/trivy:/root/.cache/trivy" \
+              -v "$PWD/.trivyignore:/sicot/.trivyignore:ro" \
+              aquasec/trivy:0.74.0 image \
+                --scanners vuln \
+                --severity CRITICAL,HIGH \
+                --ignore-unfixed \
+                --ignorefile /sicot/.trivyignore \
+                --exit-code 1 \
+                --no-progress \
+                "$imagen"
+            echo "::endgroup::"
+          done
+
       - name: Validar los archivos de Compose
         # `config` resuelve variables, fusiona los dos archivos y falla si algo
         # no cuadra. Las variables obligatorias del perfil de producción se
         # rellenan con valores de relleno: aquí se valida la estructura, no los
         # secretos.
+        #
+        # SICOT_ADMIN_EMAIL y SICOT_ADMIN_PASSWORD NO se rellenan, a propósito:
+        # la guía pide retirarlas tras el primer arranque, y este paso comprueba
+        # que Compose siga funcionando sin ellas. Cuando eran obligatorias, el
+        # servidor que seguía la guía no podía ni actualizar.
         env:
           DB_PASSWORD: valor-de-relleno-para-ci
-          JWT_SECRET: dmFsb3ItZGUtcmVsbGVuby1wYXJhLWNpLXNvbG8tZXN0cnVjdHVyYQ==
-          SICOT_ADMIN_EMAIL: ci@ejemplo.invalid
-          SICOT_ADMIN_PASSWORD: relleno-solo-para-ci-1234
+          # En claro y no en base64 a propósito: `config` no valida el secreto,
+          # y una cadena base64 de 48 bytes es indistinguible de un secreto real
+          # para gitleaks, que la marcaba y tumbaba el análisis de seguridad.
+          JWT_SECRET: relleno-solo-para-ci-no-es-un-secreto
           # El proxy con TLS de ADR-009 exige un dominio explícito: sin él, el
           # despliegue no sabría para qué nombre pedir certificado. Aquí solo se
           # valida la estructura del archivo, así que basta un nombre de relleno.
@@ -468,6 +501,91 @@ jobs:
                      | .environment.RESPALDO_DIRECTORIO == "/respaldos"
                        and any(.volumes[]; .target == "/respaldos" and .read_only == true)' > /dev/null \
             || { echo "::error::El backend de producción no recibe la carpeta de respaldos: la vigilancia del RPO (ADR-002) quedaría apagada."; exit 1; }
+          # El entorno de ensayo restaura datos de producción en un portátil y
+          # termina con `down -v`. Tiene que ser un proyecto aparte, con su
+          # propio volumen montado donde PostgreSQL 18 guarda los datos, y sin
+          # publicar nada fuera del propio equipo. Sin `name:` heredaba el
+          # proyecto de desarrollo: el restore caía sobre la base de desarrollo
+          # y el `down -v` la borraba.
+          ENSAYO_JWT_SECRET=relleno-solo-para-ci \
+            docker compose -f docker-compose.yml -f docker-compose.ensayo.yml config --format json \
+            | jq -e '.name == "sicot-ensayo"
+                     and all(.volumes[]; .name | startswith("sicot-ensayo_"))
+                     and ([.services.db.volumes[] | [.source, .target]] == [["sicot_ensayo_db_data", "/var/lib/postgresql"]])
+                     and all(.services[]; all(.ports[]?; .host_ip == "127.0.0.1"))
+                     and .services.backend.environment.JWT_SECRET != null' > /dev/null \
+            || { echo "::error::docker-compose.ensayo.yml podría tocar el entorno de desarrollo o exponer los datos restaurados."; exit 1; }
+          # ADR-009: en producción el proxy es el ÚNICO servicio con puertos
+          # publicados. Cualquier otro sería un camino sin cifrar hacia los
+          # mismos datos —o, con Ollama, una IA sin autenticación abierta a la
+          # red del Centro—, y nadie lo vigila.
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json \
+            | jq -e '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] == ["proxy"]' > /dev/null \
+            || { echo "::error::En producción hay otro servicio, además del proxy, con puertos publicados (ADR-009)."; exit 1; }
+
+      - name: Validar el Caddyfile
+        # Ni `nginx -t` ni `config` miran el Caddyfile, y un error en él solo
+        # aparecía al arrancar el proxy en el servidor. `caddy validate` lo
+        # carga como lo haría el contenedor, con las dos formas de certificado
+        # (autoridad local y ACME con correo), y con la MISMA imagen de Caddy
+        # que despliega docker-compose.prod.yml.
+        env:
+          DB_PASSWORD: valor-de-relleno-para-ci
+          # En claro y no en base64 a propósito: `config` no valida el secreto,
+          # y una cadena base64 de 48 bytes es indistinguible de un secreto real
+          # para gitleaks, que la marcaba y tumbaba el análisis de seguridad.
+          JWT_SECRET: relleno-solo-para-ci-no-es-un-secreto
+          SICOT_DOMINIO: sicot.ci.invalid
+          RESPALDO_DIRECTORIO: /srv/sicot/respaldos
+        run: |
+          imagen="$(docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json | jq -r '.services.proxy.image')"
+          for tls in internal ci@ejemplo.invalid; do
+            echo "SICOT_TLS=$tls"
+            docker run --rm \
+              -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+              -e SICOT_DOMINIO=sicot.ci.invalid \
+              -e SICOT_TLS="$tls" \
+              "$imagen" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done
+
+      - name: Comprobar que los puertos coinciden entre Caddy, nginx y los Dockerfile
+        # Ya pasó: el Caddyfile mandaba la SPA al 80 mientras nginx escuchaba en
+        # el 8443, y en producción caía toda la aplicación con la API sana. Los
+        # tres archivos se validan bien por separado; lo que falla es que no
+        # coincidan.
+        run: |
+          caddy_frontend="$(grep -oP 'reverse_proxy frontend:\K[0-9]+' Caddyfile | sort -u)"
+          nginx_listen="$(grep -oP '^\s*listen \K[0-9]+' frontend/nginx.conf.template | sort -u)"
+          expose_frontend="$(grep -oP '^EXPOSE \K[0-9]+' frontend/Dockerfile)"
+          caddy_backend="$(grep -oP 'reverse_proxy backend:\K[0-9]+' Caddyfile | sort -u)"
+          expose_backend="$(grep -oP '^EXPOSE \K[0-9]+' backend/Dockerfile)"
+          echo "frontend: Caddy=$caddy_frontend nginx=$nginx_listen EXPOSE=$expose_frontend · backend: Caddy=$caddy_backend EXPOSE=$expose_backend"
+          if [ "$caddy_frontend" != "$nginx_listen" ] || [ "$nginx_listen" != "$expose_frontend" ] \
+             || [ "$caddy_backend" != "$expose_backend" ]; then
+            echo "::error::El Caddyfile reenvía a un puerto en el que no escucha el servicio."
+            exit 1
+          fi
+
+  respaldo:
+    name: Script de respaldo
+    runs-on: ubuntu-latest
+
+    # El respaldo sostiene el RPO de ADR-002 y nadie lo ve fallar: corre de
+    # madrugada, en el servidor. Lo que se fija aquí es lo que deja en la
+    # carpeta cuando falla, porque esa carpeta es lo que vigila el backend: un
+    # volcado cortado que se quedaba con nombre de respaldo apagaba la alarma.
+    # Corre en segundos y sin base de datos (la prueba sustituye docker y
+    # pg_restore por dobles).
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Revisar los scripts con ShellCheck
+        # Viene instalado en la imagen del runner. Desde «warning»: los avisos
+        # de estilo («info») no dicen nada de si el script funciona.
+        run: shellcheck --severity=warning scripts/*.sh
+
+      - name: Un respaldo fallido no deja nada en la carpeta vigilada
+        run: bash scripts/prueba-respaldo-sicot.sh
 
   e2e:
     name: Extremo a extremo (Playwright · escritorio y teléfono)

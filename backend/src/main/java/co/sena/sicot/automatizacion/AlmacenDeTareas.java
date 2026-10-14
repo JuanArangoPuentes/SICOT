@@ -248,7 +248,10 @@ public class AlmacenDeTareas {
     }
 
     /**
-     * Borra las tareas ya resueltas que superaron la retención configurada.
+     * Borra las tareas ya resueltas que superaron la retención configurada,
+     * salvo las de contratos ACTIVO: sus filas son la memoria que impide repetir
+     * un aviso de calendario. Ver
+     * {@code TareaAutomatizadaRepository.purgarResueltasAnterioresA}.
      *
      * @return cuántas se borraron
      */

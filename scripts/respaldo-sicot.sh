@@ -12,7 +12,7 @@
 #
 #   1. VERIFICA el archivo recién creado. Un `pg_dump` puede terminar con
 #      código 0 y dejar un archivo truncado si el disco se llenó a mitad.
-#      `pg_restore --list` lo lee entero y falla si no es un volcado válido.
+#      `pg_restore -f -` lo lee entero y falla si no es un volcado válido.
 #      Un respaldo que nadie ha probado a leer es una suposición, no un
 #      respaldo.
 #   2. ROTA los antiguos, para que el disco no se llene en silencio — que es
@@ -32,6 +32,13 @@
 # Ver docs/operacion/BACKUP_Y_RESTAURACION.md.
 
 set -euo pipefail
+
+# Los volcados llevan la base entera —contratos, documentos, hashes de
+# contraseña—. Con el umask habitual (022) quedaban legibles por cualquier
+# cuenta del servidor; con 077 solo los lee quien corre el cron. La carpeta, si
+# ya existe, conserva sus permisos: el backend solo necesita listarla para ver
+# la fecha del último respaldo, no leer su contenido.
+umask 077
 
 CONTENEDOR="${SICOT_DB_CONTAINER:-sicot-db}"
 BASE="${SICOT_DB_NAME:-sicot}"
@@ -73,6 +80,14 @@ mkdir -p "$DESTINO"
 
 FECHA="$(date +%Y%m%d-%H%M%S)"
 ARCHIVO="$DESTINO/sicot-$FECHA.dump"
+# El volcado se escribe con otro nombre y solo pasa a llamarse `.dump` cuando
+# ya se verificó. Antes se escribía directamente con el nombre final, y un
+# pg_dump cortado o un volcado ilegible se quedaban en la carpeta: la
+# vigilancia del backend (VigilanciaDelRespaldo) lo tomaba por el respaldo de
+# anoche y no avisaba, y la rotación, noche tras noche, borraba los buenos para
+# conservar esos. El `trap` lo borra en cualquier salida que no llegue al `mv`.
+PARCIAL="$ARCHIVO.parcial"
+trap 'rm -f "$PARCIAL"' EXIT
 
 log "Iniciando respaldo de '$BASE' (modo: $MODO)…"
 
@@ -88,19 +103,32 @@ if [[ "$MODO" == "docker" ]]; then
     #
     # SIN `-t`: un pseudo-terminal traduce saltos de línea y corrompería un
     # volcado binario de forma silenciosa — se notaría solo al restaurar.
-    docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c > "$ARCHIVO"
+    volcar() { docker exec "$CONTENEDOR" pg_dump -U "$USUARIO" -d "$BASE" -F c > "$PARCIAL"; }
 else
-    PGPASSWORD="${SICOT_DB_PASSWORD:-}" pg_dump         -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}"         -U "$USUARIO" -d "$BASE" -F c -f "$ARCHIVO"
+    volcar() {
+        PGPASSWORD="${SICOT_DB_PASSWORD:-}" pg_dump             -h "${SICOT_DB_HOST:-localhost}" -p "${SICOT_DB_PORT:-5432}"             -U "$USUARIO" -d "$BASE" -F c -f "$PARCIAL"
+    }
+fi
+# Con `set -e` el script ya saldría, pero sin decir por qué: esta línea es la
+# que queda en el log del cron.
+if ! volcar; then
+    error "pg_dump falló; no se guardó ningún respaldo. Revise el espacio en disco y el estado de la base."
+    exit 4
 fi
 
-if [[ ! -s "$ARCHIVO" ]]; then
-    error "El respaldo quedó vacío: $ARCHIVO"
-    rm -f "$ARCHIVO"
+if [[ ! -s "$PARCIAL" ]]; then
+    error "El respaldo quedó vacío; no se guardó."
     exit 2
 fi
 
 # Verificación real: leer el volcado entero. Si está truncado o corrupto,
-# pg_restore --list falla aquí y no dentro de seis meses, cuando haga falta.
+# falla aquí y no dentro de seis meses, cuando haga falta.
+#
+# `pg_restore -f -` y no `pg_restore --list`: --list solo lee el índice del
+# volcado, no los datos. Se comprobó el 28-09-2026 con un volcado de la base de
+# desarrollo cortado al 60 %: --list lo daba por bueno (salida 0) y el volcado
+# habría devuelto los archivos de `documentos` incompletos al restaurarlo.
+# -f - recorre todos los datos y escribe el SQL a la salida, que se descarta.
 log "Verificando la integridad del volcado…"
 # Se prefiere un pg_restore instalado en la máquina, exista Docker o no: la
 # verificación solo necesita leer el archivo, y hacerlo por fuera del contenedor
@@ -114,17 +142,18 @@ log "Verificando la integridad del volcado…"
 # Sin pg_restore local se usa el contenedor, pero por ENTRADA ESTÁNDAR en vez de
 # por volumen — `-i` sin `-t`, que no traduce el binario.
 if command -v pg_restore >/dev/null 2>&1; then
-    verificar() { pg_restore --list "$ARCHIVO"; }
+    verificar() { pg_restore -f - "$PARCIAL"; }
 elif [[ "$MODO" == "docker" ]]; then
-    verificar() { docker run --rm -i postgres:18-alpine pg_restore --list < "$ARCHIVO"; }
+    verificar() { docker run --rm -i postgres:18-alpine pg_restore -f - < "$PARCIAL"; }
 else
     error "No hay pg_restore disponible para verificar el volcado."
     exit 3
 fi
 if ! verificar > /dev/null 2>&1; then
-    error "El volcado no es legible: $ARCHIVO. NO se puede confiar en este respaldo."
+    error "El volcado no es legible: NO se puede confiar en él y no se guardó."
     exit 3
 fi
+mv "$PARCIAL" "$ARCHIVO"
 
 TAMANIO="$(du -h "$ARCHIVO" | cut -f1)"
 log "Respaldo verificado: $ARCHIVO ($TAMANIO)"

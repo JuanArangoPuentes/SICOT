@@ -27,6 +27,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -239,7 +240,8 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pregunta\":\"¿de dónde saco la póliza de cumplimiento?\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.respuesta").value("respuesta de prueba del Copiloto"));
+                .andExpect(jsonPath("$.respuesta").value("respuesta de prueba del Copiloto"))
+                .andExpect(jsonPath("$.fuente").value("MODELO"));
 
         // El otro supervisor, no — 404 (no 400) para no filtrar existencia
         // (brecha 1: oráculo de enumeración unificado en SecurityUtils).
@@ -296,7 +298,74 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pregunta\":\"¿en qué paso voy?\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.respuesta", containsString("Está en el paso 1")));
+                .andExpect(jsonPath("$.respuesta", containsString("Está en el paso 1")))
+                .andExpect(jsonPath("$.fuente").value("SISTEMA"));
+
+        verifyNoInteractions(ollamaClient);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 2-10-2026 — las órdenes viajan como acción, y el precalentado de un
+    // contrato ajeno ya no responde 202
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void unaOrdenDevuelveLaAccionSinLlamarAlModeloNiCambiarNada() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-ORDEN", supervisorAsignadoId);
+        String tokenAsignado = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + tokenAsignado)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"firma el acta de inicio\",\"idSolicitud\":\"0f1e-2d3c\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fuente").value("SISTEMA"))
+                .andExpect(jsonPath("$.accion.tipo").value("ABRIR_DOCUMENTO"))
+                .andExpect(jsonPath("$.accion.subpaso").value("2.7"))
+                .andExpect(jsonPath("$.accion.documentoTipo").value("ACTA_INICIO"))
+                .andExpect(jsonPath("$.respuesta", containsString("Yo no puedo firmar")));
+
+        // La subetapa sigue pendiente: la orden no firmó ni marcó nada.
+        mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
+                        .header("Authorization", "Bearer " + tokenAsignado))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.numero == 2)].subEtapas[?(@.codigo == '2.7')].estado").value("PENDIENTE"));
+        verifyNoInteractions(ollamaClient);
+    }
+
+    @Test
+    void unIdDeSolicitudConCaracteresRarosEsUn400() throws Exception {
+        String supervisor = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        mockMvc.perform(post("/api/contratos/1/copiloto/chat")
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"hola\",\"idSolicitud\":\"../../x\",\"revisarPaso\":9}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.idSolicitud").exists())
+                .andExpect(jsonPath("$.fieldErrors.revisarPaso").exists());
+
+        verifyNoInteractions(ollamaClient);
+    }
+
+    @Test
+    void precalentarUnContratoAjenoEsUn404YNoEncolaNada() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        String admin = login("administrador@soy.sena.edu.co", "Admin123*");
+        long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
+        asegurarSupervisorAjeno(admin);
+        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "Ajeno123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-PRECAL", supervisorAsignadoId);
+
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/precalentar", contratoId)
+                        .header("Authorization", "Bearer " + tokenAjeno))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", containsString("recurso solicitado no existe")));
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/precalentar", 987654L)
+                        .header("Authorization", "Bearer " + tokenAjeno))
+                .andExpect(status().isNotFound());
 
         verifyNoInteractions(ollamaClient);
     }

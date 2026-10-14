@@ -33,9 +33,20 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
         `${doc.code === 'PENDIENTE_DE_DEFINIR' ? '' : ` (${doc.code})`} con los datos exactos del contrato, ` +
         'y usted lo revisa y lo firma con su firma electrónica. ' +
         (pideObservaciones
-          ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. '
+          ? doc.llevaObservaciones
+            ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. ' +
+              // Desde el 29-09-2026 la redacción del Copiloto se muestra antes
+              // de firmar: decir que va «tal cual» o firmarla sin enseñarla
+              // eran las dos cosas que no podían pasar.
+              'Si el Copiloto la redacta en lenguaje formal, se la mostraré junto a lo que usted escribió para que ' +
+              'decida antes de firmar. '
+            : // El Acta de Inicio y la Certificación no tienen apartado de
+              // observaciones: prometer que la descripción iría al documento
+              // era falso desde que siguen el formato oficial (28-09-2026).
+              'Antes le pediré que me cuente qué hizo en el paso, para revisarlo con usted. '
           : 'Se genera y se firma en el momento, sin observaciones: revise antes que todo lo del paso esté hecho. ') +
-        'Lo que SICOT no sabe (facturas, pólizas, pagos) queda marcado como «dato pendiente».',
+        'Justo antes de generarlo le pediré los datos que el formato necesita y el contrato no tiene (facturas, ' +
+        'pólizas, cédulas…); lo que deje vacío queda marcado como «dato pendiente».',
     )
   } else if (SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(sub.id)) {
     // La vista previa no es la carga: hasta pulsar «Cargar evidencia» la foto

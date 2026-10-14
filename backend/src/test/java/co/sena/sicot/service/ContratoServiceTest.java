@@ -85,6 +85,29 @@ class ContratoServiceTest {
 
         verify(registroService).registrar(nuevo, "CONTRATO_CREADO",
                 "Contrato CO1.PCCNTR.NUEVO creado en estado BORRADOR.");
+        verify(registroService, never()).registrar(any(), eq("SUPERVISOR_ASIGNADO"), any());
+    }
+
+    /**
+     * Elegir al supervisor al crear el contrato es el camino habitual de Gestión
+     * y tiene que dejar la misma acción que el PATCH: es la que dispara el aviso
+     * y el correo al supervisor.
+     */
+    @Test
+    void crearContratoConSupervisorRegistraLaAsignacion() {
+        when(contratoRepository.existsByNumeroContrato("CO1.PCCNTR.CONSUP")).thenReturn(false);
+        when(usuarioRepository.findById(7L)).thenReturn(java.util.Optional.of(supervisor(7L, true)));
+        when(contratoRepository.save(any(co.sena.sicot.entity.Contrato.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        CrearContratoRequest request = new CrearContratoRequest(
+                "CO1.PCCNTR.CONSUP", "Objeto con supervisor", new BigDecimal("250000"),
+                null, null, 7L, null, null, null, null, null, null, null, null);
+
+        contratoService.crear(request);
+
+        verify(registroService).registrar(any(), eq("CONTRATO_CREADO"), any());
+        verify(registroService).registrar(any(), eq("SUPERVISOR_ASIGNADO"),
+                eq("Supervisor asignado: Supervisor 7 (sup7@soy.sena.edu.co)."));
     }
 
     @Test
@@ -156,6 +179,42 @@ class ContratoServiceTest {
                 .doesNotThrowAnyException();
 
         verify(registroService).registrar(any(), eq("ESTADO_CAMBIADO"), contains("FINALIZADO → ACTIVO"));
+    }
+
+    /** /api/usuarios lista también a los inactivos: elegir uno dejaba el contrato a cargo de nadie. */
+    @Test
+    void asignarUnSupervisorDesactivadoSeRechaza() {
+        when(contratoRepository.findById(1L)).thenReturn(java.util.Optional.of(contratoExistente()));
+        when(usuarioRepository.findById(8L)).thenReturn(java.util.Optional.of(supervisor(8L, false)));
+
+        assertThatThrownBy(() -> contratoService.asignarSupervisor(1L, new AsignarSupervisorRequest(8L)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("está desactivado");
+        verify(registroService, never()).registrar(any(), any(), any());
+    }
+
+    /** Repetir la misma elección no es una asignación nueva: ni auditoría ni otro aviso. */
+    @Test
+    void asignarAlQueYaEsElSupervisorNoRegistraNada() {
+        co.sena.sicot.entity.Usuario actual = supervisor(7L, true);
+        co.sena.sicot.entity.Contrato contrato = contratoExistente();
+        contrato.setSupervisor(actual);
+        when(contratoRepository.findById(1L)).thenReturn(java.util.Optional.of(contrato));
+        when(usuarioRepository.findById(7L)).thenReturn(java.util.Optional.of(actual));
+
+        contratoService.asignarSupervisor(1L, new AsignarSupervisorRequest(7L));
+
+        verify(registroService, never()).registrar(any(), any(), any());
+    }
+
+    private static co.sena.sicot.entity.Usuario supervisor(long id, boolean activo) {
+        co.sena.sicot.entity.Usuario supervisor = new co.sena.sicot.entity.Usuario();
+        supervisor.setId(id);
+        supervisor.setNombre("Supervisor " + id);
+        supervisor.setEmail("sup" + id + "@soy.sena.edu.co");
+        supervisor.setRol(co.sena.sicot.entity.enums.Rol.SUPERVISOR);
+        supervisor.setActivo(activo);
+        return supervisor;
     }
 
     private co.sena.sicot.entity.Contrato contratoExistente() {

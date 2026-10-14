@@ -3,6 +3,12 @@
 #
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 #
+# En el servidor, mejor que escribir los -f en cada comando: COMPOSE_FILE en el
+# .env (ver .env.example e INSTALACION.md, paso 1). Así también los comandos que
+# se escriben deprisa —una rotación de secretos, un `logs`, un `cp`— cargan este
+# archivo. Uno que lo olvide recrea el backend con el perfil, los puertos y la
+# falta de secreto del archivo de desarrollo.
+#
 # Qué cambia respecto al archivo base (pensado para desarrollo en una sola
 # máquina):
 #   - Postgres deja de publicar su puerto al host: solo el backend, que está
@@ -14,10 +20,10 @@
 #     en el servidor (con acceso restringido, p. ej. por túnel SSH), agregar
 #     `--profile tools` al comando de arriba.
 #
-# Recordatorio importante (no lo resuelve este archivo): VITE_API_URL y
-# CORS_ALLOWED_ORIGINS deben apuntar a la IP/dominio real del servidor, no a
-# "localhost" — ver .env.example. Si se cambia VITE_API_URL hay que
-# reconstruir el frontend (queda horneado en el build de Vite).
+# Recordatorio (no lo resuelve este archivo): CORS_ALLOWED_ORIGINS debe ser la
+# dirección real del servidor, https://<SICOT_DOMINIO>, no "localhost". La
+# aplicación de escritorio y el APK no hace falta añadirlos: el backend los
+# acepta siempre. VITE_API_URL, en cambio, lo fija este archivo (más abajo).
 #
 # Secretos y perfil — las tres garantías que añade este archivo:
 #
@@ -67,12 +73,18 @@ services:
       # Administrador inicial: obligatorio en el PRIMER arranque de una base
       # vacía. Sin él, el despliegue quedaría inaccesible — DataInitializer solo
       # siembra cuentas en los perfiles dev/test, POST /api/usuarios exige rol
-      # ADMINISTRADOR y el login es el único endpoint público. El backend lo
-      # comprueba y se niega a arrancar (ver AdministradorInicial); esto lo
-      # detiene antes, en `docker compose up`, con un mensaje más claro.
-      # Una vez creada la cuenta, ambas variables pueden retirarse del .env.
-      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:?Defina SICOT_ADMIN_EMAIL en el .env — es la cuenta de administrador con la que se entra por primera vez}
-      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:?Defina SICOT_ADMIN_PASSWORD en el .env con al menos 12 caracteres — genérela con `openssl rand -base64 24` y cámbiela desde la aplicación tras el primer ingreso}
+      # ADMINISTRADOR y el login es el único endpoint público.
+      #
+      # Opcionales AQUÍ, a propósito, aunque el primer arranque las necesite.
+      # Antes eran `:?` y Compose las exige en CADA comando que carga el
+      # proyecto (up, ps, logs, cp…), no solo en el primero: quien seguía la guía
+      # y las retiraba del .env tras crear la cuenta ya no podía actualizar ni
+      # sacar la raíz de la CA para los teléfonos sin volver a escribir la
+      # contraseña inicial, y dejarla ahí para siempre. La garantía no se pierde:
+      # con la tabla de usuarios vacía y sin ellas, el backend se niega a
+      # arrancar y dice qué definir (AdministradorInicial, ADR-011).
+      SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:-}
+      SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:-}
       # Vigilancia del respaldo (ADR-002, VigilanciaDelRespaldo). LITERAL y no
       # interpolada, a propósito: dentro del contenedor el backend busca SIEMPRE
       # en /respaldos, que es donde el montaje de abajo pone la carpeta del
@@ -89,6 +101,14 @@ services:
       # existe, y avisado de que no había NINGÚN respaldo.
       RESPALDO_DIRECTORIO: /respaldos
       RESPALDO_RPO_HORAS: ${RESPALDO_RPO_HORAS:-24}
+      # La IA, en el contenedor `ollama` de abajo y por la red interna. El
+      # archivo base apunta al Ollama del equipo (host.docker.internal), que en
+      # Docker Desktop funciona y en un servidor Linux no: allí ese nombre lleva
+      # a la IP del puente de Docker, y Ollama instalado como servicio escucha
+      # solo en 127.0.0.1, así que la conexión se rechazaba con Ollama en pie y
+      # el modelo descargado. Se puede apuntar a otro Ollama (por ejemplo, un
+      # equipo con GPU de la red) definiendo OLLAMA_URL en el .env.
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
     volumes:
       # La carpeta donde escribe scripts/respaldo-sicot.sh, en solo lectura: el
       # backend solo mira la fecha del respaldo más reciente, nunca escribe ni
@@ -142,15 +162,52 @@ services:
     profiles: ["tools"]
     ports: !reset []
 
+  # ── IA local (Ollama, ADR-006) ───────────────────────────────────────────
+  # En su propio contenedor y no en el servidor, por dos motivos:
+  #   - Alcance. Con Ollama en el servidor, el backend en Docker no lo alcanza
+  #     sin enlazarlo a la IP del puente de Docker (con la regla de cortafuegos
+  #     correspondiente y el orden de arranque de los dos servicios), y la salida
+  #     obvia, OLLAMA_HOST=0.0.0.0, deja un Ollama sin autenticación abierto a
+  #     toda la red del Centro.
+  #   - GPU no hace falta. El objetivo es un servidor sin GPU (ADR-006): sin
+  #     ella, Ollama corre en CPU igual dentro que fuera de un contenedor.
+  #
+  # Sin puertos publicados: solo el backend le habla, por la red interna. El
+  # modelo NO viene en la imagen; se descarga una vez y queda en el volumen:
+  #   docker compose exec ollama ollama pull qwen2.5:7b
+  # Sin el modelo, SICOT funciona y la IA responde 503 diciendo qué falta.
+  ollama:
+    image: ollama/ollama:0.32.5
+    container_name: sicot-ollama
+    restart: unless-stopped
+    volumes:
+      - sicot_ollama:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          # qwen2.5:7b ocupa unos 5 GB cargado (application.properties, keep-alive)
+          # y el contexto de las peticiones en curso suma encima. El límite deja
+          # ese margen: por debajo, el núcleo mata el proceso a mitad de una
+          # respuesta y el copiloto devuelve 503 sin causa visible. El servidor
+          # tiene que tener esta memoria libre además de la del resto de SICOT.
+          memory: 8G
+
   # ── Proxy inverso con TLS (ADR-009) ──────────────────────────────────────
-  # Caddy obtiene y renueva certificados solo. Con SICOT_DOMINIO apuntando a un
-  # dominio público usa ACME; con un nombre interno emite un certificado local.
+  # Caddy obtiene y renueva certificados solo. De dónde los saca lo decide
+  # SICOT_TLS: `internal` (por defecto) usa su autoridad local; un correo pide
+  # el certificado a Let's Encrypt por ACME, solo para un nombre público. Ver la
+  # cabecera del Caddyfile.
   proxy:
-    image: caddy:2-alpine
+    # La versión exacta con la que se comprobó el comportamiento del que depende
+    # el límite de intentos fallidos (cabecera del Caddyfile: Caddy sustituye el
+    # X-Forwarded-For del cliente). Con "2-alpine" un `up --build` podía traer
+    # otro Caddy 2.x sin revisar. Al subirla, repetir esa comprobación.
+    image: caddy:2.11.4-alpine
     container_name: sicot-proxy
     restart: unless-stopped
     environment:
-      SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — dominio público para certificado ACME, o nombre interno/IP para uno local}
+      SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — el nombre (o la IP) con el que se abrirá SICOT}
+      SICOT_TLS: ${SICOT_TLS:-internal}
     ports:
       - "80:80"
       - "443:443"
@@ -184,3 +241,6 @@ services:
 volumes:
   sicot_caddy_data:
   sicot_caddy_config:
+  # Los modelos descargados (unos 5 GB). En un volumen para que una
+  # actualización de la imagen no obligue a volver a descargarlos.
+  sicot_ollama:

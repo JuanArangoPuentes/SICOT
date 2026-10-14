@@ -13,14 +13,25 @@
 #
 # CÓMO ELIGE EL CERTIFICADO
 # -------------------------
-# Depende de lo que valga SICOT_DOMINIO en el .env:
+# Lo decide SICOT_TLS en el .env, no el nombre, y por defecto es `internal`:
 #
-#   - Un dominio público (sicot.ejemplo.gov.co): Caddy obtiene y renueva un
-#     certificado de Let's Encrypt solo, sin configuración adicional. Requiere
-#     que los puertos 80 y 443 sean alcanzables desde Internet.
-#   - Un nombre interno o una IP: Caddy emite un certificado local. Cifra
-#     igual; el navegador pide confiar en él una vez. Es el caso más probable
-#     en la red del centro.
+#   - `internal`: Caddy emite el certificado con su propia autoridad local.
+#     Cifra igual; el navegador pide confiar en él una vez y en los teléfonos
+#     hay que instalar la raíz (INSTALACION.md). Es el caso más probable en la
+#     red del Centro.
+#   - Un correo (sistemas@ejemplo.gov.co): Caddy lo pide a Let's Encrypt por ACME,
+#     con ese correo como contacto, y lo renueva solo. SOLO para un nombre
+#     público con los puertos 80 y 443 alcanzables desde Internet.
+#
+# Antes no había esta línea y Caddy adivinaba por el nombre: certificado local
+# solo para localhost, IPs, *.local, *.internal y similares; ACME para
+# cualquier otro. Un nombre del DNS interno del Centro bajo un dominio real
+# (sicot.<centro>.sena.edu.co) parece público: Caddy intentaba ACME, los
+# desafíos fallaban porque desde Internet no se llega, y el sitio se quedaba
+# SIN certificado —ni navegador, ni APK, ni escritorio completaban la
+# conexión—, con solo reintentos en el log. Equivocarse hacia `internal` se ve
+# al instante (el navegador avisa) y se corrige con una línea; equivocarse
+# hacia ACME dejaba el sitio caído sin decir por qué.
 #
 # POR QUÉ EL BACKEND VA ANTES QUE EL FRONTEND
 # -------------------------------------------
@@ -46,6 +57,9 @@
 # ═══════════════════════════════════════════════════════════════════════════
 
 {$SICOT_DOMINIO:localhost} {
+	# `internal` o el correo de la cuenta ACME: ver «CÓMO ELIGE EL CERTIFICADO».
+	# Caddy rechaza al arrancar cualquier otro valor.
+	tls {$SICOT_TLS:internal}
 
 	# La API, la documentación y las métricas.
 	#

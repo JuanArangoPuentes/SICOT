@@ -1,5 +1,7 @@
 package co.sena.sicot.ia;
 
+import co.sena.sicot.exception.BusinessException;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
@@ -16,9 +18,13 @@ import java.math.RoundingMode;
  * modelo es pagar minutos de CPU por un resultado peor.
  *
  * <p>Cubre hasta 999.999.999.999 pesos, más centavos («CON 50/100»), que es
- * de sobra para un contrato de un Centro.
+ * de sobra para un contrato de un Centro. El valor de un contrato se valida
+ * con ese mismo tope al registrarlo (CrearContratoRequest).
  */
 public final class NumeroEnLetras {
+
+    /** El mayor valor que se escribe en letras. */
+    public static final BigDecimal MAXIMO = new BigDecimal("999999999999.99");
 
     private static final String[] UNIDADES = {"", "UNO", "DOS", "TRES", "CUATRO", "CINCO", "SEIS", "SIETE",
             "OCHO", "NUEVE", "DIEZ", "ONCE", "DOCE", "TRECE", "CATORCE", "QUINCE", "DIECISÉIS", "DIECISIETE",
@@ -38,11 +44,16 @@ public final class NumeroEnLetras {
             return null;
         }
         BigDecimal redondeado = valor.setScale(2, RoundingMode.HALF_UP);
-        long enteros = redondeado.longValue();
-        int centavos = redondeado.remainder(BigDecimal.ONE).movePointRight(2).abs().intValue();
-        if (enteros < 0 || enteros > 999_999_999_999L) {
-            throw new IllegalArgumentException("Valor fuera de rango para escribirlo en letras: " + valor);
+        // Fuera de rango era una IllegalArgumentException que nadie maneja: el
+        // Acta de Inicio de un contrato registrado con 13 dígitos respondía un
+        // 500 genérico (auditoría del 02-10-2026). Se compara antes de
+        // longValue, que con un valor enorme se desborda sin avisar.
+        if (redondeado.signum() < 0 || redondeado.compareTo(MAXIMO) > 0) {
+            throw new BusinessException("El valor del contrato no se puede escribir en letras: SICOT lo hace hasta"
+                    + " 999.999.999.999 pesos. Revise el valor registrado en el contrato.");
         }
+        long enteros = redondeado.longValue();
+        int centavos = redondeado.remainder(BigDecimal.ONE).movePointRight(2).intValue();
         // Delante de «PESOS» el «UNO» también se apocopa: «CIENTO UN PESOS».
         String letras = enteros == 0 ? "CERO" : apocopar(entero(enteros));
         // «UN MILLÓN DE PESOS», «DOS MILLONES DE PESOS»: tras millón/millones

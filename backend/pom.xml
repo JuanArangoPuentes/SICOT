@@ -74,14 +74,39 @@
               es una línea, y el argumento "esa ruta no la usamos" envejece mal
               en cuanto alguien añada una configuración que sí la use.
 
-            · jackson-databind 2.21.4 → 2.21.6
-              CVE-2026-59889 (escalada de privilegios por manejo indebido de
-              @JsonUnwrapped) y CVE-2026-54515 (propiedades marcadas como
-              ignoradas que sí se modifican). Esta sí está en la ruta caliente:
+            · jackson (BOM) 2.21.4 → 2.21.7
+              Es la dependencia de esta lista que está en la ruta caliente:
               jackson deserializa TODOS los cuerpos JSON que entran por la API,
-              y "una propiedad que se ignoraba deja de ignorarse" es exactamente
-              la clase de fallo que convierte un DTO de entrada en un vector
-              para escribir campos que el cliente no debería poder tocar.
+              y además jjwt-jackson lo usa para leer los JWT, cuya cabecera hay
+              que interpretar antes de poder verificar la firma. Es decir, recibe
+              entrada de cualquiera, incluso sin sesión.
+
+              2.21.6 cerró en jackson-databind CVE-2026-59889 (escalada de
+              privilegios por manejo indebido de @JsonUnwrapped) y CVE-2026-54515
+              (propiedades marcadas como ignoradas que sí se modifican): "una
+              propiedad que se ignoraba deja de ignorarse" es exactamente la clase
+              de fallo que convierte un DTO de entrada en un vector para escribir
+              campos que el cliente no debería poder tocar.
+
+              2.21.7 cierra cuatro HIGH más, todas de denegación de servicio, que
+              Trivy empezó a reportar el 1 de octubre de 2026:
+                - CVE-2026-89407 (jackson-core): la expresión regular que valida
+                  números escritos como texto retrocede de forma cuadrática. SICOT
+                  sí tiene esa ruta abierta: hay campos numéricos en los cuerpos
+                  (p. ej. `valor` BigDecimal en CrearContratoRequest) y no se
+                  desactiva la conversión de texto a número.
+                - CVE-2026-89425 (jackson-core): crecimiento sin tope de un
+                  StringBuilder al reportar un token mal formado en el parser
+                  sobre DataInput.
+                - CVE-2026-91776 (jackson-databind): la caché de deserializadores
+                  polimórficos guarda cada id de tipo desconocido que manda el
+                  atacante, sin límite (memoria que no se libera entre peticiones).
+                - CVE-2026-91777 (jackson-databind): resolver referencias
+                  adelantadas de @JsonIdentityInfo cuesta CPU cuadrática.
+              Las tres últimas dependen de rutas que hoy SICOT no usa (parser
+              sobre DataInput, @JsonTypeInfo, @JsonIdentityInfo). Se suben igual
+              por lo mismo que Tomcat: el arreglo es una línea y "no usamos esa
+              ruta" deja de ser cierto el día que alguien añade una anotación.
 
             · commons-lang3 3.17.0 → 3.18.0
               CVE-2025-48924, recursión no controlada. Entra por debajo de Tika.
@@ -94,7 +119,7 @@
               que alguien lee el informe del escáner.
         -->
         <tomcat.version>10.1.59</tomcat.version>
-        <jackson-bom.version>2.21.6</jackson-bom.version>
+        <jackson-bom.version>2.21.7</jackson-bom.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <log4j2.version>2.25.5</log4j2.version>
     </properties>

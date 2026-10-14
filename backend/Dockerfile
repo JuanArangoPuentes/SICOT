@@ -1,5 +1,8 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-25 AS build
+# Imágenes base fijadas por versión exacta, no por rama: una actualización llega
+# como PR de Dependabot (ecosistema docker), se revisa y el CI escanea la imagen
+# resultante con Trivy. Con "25-jre-alpine" cambiaban por debajo sin revisión.
+FROM maven:3.9.16-eclipse-temurin-25 AS build
 WORKDIR /build
 
 # Cache dependencies separately from source so code edits don't re-download.
@@ -10,7 +13,7 @@ COPY src/ src/
 RUN mvn -B clean package -DskipTests
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:25.0.4.1_1-jre-alpine
 WORKDIR /app
 
 # wget se usa en el HEALTHCHECK de abajo; en la imagen alpine viene por

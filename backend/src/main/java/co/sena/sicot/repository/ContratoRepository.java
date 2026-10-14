@@ -80,6 +80,14 @@ public interface ContratoRepository extends JpaRepository<Contrato, Long> {
     @EntityGraph(attributePaths = "supervisor")
     List<Contrato> findByEstadoInOrderByFechaCreacionDesc(Collection<EstadoContrato> estados);
 
+    /**
+     * Contratos de un supervisor en ciertos estados, sin tope: son los de una
+     * sola persona, y quien los pide —desactivar la cuenta o quitarle el rol—
+     * tiene que poder nombrarlos todos.
+     */
+    List<Contrato> findBySupervisorIdAndEstadoInOrderByNumeroContratoAsc(Long supervisorId,
+                                                                        Collection<EstadoContrato> estados);
+
     @Query("""
             SELECT new co.sena.sicot.dto.seguimiento.ConteoPorId(c.supervisor.id, COUNT(c))
               FROM Contrato c
