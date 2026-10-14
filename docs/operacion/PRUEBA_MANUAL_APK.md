@@ -33,9 +33,12 @@ compilado en la máquina: es lo que va a instalar el supervisor.
   documento con observaciones pendiente de firmar. El único candidato es el
   Informe de Supervisión (3.4) —son las notas que el Copiloto redacta—, y para
   llegar a él hay que **cerrar antes el sub-paso 3.3** del contrato con el que se
-  prueba. Decirlo importa: es lo que ha dejado estos dos puntos sin recorrer en
-  los tres recorridos, porque cerrar un sub-paso es un cambio permanente sobre
-  los datos de ese contrato y no se hace para pasar una prueba.
+  prueba. Eso es un cambio permanente sobre los datos de ese contrato, así que no
+  se hace para pasar una prueba sin que lo autorice quien manda sobre ellos: es
+  lo que tuvo estos dos puntos sin recorrer hasta el 14-10-2026.
+- El 11 pide además salir de la aplicación **mientras el Copiloto redacta**, que
+  es la ventana entre «Generar y revisar» y el portillo de revisión. Son unos dos
+  minutos y medio, así que conviene salir en los primeros segundos.
 
 ## La lista
 
@@ -48,10 +51,9 @@ aunque el código parezca correcto.
 Los resultados de abajo son los de los recorridos del **7, 8 y 14 de octubre de
 2026**, hechos sobre un emulador Android 14 con el APK de publicación `x86_64`
 firmado con el almacén de depuración, detrás de Caddy, tal como describe la
-sección siguiente. Están informados día por día en MDL-247. **A 14-10-2026: 14
-pasan y 3 siguen sin recorrer** — el 1, porque exige la llave real de
-publicación, y el 11 y el 12, porque exigen cerrar antes el sub-paso 3.3. Ningún
-punto queda a medias.
+sección siguiente. Están informados día por día en MDL-247. **A 14-10-2026: 16
+pasan y 1 sigue sin recorrer** — el 1, porque exige la llave real de
+publicación. Ningún punto queda a medias.
 
 > **Corrección del 14-10-2026 a la cuenta anterior.** Aquí decía «12 pasan, 1
 > pasa a medias y 4 siguen sin recorrer», y el punto 17 figuraba «Sin recorrer».
@@ -73,8 +75,8 @@ punto queda a medias.
 | 8 | En el sub-paso 3.1 o 3.2, «Tomar foto de la entrega» | Se abre directamente la cámara, **no** la galería. Al cargar la foto, la evidencia dice cuándo se tomó y, si la cámara guarda la ubicación, dónde | Pasa · 08-10-2026 — la cámara se abrió de verdad, confirmado con el `mCurrentFocus` del sistema |
 | 9 | Repetir el 8 sin permiso de cámara: negarlo cuando Android lo pida, o quitarlo en Ajustes › Aplicaciones › SICOT › Permisos | SICOT dice que no se tomó ninguna foto, cómo activar el permiso y que puede usar «Elegir una foto» | Pasa · 08-10-2026 |
 | 10 | En el mismo sub-paso, «Elegir una foto» | Se abre el selector del sistema y la foto queda cargada; si llegó sin ubicación, SICOT lo dice en vez de omitirlo | Pasa · 08-10-2026 |
-| 11 | «Firmar documento» en el documento con observaciones y, mientras el Copiloto redacta, salir a otra aplicación o apagar la pantalla un par de minutos | Al volver, SICOT dice que la conexión se cortó por salir de la aplicación —no culpa al Copiloto ni al servidor— y no firma nada por su cuenta: el sub-paso sigue abierto | Sin recorrer — exige el Informe de Supervisión (3.4) pendiente de firmar |
-| 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar | Sin recorrer — mismo requisito que el 11 |
+| 11 | «Firmar documento» en el documento con observaciones y, mientras el Copiloto redacta, salir a otra aplicación o apagar la pantalla un par de minutos | Al volver, SICOT dice que la conexión se cortó por salir de la aplicación —no culpa al Copiloto ni al servidor— y no firma nada por su cuenta: el sub-paso sigue abierto | Pasa con matiz · 14-10-2026 — no firmó nada por su cuenta y el sub-paso siguió abierto; el aviso de corte no llegó a salir porque la petición terminó en el servidor y se recuperó al volver (ver abajo) |
+| 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar | Pasa · 14-10-2026 — «Cancelar» dejó el 3.4 en PENDIENTE; «Firmar» lo cerró y firmó el documento |
 | 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación | Pasa · 14-10-2026 — las dos mitades: vuelve a la vista anterior, y en la pantalla de acceso sale de la aplicación **también después de cerrar sesión** |
 | 14 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT | Pasa · 08-10-2026 — el 14-10 se recomprobó solo que el selector del sistema se abre |
 | 15 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece | Pasa · 14-10-2026 — con el GCCON-F-031 real (881 kB) cargado para poder borrarlo; el catálogo queda como estaba |
@@ -97,6 +99,15 @@ cuando los 17 tienen resultado y fecha.
 Lo que el recorrido encontró y todavía no se puede dar por cerrado. Queda escrito
 aquí porque hasta ahora solo existía en el informe del día, y un fallo que solo
 vive en un informe se pierde.
+
+- **Con el panel del Copiloto oculto, «Firmar documento» no da ninguna señal.**
+  En el último sub-paso de un paso, ese botón no abre un diálogo: escribe en el
+  chat del Copiloto la revisión previa («cuénteme qué hizo en cada punto») con
+  sus dos botones de confirmar o cancelar. Si el supervisor tiene el panel
+  plegado —se pliega con «Ocultar copiloto», y en un teléfono es lo natural para
+  ganar sitio—, pulsar el botón no cambia nada en pantalla y parece que no
+  funciona; la revisión está esperando en un panel que no se ve. Observado el
+  14-10-2026. El arreglo razonable es que el botón despliegue el panel.
 
 - **El cargador de fichas de Gestión y el de formatos abren el diálogo del
   sistema, y sus botones salen en el idioma del teléfono.** El texto de
@@ -141,16 +152,24 @@ De todas formas, dos de los tres volvieron a verse en el APK del 14-10-2026:
 se escribe el nombre). `ec55172` («Ir a firmar» mueve la pantalla hasta el
 sub-paso) **no** se recorrió el 14 y se sostiene en el recorrido del 8.
 
-### Lo que el recorrido del 14-10-2026 no cubrió
+### El matiz del punto 11, y lo que el recorrido del 14-10-2026 no cubrió
 
-- **El punto 7** se sostiene en el recorrido del 08-10. Ese día se midió con una
-  pregunta que fue al modelo y tardó 80 s; el 14 las preguntas de prueba las
-  resolvió la vía determinista al instante, así que el caso que el punto vigila
-  —que la respuesta NO haya llegado al volver— no llegó a darse. Lo que sí se vio
-  el 14 es que al volver a la aplicación la conversación seguía completa. El
-  cambio de este día toca el historial de navegación y la sesión, no la espera
-  del Copiloto.
-- **El punto 17** se sostiene en el recorrido del 08-10, por lo mismo.
+- **El punto 11 pasa en lo que de verdad vigila, pero su aviso no llegó a
+  salir.** El 14-10-2026 se salió de la aplicación diez segundos después de
+  pulsar «Generar y revisar» y se volvió dos minutos y cuarenta y nueve segundos
+  después. Lo esencial se cumplió: **no se firmó nada** —el sub-paso siguió
+  abierto— y al volver estaba el portillo «Revisar antes de firmar» con el
+  borrador ya hecho. Lo que no se vio es el mensaje de que la conexión se cortó,
+  porque la petición terminó en el servidor y se recuperó al volver, que es
+  justo lo que SICOT hace para no pagar dos veces la misma inferencia. Para
+  provocar el corte haría falta un trabajo más largo que la ausencia, o cortar la
+  red a propósito.
+- **El punto 7 y el punto 17** se sostienen en el recorrido del 08-10. Ese día se
+  midieron con preguntas que fueron al modelo (80 s y 83,9 s); el 14 las
+  preguntas de prueba las resolvió la vía determinista al instante, así que el
+  caso que esos puntos vigilan —que la respuesta NO haya llegado al volver— no
+  llegó a darse. Lo que sí se vio el 14 es que al volver a la aplicación la
+  conversación seguía completa.
 
 ## Cómo montar el emulador, si no hay teléfono a mano
 
