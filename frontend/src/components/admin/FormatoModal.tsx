@@ -4,7 +4,7 @@
 // sus piezas compartidas en un solo archivo de 913 líneas — el mismo patrón que
 // ya se aplicó a SupervisorPanel.tsx (ver components/supervisor/).
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Field, Modal } from '@/components/ui'
 import { IconUpload } from '@/components/icons'
 import type { FormatoDocumentalResponse } from '@/services/api/types'
@@ -26,6 +26,8 @@ export function FormatoModal({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState(false)
+  // El campo de archivo está oculto: quien lo abre es el botón de abajo.
+  const campoArchivo = useRef<HTMLInputElement>(null)
 
   const esNuevoVersion = formatoExistente !== null
 
@@ -113,15 +115,47 @@ export function FormatoModal({
         />
       </Field>
       <Field label="Archivo (PDF, DOCX o XLSX — máx 20 MB)">
+        {/*
+          El <input type="file"> va oculto y lo dispara un botón del proyecto.
+          Visible, el navegador lo pinta con su propio control: en la app de
+          Android eso salía como «Choose File / No file chosen», en inglés y sin
+          el estilo del resto de la aplicación, que está toda en español (visto
+          en el emulador el 08-10-2026). El texto del control nativo lo escribe
+          el navegador y no se puede traducir ni estilar desde aquí, así que la
+          única salida es no mostrarlo. Es lo que ya hacen EvidenciaFotografica
+          (botón que hace click() sobre el campo) y el cargador de fichas de
+          GestionPanel (zona punteada que lo dispara).
+        */}
         <input
+          ref={campoArchivo}
           type="file"
           accept=".pdf,.docx,.xlsx"
           onChange={(e) => {
             setArchivo(e.target.files?.[0] ?? null)
             setError('')
           }}
-          style={{ width: '100%', fontSize: 13, color: 'var(--text-secondary)' }}
+          style={{ display: 'none' }}
         />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            className="btn-ghost"
+            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 7 }}
+            onClick={() => campoArchivo.current?.click()}
+          >
+            <IconUpload size={15} />
+            {archivo ? 'Cambiar archivo' : 'Elegir archivo'}
+          </button>
+          {archivo ? (
+            <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', minWidth: 0, wordBreak: 'break-all' }}>
+              {archivo.name}{' '}
+              <span style={{ color: 'var(--text-muted)' }}>({(archivo.size / 1024 / 1024).toFixed(1)} MB)</span>
+            </span>
+          ) : (
+            // Lo que de verdad hay: ninguno. No se finge un archivo pendiente
+            // ni se deja el hueco en blanco, que haría dudar si se eligió algo.
+            <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Sin archivo seleccionado</span>
+          )}
+        </div>
       </Field>
 
       {error && <p style={{ color: 'var(--alert-critica)', fontSize: 12, margin: '4px 0 10px' }}>{error}</p>}
