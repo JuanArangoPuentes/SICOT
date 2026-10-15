@@ -200,12 +200,19 @@ public class DatosAbiertosSecop {
         return null;
     }
 
-    /** Los enlaces vienen envueltos: {@code {"url": "https://…"}}. */
+    /**
+     * Los enlaces vienen envueltos: {@code {"url": "https://…"}}. Solo se
+     * aceptan los del SECOP: terminan como enlaces que el supervisor abre desde
+     * el panel, y un dato externo no debe poder convertirse en un enlace a otro
+     * sitio —o en un {@code javascript:}— por mucho que la fuente sea oficial.
+     */
     static String url(JsonNode fila, String campo) {
         JsonNode v = fila.get(campo);
         if (v == null || v.isNull()) return null;
         JsonNode u = v.isObject() ? v.get("url") : v;
-        return u == null || u.isNull() || u.asText().isBlank() ? null : u.asText().strip();
+        if (u == null || u.isNull()) return null;
+        String enlace = u.asText().strip();
+        return enlace.startsWith("https://community.secop.gov.co/") ? enlace : null;
     }
 
     /** datos.gov.co no respondió: sin conexión, caído o lento. */

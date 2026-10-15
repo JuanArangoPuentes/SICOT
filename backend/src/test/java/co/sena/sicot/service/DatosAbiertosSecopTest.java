@@ -53,6 +53,19 @@ class DatosAbiertosSecopTest {
     }
 
     @Test
+    @DisplayName("un enlace que no es del SECOP no llega al panel, aunque venga de la fuente oficial")
+    void soloSeAceptanEnlacesDelSecop() throws Exception {
+        JsonNode f = fila("""
+                {"bueno":{"url":"https://community.secop.gov.co/Public/Archive/RetrieveFile/Index?DocumentId=1"},
+                 "otro":{"url":"https://sitio-ajeno.example/descarga"},
+                 "script":{"url":"javascript:alert(1)"}}""");
+
+        assertThat(DatosAbiertosSecop.url(f, "bueno")).startsWith("https://community.secop.gov.co/");
+        assertThat(DatosAbiertosSecop.url(f, "otro")).isNull();
+        assertThat(DatosAbiertosSecop.url(f, "script")).isNull();
+    }
+
+    @Test
     @DisplayName("solo se consulta con un número de contrato de SECOP II bien formado")
     void unNumeroMalFormadoNoLlegaALaConsulta() {
         DatosAbiertosSecop cliente = new DatosAbiertosSecop("http://127.0.0.1:9", 1);
