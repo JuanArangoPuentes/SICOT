@@ -74,6 +74,56 @@ public class ExtraccionDeterminista {
             Pattern.compile("\\bCO1\\.PCCNTR\\.([A-Z0-9]+)(?:[ \\t]*\\n[ \\t]*([0-9]{1,8})(?![0-9A-Z]))?");
 
     /**
+     * Comienzo del enlace del proceso en SECOP II, que trae el acto de
+     * designación en su fila «Link». Solo caracteres de URL: el texto que lo
+     * rodea en un PDF no debe colarse en algo que el panel ofrece para abrir.
+     */
+    private static final Pattern ENLACE_SECOP =
+            Pattern.compile("https://community\\.secop\\.gov\\.co/[\\w\\-./?=&%#:+~]+");
+
+    /** El renglón siguiente, por si PDFBox partió la URL al ancho de la celda. */
+    private static final Pattern CONTINUACION_DE_URL =
+            Pattern.compile("[ \\t]*\\n[ \\t]*([\\w\\-./?=&%#:+~]+)");
+
+    /** Un trozo que empieza como parámetro de consulta («noticeUID=…»). */
+    private static final Pattern PARAMETRO_DE_URL = Pattern.compile("&?[A-Za-z0-9_]+=.*");
+
+    /** El acto de designación se reconoce por su título, no por su nombre de archivo. */
+    private static final Pattern ES_DESIGNACION = Pattern.compile(
+            "DESIGNACI[OÓ]N[ \\t]+DE[ \\t]+SUPERVISOR", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Las personas del encabezado «PARA» de la designación: «Alex Fernando
+     * Zapata Rios (Supervisor)» y debajo «Yeison Dariel Zapata Monsalve (Apoyo
+     * a la supervisión)». El rol entre paréntesis es lo que las distingue, así
+     * que se exige completo: el cuerpo del formato dice «supervisor(a)» y eso no
+     * debe confundirse con un nombre.
+     */
+    private static final Pattern SUPERVISOR_EN_DESIGNACION = Pattern.compile(
+            "^[ \\t]*(?:PARA[ \\t]+)?(\\p{L}[\\p{L} ]{4,80}?)[ \\t]*\\([ \\t]*Supervisora?[ \\t]*\\)",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    private static final Pattern APOYO_EN_DESIGNACION = Pattern.compile(
+            "^[ \\t]*(?:PARA[ \\t]+)?(\\p{L}[\\p{L} ]{4,80}?)[ \\t]*\\([ \\t]*Apoyo[ \\t]+a[ \\t]+la[ \\t]+supervisi[oó]n[ \\t]*\\)",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Fila «SUPERVISOR DESIGNADO …» del Acta de Inicio GCCON-F-018 V.06. */
+    private static final Pattern SUPERVISOR_ETIQUETA = Pattern.compile(
+            "^[ \\t]*SUPERVISOR[ \\t]+DESIGNADO[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * «Itagüí, 9 de octubre de 2026»: ciudad, coma y fecha al comienzo de una
+     * línea. Solo se usa en la designación; el acta escribe «En Itagüí, el 14 de
+     * octubre…», con un «el» que este patrón no admite a propósito.
+     */
+    private static final Pattern CIUDAD_Y_FECHA = Pattern.compile(
+            "^[ \\t]*\\p{L}[\\p{L} .\\-]{2,40},[ \\t]+(\\d{1,2}[ \\t]+de[ \\t]+\\p{L}+[ \\t]+de[ \\t]+\\d{4})",
+            Pattern.MULTILINE | Pattern.UNICODE_CASE);
+
+    private static final Pattern CORREO = Pattern.compile("[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+");
+
+    /**
      * Por debajo de esto se asume que la celda partió el número: los
      * consecutivos de SECOP II rondan los ocho dígitos y ninguno real es tan
      * corto. Solo entonces se pega la línea siguiente, para no tragarse por
@@ -464,6 +514,12 @@ public class ExtraccionDeterminista {
             fin = aIso(primerGrupo(FECHA_FIN_ETIQUETA, texto, 1));
         }
 
+        boolean esDesignacion = ES_DESIGNACION.matcher(texto).find();
+        String supervisor = normalizarEspacios(primerGrupo(SUPERVISOR_EN_DESIGNACION, texto, 1));
+        if (supervisor == null) {
+            supervisor = normalizarEspacios(primerGrupo(SUPERVISOR_ETIQUETA, texto, 1));
+        }
+
         return new ExtraccionContratoResponse(
                 numeroDeContrato(texto),
                 objeto(texto),
@@ -475,8 +531,68 @@ public class ExtraccionDeterminista {
                 fin,
                 lugar(texto),
                 conAlgunDigito(primerGrupo(REGISTRO_PRESUPUESTAL, texto, 1)),
-                tipo(texto)
+                tipo(texto),
+                enlaceSecop(texto),
+                supervisor,
+                normalizarEspacios(primerGrupo(APOYO_EN_DESIGNACION, texto, 1)),
+                esDesignacion ? aIso(primerGrupo(CIUDAD_Y_FECHA, texto, 1)) : null,
+                correoDelContratista(texto),
+                List.of()
         );
+    }
+
+    /**
+     * El enlace del proceso en SECOP II, reuniendo los renglones en que PDFBox
+     * lo parte. En la designación del Lote 4 llega así, cortado justo después
+     * del «?»:
+     * <pre>
+     * https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?
+     * noticeUID=CO1.NTC.10815297&amp;isFromPublicArea=True&amp;isModal=False
+     * </pre>
+     * Solo se pega el renglón siguiente cuando la URL quedó claramente a medias
+     * (termina en «?», «&amp;», «=» o «/») o cuando el renglón empieza como un
+     * parámetro: así no se le pega la primera palabra del párrafo de abajo.
+     */
+    static String enlaceSecop(String texto) {
+        Matcher m = ENLACE_SECOP.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        StringBuilder url = new StringBuilder(m.group());
+        int desde = m.end();
+        Matcher sigue = CONTINUACION_DE_URL.matcher(texto);
+        for (int i = 0; i < 3 && desde < texto.length(); i++) {
+            sigue.region(desde, texto.length());
+            if (!sigue.lookingAt()) {
+                break;
+            }
+            String trozo = sigue.group(1);
+            char ultimo = url.charAt(url.length() - 1);
+            boolean aMedias = ultimo == '?' || ultimo == '&' || ultimo == '=' || ultimo == '/';
+            if (!aMedias && !PARAMETRO_DE_URL.matcher(trozo).matches()) {
+                break;
+            }
+            url.append(trozo);
+            desde = sigue.end();
+        }
+        String limpia = url.toString().replaceAll("[.,;)]+$", "");
+        return limpia.length() <= 500 ? limpia : null;
+    }
+
+    /**
+     * El correo del contratista: el primero del documento que no sea del SENA.
+     * En el acta de inicio es el único que aparece, bajo el bloque de firma del
+     * representante legal; los del SENA son de quien elaboró o del supervisor.
+     */
+    static String correoDelContratista(String texto) {
+        Matcher m = CORREO.matcher(texto);
+        while (m.find()) {
+            String correo = m.group().toLowerCase(Locale.ROOT).replaceAll("[.]+$", "");
+            if (!correo.endsWith("sena.edu.co")) {
+                return correo;
+            }
+        }
+        return null;
     }
 
     /**

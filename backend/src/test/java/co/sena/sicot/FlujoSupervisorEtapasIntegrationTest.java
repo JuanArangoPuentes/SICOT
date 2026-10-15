@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /**
  * Prueba de extremo a extremo del flujo del supervisor: crear un contrato,
- * asignarlo, y recorrer sus 6 etapas / 27 subetapas GCCON-P-010 marcando cada
+ * asignarlo, y recorrer sus 6 etapas / 21 subetapas marcando cada
  * subetapa como COMPLETADA hasta que las 6 etapas quedan al 100 %.
  *
  * Existe para blindar la tarea de transiciones de estado: la validación
@@ -34,7 +34,7 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
     private ObjectMapper objectMapper;
 
     @Test
-    void elSupervisorRecorreLas6EtapasY27SubetapasDePrincipioAFin() throws Exception {
+    void elSupervisorRecorreLas6EtapasY21SubetapasDePrincipioAFin() throws Exception {
         String gestionToken = login("gestion@soy.sena.edu.co", "Gestion123*");
         String supervisorToken = login("supervisor@soy.sena.edu.co", "Supervisor123*");
         long supervisorId = objectMapper.readTree(
@@ -45,7 +45,7 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                         .header("Authorization", "Bearer " + gestionToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"numeroContrato":"CO1.PCCNTR.FLUJO27","objeto":"Flujo completo del supervisor",
+                                {"numeroContrato":"CO1.PCCNTR.FLUJO21","objeto":"Flujo completo del supervisor",
                                  "valor":1000000,"fechaInicio":"2026-01-01","fechaFin":"2026-12-31"}
                                 """))
                 .andExpect(status().isCreated())
@@ -64,14 +64,36 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                         .content("{\"estado\":\"ACTIVO\"}"))
                 .andExpect(status().isOk());
 
-        // 2. Estructura inicial: 6 etapas, 27 subetapas.
+        // 2. Estructura inicial: 6 etapas, 21 subetapas. Asignar el supervisor es
+        //    la designación: la etapa 1 ya llega completa y el proceso arranca en
+        //    el paso del acta, como en el proceso real.
         JsonNode etapas = leerEtapas(contratoId, supervisorToken);
         assertThat(etapas).hasSize(6);
-        assertThat(contarSubetapas(etapas)).isEqualTo(27);
+        assertThat(contarSubetapas(etapas)).isEqualTo(21);
+        assertThat(etapas.get(0).get("estado").asText()).isEqualTo("COMPLETADA");
+        JsonNode pasoDelActa = etapas.get(1).get("subEtapas").get(0);
+        assertThat(pasoDelActa.get("codigo").asText()).isEqualTo("2.1");
+        assertThat(pasoDelActa.get("estado").asText()).isEqualTo("EN_CURSO");
+        assertThat(pasoDelActa.get("documentosRequeridos").asText()).isEqualTo("ACTA_FIRMADA_Y_ENVIO");
 
-        // 3. Recorrer cada subetapa de cada etapa, en orden, marcándola COMPLETADA.
+        // 3. El paso del acta queda esperando: sin el acta firmada y la evidencia
+        //    del envío no se cierra.
+        long pasoDelActaId = pasoDelActa.get("id").asLong();
+        mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDelActaId)
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"COMPLETADA\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Acta de Inicio firmada")));
+        cargar(contratoId, pasoDelActaId, supervisorToken, "acta-firmada.pdf", "application/pdf",
+                "%PDF-1.4 acta firmada".getBytes());
+        cargar(contratoId, pasoDelActaId, supervisorToken, "correo-enviado.png", "image/png",
+                new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0});
+
+        // 4. Recorrer cada subetapa de cada etapa, en orden, marcándola COMPLETADA.
         //    Igual que el panel del supervisor: la mayoría van PENDIENTE -> COMPLETADA
-        //    directo (nunca pasan por EN_CURSO).
+        //    directo (nunca pasan por EN_CURSO). Las de la etapa 1 ya estaban
+        //    completas: volver a marcarlas no cambia nada ni deja traza.
         for (JsonNode etapa : etapas) {
             for (JsonNode subetapa : etapa.get("subEtapas")) {
                 long subetapaId = subetapa.get("id").asLong();
@@ -83,7 +105,7 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
             }
         }
 
-        // 4. Las 6 etapas quedan COMPLETADA al 100 %.
+        // 5. Las 6 etapas quedan COMPLETADA al 100 %.
         JsonNode etapasFinales = leerEtapas(contratoId, supervisorToken);
         for (JsonNode etapa : etapasFinales) {
             assertThat(etapa.get("estado").asText())
@@ -92,21 +114,33 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
             assertThat(etapa.get("porcentaje").asInt()).isEqualTo(100);
         }
 
-        // 5. Cada subetapa dejó su traza de avance; ninguna de retroceso.
+        // 6. Cada subetapa del supervisor dejó su traza de avance; ninguna de
+        //    retroceso. Las 3 de la designación quedaron registradas de una vez.
         String registros = mockMvc.perform(get("/api/contratos/{id}/registros", contratoId)
                         .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long avances = contar(registros, "SUBETAPA_AVANZADA");
         long retrocesos = contar(registros, "SUBETAPA_REVERTIDA") + contar(registros, "ETAPA_RETROCEDIDA");
-        assertThat(avances).isEqualTo(27);
+        assertThat(avances).isEqualTo(18);
+        assertThat(contar(registros, "DESIGNACION_REGISTRADA")).isEqualTo(1);
         assertThat(retrocesos).isZero();
 
-        // 6. El contrato NO se cierra solo al completar las 6 etapas: sigue ACTIVO.
+        // 7. El contrato NO se cierra solo al completar las 6 etapas: sigue ACTIVO.
         mockMvc.perform(get("/api/contratos/{id}", contratoId)
                         .header("Authorization", "Bearer " + supervisorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("ACTIVO"));
+    }
+
+    private void cargar(long contratoId, long subetapaId, String token, String nombre, String tipo, byte[] bytes)
+            throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/contratos/{id}/documentos", contratoId)
+                        .file(new org.springframework.mock.web.MockMultipartFile("archivo", nombre, tipo, bytes))
+                        .param("subetapaId", String.valueOf(subetapaId))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
     }
 
     private JsonNode leerEtapas(long contratoId, String token) throws Exception {

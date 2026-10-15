@@ -85,28 +85,40 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
         contratoSinSupervisorId = crearContrato("CO1.PCCNTR.SEGUIM-2");
         activar(contratoSinSupervisorId);
 
-        // Avance real por la API, como lo haría el supervisor: 1.1 queda
-        // completada y 1.2 en curso.
+        // Avance real por la API, como lo haría el supervisor. La etapa 1
+        // (designación) ya llegó completa al asignarle el contrato; el
+        // supervisor carga el acta firmada y la evidencia del envío, cierra
+        // 2.1 y deja 2.2 en curso.
         String tokenSupervisor = login(EMAIL_CON, PASSWORD);
         JsonNode subs = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + tokenSupervisor))
                 .andExpect(status().isOk())
-                .andReturn().getResponse().getContentAsString()).get(0).get("subEtapas");
-        cambiarSubetapa(tokenSupervisor, subs.get(0).get("id").asLong(), "COMPLETADA");
-        cambiarSubetapa(tokenSupervisor, subs.get(1).get("id").asLong(), "EN_CURSO");
+                .andReturn().getResponse().getContentAsString()).get(1).get("subEtapas");
 
         Documento doc = new Documento();
         doc.setContrato(contratoRepository.findById(contratoId).orElseThrow());
         doc.setSubetapa(subetapaRepository.findById(subs.get(0).get("id").asLong()).orElseThrow());
-        doc.setNombre("Acta de Inicio — CO1.PCCNTR.SEGUIM-1");
+        doc.setNombre("Acta de Inicio firmada — CO1.PCCNTR.SEGUIM-1");
         doc.setTipo(TipoDocumento.PDF);
         doc.setContentType("application/pdf");
         doc.setContenido("%PDF-1.4 seguimiento".getBytes(StandardCharsets.UTF_8));
         doc.setTamanioBytes(20L);
         doc.setEstado(EstadoDocumento.APROBADO);
         doc.setFirmaId("FIRMA-SEGUIM");
-        doc.setGeneradoPorIa(true);
         documentoRepository.save(doc);
+
+        Documento evidencia = new Documento();
+        evidencia.setContrato(doc.getContrato());
+        evidencia.setSubetapa(doc.getSubetapa());
+        evidencia.setNombre("Evidencia del envío del acta");
+        evidencia.setTipo(TipoDocumento.IMAGEN);
+        evidencia.setContentType("image/png");
+        evidencia.setContenido(new byte[]{(byte) 0x89, 'P', 'N', 'G'});
+        evidencia.setTamanioBytes(4L);
+        documentoRepository.save(evidencia);
+
+        cambiarSubetapa(tokenSupervisor, subs.get(0).get("id").asLong(), "COMPLETADA");
+        cambiarSubetapa(tokenSupervisor, subs.get(1).get("id").asLong(), "EN_CURSO");
 
         Alerta alerta = new Alerta();
         alerta.setContrato(contratoRepository.findById(contratoId).orElseThrow());
@@ -126,17 +138,25 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
         JsonNode c = ana.get("contratos").get(0);
         assertThat(c.get("numeroContrato").asText()).isEqualTo("CO1.PCCNTR.SEGUIM-1");
         assertThat(c.get("estado").asText()).isEqualTo("ACTIVO");
-        assertThat(c.get("subetapasCompletadas").asLong()).isEqualTo(1);
-        assertThat(c.get("subetapasTotales").asLong()).isEqualTo(27);
-        assertThat(c.get("etapaActual").asInt()).isEqualTo(1);
-        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("1.2");
+        // 3 de la designación + el acta.
+        assertThat(c.get("subetapasCompletadas").asLong()).isEqualTo(4);
+        assertThat(c.get("subetapasTotales").asLong()).isEqualTo(21);
+        assertThat(c.get("etapaActual").asInt()).isEqualTo(2);
+        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("2.2");
         assertThat(c.get("etapas")).hasSize(6);
         assertThat(c.get("cronograma").get("semaforo").asText()).isNotBlank();
         assertThat(c.get("alertasSinLeer").asLong()).isEqualTo(1);
-        JsonNode doc = c.get("documentos").get(0);
-        assertThat(doc.get("subetapaCodigo").asText()).isEqualTo("1.1");
+        // El acta firmada que cargó el supervisor queda en el paso del acta. No
+        // la generó SICOT: según el proceso real, la elabora Contratación.
+        assertThat(c.get("documentos")).hasSize(2);
+        JsonNode doc = null;
+        for (JsonNode d : c.get("documentos")) {
+            if (d.get("nombre").asText().startsWith("Acta de Inicio firmada")) doc = d;
+        }
+        assertThat(doc).isNotNull();
+        assertThat(doc.get("subetapaCodigo").asText()).isEqualTo("2.1");
         assertThat(doc.get("firmado").asBoolean()).isTrue();
-        assertThat(doc.get("generadoPorIa").asBoolean()).isTrue();
+        assertThat(doc.get("generadoPorIa").asBoolean()).isFalse();
         // El avance de la subetapa dejó registro, y es lo último que pasó.
         assertThat(c.get("ultimaActividad").isNull()).isFalse();
 
@@ -265,12 +285,12 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
         String tokenSupervisor = login(EMAIL_CON, PASSWORD);
         JsonNode subs = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + tokenSupervisor))
-                .andReturn().getResponse().getContentAsString()).get(0).get("subEtapas");
-        // 1.2 estaba EN_CURSO; se cierra, y 1.3 queda PENDIENTE sin que nadie la inicie.
+                .andReturn().getResponse().getContentAsString()).get(1).get("subEtapas");
+        // 2.2 estaba EN_CURSO; se cierra, y 2.3 queda PENDIENTE sin que nadie la inicie.
         cambiarSubetapa(tokenSupervisor, subs.get(1).get("id").asLong(), "COMPLETADA");
 
         JsonNode c = supervisor(seguimiento(tokenAdmin), idConFirma).get("contratos").get(0);
-        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("1.3");
+        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("2.3");
         assertThat(c.get("subetapaEnCurso").get("estado").asText()).isEqualTo("PENDIENTE");
     }
 }

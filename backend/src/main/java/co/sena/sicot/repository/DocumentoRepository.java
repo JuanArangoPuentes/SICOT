@@ -3,6 +3,7 @@ package co.sena.sicot.repository;
 import co.sena.sicot.dto.documento.DocumentoResponse;
 import co.sena.sicot.dto.seguimiento.DocumentoResumen;
 import co.sena.sicot.entity.Documento;
+import co.sena.sicot.entity.enums.TipoDocumento;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -101,6 +102,15 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      */
     boolean existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
             Long contratoId, Long subetapaId, String nombre, Long id);
+
+    /**
+     * Cuántos documentos se cargaron en un paso. Lo usa la compuerta del paso
+     * del acta de inicio, que no se cierra sin el acta firmada y la evidencia
+     * del envío. Es un conteo: no trae el contenido binario.
+     */
+    long countBySubetapaId(Long subetapaId);
+
+    boolean existsBySubetapaIdAndTipo(Long subetapaId, TipoDocumento tipo);
 
     /**
      * Resumen de los documentos de varios contratos, sin contenido binario.

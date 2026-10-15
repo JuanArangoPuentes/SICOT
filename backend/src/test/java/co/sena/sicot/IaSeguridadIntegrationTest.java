@@ -296,7 +296,7 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"pregunta\":\"¿en qué paso voy?\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.respuesta", containsString("Está en el paso 1")));
+                .andExpect(jsonPath("$.respuesta", containsString("Está en el paso 2")));
 
         verifyNoInteractions(ollamaClient);
     }

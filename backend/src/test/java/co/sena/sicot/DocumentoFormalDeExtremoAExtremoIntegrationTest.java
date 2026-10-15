@@ -258,12 +258,12 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
 
     // ── Hallazgos de la revisión adversarial del 28-09-2026 ─────────────────
 
-    private long subetapa27() throws Exception {
+    private long pasoDelActa() throws Exception {
         JsonNode etapas = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        return etapas.get(1).get("subEtapas").get(6).get("id").asLong();
+        return etapas.get(1).get("subEtapas").get(0).get("id").asLong(); // 2.1, el paso del acta
     }
 
     private long generarActa(long subetapa) throws Exception {
@@ -283,7 +283,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void generarNoSobrescribeUnDocumentoCargadoAManoConUnNombreParecido() throws Exception {
-        long subetapa = subetapa27();
+        long subetapa = pasoDelActa();
         byte[] escaneado = "%PDF-1.4 acta escaneada firmada en papel".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         Documento cargado = new Documento();
         cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
@@ -305,7 +305,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     /** El nombre estampado en el hueco del supervisor tiene que ser el del supervisor. */
     @Test
     void unDocumentoGeneradoSoloLoFirmaElSupervisorDelContrato() throws Exception {
-        long id = generarActa(subetapa27());
+        long id = generarActa(pasoDelActa());
         String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + admin))
                 .andReturn().getResponse().getContentAsString();
         if (!objectMapper.readTree(miFirma).get("tieneFirmaActiva").asBoolean()) {
@@ -328,7 +328,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     /** Si Gestión corrige el número del contrato, el borrador regenerado lleva el nombre nuevo. */
     @Test
     void alRegenerarElBorradorTomaElNumeroDeContratoActual() throws Exception {
-        long subetapa = subetapa27();
+        long subetapa = pasoDelActa();
         long primero = generarActa(subetapa);
         var contrato = contratoRepository.findById(contratoId).orElseThrow();
         contrato.setNumeroContrato("CO1.PCCNTR.8151685-CORREGIDO");
@@ -365,7 +365,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     @Test
     void trasReasignarElContratoElBorradorDelSupervisorAnteriorNoSeFirmaSinRegenerarlo() throws Exception {
         asegurarFirmaDelAdministrador();
-        long subetapa = subetapa27();
+        long subetapa = pasoDelActa();
         long id = generarActa(subetapa);
         var contrato = contratoRepository.findById(contratoId).orElseThrow();
         long idAdmin = objectMapper.readTree(loginBody("administrador@soy.sena.edu.co", "Admin123*"))
@@ -418,7 +418,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void unDocumentoCargadoAManoYFirmadoNoImpideGenerarElDelPaso() throws Exception {
-        long subetapa = subetapa27();
+        long subetapa = pasoDelActa();
         Documento cargado = new Documento();
         cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
         cargado.setSubetapa(subetapaRepository.findById(subetapa).orElseThrow());
@@ -442,7 +442,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void soloSeFirmaElBorradorQueElSupervisorRevisó() throws Exception {
-        long subetapa = subetapa27();
+        long subetapa = pasoDelActa();
         String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)

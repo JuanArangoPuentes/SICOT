@@ -172,6 +172,41 @@ class MotorDeAutomatizacionIntegrationTest extends PruebaDeIntegracion {
     }
 
     /**
+     * Gestión crea el contrato con el supervisor en una sola llamada, que es
+     * como lo hace su panel. Hasta el 15-10-2026 por ese camino solo se
+     * registraba CONTRATO_CREADO y el aviso de designación no salía nunca:
+     * justo lo que el proceso real le pide al sistema en el paso 1.
+     */
+    @Test
+    void crearElContratoConSupervisorTambienAvisaDeLaDesignacion() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long supervisorId = idDe("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        String respuesta = mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + gestion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.DESIGNA","objeto":"Suministro de materiales",
+                                 "valor":45900300,"fechaInicio":"2026-10-14","fechaFin":"2026-12-15",
+                                 "supervisorId":%d}
+                                """.formatted(supervisorId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long contratoId = objectMapper.readTree(respuesta).get("id").asLong();
+
+        assertThat(tareaRepository.findAll())
+                .extracting(t -> t.getTipo())
+                .containsExactlyInAnyOrder(TipoTareaAutomatizada.CREAR_ALERTA, TipoTareaAutomatizada.ENVIAR_CORREO);
+
+        ejecutor.procesarPendientes();
+
+        assertThat(alertaRepository.findByContratoIdOrderByFechaCreacionDesc(contratoId, TODAS))
+                .singleElement()
+                .satisfies(a -> assertThat(a.getMensaje()).contains("Fue designado supervisor del contrato CO1.PCCNTR.DESIGNA")
+                        .contains("Acta de Inicio"));
+    }
+
+    /**
      * Una tarea que quedó EN_PROCESO porque el proceso murió a mitad tiene que
      * volver a la cola. Es la fuga clásica de toda cola basada en estado, y solo
      * se manifiesta tras el primer reinicio brusco en producción.

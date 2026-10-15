@@ -463,10 +463,35 @@ class ExtraccionDeterministaTest {
 
             2
             GCCON-F-018 V.06
+
+            ALEX FERNANDO ZAPATA RIOS\s
+            Supervisor\s
+
+            SUMINISTROS MAYBE S.A.S\s
+            NIT. 800154801-6,\s
+            Representante legal\s
+            maybesuministros@gmail.com\s
+
+            Elaboró: Carolinne Moreno Triana – Apoyo Contratación Bienes y servicios.\s
             """;
 
     /** La tabla del GCCON-F-032 es estrecha y parte el número en dos renglones. */
     private static final String DESIGNACION_LOTE_4 = """
+            1\s
+            GCCON-F-032 V.03\s
+
+            FORMATO DE DESIGNACIÓN DE SUPERVISOR Y/O APOYO A LA SUPERVISIÓN\s
+
+            Itagüí, 9 de octubre de 2026 \s
+
+            PARA  Alex Fernando Zapata Rios (Supervisor)\s
+                                         Yeison Dariel Zapata Monsalve (Apoyo a la supervisión)\s
+            DE  Carlos Mario Castañeda Monsalve\s
+            ASUNTO Designación de supervisor(a) y/o apoyo a la supervisión\s
+
+            Me permito comunicarle que ha sido designado(a) como supervisor y/o apoyo a la supervisión del (los)\s
+            siguiente(s) contrato(s) o convenios(s).\s
+
             CONTRATO NRO. CONTRATISTA OBJETO\s
             CO1.PCCNTR.1005
             7820\s
@@ -479,7 +504,62 @@ class ExtraccionDeterministaTest {
             Link\s
             https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?
             noticeUID=CO1.NTC.10815297&isFromPublicArea=True&isModal=False\s
+
+            En caso de presentar incompatibilidad y/o conflicto de interés para ejercer como supervisor(a) y/o apoyo\s
+            a la supervisión en el contrato referido, deberá manifestarlo por escrito máximo al día siguiente de la\s
             """;
+
+    private static final String ENLACE_LOTE_4 = "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/"
+            + "Index?noticeUID=CO1.NTC.10815297&isFromPublicArea=True&isModal=False";
+
+    @Test
+    @DisplayName("de la designación salen el enlace del SECOP entero, el supervisor, el apoyo y la fecha")
+    void laDesignacionTraeLoQueNecesitaElPaso1() {
+        ExtraccionContratoResponse r = extractor.extraer(DESIGNACION_LOTE_4);
+
+        assertThat(r.enlaceSecop()).isEqualTo(ENLACE_LOTE_4);
+        assertThat(r.supervisorDesignado()).isEqualTo("Alex Fernando Zapata Rios");
+        assertThat(r.apoyoSupervision()).isEqualTo("Yeison Dariel Zapata Monsalve");
+        assertThat(r.fechaDesignacion()).isEqualTo("2026-10-09");
+    }
+
+    @Test
+    @DisplayName("del acta salen el supervisor designado y el correo del contratista, no una fecha de designación")
+    void elActaTraeElCorreoDelContratista() {
+        ExtraccionContratoResponse r = extractor.extraer(ACTA_LOTE_4);
+
+        assertThat(r.supervisorDesignado()).isEqualTo("ALEX FERNANDO ZAPATA RIOS");
+        assertThat(r.correoContratista()).isEqualTo("maybesuministros@gmail.com");
+        // El acta no es una designación: su «En Itagüí, el 14 de octubre» no es
+        // la fecha en que se designó al supervisor.
+        assertThat(r.fechaDesignacion()).isNull();
+        assertThat(r.enlaceSecop()).isNull();
+    }
+
+    @Test
+    @DisplayName("un enlace completo no se pega con la primera palabra del párrafo de abajo")
+    void elEnlaceNoArrastraElParrafoSiguiente() {
+        assertThat(ExtraccionDeterminista.enlaceSecop("""
+                Link
+                https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1
+                Conforme a lo anterior, el supervisor…
+                """)).isEqualTo("https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1");
+    }
+
+    @Test
+    @DisplayName("un enlace que no es del SECOP no se toma como enlace del proceso")
+    void soloSeTomanEnlacesDelSecop() {
+        assertThat(ExtraccionDeterminista.enlaceSecop("Link https://otro-sitio.example/Index?noticeUID=1")).isNull();
+    }
+
+    @Test
+    @DisplayName("los correos del SENA no se toman como correo del contratista")
+    void losCorreosDelSenaNoSonDelContratista() {
+        assertThat(ExtraccionDeterminista.correoDelContratista(
+                "Supervisor afzapatar@sena.edu.co\nContratista ventas@proveedor.com.co"))
+                .isEqualTo("ventas@proveedor.com.co");
+        assertThat(ExtraccionDeterminista.correoDelContratista("Elaboró: abogada@soy.sena.edu.co")).isNull();
+    }
 
     @Test
     @DisplayName("del acta real del Lote 4 sale todo, incluido el valor sin símbolo de peso")

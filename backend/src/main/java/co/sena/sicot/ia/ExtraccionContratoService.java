@@ -1,8 +1,10 @@
 package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.service.ArchivoValidator;
+import co.sena.sicot.service.DatosAbiertosSecop;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Lee los documentos reales (Acta de Inicio, notificación, formatos, etc.)
@@ -62,16 +66,20 @@ public class ExtraccionContratoService {
     static final List<String> TIPOS = List.of("Suministro de Bienes", "Compraventa", "Servicios", "Obras",
             "Arrendamiento");
 
+    private final DatosAbiertosSecop datosAbiertos;
+
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
                                       ObjectMapper objectMapper, ArchivoValidator archivoValidator,
                                       ExtraccionDeterminista extraccionDeterminista,
-                                      DocxTextExtractor docxTextExtractor) {
+                                      DocxTextExtractor docxTextExtractor,
+                                      DatosAbiertosSecop datosAbiertos) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
         this.archivoValidator = archivoValidator;
         this.extraccionDeterminista = extraccionDeterminista;
         this.docxTextExtractor = docxTextExtractor;
+        this.datosAbiertos = datosAbiertos;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -133,7 +141,74 @@ public class ExtraccionContratoService {
                     + " y todavía no se reconoce su texto. Diligencie los datos a mano o cargue el documento"
                     + " original.");
         }
-        return resultado;
+        return completarDesdeSecop(resultado);
+    }
+
+    /**
+     * Lo que el documento no trajo y el SECOP II publica del mismo contrato.
+     *
+     * <p>El acto de designación —el documento con que entra un contrato según
+     * el proceso real— trae el número, el contratista, el objeto y el enlace,
+     * pero no el valor, el plazo ni las fechas. Con el número basta para
+     * pedirle el resto a los datos abiertos, sin modelo y en menos de un
+     * segundo. Lo leído del documento siempre gana; de aquí solo se llenan
+     * huecos, y se anota cuáles para que el formulario diga de dónde salió cada
+     * dato.
+     *
+     * <p>No se toma la fecha de inicio: el SECOP publica la de firma, que es
+     * otra (en el Lote 4, el 13 de octubre frente al 14 del acta).
+     */
+    ExtraccionContratoResponse completarDesdeSecop(ExtraccionContratoResponse r) {
+        if (!DatosAbiertosSecop.esNumeroDeContratoValido(r.idContrato())) {
+            return r;
+        }
+        Optional<VerificacionSecopResponse.Ficha> encontrada;
+        try {
+            encontrada = datosAbiertos.contrato(r.idContrato());
+        } catch (DatosAbiertosSecop.NoDisponible e) {
+            log.info("No se completó '{}' desde el SECOP: {}", r.idContrato(), e.getMessage());
+            return r;
+        }
+        if (encontrada.isEmpty()) {
+            return r;
+        }
+        VerificacionSecopResponse.Ficha f = encontrada.get();
+        List<String> completados = new ArrayList<>(r.completadoDesdeSecop());
+        String tipoSecop = ExtraccionDeterminista.tipoPorObjeto(f.objeto());
+        ExtraccionContratoResponse completo = new ExtraccionContratoResponse(
+                r.idContrato(),
+                hueco(r.objeto(), f.objeto(), "objeto", completados),
+                hueco(r.proveedor(), f.proveedor(), "proveedor", completados),
+                hueco(r.nit(), f.documentoProveedor(), "nit", completados),
+                hueco(r.representanteLegal(), f.representanteLegal(), "representanteLegal", completados),
+                hueco(r.valor(), f.valor() == null ? null : f.valor().toPlainString(), "valor", completados),
+                r.vigenciaInicio(),
+                hueco(r.vigenciaFin(), f.fechaFin() == null ? null : f.fechaFin().toString(), "vigenciaFin",
+                        completados),
+                r.lugarEjecucion(),
+                r.registroPresupuestal(),
+                hueco(r.tipoContrato(), tipoSecop, "tipoContrato", completados),
+                hueco(r.enlaceSecop(), f.enlaceProceso(), "enlaceSecop", completados),
+                hueco(r.supervisorDesignado(), f.supervisor(), "supervisorDesignado", completados),
+                r.apoyoSupervision(),
+                r.fechaDesignacion(),
+                r.correoContratista(),
+                completados);
+        if (!completados.isEmpty()) {
+            log.info("'{}': completados desde los datos abiertos del SECOP: {}", r.idContrato(), completados);
+        }
+        return completo;
+    }
+
+    private static String hueco(String delDocumento, String delSecop, String campo, List<String> completados) {
+        if (delDocumento != null && !delDocumento.isBlank()) {
+            return delDocumento;
+        }
+        if (delSecop == null || delSecop.isBlank()) {
+            return delDocumento;
+        }
+        completados.add(campo);
+        return delSecop;
     }
 
     private ExtraccionContratoResponse extraerDeUnArchivo(MultipartFile archivo) {
@@ -282,7 +357,8 @@ public class ExtraccionContratoService {
     private static ExtraccionContratoResponse conTipo(ExtraccionContratoResponse r, String tipo) {
         return new ExtraccionContratoResponse(r.idContrato(), r.objeto(), r.proveedor(), r.nit(),
                 r.representanteLegal(), r.valor(), r.vigenciaInicio(), r.vigenciaFin(), r.lugarEjecucion(),
-                r.registroPresupuestal(), tipo);
+                r.registroPresupuestal(), tipo, r.enlaceSecop(), r.supervisorDesignado(), r.apoyoSupervision(),
+                r.fechaDesignacion(), r.correoContratista(), r.completadoDesdeSecop());
     }
 
     private ExtraccionContratoResponse combinar(ExtraccionContratoResponse base, ExtraccionContratoResponse nuevo) {
@@ -297,7 +373,13 @@ public class ExtraccionContratoService {
                 primero(base.vigenciaFin(), nuevo.vigenciaFin()),
                 primero(base.lugarEjecucion(), nuevo.lugarEjecucion()),
                 primero(base.registroPresupuestal(), nuevo.registroPresupuestal()),
-                primero(base.tipoContrato(), nuevo.tipoContrato()));
+                primero(base.tipoContrato(), nuevo.tipoContrato()),
+                primero(base.enlaceSecop(), nuevo.enlaceSecop()),
+                primero(base.supervisorDesignado(), nuevo.supervisorDesignado()),
+                primero(base.apoyoSupervision(), nuevo.apoyoSupervision()),
+                primero(base.fechaDesignacion(), nuevo.fechaDesignacion()),
+                primero(base.correoContratista(), nuevo.correoContratista()),
+                base.completadoDesdeSecop());
     }
 
     private String primero(String existente, String candidato) {

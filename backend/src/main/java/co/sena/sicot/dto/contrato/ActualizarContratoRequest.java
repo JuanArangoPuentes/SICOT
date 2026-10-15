@@ -3,8 +3,10 @@ package co.sena.sicot.dto.contrato;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -59,7 +61,24 @@ public record ActualizarContratoRequest(
         LocalDate fechaRegistroPresupuestal,
 
         @Size(max = 100, message = "El centro de costo no puede superar 100 caracteres.")
-        String centroCosto
+        String centroCosto,
+
+        // Lo que trae el acto de designación (GCCON-F-032). El enlace se valida
+        // contra el dominio del SECOP porque el panel lo ofrece para abrir: un
+        // enlace cualquiera salido de un PDF no debe llegar ahí.
+        @Size(max = 500, message = "El enlace del SECOP no puede superar 500 caracteres.")
+        @Pattern(regexp = "|https://community\\.secop\\.gov\\.co/.*",
+                message = "El enlace debe ser del SECOP II (https://community.secop.gov.co/…).")
+        String enlaceSecop,
+
+        @Size(max = 255, message = "El apoyo a la supervisión no puede superar 255 caracteres.")
+        String apoyoSupervision,
+
+        LocalDate fechaDesignacion,
+
+        @Size(max = 255, message = "El correo del contratista no puede superar 255 caracteres.")
+        @Email(message = "El correo del contratista no es válido.")
+        String correoContratista
 ) {
 
     /**
