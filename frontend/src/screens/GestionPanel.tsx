@@ -92,14 +92,59 @@ const parseValor = (texto: string): number | null => {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+const displayAIso = (f: string) => {
+  const [d, m, y] = f.split('/')
+  return `${y}-${m}-${d}`
+}
+
 const parseVigencia = (texto: string): { inicio: string | null; fin: string | null } => {
-  const fechas = texto.match(/\d{2}\/\d{2}\/\d{4}/g)
-  const toIso = (f: string) => {
-    const [d, m, y] = f.split('/')
-    return `${y}-${m}-${d}`
+  // Con un separador, cada lado se lee por su cuenta: el acto de designación
+  // trae (vía SECOP) la fecha de terminación pero no la de inicio, que llega
+  // después con el acta. Exigir las dos tiraba la que sí se conocía.
+  const partes = texto.split(/\s[–-]\s|–/)
+  const fecha = (p: string | undefined) => {
+    const m = p?.match(/\d{2}\/\d{2}\/\d{4}/)
+    return m ? displayAIso(m[0]) : null
   }
+  if (partes.length >= 2) return { inicio: fecha(partes[0]), fin: fecha(partes[1]) }
+  const fechas = texto.match(/\d{2}\/\d{2}\/\d{4}/g)
   if (!fechas || fechas.length < 2) return { inicio: null, fin: null }
-  return { inicio: toIso(fechas[0]), fin: toIso(fechas[1]) }
+  return { inicio: displayAIso(fechas[0]), fin: displayAIso(fechas[1]) }
+}
+
+// ¿El nombre que trae la designación es el de este usuario? «Alex Zapata» y
+// «Alex Fernando Zapata Rios» son la misma persona: basta con que todos los
+// nombres del más corto estén en el más largo (misma regla que el backend al
+// verificar contra el SECOP).
+const palabras = (s: string) =>
+  new Set(
+    s
+      .normalize('NFD')
+      .replace(/\p{M}/gu, '')
+      .toUpperCase()
+      .replace(/[^A-Z ]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean),
+  )
+const mismaPersona = (a: string, b: string) => {
+  const x = palabras(a)
+  const y = palabras(b)
+  if (x.size === 0 || y.size === 0) return false
+  const [corto, largo] = x.size <= y.size ? [x, y] : [y, x]
+  return [...corto].every((p) => largo.has(p))
+}
+
+// Etiquetas de los campos que el backend pudo completar desde el SECOP.
+const CAMPO_SECOP: Record<string, string> = {
+  objeto: 'objeto',
+  proveedor: 'contratista',
+  nit: 'NIT',
+  representanteLegal: 'representante legal',
+  valor: 'valor',
+  vigenciaFin: 'fecha de terminación',
+  tipoContrato: 'tipo de contrato',
+  enlaceSecop: 'enlace del proceso',
+  supervisorDesignado: 'supervisor',
 }
 
 // AAAA-MM-DD (lo que devuelve la IA) -> DD/MM/AAAA (lo que espera el campo de vigencia)
@@ -148,6 +193,12 @@ export default function GestionPanel({
   const [representanteLegal, setRepresentanteLegal] = useState('')
   const [lugarEjecucion, setLugarEjecucion] = useState('')
   const [registroPresupuestal, setRegistroPresupuestal] = useState('')
+  // Del acto de designación (GCCON-F-032) y del acta de inicio
+  const [enlaceSecop, setEnlaceSecop] = useState('')
+  const [apoyoSupervision, setApoyoSupervision] = useState('')
+  const [fechaDesignacion, setFechaDesignacion] = useState('')
+  const [correoContratista, setCorreoContratista] = useState('')
+  const [completadoDesdeSecop, setCompletadoDesdeSecop] = useState<string[]>([])
 
   // Tabla de contratos reales (GET /api/contratos)
   useEffect(() => {
@@ -222,9 +273,19 @@ export default function GestionPanel({
       setValor(resultado.valor ?? '')
       const inicio = isoADisplay(resultado.vigenciaInicio)
       const fin = isoADisplay(resultado.vigenciaFin)
-      setVigencia(inicio && fin ? `${inicio} – ${fin}` : '')
+      setVigencia(inicio || fin ? `${inicio} – ${fin}`.trim() : '')
       setLugarEjecucion(resultado.lugarEjecucion ?? '')
       setRegistroPresupuestal(resultado.registroPresupuestal ?? '')
+      setEnlaceSecop(resultado.enlaceSecop ?? '')
+      setApoyoSupervision(resultado.apoyoSupervision ?? '')
+      setFechaDesignacion(isoADisplay(resultado.fechaDesignacion))
+      setCorreoContratista(resultado.correoContratista ?? '')
+      setCompletadoDesdeSecop(resultado.completadoDesdeSecop ?? [])
+      // La designación nombra al supervisor: si es un usuario de SICOT, queda
+      // preseleccionado. Si no lo es, no se adivina: Gestión elige.
+      const designado = resultado.supervisorDesignado
+      const coincide = designado ? supervisores.find((s) => mismaPersona(s.nombre, designado)) : undefined
+      if (coincide) setSupervisor(String(coincide.id))
       // Antes se comparaba con Object.keys(CONTRACT_TYPES), que en un arreglo
       // son los índices ('0', '1'…): el tipo extraído nunca se aplicaba y el
       // formulario se quedaba siempre en «Suministro de Bienes».
@@ -273,6 +334,12 @@ export default function GestionPanel({
         lugarEjecucion: lugarEjecucion.trim() || null,
         numeroRegistroPresupuestal: registroPresupuestal.trim() || null,
         centroCosto: centro,
+        enlaceSecop: enlaceSecop.trim() || null,
+        apoyoSupervision: apoyoSupervision.trim() || null,
+        fechaDesignacion: /^\d{2}\/\d{2}\/\d{4}$/.test(fechaDesignacion.trim())
+          ? displayAIso(fechaDesignacion.trim())
+          : null,
+        correoContratista: correoContratista.trim() || null,
       })
       // Se cuentan los adjuntos que realmente quedaron guardados. Antes se
       // tragaban todos los fallos y luego se informaba "N documentos adjuntos"
@@ -759,6 +826,12 @@ export default function GestionPanel({
                   }}
                 >
                   ✓ Documento analizado. Revise, corrija y confirme los datos extraídos.
+                  {completadoDesdeSecop.length > 0 && (
+                    <div style={{ color: 'var(--text-secondary)', marginTop: 4, fontSize: 12 }}>
+                      El documento no traía {completadoDesdeSecop.map((c) => CAMPO_SECOP[c] ?? c).join(', ')}: se
+                      tomaron de los datos abiertos del SECOP II para el mismo número de contrato.
+                    </div>
+                  )}
                 </div>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -782,6 +855,25 @@ export default function GestionPanel({
                     onChange: setRegistroPresupuestal,
                     mono: true,
                   },
+                  {
+                    label: 'Correo del contratista',
+                    value: correoContratista,
+                    onChange: setCorreoContratista,
+                    mono: false,
+                  },
+                  {
+                    label: 'Apoyo a la supervisión',
+                    value: apoyoSupervision,
+                    onChange: setApoyoSupervision,
+                    mono: false,
+                  },
+                  {
+                    label: 'Fecha de la designación (dd/mm/aaaa)',
+                    value: fechaDesignacion,
+                    onChange: setFechaDesignacion,
+                    mono: true,
+                  },
+                  { label: 'Enlace del proceso en SECOP II', value: enlaceSecop, onChange: setEnlaceSecop, mono: true },
                 ].map((f) => (
                   <div key={f.label}>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{f.label}</div>

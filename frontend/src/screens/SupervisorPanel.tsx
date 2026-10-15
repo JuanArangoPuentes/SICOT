@@ -43,8 +43,18 @@ import {
   IconInbox,
   IconPlay,
 } from '@/components/icons'
-import { AI_GENERATED_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA, TUTORIAL, FORMAL_DOCS } from '@/data/contractFlow'
+import {
+  ACTA_FIRMADA_Y_ENVIO,
+  AI_GENERATED_DOCS,
+  HERRAMIENTA_POR_PASO,
+  SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA,
+  TUTORIAL,
+  FORMAL_DOCS,
+} from '@/data/contractFlow'
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
+import ActaFirmadaYEnvio from '@/components/supervisor/ActaFirmadaYEnvio'
+import VerificacionSecop from '@/components/supervisor/VerificacionSecop'
+import BorradorDeCorreo, { type TipoDeCorreo } from '@/components/supervisor/BorradorDeCorreo'
 import DatosDelDocumento, {
   guardarTablasDelContrato,
   leerTablasDelContrato,
@@ -111,9 +121,11 @@ const claveDePaso = (id: number) => `paso-${id}`
 const pasoDeClave = (key: string) => Number(key.replace('paso-', '')) || 1
 
 // Resumen de lo que ocurre en cada paso — se muestra bajo la barra grande.
+// Los pasos 1 y 2 siguen el proceso real que documentó el supervisor el
+// 15-10-2026 (ver data/contractFlow.ts); los demás, GCCON-P-010.
 const DETALLE_PASO: Record<number, string> = {
-  1: 'Estudios previos (GCCON-F-046), CDP y garantías, suscripción y publicación en SECOP II, y designación del supervisor.',
-  2: 'Revisión del contratista, cronograma y seguridad social, y firma del Acta de Inicio GCCON-F-018.',
+  1: 'Contrato publicado en SECOP II, designación del supervisor y del apoyo (GCCON-F-032) y registro en SICOT.',
+  2: 'Firma y devolución del Acta de Inicio, aviso a SST y ambiental, verificación en SECOP II y acuerdo de entregas con el contratista.',
   3: 'Inspección física en bodega, evidencia fotográfica y firma del Informe de Supervisión GCCON-F-031.',
   4: 'Verificación de PILA y factura electrónica DIAN, y firma del Acta de Recibo a Satisfacción GIL-F-010.',
   5: 'Vigencia de garantías, orden de pago y CRP, y firma de la certificación de cumplimiento que respalda el pago.',
@@ -263,6 +275,8 @@ export default function SupervisorPanel({
   setSteps,
   usuario,
   contrato,
+  contratos = [],
+  onSeleccionarContrato,
   cargandoContrato,
   errorContrato,
   onLogout,
@@ -277,6 +291,9 @@ export default function SupervisorPanel({
   setSteps: (s: Step[]) => void
   usuario: AuthResponse
   contrato: ContratoResponse | null
+  /** Todos los contratos del supervisor; con más de uno aparece el selector. */
+  contratos?: ContratoResponse[]
+  onSeleccionarContrato?: (id: number) => void
   cargandoContrato: boolean
   errorContrato: boolean
   onLogout: () => void
@@ -1158,6 +1175,43 @@ export default function SupervisorPanel({
       onOpenSettings={onOpenSettings}
       title={TITULO_VISTA[tab].titulo}
       subtitle={`${contrato.numeroContrato} · ${TITULO_VISTA[tab].sub}`}
+      barra={
+        contratos.length > 1 && onSeleccionarContrato ? (
+          <>
+            <label htmlFor="selector-contrato" style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Contrato en supervisión
+            </label>
+            <select
+              id="selector-contrato"
+              aria-label="Contrato en supervisión"
+              value={contrato.id}
+              onChange={(e) => onSeleccionarContrato(Number(e.target.value))}
+              style={{
+                fontSize: 12,
+                padding: '5px 8px',
+                width: 'auto',
+                minWidth: 220,
+                maxWidth: '100%',
+                fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {/* Los activos primero: son los que se supervisan; un borrador o
+                  uno cancelado se puede abrir, pero no es lo que se busca. */}
+              {[...contratos]
+                .sort((a, b) => (a.estado === 'ACTIVO' ? 0 : 1) - (b.estado === 'ACTIVO' ? 0 : 1))
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.numeroContrato}
+                    {c.estado !== 'ACTIVO' ? ` (${c.estado.toLowerCase()})` : ''}
+                  </option>
+                ))}
+            </select>
+            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+              {contratos.filter((c) => c.estado === 'ACTIVO').length} activos de {contratos.length} asignados
+            </span>
+          </>
+        ) : undefined
+      }
       actions={
         <>
           {tab === 'contrato' && (
@@ -1499,6 +1553,34 @@ export default function SupervisorPanel({
                                   }}
                                 />
                               )}
+                              {/* Los pasos del proceso real (etapa 2). Solo en el paso
+                                  en curso o uno abierto sin cerrar: cerrado, ya no hay
+                                  nada que hacer en él. */}
+                              {contrato && !ss.completed && ss.documentosRequeridos === ACTA_FIRMADA_Y_ENVIO && (
+                                <ActaFirmadaYEnvio
+                                  contratoId={contrato.id}
+                                  subetapaApiId={ss.apiId}
+                                  documentos={docsContrato}
+                                  onCargado={() => {
+                                    void onRefreshRegistros()
+                                    getDocumentosContrato(contrato.id)
+                                      .then(setDocsContrato)
+                                      .catch(() => {})
+                                  }}
+                                />
+                              )}
+                              {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'VERIFICACION_SECOP' && (
+                                <VerificacionSecop contratoId={contrato.id} />
+                              )}
+                              {contrato &&
+                                !ss.completed &&
+                                (HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' ||
+                                  HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA') && (
+                                  <BorradorDeCorreo
+                                    tipo={HERRAMIENTA_POR_PASO[ss.label] as TipoDeCorreo}
+                                    contrato={contrato}
+                                  />
+                                )}
                             </div>
                           )
                         })}

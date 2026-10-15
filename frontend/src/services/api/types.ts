@@ -122,6 +122,11 @@ export interface CrearContratoRequest {
   numeroRegistroPresupuestal?: string | null
   fechaRegistroPresupuestal?: string | null
   centroCosto?: string | null
+  // Del acto de designación (GCCON-F-032) y del acta de inicio — opcionales
+  enlaceSecop?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
 }
 
 export interface ContratoResponse {
@@ -143,6 +148,10 @@ export interface ContratoResponse {
   numeroRegistroPresupuestal: string | null
   fechaRegistroPresupuestal: string | null
   centroCosto: string | null
+  enlaceSecop: string | null
+  apoyoSupervision: string | null
+  fechaDesignacion: string | null
+  correoContratista: string | null
   fechaCreacion: string
 }
 
@@ -159,6 +168,8 @@ export interface SubetapaResponse {
   descripcion: string
   estado: EstadoSubetapa
   responsable: string
+  /** Lo que hay que cargar antes de cerrar el paso; hoy solo 'ACTA_FIRMADA_Y_ENVIO'. */
+  documentosRequeridos?: string | null
 }
 
 export interface EtapaResponse {
@@ -239,6 +250,57 @@ export interface ExtraccionContratoResponse {
   lugarEjecucion: string | null
   registroPresupuestal: string | null
   tipoContrato: string | null
+  enlaceSecop?: string | null
+  supervisorDesignado?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
+  /** Campos que el documento no traía y se tomaron de los datos abiertos del SECOP II. */
+  completadoDesdeSecop?: string[]
+}
+
+// ─── Verificación contra el SECOP II (datos abiertos) ────────────────────────
+
+export interface FichaSecop {
+  idContrato: string | null
+  objeto: string | null
+  estado: string | null
+  proveedor: string | null
+  documentoProveedor: string | null
+  representanteLegal: string | null
+  valor: number | null
+  duracion: string | null
+  fechaFirma: string | null
+  fechaFin: string | null
+  inicioLiquidacion: string | null
+  finLiquidacion: string | null
+  supervisor: string | null
+  ordenadorDelGasto: string | null
+  modalidad: string | null
+  tipoContrato: string | null
+  obligacionAmbiental: boolean | null
+  valorFacturado: number | null
+  valorPagado: number | null
+  valorPendienteDePago: number | null
+  enlaceProceso: string | null
+}
+
+export interface VerificacionSecopResponse {
+  disponible: boolean
+  motivo: string | null
+  consultadoEn: string
+  enlaceProceso: string | null
+  ficha: FichaSecop | null
+  diferencias: { campo: string; enSicot: string; enSecop: string }[]
+  documentos: { nombre: string; tamanoBytes: number | null; fechaCarga: string | null; url: string | null }[]
+  garantias: {
+    aseguradora: string | null
+    numero: string | null
+    tipo: string | null
+    valor: number | null
+    vigenteHasta: string | null
+    estado: string | null
+  }[]
 }
 
 export interface GenerarDocumentoRequest {

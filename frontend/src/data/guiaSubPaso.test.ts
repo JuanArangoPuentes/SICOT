@@ -16,13 +16,42 @@ const sub = (over: Partial<SubStep>): SubStep => ({
 describe('guiaDelSubPaso', () => {
   it('en un sub-paso con documento dice que SICOT lo arma y el supervisor lo firma', () => {
     const t = guiaDelSubPaso(
-      paso(2, 'INICIO — Acta de Inicio'),
-      sub({ id: '2.7', label: 'Firma del Acta de Inicio', description: 'Suscripción del acta con el contratista.' }),
+      paso(3, 'INSPECCIÓN'),
+      sub({ id: '3.4', label: 'Firma del Informe de Supervisión', description: 'SICOT arma el informe.' }),
     )
-    expect(t).toContain('Sub-paso 2.7 — Firma del Acta de Inicio')
-    expect(t).toContain('Suscripción del acta con el contratista.')
-    expect(t).toContain('SICOT arma «Acta de Inicio» (GCCON-F-018)')
+    expect(t).toContain('Sub-paso 3.4 — Firma del Informe de Supervisión')
+    expect(t).toContain('SICOT arma el informe.')
+    expect(t).toContain('SICOT arma «Informe de Supervisión» (GCCON-F-031)')
     expect(t).toContain('«dato pendiente»')
+  })
+
+  // El proceso real (15-10-2026): el acta la elabora Contratación; SICOT no la
+  // arma, la recibe firmada. La guía tiene que decir eso, no lo contrario.
+  it('en el paso del acta explica qué cargar y que sin eso no se cierra', () => {
+    const t = guiaDelSubPaso(
+      paso(2, 'INICIO — Acta de Inicio y arranque'),
+      sub({
+        id: '2.1',
+        label: 'Firma y devolución del Acta de Inicio (GCCON-F-018)',
+        documentosRequeridos: 'ACTA_FIRMADA_Y_ENVIO',
+      }),
+    )
+    expect(t).toContain('cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío')
+    expect(t).toContain('SICOT no lo deja cerrar sin ellas')
+    expect(t).not.toContain('SICOT arma')
+  })
+
+  it('en la verificación y los correos del arranque dice qué herramienta usar', () => {
+    const inicio = paso(2, 'INICIO')
+    expect(guiaDelSubPaso(inicio, sub({ id: '2.3', label: 'Verificación de especificaciones en SECOP II' }))).toContain(
+      'lo que el SECOP II publica del contrato',
+    )
+    expect(guiaDelSubPaso(inicio, sub({ id: '2.2', label: 'Aviso a los profesionales SST y ambiental' }))).toContain(
+      'están en el estudio previo',
+    )
+    expect(
+      guiaDelSubPaso(inicio, sub({ id: '2.4', label: 'Contacto con el contratista y acuerdo de entregas' })),
+    ).toContain('complete las cantidades exactas')
   })
 
   it('en la evidencia fotográfica manda a tomar la foto', () => {
@@ -44,7 +73,10 @@ describe('guiaDelSubPaso', () => {
   })
 
   it('en el último sub-paso del paso sí promete pedir observaciones', () => {
-    const t = guiaDelSubPaso(paso(2, 'INICIO', [{ id: '2.6' }, { id: '2.7' }]), sub({ id: '2.7', label: 'Acta' }))
+    const t = guiaDelSubPaso(
+      paso(3, 'INSPECCIÓN', [{ id: '3.3' }, { id: '3.4' }]),
+      sub({ id: '3.4', label: 'Informe' }),
+    )
     expect(t).toContain('le pediré que me cuente')
   })
 

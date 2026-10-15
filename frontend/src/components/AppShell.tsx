@@ -83,6 +83,7 @@ export default function AppShell({
   title,
   subtitle,
   actions,
+  barra,
   children,
 }: {
   /** Etiqueta del módulo/rol — se muestra en la cabecera y bajo la marca. */
@@ -98,6 +99,13 @@ export default function AppShell({
   title: string
   subtitle?: string
   actions?: ReactNode
+  /**
+   * Franja de ancho completo entre la cabecera y el contenido, para lo que
+   * cambia el contexto de toda la pantalla (el contrato en supervisión). No va
+   * en `actions`: la cabecera tiene alto fijo y ahí no cabía sin tapar el menú
+   * del usuario a 800 px.
+   */
+  barra?: ReactNode
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(leerColapsada)
@@ -266,6 +274,7 @@ export default function AppShell({
           />
         </header>
 
+        {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>
     </div>

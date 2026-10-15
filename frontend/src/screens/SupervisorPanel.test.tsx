@@ -194,6 +194,26 @@ describe('SupervisorPanel', () => {
     ]
   }
 
+  // El supervisor real lleva varios lotes a la vez. Antes el panel mostraba
+  // solo el primer contrato ACTIVO y los demás quedaban inaccesibles.
+  it('con más de un contrato ofrece elegir cuál supervisar', async () => {
+    const lote4 = contrato({ id: 54, numeroContrato: 'CO1.PCCNTR.10057820' })
+    const lote8 = contrato({ id: 60, numeroContrato: 'CO1.PCCNTR.10057899' })
+    const onSeleccionarContrato = vi.fn()
+    await montar({ contrato: lote4, contratos: [lote4, lote8], onSeleccionarContrato })
+
+    const selector = screen.getByRole('combobox', { name: 'Contrato en supervisión' })
+    expect(selector).toHaveValue('54')
+    fireEvent.change(selector, { target: { value: '60' } })
+    expect(onSeleccionarContrato).toHaveBeenCalledWith(60)
+  })
+
+  it('con un solo contrato no muestra el selector', async () => {
+    const lote4 = contrato({ id: 54 })
+    await montar({ contrato: lote4, contratos: [lote4], onSeleccionarContrato: vi.fn() })
+    expect(screen.queryByRole('combobox', { name: 'Contrato en supervisión' })).toBeNull()
+  })
+
   it('la bandeja muestra la barra de avance con el porcentaje real', async () => {
     // 5 de 8 sub-pasos cerrados = 63 %.
     await montar({ contrato: contrato(), steps: etapasConAvance() })
@@ -268,32 +288,45 @@ describe('SupervisorPanel', () => {
   // sub-paso bloqueado o decía que la firma había fallado cuando no.
   // ──────────────────────────────────────────────────────────────────────────
 
-  /** El sub-paso 2.7 (Acta de Inicio) en un paso que sigue abierto después de él. */
+  /**
+   * El sub-paso 5.3 (Certificación de cumplimiento) en un paso que sigue abierto
+   * después de él. Hasta el 15-10-2026 estas pruebas usaban el Acta de Inicio
+   * (2.7), pero el acta ya no la arma SICOT: la elabora Contratación y el
+   * supervisor la carga firmada. La certificación tiene la misma forma: tampoco
+   * lleva observaciones.
+   */
   function pasoConActa(): Step[] {
     return [
       {
         id: 1,
-        title: 'INICIO — Acta de Inicio (GCCON-F-018)',
+        title: 'CERTIFICACIÓN — Cumplimiento y Trámite de Pago',
         status: 'active',
         subSteps: [
           {
-            id: '2.7',
-            label: 'Firmar el Acta de Inicio',
+            id: '5.3',
+            label: 'Firma de la Certificación de cumplimiento',
             responsible: 'Supervisor',
-            document: 'Acta',
+            document: 'Certificación',
             completed: false,
-            apiId: 27,
+            apiId: 53,
           },
-          { id: '2.8', label: 'Archivar', responsible: 'Supervisor', document: 'Acta', completed: false, apiId: 28 },
+          {
+            id: '5.4',
+            label: 'Archivar',
+            responsible: 'Supervisor',
+            document: 'Certificación',
+            completed: false,
+            apiId: 54,
+          },
         ],
       },
     ]
   }
 
   const plantillaActa: PlantillaDocumento = {
-    tipo: 'ACTA_INICIO',
-    codigo: 'GCCON-F-018',
-    nombre: 'Acta de Inicio',
+    tipo: 'CERTIFICACION_CUMPLIMIENTO',
+    codigo: 'ESUCON',
+    nombre: 'Certificación de cumplimiento',
     llevaObservaciones: false,
     campos: [
       {
@@ -328,7 +361,9 @@ describe('SupervisorPanel', () => {
     await firmarActa()
 
     expect(documentos.generarDocumento).not.toHaveBeenCalled()
-    expect(await screen.findByText(/no pude consultar qué datos pide «Acta de Inicio»/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/no pude consultar qué datos pide «Certificación de cumplimiento»/i),
+    ).toBeInTheDocument()
     // Y el sub-paso queda libre para intentarlo otra vez.
     expect(screen.getByRole('button', { name: 'Firmar documento' })).toBeEnabled()
   })
@@ -337,8 +372,8 @@ describe('SupervisorPanel', () => {
     const { documentos, etapas } = await servicios()
     documentos.getDocumentosContrato.mockResolvedValue([
       documento({
-        nombre: 'Acta de Inicio — CTMA-2026-0184',
-        subetapaId: 27,
+        nombre: 'Certificación de cumplimiento — CTMA-2026-0184',
+        subetapaId: 53,
         generadoPorIa: true,
         firmaId: 'FIRMA-TEST',
       }),
@@ -350,7 +385,7 @@ describe('SupervisorPanel', () => {
     await firmarActa()
 
     expect(documentos.generarDocumento).not.toHaveBeenCalled()
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
   })
 
   it('pide los datos antes de firmar y, si luego falla el registro, no dice que la firma falló', async () => {
@@ -370,10 +405,10 @@ describe('SupervisorPanel', () => {
 
     expect(documentos.generarDocumento).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ tipo: 'ACTA_INICIO', datos: { cedulaSupervisor: '98.587.121' } }),
+      expect.objectContaining({ tipo: 'CERTIFICACION_CUMPLIMIENTO', datos: { cedulaSupervisor: '98.587.121' } }),
     )
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, undefined)
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
 
@@ -418,7 +453,7 @@ describe('SupervisorPanel', () => {
     expect(documentos.generarDocumento).toHaveBeenCalledWith(
       1,
       expect.objectContaining({
-        tipo: 'ACTA_INICIO',
+        tipo: 'CERTIFICACION_CUMPLIMIENTO',
         datos: {},
         tablas: { obligacionesEspecificas: [['Proveer los bienes nuevos', 'Se verificó']] },
       }),
@@ -475,7 +510,7 @@ describe('SupervisorPanel', () => {
     // huella: si otra pestaña lo regeneró entre medias, el servidor no firma.
     expect(documentos.generarDocumento).toHaveBeenCalledTimes(1)
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(27, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
   })
 
   it('«Usar mis notas tal cual» regenera sin el Copiloto y firma eso', async () => {

@@ -87,6 +87,28 @@ const rutaDeRol = (u: AuthResponse): string => {
 }
 
 const VISTAS_SUPERVISOR: Tab[] = ['bandeja', 'contrato', 'alertas', 'documentos', 'registros']
+
+// El contrato que el supervisor eligió en el selector, para volver a él al
+// recargar. Es una comodidad de este equipo: si el almacenamiento no está
+// disponible (ventana privada, datos borrados), se vuelve al contrato ACTIVO.
+const claveContratoElegido = (usuarioId: number) => `sicot.contratoElegido.${usuarioId}`
+
+function leerContratoElegido(usuarioId: number): number | null {
+  try {
+    const v = localStorage.getItem(claveContratoElegido(usuarioId))
+    return v ? Number(v) : null
+  } catch {
+    return null
+  }
+}
+
+function guardarContratoElegido(usuarioId: number, contratoId: number) {
+  try {
+    localStorage.setItem(claveContratoElegido(usuarioId), String(contratoId))
+  } catch {
+    // sin almacenamiento, el selector sigue funcionando en esta sesión
+  }
+}
 const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'seguimiento', 'documentos', 'usuarios', 'firmas']
 
 /** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
@@ -107,6 +129,12 @@ function AppInner() {
   const [tourActive, setTourActive] = useState(false)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [contrato, setContrato] = useState<ContratoResponse | null>(null)
+  // Todos los contratos del supervisor. Antes solo existía `contrato`, el
+  // primero ACTIVO de la lista: con un segundo contrato el primero quedaba
+  // inaccesible desde el panel. El supervisor real lleva varios lotes a la vez
+  // (Lote 4 y Lote 8, octubre de 2026), y el proceso pregunta qué pasa cuando
+  // al supervisor que ya tiene SICOT le llega un contrato nuevo: que se suma.
+  const [contratos, setContratos] = useState<ContratoResponse[]>([])
   // true mientras se consulta el contrato real del supervisor — evita que el
   // panel muestre "sin contrato asignado" por un instante antes de que la
   // respuesta real llegue.
@@ -117,6 +145,17 @@ function AppInner() {
     if (!contrato) return
     const lista = await getRegistrosContrato(contrato.id)
     setRegistros(mapRegistros(lista))
+  }
+
+  const seleccionarContrato = (id: number) => {
+    const elegido = contratos.find((c) => c.id === id)
+    if (!elegido || !session) return
+    guardarContratoElegido(session.usuarioId, id)
+    // Las etapas son las del contrato anterior hasta que lleguen las nuevas:
+    // se vacían para no mostrar por un instante el avance de otro contrato.
+    setSteps([])
+    setRegistros([])
+    setContrato(elegido)
   }
 
   // Contrato asignado al supervisor (rol SUPERVISOR): el ACTIVO si existe.
@@ -132,7 +171,11 @@ function AppInner() {
     getContratos(session.usuarioId)
       .then((lista) => {
         if (cancelado) return
-        const activo = lista.find((c) => c.estado === 'ACTIVO') ?? lista[0] ?? null
+        setContratos(lista)
+        // El que eligió la última vez, si sigue siendo suyo; si no, el ACTIVO.
+        const elegido = leerContratoElegido(session.usuarioId)
+        const activo =
+          lista.find((c) => c.id === elegido) ?? lista.find((c) => c.estado === 'ACTIVO') ?? lista[0] ?? null
         setContrato(activo)
       })
       .catch((err) => {
@@ -238,10 +281,16 @@ function AppInner() {
             path="/supervisor/:vista"
             element={conSesion(['SUPERVISOR'], (s) => (
               <PanelSupervisorEnRuta
+                // Un panel nuevo por contrato: el sub-paso abierto, los
+                // borradores y las cargas a medias son de un contrato y no deben
+                // pasar al siguiente.
+                key={contrato?.id ?? 'sin-contrato'}
                 usuario={s}
                 steps={steps}
                 setSteps={setSteps}
                 contrato={contrato}
+                contratos={contratos}
+                onSeleccionarContrato={seleccionarContrato}
                 cargandoContrato={cargandoContrato}
                 errorContrato={errorContrato}
                 onLogout={logout}
