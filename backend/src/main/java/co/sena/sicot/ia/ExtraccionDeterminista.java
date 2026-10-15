@@ -63,9 +63,23 @@ public class ExtraccionDeterminista {
     /**
      * Número de proceso de SECOP II. El prefijo es estable en toda la
      * contratación estatal colombiana, que es lo que lo hace fiable aquí.
+     *
+     * <p>La continuación de la segunda línea existe por la tabla del formato de
+     * designación GCCON-F-032: la celda es estrecha y parte el número en dos
+     * renglones («CO1.PCCNTR.1005» y debajo «7820»). Sin esto el patrón casaba
+     * con el primer pedazo y devolvía un número truncado —un contrato que no
+     * existe— en vez de no devolver nada, que es el peor de los dos errores.
      */
     private static final Pattern NUMERO_CONTRATO =
-            Pattern.compile("\\bCO1\\.PCCNTR\\.[A-Z0-9]+");
+            Pattern.compile("\\bCO1\\.PCCNTR\\.([A-Z0-9]+)(?:[ \\t]*\\n[ \\t]*([0-9]{1,8})(?![0-9A-Z]))?");
+
+    /**
+     * Por debajo de esto se asume que la celda partió el número: los
+     * consecutivos de SECOP II rondan los ocho dígitos y ninguno real es tan
+     * corto. Solo entonces se pega la línea siguiente, para no tragarse por
+     * descuido un número de página que vaya debajo de un número completo.
+     */
+    private static final int DIGITOS_MINIMOS_CONTRATO = 7;
 
     /**
      * NIT del contratista.
@@ -88,6 +102,16 @@ public class ExtraccionDeterminista {
      * la forma canónica en estos documentos es «… PESOS ($184.750.000) M/CTE».
      */
     private static final Pattern VALOR = Pattern.compile("\\$\\s?([\\d.]{5,20})");
+
+    /**
+     * El valor cuando va en una fila de tabla y sin símbolo de peso, que es como
+     * lo escribe el Acta de Inicio GCCON-F-018: «VALOR 45.900.300». Exigir el
+     * «$» dejaba el campo vacío en toda acta real, aunque la cifra estuviera
+     * ahí a la vista.
+     */
+    private static final Pattern VALOR_ETIQUETA = Pattern.compile(
+            "^[ \\t]*VALOR(?:[ \\t]+(?:TOTAL|DEL[ \\t]+CONTRATO))?[ \\t]*:?[ \\t]*\\$?[ \\t]*(\\d[\\d.,]{4,19})",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final Pattern VIGENCIA = Pattern.compile(
             "desde\\s+el\\s+(.{5,45}?)\\s+hasta\\s+el\\s+(.{5,45}?)[,.]",
@@ -317,8 +341,15 @@ public class ExtraccionDeterminista {
             "cuyo\\s+objeto\\s+(?:es|lo\\s+constituye|consiste\\s+en)\\s*:?\\s*(.{10,800}?)(?:\\.(?=[ \\t]*\\R)|\\.\\s+(?=\\p{Lu})|,\\s+celebrado|\\z)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
 
+    /**
+     * «TIPOLOGÍA» va junto a «TIPO DE CONTRATO» porque el Acta de Inicio
+     * GCCON-F-018 rotula esa fila «TIPOLOGÍA Suministro», y la lista de chequeo
+     * del supervisor la llama «TIPOLOGÍA CONTRACTUAL». Es el mismo dato con tres
+     * nombres según el documento.
+     */
     private static final Pattern TIPO_ETIQUETA = Pattern.compile(
-            "^[^\\n:]{0,4}?TIPO[ \\t]+DE[ \\t]+CONTRATO[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
+            "^[^\\n:]{0,4}?(?:TIPO[ \\t]+DE[ \\t]+CONTRATO|TIPOLOG[IÍ]A(?:[ \\t]+CONTRACTUAL)?)"
+                    + "[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
             Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
@@ -434,18 +465,44 @@ public class ExtraccionDeterminista {
         }
 
         return new ExtraccionContratoResponse(
-                primerGrupo(NUMERO_CONTRATO, texto, 0),
+                numeroDeContrato(texto),
                 objeto(texto),
                 proveedor,
                 nit,
                 representante,
-                soloDigitos(primerGrupo(VALOR, texto, 1)),
+                valorDelContrato(texto),
                 inicio,
                 fin,
                 lugar(texto),
                 conAlgunDigito(primerGrupo(REGISTRO_PRESUPUESTAL, texto, 1)),
                 tipo(texto)
         );
+    }
+
+    /**
+     * El número de contrato, recomponiéndolo si la tabla lo partió en dos
+     * renglones. Ver {@link #NUMERO_CONTRATO}.
+     */
+    static String numeroDeContrato(String texto) {
+        Matcher m = NUMERO_CONTRATO.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        String consecutivo = m.group(1);
+        if (consecutivo.length() < DIGITOS_MINIMOS_CONTRATO && m.group(2) != null) {
+            consecutivo += m.group(2);
+        }
+        return "CO1.PCCNTR." + consecutivo;
+    }
+
+    /**
+     * El valor en dígitos: primero la forma canónica del contrato («… PESOS
+     * ($45.900.300) M/CTE»), que es la más fiable porque el símbolo de peso no
+     * deja dudas, y si no está, la fila rotulada del acta.
+     */
+    private static String valorDelContrato(String texto) {
+        String conSimbolo = soloDigitos(primerGrupo(VALOR, texto, 1));
+        return conSimbolo != null ? conSimbolo : soloDigitos(primerGrupo(VALOR_ETIQUETA, texto, 1));
     }
 
     /**
