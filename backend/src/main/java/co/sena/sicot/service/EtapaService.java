@@ -129,10 +129,12 @@ public class EtapaService {
         long cargados = documentoRepository.countBySubetapaId(subetapa.getId());
         boolean hayPdf = documentoRepository.existsBySubetapaIdAndTipo(subetapa.getId(), TipoDocumento.PDF);
         if (!hayPdf || cargados < 2) {
+            String cuantos = cargados == 0 ? "Todavía no ha cargado ninguno."
+                    : !hayPdf ? "Hay " + cargados + (cargados == 1 ? " cargado" : " cargados")
+                            + ", pero el acta firmada tiene que ser un PDF."
+                    : "Falta uno: hay 1 documento cargado.";
             throw new BusinessException("Para cerrar este paso cargue el Acta de Inicio firmada (PDF) y la evidencia"
-                    + " de que la devolvió por correo (pantallazo o PDF del correo). Hay " + cargados
-                    + (cargados == 1 ? " documento cargado" : " documentos cargados")
-                    + (hayPdf ? "." : " y ninguno es un PDF."));
+                    + " de que la devolvió por correo (pantallazo o PDF del correo). " + cuantos);
         }
     }
 

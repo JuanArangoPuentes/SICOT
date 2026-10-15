@@ -524,6 +524,18 @@ class ExtraccionDeterministaTest {
     }
 
     @Test
+    @DisplayName("el contratista y el objeto se leen de la tabla de la designación, sin preguntarle al modelo")
+    void laTablaDeLaDesignacionTraeContratistaYObjeto() {
+        ExtraccionContratoResponse r = extractor.extraer(DESIGNACION_LOTE_4);
+
+        assertThat(r.proveedor()).isEqualTo("SUMINISTROS MAYBE S.A.S");
+        assertThat(r.objeto()).isEqualTo("5_9205_306 Contratar el suministro de materiales para la formación para los"
+                + " diferentes programas de formación del Centro Tecnológico del Mobiliario");
+        // Con el objeto el tipo se deduce («suministro»): no queda nada para el modelo.
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(r.objeto())).isEqualTo("Suministro de Bienes");
+    }
+
+    @Test
     @DisplayName("del acta salen el supervisor designado y el correo del contratista, no una fecha de designación")
     void elActaTraeElCorreoDelContratista() {
         ExtraccionContratoResponse r = extractor.extraer(ACTA_LOTE_4);

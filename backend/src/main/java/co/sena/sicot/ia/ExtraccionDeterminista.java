@@ -88,6 +88,16 @@ public class ExtraccionDeterminista {
     /** Un trozo que empieza como parámetro de consulta («noticeUID=…»). */
     private static final Pattern PARAMETRO_DE_URL = Pattern.compile("&?[A-Za-z0-9_]+=.*");
 
+    /**
+     * Encabezado de la tabla del GCCON-F-032: «CONTRATO NRO. CONTRATISTA
+     * OBJETO». Debajo vienen, en ese orden y sin rótulos por fila, el número
+     * (a veces partido en dos renglones), el contratista y el objeto en varios
+     * renglones, hasta la fila «Link».
+     */
+    private static final Pattern TABLA_DESIGNACION = Pattern.compile(
+            "CONTRATO[ \\t]+NRO\\.?[ \\t]+CONTRATISTA[ \\t]+OBJETO[ \\t]*\\n",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
     /** El acto de designación se reconoce por su título, no por su nombre de archivo. */
     private static final Pattern ES_DESIGNACION = Pattern.compile(
             "DESIGNACI[OÓ]N[ \\t]+DE[ \\t]+SUPERVISOR", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
@@ -520,9 +530,16 @@ public class ExtraccionDeterminista {
             supervisor = normalizarEspacios(primerGrupo(SUPERVISOR_ETIQUETA, texto, 1));
         }
 
+        String objeto = objeto(texto);
+        String[] tabla = esDesignacion ? contratistaYObjetoDeLaDesignacion(texto) : null;
+        if (tabla != null) {
+            if (proveedor == null) proveedor = tabla[0];
+            if (objeto == null) objeto = tabla[1];
+        }
+
         return new ExtraccionContratoResponse(
                 numeroDeContrato(texto),
-                objeto(texto),
+                objeto,
                 proveedor,
                 nit,
                 representante,
@@ -577,6 +594,51 @@ public class ExtraccionDeterminista {
         }
         String limpia = url.toString().replaceAll("[.,;)]+$", "");
         return limpia.length() <= 500 ? limpia : null;
+    }
+
+    /**
+     * Contratista y objeto de la tabla del acto de designación.
+     *
+     * <p>Sin esto, la designación no traía objeto legible y la extracción le
+     * preguntaba al modelo: con el acto real del Lote 4 tardó 211 segundos en
+     * un equipo sin GPU (15-10-2026), para un dato que está impreso en la
+     * tabla. Leerlo aquí lo deja en milisegundos y sin modelo.
+     *
+     * @return {@code [contratista, objeto]}, o {@code null} si el documento no
+     *         trae esa tabla o viene vacía
+     */
+    static String[] contratistaYObjetoDeLaDesignacion(String texto) {
+        Matcher m = TABLA_DESIGNACION.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        String[] lineas = texto.substring(m.end()).split("\n", -1);
+        int i = 0;
+        // El número va primero, a veces partido: «CO1.PCCNTR.1005» y debajo «7820».
+        while (i < lineas.length && (lineas[i].isBlank() || lineas[i].strip().startsWith("CO1.PCCNTR")
+                || lineas[i].strip().matches("\\d{1,8}"))) {
+            i++;
+        }
+        if (i >= lineas.length) {
+            return null;
+        }
+        String contratista = normalizarEspacios(lineas[i]);
+        i++;
+        StringBuilder objeto = new StringBuilder();
+        while (i < lineas.length && objeto.length() < MAX_OBJETO) {
+            String linea = lineas[i].strip();
+            if (linea.isEmpty() || linea.equalsIgnoreCase("Link") || linea.startsWith("http")) {
+                break;
+            }
+            if (objeto.length() > 0) objeto.append(' ');
+            objeto.append(linea);
+            i++;
+        }
+        String elObjeto = normalizarEspacios(objeto.toString());
+        if (contratista == null || elObjeto == null || elObjeto.length() < 10) {
+            return null;
+        }
+        return new String[]{contratista, elObjeto.replaceAll("[.\\s]+$", "")};
     }
 
     /**
