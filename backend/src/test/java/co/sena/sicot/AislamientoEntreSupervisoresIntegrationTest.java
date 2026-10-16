@@ -138,10 +138,10 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
         asignarSupervisor(contratoBId, idSupB);
         activar(contratoBId);
 
-        long[] etapaSubA = primeraEtapaYSubetapa(contratoAId);
+        long[] etapaSubA = etapaEnCursoYSuPrimeraSubetapa(contratoAId);
         etapaAId = etapaSubA[0];
         subAId = etapaSubA[1];
-        subBId = primeraEtapaYSubetapa(contratoBId)[1];
+        subBId = etapaEnCursoYSuPrimeraSubetapa(contratoBId)[1];
 
         alertaAId = seedAlerta(contratoAId);
         alertaBId = seedAlerta(contratoBId);
@@ -605,16 +605,21 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isOk());
     }
 
-    private long[] primeraEtapaYSubetapa(long contratoId) throws Exception {
+    private long[] etapaEnCursoYSuPrimeraSubetapa(long contratoId) throws Exception {
         String respuesta = mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + tokenGestion))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         JsonNode etapas = objectMapper.readTree(respuesta);
-        JsonNode primera = etapas.get(0);
+        // La etapa en curso, no la primera: la etapa 1 (designación) nace
+        // completa cuando el contrato ya tiene supervisor, y una subetapa que ya
+        // está COMPLETADA no sirve para probar que un intento ajeno no la cierra.
+        // Y la 2.2, no la 2.1: el paso del acta no se cierra sin el acta firmada
+        // y la evidencia del envío, y aquí se prueba el acceso, no esa compuerta.
+        JsonNode enCurso = etapas.get(1);
         return new long[]{
-                primera.get("id").asLong(),
-                primera.get("subEtapas").get(0).get("id").asLong()
+                enCurso.get("id").asLong(),
+                enCurso.get("subEtapas").get(1).get("id").asLong()
         };
     }
 

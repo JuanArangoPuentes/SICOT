@@ -219,7 +219,11 @@ public class SecurityConfig {
         // Retry-After también: la app de escritorio siempre llama entre orígenes
         // (tauri.localhost → servidor) y sin exponerla no podía decir cuántos
         // minutos esperar tras un 429 en el inicio de sesión.
-        config.setExposedHeaders(List.of("Authorization", "Retry-After"));
+        // Content-Disposition y X-SICOT-Integridad expuestas: la app de
+        // escritorio, el APK y el entorno de desarrollo llaman a la API desde
+        // otro origen, y sin esto el navegador le ocultaba al frontend el
+        // nombre real del archivo y el estado de integridad de la descarga.
+        config.setExposedHeaders(List.of("Authorization", "Retry-After", "Content-Disposition", "X-SICOT-Integridad"));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

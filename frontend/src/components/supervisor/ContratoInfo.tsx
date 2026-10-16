@@ -8,6 +8,7 @@
 import { Chip, type ChipType } from '@/components/ui'
 import type { ContratoResponse, EstadoContrato } from '@/services/api/types'
 import { formatCOP, formatFecha } from '@/services/format'
+import { EnlaceExterno } from './enlacesExternos'
 
 const ESTADO_CHIP: Record<EstadoContrato, { label: string; type: ChipType }> = {
   ACTIVO: { label: 'Activo', type: 'vigente' },
@@ -162,6 +163,7 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
         <Dato label="Contratista" value={contrato.contratista} />
         <Dato label="NIT / Identificación" value={contrato.contratistaNit} mono />
         <Dato label="Representante legal" value={contrato.representanteLegal} />
+        <Dato label="Correo del contratista" value={contrato.correoContratista} />
         <Dato label="Fecha de inicio" value={contrato.fechaInicio ? formatFecha(contrato.fechaInicio) : null} mono />
         <Dato label="Fecha de terminación" value={contrato.fechaFin ? formatFecha(contrato.fechaFin) : null} mono />
         <Dato label="Lugar de ejecución" value={contrato.lugarEjecucion} />
@@ -174,11 +176,38 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
         <Dato label="Centro de costo" value={contrato.centroCosto} />
         <Dato label="Supervisor designado" value={contrato.supervisorNombre} />
         <Dato label="Correo del supervisor" value={contrato.supervisorEmail} />
+        <Dato label="Apoyo a la supervisión" value={contrato.apoyoSupervision} />
+        <Dato
+          label="Fecha de la designación"
+          value={contrato.fechaDesignacion ? formatFecha(contrato.fechaDesignacion) : null}
+          mono
+        />
         <Dato
           label="Registrado en SICOT"
           value={contrato.fechaCreacion ? formatFecha(contrato.fechaCreacion.slice(0, 10)) : null}
           mono
         />
+        <div style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              textTransform: 'uppercase',
+              color: 'var(--text-muted)',
+              marginBottom: 3,
+            }}
+          >
+            Proceso en el SECOP II
+          </div>
+          {contrato.enlaceSecop ? (
+            <div style={{ fontSize: 13 }}>
+              <EnlaceExterno href={contrato.enlaceSecop}>Abrir el proceso en el SECOP II</EnlaceExterno>
+            </div>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>No registrado</div>
+          )}
+        </div>
       </div>
     </div>
   )

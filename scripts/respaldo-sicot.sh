@@ -12,7 +12,7 @@
 #
 #   1. VERIFICA el archivo recién creado. Un `pg_dump` puede terminar con
 #      código 0 y dejar un archivo truncado si el disco se llenó a mitad.
-#      `pg_restore --list` lo lee entero y falla si no es un volcado válido.
+#      `pg_restore -f -` lo lee entero y falla si no es un volcado válido.
 #      Un respaldo que nadie ha probado a leer es una suposición, no un
 #      respaldo.
 #   2. ROTA los antiguos, para que el disco no se llene en silencio — que es
@@ -100,7 +100,13 @@ if [[ ! -s "$ARCHIVO" ]]; then
 fi
 
 # Verificación real: leer el volcado entero. Si está truncado o corrupto,
-# pg_restore --list falla aquí y no dentro de seis meses, cuando haga falta.
+# falla aquí y no dentro de seis meses, cuando haga falta.
+#
+# `pg_restore -f -` y no `pg_restore --list`: --list solo lee el índice del
+# volcado, no los datos. Se comprobó el 28-09-2026 con un volcado de la base de
+# desarrollo cortado al 60 %: --list lo daba por bueno (salida 0) y el volcado
+# habría devuelto los archivos de `documentos` incompletos al restaurarlo.
+# -f - recorre todos los datos y escribe el SQL a la salida, que se descarta.
 log "Verificando la integridad del volcado…"
 # Se prefiere un pg_restore instalado en la máquina, exista Docker o no: la
 # verificación solo necesita leer el archivo, y hacerlo por fuera del contenedor
@@ -114,9 +120,9 @@ log "Verificando la integridad del volcado…"
 # Sin pg_restore local se usa el contenedor, pero por ENTRADA ESTÁNDAR en vez de
 # por volumen — `-i` sin `-t`, que no traduce el binario.
 if command -v pg_restore >/dev/null 2>&1; then
-    verificar() { pg_restore --list "$ARCHIVO"; }
+    verificar() { pg_restore -f - "$ARCHIVO"; }
 elif [[ "$MODO" == "docker" ]]; then
-    verificar() { docker run --rm -i postgres:18-alpine pg_restore --list < "$ARCHIVO"; }
+    verificar() { docker run --rm -i postgres:18-alpine pg_restore -f - < "$ARCHIVO"; }
 else
     error "No hay pg_restore disponible para verificar el volcado."
     exit 3

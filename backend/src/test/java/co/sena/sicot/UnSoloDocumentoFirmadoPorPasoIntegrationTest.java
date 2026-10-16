@@ -77,7 +77,7 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        subetapaId = etapas.get(1).get("subEtapas").get(6).get("id").asLong(); // 2.7
+        subetapaId = etapas.get(1).get("subEtapas").get(0).get("id").asLong(); // 2.1, el paso del acta
 
         String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + supervisor))
                 .andReturn().getResponse().getContentAsString();

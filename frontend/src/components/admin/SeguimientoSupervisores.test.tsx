@@ -11,8 +11,8 @@ import type { ContratoSeguimiento, EtapaResponse, SeguimientoResponse } from '@/
 
 function etapas(completadasHasta: string, enCurso: string): EtapaResponse[] {
   const codigos: Record<number, string[]> = {
-    1: ['1.1', '1.2', '1.3', '1.4', '1.5', '1.6'],
-    2: ['2.1', '2.2', '2.3', '2.4', '2.5', '2.6', '2.7'],
+    1: ['1.1', '1.2', '1.3'],
+    2: ['2.1', '2.2', '2.3', '2.4'],
     3: ['3.1', '3.2', '3.3', '3.4'],
     4: ['4.1', '4.2', '4.3'],
     5: ['5.1', '5.2', '5.3'],
@@ -69,8 +69,8 @@ function contrato(over: Partial<ContratoSeguimiento> = {}): ContratoSeguimiento 
       diasDeAtraso: 4,
       mensaje: 'Atrasado respecto al plazo',
     },
-    subetapasCompletadas: 16,
-    subetapasTotales: 27,
+    subetapasCompletadas: 14,
+    subetapasTotales: 21,
     etapaActual: 3,
     etapaActualNombre: 'INSPECCIÓN',
     subetapaEnCurso: {
@@ -114,22 +114,35 @@ function datos(c: ContratoSeguimiento, firma = true): SeguimientoResponse {
 
 describe('estadoDocumentosFormales', () => {
   it('distingue un paso cerrado sin su documento de uno al que aún no se llega', () => {
-    const estados = estadoDocumentosFormales(contrato())
+    const estados = estadoDocumentosFormales(
+      contrato({
+        etapas: etapas('4.2', '4.3'),
+        subetapaEnCurso: {
+          id: 2,
+          codigo: '4.3',
+          nombre: 'Firma del Acta de Recibo a Satisfacción',
+          descripcion: '',
+          estado: 'EN_CURSO',
+          responsable: 'Supervisor',
+        },
+      }),
+    )
     const por = Object.fromEntries(estados.map((e) => [e.subStepId, e.estado.label]))
-    // 2.7 quedó completada sin Acta de Inicio en el expediente.
-    expect(por['2.7']).toBe('Paso cerrado sin documento')
-    expect(por['3.4']).toBe('Por generar')
+    // 3.4 quedó completada sin Informe de Supervisión en el expediente.
+    expect(por['3.4']).toBe('Paso cerrado sin documento')
+    expect(por['4.3']).toBe('Por generar')
     expect(por['6.3']).toBe('Aún no corresponde')
   })
 
   it('reconoce un documento firmado y uno pendiente de firma por su subetapa', () => {
     const c = contrato({
+      etapas: etapas('4.2', '4.3'),
       documentos: [
         {
           id: 1,
           contratoId: 10,
-          subetapaCodigo: '2.7',
-          nombre: 'Acta',
+          subetapaCodigo: '3.4',
+          nombre: 'Informe',
           estado: 'APROBADO',
           generadoPorIa: true,
           firmado: true,
@@ -139,8 +152,8 @@ describe('estadoDocumentosFormales', () => {
         {
           id: 2,
           contratoId: 10,
-          subetapaCodigo: '3.4',
-          nombre: 'Informe',
+          subetapaCodigo: '4.3',
+          nombre: 'Acta de Recibo',
           estado: 'PENDIENTE',
           generadoPorIa: true,
           firmado: false,
@@ -150,8 +163,8 @@ describe('estadoDocumentosFormales', () => {
       ],
     })
     const por = Object.fromEntries(estadoDocumentosFormales(c).map((e) => [e.subStepId, e.estado.label]))
-    expect(por['2.7']).toBe('Firmado')
-    expect(por['3.4']).toBe('Pendiente de firma')
+    expect(por['3.4']).toBe('Firmado')
+    expect(por['4.3']).toBe('Pendiente de firma')
   })
 })
 
@@ -164,7 +177,7 @@ describe('SeguimientoSupervisores', () => {
     expect(screen.getByText('Atrasado')).toBeInTheDocument()
     expect(screen.getByText(/Paso 3 de 6 — INSPECCIÓN/)).toBeInTheDocument()
     expect(screen.getByText(/3.4 Firma del Informe de Supervisión/)).toBeInTheDocument()
-    expect(screen.getByText(/16 de 27 subetapas completadas/)).toBeInTheDocument()
+    expect(screen.getByText(/14 de 21 subetapas completadas/)).toBeInTheDocument()
     expect(screen.getByText(/Subetapa 3.3 completada/)).toBeInTheDocument()
     expect(screen.getByText(/2 alertas sin leer/)).toBeInTheDocument()
   })
@@ -207,7 +220,7 @@ describe('SeguimientoSupervisores', () => {
 
 describe('ResumenSeguimiento', () => {
   it('cuenta los contratos por semáforo y señala los pasos cerrados sin documento', () => {
-    render(<ResumenSeguimiento datos={datos(contrato(), false)} />)
+    render(<ResumenSeguimiento datos={datos(contrato({ etapas: etapas('4.2', '4.3') }), false)} />)
 
     expect(screen.getByText('Atrasados').previousSibling).toHaveTextContent('1')
     expect(screen.getByText(/1 supervisor con contratos y sin firma electrónica/)).toBeInTheDocument()
@@ -217,20 +230,20 @@ describe('ResumenSeguimiento', () => {
 
 describe('hallazgos de la revisión del 24-09-2026', () => {
   it('el documento de la subetapa en la que va el supervisor está «Por generar» aunque siga PENDIENTE', () => {
-    // 2.1 a 2.6 cerradas, 2.7 PENDIENTE: así queda con el panel real.
+    // 3.1 a 3.3 cerradas, 3.4 PENDIENTE: así queda con el panel real.
     const c = contrato({
-      etapas: etapas('2.6', 'ninguna'),
+      etapas: etapas('3.3', 'ninguna'),
       subetapaEnCurso: {
         id: 9,
-        codigo: '2.7',
-        nombre: 'Firma del Acta de Inicio',
+        codigo: '3.4',
+        nombre: 'Firma del Informe de Supervisión',
         descripcion: '',
         estado: 'PENDIENTE',
         responsable: 'Supervisor',
       },
     })
     const por = Object.fromEntries(estadoDocumentosFormales(c).map((e) => [e.subStepId, e.estado.label]))
-    expect(por['2.7']).toBe('Por generar')
+    expect(por['3.4']).toBe('Por generar')
   })
 
   it('el buscador también encuentra los contratos sin supervisor', () => {

@@ -32,6 +32,7 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       completed: ss.estado === 'COMPLETADA',
       aiGenerated: AI_GENERATED_DOCS.has(ss.codigo),
       apiId: ss.id,
+      documentosRequeridos: ss.documentosRequeridos ?? null,
     })),
   }))
 }

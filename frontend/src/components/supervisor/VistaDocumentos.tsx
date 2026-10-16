@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react'
 import { Chip, SectionHeader } from '@/components/ui'
 import { FORMAL_DOCS } from '@/data/contractFlow'
 import { descargarDocumento, verificarIntegridad } from '@/services/documentoService'
+import { ApiError } from '@/services/api/client'
 import { describirCaptura, formatFecha } from '@/services/format'
 import type { ContratoResponse, DocumentoResponse, EstadoIntegridad } from '@/services/api/types'
 
@@ -159,7 +160,13 @@ export default function VistaDocumentos({
       })
       .catch((err) => {
         console.error('No se pudo descargar el documento:', err)
-        setErrorDescarga(`No se pudo descargar "${doc.nombre}". Intente de nuevo en un momento.`)
+        // El motivo real cuando lo hay: «no tiene archivo guardado» no se
+        // arregla intentando de nuevo, y decir eso sería engañar.
+        setErrorDescarga(
+          err instanceof ApiError || (err instanceof Error && err.message.includes('vacío'))
+            ? err.message
+            : `No se pudo descargar "${doc.nombre}". Intente de nuevo en un momento.`,
+        )
       })
   }
 

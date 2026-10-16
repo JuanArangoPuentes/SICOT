@@ -25,6 +25,9 @@ export interface SubStep {
   aiGenerated?: boolean
   // id numérico de la subetapa en el backend (para PATCH /api/subetapas/{id}/estado)
   apiId?: number
+  // Lo que el supervisor tiene que cargar antes de cerrar el paso ('ACTA_FIRMADA_Y_ENVIO'
+  // en el paso del acta); lo exige el backend al cerrar la subetapa.
+  documentosRequeridos?: string | null
 }
 
 export interface Step {

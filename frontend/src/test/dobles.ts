@@ -57,6 +57,10 @@ export function contrato(parcial: Partial<ContratoResponse> = {}): ContratoRespo
     numeroRegistroPresupuestal: 'RP-2026-118',
     fechaRegistroPresupuestal: '2026-02-20',
     centroCosto: 'CTMA-01',
+    enlaceSecop: null,
+    apoyoSupervision: null,
+    fechaDesignacion: null,
+    correoContratista: null,
     fechaCreacion: '2026-02-15T09:00:00Z',
     ...parcial,
   }

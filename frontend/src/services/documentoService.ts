@@ -6,9 +6,11 @@ import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
 import type {
   ChatResponse,
+  DocumentoGeneradoResponse,
   DocumentoResponse,
   ExtraccionContratoResponse,
   GenerarDocumentoRequest,
+  PlantillaDocumento,
   VerificacionIntegridadResponse,
 } from './api/types'
 import type { ChatMsg } from '@/types/domain'
@@ -34,15 +36,26 @@ export function subirDocumento(
   return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos`, { method: 'POST', body: form })
 }
 
-export function generarDocumento(contratoId: number, request: GenerarDocumentoRequest): Promise<DocumentoResponse> {
-  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/generar`, {
+export function generarDocumento(
+  contratoId: number,
+  request: GenerarDocumentoRequest,
+): Promise<DocumentoGeneradoResponse> {
+  return apiFetch<DocumentoGeneradoResponse>(`/api/contratos/${contratoId}/documentos/generar`, {
     method: 'POST',
     body: JSON.stringify(request),
   })
 }
 
-export function firmarDocumento(contratoId: number, documentoId: number): Promise<DocumentoResponse> {
-  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/firmar`, {
+// huellaRevisada: la del borrador que el supervisor leyó. Con ella el servidor
+// solo firma si el borrador no se regeneró entre medias (otra pestaña, un
+// reintento): si no, se habría firmado una redacción que nadie leyó.
+export function firmarDocumento(
+  contratoId: number,
+  documentoId: number,
+  huellaRevisada?: string,
+): Promise<DocumentoResponse> {
+  const consulta = huellaRevisada ? `?huellaRevisada=${encodeURIComponent(huellaRevisada)}` : ''
+  return apiFetch<DocumentoResponse>(`/api/contratos/${contratoId}/documentos/${documentoId}/firmar${consulta}`, {
     method: 'POST',
   })
 }
@@ -67,7 +80,54 @@ export async function descargarDocumento(
   nombreArchivo: string,
 ): Promise<ResultadoGuardado> {
   const blob = await apiFetchBlob(`/api/contratos/${contratoId}/documentos/${documentoId}/archivo`)
-  return guardarArchivo(blob, nombreArchivo.toLowerCase().endsWith('.pdf') ? nombreArchivo : `${nombreArchivo}.pdf`)
+  // Un archivo vacío no se guarda: se bajaba un «.pdf» de 0 bytes que el
+  // lector daba por dañado (auditoría del 28-09-2026). El backend ya responde
+  // 404 en ese caso; esto cubre cualquier otro camino por el que llegue vacío.
+  if (blob.size === 0) {
+    throw new Error(`El archivo de «${nombreArchivo}» llegó vacío; no se guardó.`)
+  }
+  return guardarArchivo(blob, nombreConExtension(nombreArchivo, blob.type))
+}
+
+const EXTENSIONES: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'text/csv': 'csv',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+}
+
+// La extensión sale del tipo real del archivo, no se supone. Antes se le
+// pegaba «.pdf» a todo nombre que no terminara en .pdf: una foto de evidencia
+// bajaba como «…jpg.pdf», Windows la abría con el lector de PDF y la daba por
+// dañada; lo mismo habría pasado con un .docx o un .xlsx de Gestión.
+//
+// El nombre se limpia antes, igual que en el backend (NombreDeDescarga): en la
+// aplicación de escritorio va como ruta propuesta al diálogo de guardar, y un
+// «/» de «Informe 3/2025» lo partía en una carpeta que no existe; Windows,
+// además, rechaza los nombres con «: * ? " < > |» o que acaban en punto.
+export function nombreConExtension(nombreOriginal: string, tipo: string): string {
+  const nombre = nombreOriginal.replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/, '') || 'documento'
+  const extension = EXTENSIONES[tipo.split(';')[0].trim().toLowerCase()]
+  if (!extension) return nombre
+  const minusculas = nombre.toLowerCase()
+  const yaLaTiene = minusculas.endsWith(`.${extension}`) || (extension === 'jpg' && minusculas.endsWith('.jpeg'))
+  return yaLaTiene ? nombre : `${nombre}.${extension}`
+}
+
+// Los documentos que SICOT arma y los datos que pide cada uno. Cambia solo con
+// un despliegue, así que se pide una vez por sesión.
+let plantillas: Promise<PlantillaDocumento[]> | null = null
+export function getPlantillasDocumento(): Promise<PlantillaDocumento[]> {
+  if (!plantillas) {
+    plantillas = apiFetch<PlantillaDocumento[]>('/api/ia/plantillas').catch((e) => {
+      plantillas = null
+      throw e
+    })
+  }
+  return plantillas
 }
 
 // Extracción de datos con IA (Gestión, antes de que el contrato exista) —

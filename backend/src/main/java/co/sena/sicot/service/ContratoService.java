@@ -6,6 +6,7 @@ import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
 import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
 import co.sena.sicot.entity.Contrato;
+import co.sena.sicot.entity.Etapa;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.exception.BusinessException;
@@ -110,6 +111,10 @@ public class ContratoService {
         contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
+        contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
+        contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
+        contrato.setFechaDesignacion(request.fechaDesignacion());
+        contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
         if (request.supervisorId() != null) {
             contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
         }
@@ -117,6 +122,19 @@ public class ContratoService {
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
         registroService.registrar(guardado, "CONTRATO_CREADO",
                 "Contrato " + numero + " creado en estado BORRADOR.");
+        if (guardado.getSupervisor() != null) {
+            // Gestión crea el contrato con el supervisor en una sola llamada, y
+            // solo se registraba CONTRATO_CREADO: la regla que avisa al
+            // supervisor escucha SUPERVISOR_ASIGNADO, así que por el camino
+            // normal el supervisor nunca se enteraba de su designación. Es justo
+            // lo que el proceso real le pide al sistema en el paso 1.
+            Usuario supervisor = guardado.getSupervisor();
+            registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
+                    "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+            registroService.registrar(guardado, "DESIGNACION_REGISTRADA",
+                    "Etapa 1 (designación de la supervisión) completada al registrar el contrato con su supervisor;"
+                            + " el proceso arranca en la firma del Acta de Inicio.");
+        }
         return ContratoMapper.toResponse(guardado);
     }
 
@@ -144,6 +162,10 @@ public class ContratoService {
         contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
+        contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
+        contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
+        contrato.setFechaDesignacion(request.fechaDesignacion());
+        contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
                 "Se actualizó la información general del contrato " + numero + ".");
@@ -158,6 +180,15 @@ public class ContratoService {
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
                 "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        // Si el contrato nació sin supervisor, asignárselo es la designación:
+        // la etapa 1 queda hecha y el supervisor arranca en el paso del acta.
+        List<Etapa> etapas = etapaRepository.findByContratoIdOrderByNumeroAsc(guardado.getId());
+        if (GcconP010Plantilla.completarDesignacion(etapas)) {
+            etapaRepository.saveAll(etapas);
+            registroService.registrar(guardado, "DESIGNACION_REGISTRADA",
+                    "Etapa 1 (designación de la supervisión) completada al asignar al supervisor; el proceso pasa"
+                            + " a la firma del Acta de Inicio.");
+        }
         return ContratoMapper.toResponse(guardado);
     }
 
@@ -199,5 +230,14 @@ public class ContratoService {
             throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
         }
         return supervisor;
+    }
+
+    /**
+     * El formulario de Gestión manda «» cuando el campo quedó vacío. Guardado
+     * así, un enlace en blanco chocaría con la restricción de la base, que solo
+     * admite enlaces del SECOP o nada.
+     */
+    private static String enBlancoComoNulo(String v) {
+        return v == null || v.isBlank() ? null : v.strip();
     }
 }

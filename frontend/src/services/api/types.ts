@@ -122,6 +122,11 @@ export interface CrearContratoRequest {
   numeroRegistroPresupuestal?: string | null
   fechaRegistroPresupuestal?: string | null
   centroCosto?: string | null
+  // Del acto de designación (GCCON-F-032) y del acta de inicio — opcionales
+  enlaceSecop?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
 }
 
 export interface ContratoResponse {
@@ -143,6 +148,10 @@ export interface ContratoResponse {
   numeroRegistroPresupuestal: string | null
   fechaRegistroPresupuestal: string | null
   centroCosto: string | null
+  enlaceSecop: string | null
+  apoyoSupervision: string | null
+  fechaDesignacion: string | null
+  correoContratista: string | null
   fechaCreacion: string
 }
 
@@ -159,6 +168,8 @@ export interface SubetapaResponse {
   descripcion: string
   estado: EstadoSubetapa
   responsable: string
+  /** Lo que hay que cargar antes de cerrar el paso; hoy solo 'ACTA_FIRMADA_Y_ENVIO'. */
+  documentosRequeridos?: string | null
 }
 
 export interface EtapaResponse {
@@ -239,6 +250,67 @@ export interface ExtraccionContratoResponse {
   lugarEjecucion: string | null
   registroPresupuestal: string | null
   tipoContrato: string | null
+  enlaceSecop?: string | null
+  supervisorDesignado?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
+  /** Campos que el documento no traía y se tomaron de los datos abiertos del SECOP II. */
+  completadoDesdeSecop?: string[]
+}
+
+// ─── Verificación contra el SECOP II (datos abiertos) ────────────────────────
+
+export interface FichaSecop {
+  idContrato: string | null
+  objeto: string | null
+  estado: string | null
+  proveedor: string | null
+  documentoProveedor: string | null
+  representanteLegal: string | null
+  valor: number | null
+  duracion: string | null
+  fechaFirma: string | null
+  fechaFin: string | null
+  inicioLiquidacion: string | null
+  finLiquidacion: string | null
+  /** El expediente se archiva bajo este identificador, no bajo el del contrato. */
+  procesoDeCompra: string | null
+  supervisor: string | null
+  ordenadorDelGasto: string | null
+  modalidad: string | null
+  tipoContrato: string | null
+  obligacionAmbiental: boolean | null
+  valorFacturado: number | null
+  valorPagado: number | null
+  valorPendienteDePago: number | null
+  enlaceProceso: string | null
+}
+
+export interface VerificacionSecopResponse {
+  disponible: boolean
+  motivo: string | null
+  consultadoEn: string
+  enlaceProceso: string | null
+  ficha: FichaSecop | null
+  diferencias: { campo: string; enSicot: string; enSecop: string }[]
+  documentos: { nombre: string; tamanoBytes: number | null; fechaCarga: string | null; url: string | null }[]
+  /**
+   * Por qué no hay índice del expediente, cuando no hay. Los datos abiertos del
+   * SECOP no publican los archivos de los contratos nuevos, así que esto llega
+   * casi siempre y hay que mostrarlo: una lista vacía en silencio dejaba al
+   * supervisor sin saber si el contrato no tiene expediente o si la fuente no
+   * lo cubre.
+   */
+  avisoDocumentos: string | null
+  garantias: {
+    aseguradora: string | null
+    numero: string | null
+    tipo: string | null
+    valor: number | null
+    vigenteHasta: string | null
+    estado: string | null
+  }[]
 }
 
 export interface GenerarDocumentoRequest {
@@ -250,6 +322,41 @@ export interface GenerarDocumentoRequest {
    * apartado queda marcado como pendiente en vez de inventarse.
    */
   notas?: string | null
+  /**
+   * Datos del documento que el contrato no tiene —factura, póliza, cédulas…—,
+   * por clave (ver `PlantillaDocumento.campos`). Los que falten salen en el PDF
+   * como «[dato pendiente…]», en rojo, en vez de inventarse.
+   */
+  datos?: Record<string, string>
+  /**
+   * false: las observaciones van tal como el supervisor las escribió, sin
+   * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
+   */
+  redactarConIa?: boolean
+  /**
+   * Filas de las tablas del formato (ver `PlantillaDocumento.tablas`). Una
+   * tabla sin filas sale en el PDF como «[dato pendiente…]».
+   */
+  tablas?: TablasDelDocumento
+}
+
+/**
+ * El documento recién generado y cómo quedaron sus observaciones. El panel
+ * muestra la redacción del Copiloto antes de firmar: ninguna comprobación
+ * automática ve que cambie el sujeto de una frase, y quien firma sí.
+ */
+export interface DocumentoGeneradoResponse extends DocumentoResponse {
+  /** El texto que quedó en el apartado de observaciones, o null si no hay. */
+  observaciones: string | null
+  /** Si ese texto lo redactó el Copiloto (false: son las notas tal cual). */
+  observacionesRedactadasConIa: boolean
+  /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
+  motivoNotasTalCual: string | null
+  /**
+   * SHA-256 del borrador tal como quedó. Se devuelve al firmar para que se
+   * firme exactamente lo que el supervisor leyó.
+   */
+  huellaDelBorrador: string
 }
 
 export interface ChatResponse {
@@ -400,3 +507,45 @@ export interface SeguimientoResponse {
   contratosSinSupervisor: ContratoSeguimiento[]
   generadoEn: string
 }
+
+/** Un documento formal que SICOT arma y los datos que pide que el contrato no tiene (GET /api/ia/plantillas). */
+export interface PlantillaDocumento {
+  tipo: string
+  codigo: string
+  nombre: string
+  /** Si el formato tiene un apartado donde van las notas del supervisor. */
+  llevaObservaciones: boolean
+  /**
+   * `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no
+   * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
+   * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
+   * cambia en cada documento (número de informe, factura…), así que no se
+   * recuerda para el siguiente. `largo`: es un párrafo (el cumplimiento del
+   * SIGA), no un dato de una línea.
+   */
+  campos: Array<{
+    clave: string
+    etiqueta: string
+    ejemplo: string
+    opcional: boolean
+    dependeDe: string | null
+    porDocumento: boolean
+    largo?: boolean
+  }>
+  /**
+   * Tablas del formato que se llenan fila por fila (obligaciones, amparos,
+   * órdenes de pago). En cada columna, `delContrato` dice si lo escrito es del
+   * contrato (el texto de la obligación) y se ofrece en el siguiente documento,
+   * o de este (lo hecho en el periodo) y no se arrastra. Opcional para tolerar
+   * un backend anterior al 30-09-2026, que no las enviaba.
+   */
+  tablas?: Array<{
+    clave: string
+    etiqueta: string
+    ayuda: string
+    columnas: Array<{ etiqueta: string; ejemplo: string; delContrato: boolean }>
+  }>
+}
+
+/** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
+export type TablasDelDocumento = Record<string, string[][]>

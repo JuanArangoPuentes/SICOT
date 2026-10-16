@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-09-09 contra el código. 14 controladores, 44 endpoints.**
+**Revisado el 2026-09-09 contra el código. 14 controladores, 44 endpoints.** La fila 43 (`/api/ia/plantillas`) se añadió el 2026-09-30 sin repetir esa revisión completa: el conteo de arriba es el de entonces, y el comando de abajo da el actual.
 
 > Este documento se verifica a mano, así que se queda viejo en cuanto alguien
 > añade una ruta. La comprobación es un comando, y conviene correrla antes de
@@ -40,8 +40,8 @@
 | 19 | DocumentoController | POST | /api/contratos/{contratoId}/documentos | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize + regla de ruta + Service verifica acceso (el SUPERVISOR, solo en su contrato) | **201** | `DocumentoResponse` |
 | 20 | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/archivo | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `byte[]` (archivo) |
 | 20b | DocumentoController | GET | /api/contratos/{contratoId}/documentos/{id}/verificacion | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `VerificacionIntegridadResponse` |
-| 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
-| 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
+| 21 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar (cuerpo: `tipo`, `notas`, `datos` por clave, `redactarConIa` y, desde el 30-09-2026, `tablas`: filas de obligaciones, amparos u órdenes de pago; en el Informe Final, órdenes que se leen como cifras y no suman el total pagado → 400) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoGeneradoResponse` (los campos de `DocumentoResponse` más `observaciones`, `observacionesRedactadasConIa`, `motivoNotasTalCual` y `huellaDelBorrador`) |
+| 22 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (opcional `?huellaRevisada=`: solo firma si el borrador sigue siendo el revisado) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoResponse` |
 | 23 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse` |
 | 24 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
 | 25 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |
@@ -62,6 +62,7 @@
 | 40 | AutomatizacionController | GET | /api/automatizaciones/estado | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `EstadoDelMotorResponse` |
 | 41 | AutomatizacionController | GET | /api/automatizaciones/tareas | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `List<TareaAutomatizadaResponse>` |
 | 42 | AutomatizacionController | POST | /api/automatizaciones/evaluar | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `{"tareasEncoladas": n}` |
+| 43 | IAController | GET | /api/ia/plantillas | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<PlantillaDocumentoResponse>`: los `campos` y las `tablas` (con sus columnas y si son del contrato) que pide cada formato |
 
 ---
 
