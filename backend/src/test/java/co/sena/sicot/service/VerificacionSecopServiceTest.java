@@ -89,6 +89,8 @@ class VerificacionSecopServiceTest {
         assertThat(VerificacionSecopService.mismaPersona("Alex Zapata", "Alex Fernando Zapata Rios")).isTrue();
         assertThat(VerificacionSecopService.mismaPersona("Laura Restrepo", "Alex Fernando Zapata Rios")).isFalse();
         assertThat(VerificacionSecopService.mismaPersona(null, "Alex Fernando Zapata Rios")).isFalse();
+        // Un solo nombre en común no identifica a nadie.
+        assertThat(VerificacionSecopService.mismaPersona("Alex", "Alex Fernando Zapata Rios")).isFalse();
     }
 
     @Test

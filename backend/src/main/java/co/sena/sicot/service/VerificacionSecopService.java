@@ -150,7 +150,11 @@ public class VerificacionSecopService {
         if (a == null || b == null) return false;
         Set<String> uno = palabras(a);
         Set<String> otro = palabras(b);
-        if (uno.isEmpty() || otro.isEmpty()) return false;
+        // Con un solo nombre en común no basta: un usuario registrado solo
+        // como «Alex» no es por eso la misma persona que «Alex Fernando Zapata
+        // Rios», y darlos por iguales escondería justo la diferencia que hay
+        // que ver.
+        if (Math.min(uno.size(), otro.size()) < 2) return false;
         return uno.size() <= otro.size() ? otro.containsAll(uno) : uno.containsAll(otro);
     }
 

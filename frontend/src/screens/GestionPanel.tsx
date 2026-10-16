@@ -129,7 +129,9 @@ const palabras = (s: string) =>
 const mismaPersona = (a: string, b: string) => {
   const x = palabras(a)
   const y = palabras(b)
-  if (x.size === 0 || y.size === 0) return false
+  // Un solo nombre en común («Alex») no identifica a nadie: preseleccionaría a
+  // la persona equivocada. Se exigen al menos dos.
+  if (Math.min(x.size, y.size) < 2) return false
   const [corto, largo] = x.size <= y.size ? [x, y] : [y, x]
   return [...corto].every((p) => largo.has(p))
 }
