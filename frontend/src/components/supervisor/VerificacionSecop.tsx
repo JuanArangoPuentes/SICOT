@@ -4,9 +4,15 @@
 // cifra por cifra. El sitio no se deja leer por un programa (responde con un
 // reCAPTCHA), pero la misma información se publica como datos abiertos, y el
 // backend la trae (GET /api/contratos/{id}/secop). Aquí se muestra lo que no
-// coincide con SICOT, los datos clave y el índice de documentos del expediente
-// —la oferta económica y el estudio previo están ahí— para que la verificación,
-// que sigue siendo del supervisor, no sea transcripción a ciegas.
+// coincide con SICOT y los datos clave, para que la verificación —que sigue
+// siendo del supervisor— no sea transcripción a ciegas.
+//
+// El índice de documentos del expediente se muestra cuando los datos abiertos
+// lo publican, que con los contratos nuevos no pasa: esa fuente se quedó en
+// 2021. Cuando no hay índice se dice por qué y se deja el enlace del proceso,
+// que es la vía real para abrir la oferta económica y el estudio previo. Antes
+// la sección desaparecía sin más, y el paso 2.4 pedía copiar las cantidades de
+// un documento que nunca se mostraba.
 
 import { useCallback, useEffect, useState } from 'react'
 import { verificarEnSecop } from '@/services/contratoService'
@@ -140,7 +146,7 @@ export default function VerificacionSecop({ contratoId }: { contratoId: number }
             )}
           </div>
 
-          {datos.documentos.length > 0 && (
+          {datos.documentos.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
                 Documentos del expediente ({datos.documentos.length}). Las cantidades y especificaciones están en la
@@ -157,6 +163,10 @@ export default function VerificacionSecop({ contratoId }: { contratoId: number }
                 </span>
               ))}
             </div>
+          ) : (
+            datos.avisoDocumentos && (
+              <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>{datos.avisoDocumentos}</span>
+            )
           )}
 
           {datos.garantias.length > 0 && (

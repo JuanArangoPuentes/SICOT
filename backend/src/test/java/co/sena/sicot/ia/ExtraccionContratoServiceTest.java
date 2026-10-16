@@ -508,7 +508,8 @@ class ExtraccionContratoServiceTest {
                     + " de formación del Centro Tecnológico del Mobiliario",
             "Aprobado", "SUMINISTROS MAYBE SAS", "800154801", "LUZ MARINA MEJIA PEREZ",
             new BigDecimal("45900300"), "67 Dia(s)", LocalDate.of(2026, 10, 13), LocalDate.of(2026, 12, 15),
-            LocalDate.of(2026, 12, 16), LocalDate.of(2027, 6, 30), "Alex Fernando Zapata Rios",
+            LocalDate.of(2026, 12, 16), LocalDate.of(2027, 6, 30), "CO1.BDOS.10711126",
+            "Alex Fernando Zapata Rios",
             "Carlos Mario Castañeda Monsalve", "Selección abreviada subasta inversa", "Suministros", true,
             BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("45900300"),
             "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.10815297"

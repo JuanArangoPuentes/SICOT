@@ -66,14 +66,15 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
   } else if (HERRAMIENTA_POR_PASO[sub.label] === 'VERIFICACION_SECOP') {
     partes.push(
       'Qué hacer en SICOT: debajo de este sub-paso verá lo que el SECOP II publica del contrato y lo que no coincide ' +
-        'con lo registrado en SICOT. Abra la oferta económica y el estudio previo desde la lista de documentos para ' +
-        'verificar cantidades y especificaciones; cuando esté todo revisado, márquelo como completado.',
+        'con lo registrado en SICOT. Las cantidades y las especificaciones no vienen en esos datos: abra el proceso ' +
+        'en el SECOP II con el enlace del sub-paso y revíselas en la oferta económica y el estudio previo del ' +
+        'expediente; cuando esté todo revisado, márquelo como completado.',
     )
   } else if (HERRAMIENTA_POR_PASO[sub.label] === 'CORREO_SST') {
     partes.push(
       'Qué hacer en SICOT: abra el borrador del correo, agregue como destinatarios a los profesionales de SST y ' +
-        'ambiental —sus correos están en el estudio previo, en los documentos del sub-paso de verificación en el ' +
-        'SECOP— y envíelo desde su correo. Después, márquelo como completado.',
+        'ambiental —sus correos están en el estudio previo, que se abre entrando al proceso en el SECOP II con el ' +
+        'enlace del sub-paso de verificación— y envíelo desde su correo. Después, márquelo como completado.',
     )
   } else if (HERRAMIENTA_POR_PASO[sub.label] === 'CORREO_CONTRATISTA') {
     partes.push(

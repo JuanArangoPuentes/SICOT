@@ -21,6 +21,14 @@ import java.util.List;
  *                    publicado); entonces {@code motivo} dice por qué y el
  *                    resto viene vacío
  * @param diferencias solo los campos que no coinciden; vacía si todo cuadra
+ * @param documentos  el índice del expediente, cuando los datos abiertos lo
+ *                    publican
+ * @param avisoDocumentos por qué no hay índice, cuando no lo hay; {@code null}
+ *                    si hay documentos. Una lista vacía sin explicación dejaba
+ *                    al supervisor sin saber si el contrato no tiene
+ *                    expediente, si falló la consulta, o si esa fuente no
+ *                    cubre su contrato —que es lo que pasa siempre con los
+ *                    contratos nuevos—
  */
 public record VerificacionSecopResponse(
         boolean disponible,
@@ -30,6 +38,7 @@ public record VerificacionSecopResponse(
         Ficha ficha,
         List<Diferencia> diferencias,
         List<Documento> documentos,
+        String avisoDocumentos,
         List<Garantia> garantias
 ) {
 
@@ -47,6 +56,7 @@ public record VerificacionSecopResponse(
             LocalDate fechaFin,
             LocalDate inicioLiquidacion,
             LocalDate finLiquidacion,
+            String procesoDeCompra,
             String supervisor,
             String ordenadorDelGasto,
             String modalidad,
@@ -66,7 +76,8 @@ public record VerificacionSecopResponse(
     /**
      * Un documento publicado en el expediente del contrato. Se muestra el
      * índice y el enlace para que el supervisor lo abra en su navegador; SICOT
-     * no lo descarga.
+     * no lo descarga, y no podría: el enlace de descarga del SECOP responde 403
+     * a cualquier programa.
      */
     public record Documento(String nombre, Long tamanoBytes, LocalDate fechaCarga, String url) {
     }
@@ -78,6 +89,6 @@ public record VerificacionSecopResponse(
 
     public static VerificacionSecopResponse noDisponible(String motivo, Instant consultadoEn, String enlaceProceso) {
         return new VerificacionSecopResponse(false, motivo, consultadoEn, enlaceProceso, null,
-                List.of(), List.of(), List.of());
+                List.of(), List.of(), null, List.of());
     }
 }

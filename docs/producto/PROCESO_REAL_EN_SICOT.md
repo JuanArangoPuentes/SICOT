@@ -96,13 +96,16 @@ contrato inició.
 - Arma el borrador del correo con los datos reales del contrato (número,
   contratista, objeto y vigencia) para que el supervisor lo envíe desde su
   correo.
-- Avisa dónde están los destinatarios: en el estudio previo, que SICOT lista
-  con su enlace en el paso 2.3.
+- Avisa dónde están los destinatarios: en el estudio previo, que se abre
+  entrando al proceso en el SECOP con el enlace del paso 2.3.
 - Si el SECOP registra **obligación ambiental**, el paso 2.3 lo señala.
 
 **Pendiente.** SICOT no conoce todavía los correos de SST y ambiental: están
 dentro del estudio previo (un PDF de más de 5 MB en el SECOP). Por eso el
-borrador sale sin destinatarios y lo dice.
+borrador sale sin destinatarios y lo dice. Sacarlos de un estudio previo
+**cargado** por el supervisor sí está al alcance de lo que ya hay —el extractor
+determinista reconoce correos sin pasar por el modelo—; lo que no lo está, de
+momento, es la tabla de cantidades.
 
 ## Paso 4 — Verificar las especificaciones del contrato
 
@@ -112,18 +115,40 @@ cantidades de suministros, especificaciones y valores.
 **Lo que hace SICOT hoy.**
 - Guarda el enlace del proceso y lo ofrece en la ficha del contrato y en el paso.
 - El sitio del SECOP no se puede leer desde un programa (pide un reCAPTCHA),
-  pero la misma información está en los **datos abiertos del SECOP II**, que son
-  públicos y gratuitos. SICOT trae de ahí: estado del contrato, valor, plazo,
-  fechas de firma, terminación y liquidación, obligación ambiental, lo pagado y
-  lo pendiente, las pólizas y **el índice de los documentos del expediente**.
+  pero parte de la información está en los **datos abiertos del SECOP II**, que
+  son públicos y gratuitos. SICOT trae de ahí: estado del contrato, valor,
+  plazo, fechas de firma, terminación y liquidación, obligación ambiental, lo
+  pagado y lo pendiente, y **las pólizas**. Del Lote 4 vienen la ficha y dos
+  pólizas.
 - Compara con lo registrado en SICOT y **señala lo que no coincide**. En el Lote
   4, todo coincide.
 - La verificación sigue siendo del supervisor: SICOT no decide si una diferencia
   es un error.
 
+**Corrección al corte del 15-10 (comprobada el 16-10-2026).** Ese corte decía
+que SICOT trae también «el índice de los documentos del expediente». **No lo
+trae, y no puede.** El conjunto de datos de archivos del SECOP II
+(`dmgg-8hin`, «Archivos Descarga Desde 2025») tiene 1.000 filas y ninguna
+cargada después del **30-12-2021**: para el contrato del Lote 4 y para su
+proceso `CO1.BDOS.10711126` devuelve cero, y los otros conjuntos de archivos
+—histórico, 2022, 2023 y 2024— tampoco lo tienen. Además, el enlace de descarga
+que publicarían (`RetrieveFile/Index?DocumentId=…`) responde **403** a un
+programa. El panel escondía la sección cuando venía vacía, de modo que el paso
+2.3 no decía nada de los documentos y el 2.4 le pedía al supervisor copiar las
+cantidades de la oferta económica sin decirle de dónde sacarla. Ahora el paso
+2.3 dice por qué no hay índice y lo remite al **enlace del proceso**, que es la
+vía real; la consulta se mantiene —corregida, porque el expediente se archiva
+bajo el proceso de compra y no bajo el número de contrato— para los contratos
+antiguos que sí están publicados.
+
 **Pendiente.** Las **cantidades y especificaciones** están en la oferta
-económica («8. ECONOMICA LOTE 4 AJUSTADA.pdf») y en el estudio previo. SICOT los
-lista con su enlace para que el supervisor los abra, pero no los lee todavía.
+económica («8. ECONOMICA LOTE 4 AJUSTADA.pdf») y en el estudio previo, y hay que
+abrirlas en el SECOP a mano. SICOT no las lee, y por el 403 no puede bajarlas
+del SECOP: la vía posible es que el supervisor **cargue esos dos PDF** en el
+paso, como ya hace con el acta firmada, y que SICOT los lea. Hoy ese puente no
+existe: la carga de archivos al expediente y la lectura de PDF son dos caminos
+que no se tocan —lo que se carga no se lee nunca, y el único extractor es de
+GESTIÓN y saca los 16 campos del formulario de contrato—.
 
 ## Paso 5 — Contacto al contratista
 
@@ -136,7 +161,8 @@ cantidades exactas.
 - Arma el borrador dirigido a él, con el contrato, la vigencia y el
   representante legal, listo para enviarse desde el correo del supervisor.
 - En un suministro, el borrador deja el espacio para las cantidades exactas y
-  avisa que hay que copiarlas de la oferta económica.
+  avisa que hay que copiarlas de la oferta económica, abriendo el proceso en el
+  SECOP con el enlace del paso 2.3.
 
 **Pendiente.** Las cantidades, por lo mismo del paso 4. Y el acta del Lote 4 no
 trae teléfono del contratista, aunque la lista de Alex dice que debería: SICOT

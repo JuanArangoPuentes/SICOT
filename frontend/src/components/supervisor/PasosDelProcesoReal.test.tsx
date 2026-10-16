@@ -138,6 +138,7 @@ describe('2.3 — verificación contra el SECOP II', () => {
       fechaFin: '2026-12-15',
       inicioLiquidacion: '2026-12-16',
       finLiquidacion: '2027-06-30',
+      procesoDeCompra: 'CO1.BDOS.10711126',
       supervisor: 'Alex Fernando Zapata Rios',
       ordenadorDelGasto: null,
       modalidad: null,
@@ -157,6 +158,7 @@ describe('2.3 — verificación contra el SECOP II', () => {
         url: 'https://community.secop.gov.co/x',
       },
     ],
+    avisoDocumentos: null,
     garantias: [],
   }
 
@@ -173,6 +175,27 @@ describe('2.3 — verificación contra el SECOP II', () => {
     expect(screen.getByText(/tenga en cuenta al profesional ambiental/)).toBeTruthy()
     expect(screen.getByRole('link', { name: '8. ECONOMICA LOTE 4 AJUSTADA.pdf' })).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Abrir el proceso en el SECOP II' })).toBeTruthy()
+  })
+
+  // El caso de todos los contratos de ahora: el SECOP publica la ficha pero no
+  // sus archivos. Antes la sección de documentos simplemente no aparecía, y el
+  // paso 2.4 pedía copiar las cantidades de la oferta económica sin decir de
+  // dónde sacarla.
+  it('sin índice del expediente explica por qué y deja el enlace del proceso', async () => {
+    vi.mocked(verificarEnSecop).mockResolvedValue({
+      ...respuesta,
+      documentos: [],
+      avisoDocumentos:
+        'Los datos abiertos del SECOP no traen la lista de archivos de este contrato: ese conjunto de datos no ' +
+        'se actualiza desde 2021. El expediente se abre con el enlace del proceso, y ahí están la oferta ' +
+        'económica, con las cantidades exactas, y el estudio previo, con los contactos de SST y ambiental.',
+    })
+    render(<VerificacionSecop contratoId={9} />)
+
+    expect(await screen.findByText(/no se actualiza desde 2021/)).toBeTruthy()
+    expect(screen.getByText(/la oferta económica, con las cantidades exactas/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Abrir el proceso en el SECOP II' })).toBeTruthy()
+    expect(screen.queryByText(/Documentos del expediente/)).toBeNull()
   })
 
   it('sin conexión dice el motivo y conserva el enlace para hacerlo a mano', async () => {

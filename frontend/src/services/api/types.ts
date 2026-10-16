@@ -274,6 +274,8 @@ export interface FichaSecop {
   fechaFin: string | null
   inicioLiquidacion: string | null
   finLiquidacion: string | null
+  /** El expediente se archiva bajo este identificador, no bajo el del contrato. */
+  procesoDeCompra: string | null
   supervisor: string | null
   ordenadorDelGasto: string | null
   modalidad: string | null
@@ -293,6 +295,14 @@ export interface VerificacionSecopResponse {
   ficha: FichaSecop | null
   diferencias: { campo: string; enSicot: string; enSecop: string }[]
   documentos: { nombre: string; tamanoBytes: number | null; fechaCarga: string | null; url: string | null }[]
+  /**
+   * Por qué no hay índice del expediente, cuando no hay. Los datos abiertos del
+   * SECOP no publican los archivos de los contratos nuevos, así que esto llega
+   * casi siempre y hay que mostrarlo: una lista vacía en silencio dejaba al
+   * supervisor sin saber si el contrato no tiene expediente o si la fuente no
+   * lo cubre.
+   */
+  avisoDocumentos: string | null
   garantias: {
     aseguradora: string | null
     numero: string | null

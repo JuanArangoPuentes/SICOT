@@ -26,7 +26,7 @@ class VerificacionSecopServiceTest {
         return new Ficha("CO1.PCCNTR.10057820", "5_9205_306 Contratar el suministro de materiales", "Aprobado",
                 "SUMINISTROS MAYBE SAS", "800154801", "LUZ MARINA MEJIA PEREZ", new BigDecimal("45900300"),
                 "67 Dia(s)", LocalDate.of(2026, 10, 13), LocalDate.of(2026, 12, 15), null, null,
-                "Alex Fernando Zapata Rios", "Carlos Mario Castañeda Monsalve", "Selección abreviada subasta inversa",
+                "CO1.BDOS.10711126", "Alex Fernando Zapata Rios", "Carlos Mario Castañeda Monsalve", "Selección abreviada subasta inversa",
                 "Suministros", true, BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("45900300"), null);
     }
 
@@ -79,7 +79,7 @@ class VerificacionSecopServiceTest {
     @DisplayName("lo que el SECOP no publica no se cuenta como diferencia")
     void loNoPublicadoNoEsDiferencia() {
         Ficha sinRepresentante = new Ficha("CO1.PCCNTR.10057820", null, null, null, null, null, null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertThat(VerificacionSecopService.comparar(new Contrato(), sinRepresentante)).isEmpty();
     }

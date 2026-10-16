@@ -44,7 +44,22 @@ public class DatosAbiertosSecop {
     /** «SECOP II - Contratos Electrónicos». La fuente fiable para valor y contratista. */
     static final String CONTRATOS = "jbjy-vk9h";
 
-    /** «SECOP II - Archivos Descarga Desde 2025»: el índice de documentos del expediente. */
+    /**
+     * «SECOP II - Archivos Descarga Desde 2025»: el índice de documentos del
+     * expediente. Se consulta por el proceso de compra, que es la clave con que
+     * está armado, y además por el número de contrato, que solo trae poblado en
+     * parte de sus filas.
+     *
+     * <p><b>Lo que de verdad publica.</b> El 16-10-2026 tenía 1.000 filas y
+     * ninguna cargada después del 30-12-2021, pese a llamarse «desde 2025»:
+     * para el contrato del Lote 4 y para su proceso CO1.BDOS.10711126 devuelve
+     * cero, y los otros conjuntos de archivos (histórico, 2022, 2023, 2024)
+     * tampoco lo tienen. El enlace de descarga que publicaría
+     * ({@code RetrieveFile/Index?DocumentId=…}) responde 403, así que SICOT
+     * tampoco podría bajar el archivo. La consulta se queda por los contratos
+     * antiguos que sí están; cuando vuelve vacía hay que decir por qué, porque
+     * el expediente se abre con el enlace del proceso.
+     */
     static final String DOCUMENTOS = "dmgg-8hin";
 
     /** «SECOP II - Garantías». */
@@ -56,6 +71,13 @@ public class DatosAbiertosSecop {
      * servicio externo es justo lo que no se quiere.
      */
     private static final Pattern ID_CONTRATO = Pattern.compile("CO1\\.PCCNTR\\.\\d{4,12}");
+
+    /**
+     * El expediente se archiva bajo el proceso de compra, que es otro
+     * identificador: el contrato CO1.PCCNTR.10057820 cuelga del proceso
+     * CO1.BDOS.10711126, y no se deduce uno del otro.
+     */
+    private static final Pattern ID_PROCESO = Pattern.compile("CO1\\.BDOS\\.\\d{4,12}");
 
     private static final Set<String> SIN_DATO = Set.of(
             "no definido", "sin descripcion", "sin descripción", "no aplica", "");
@@ -73,6 +95,10 @@ public class DatosAbiertosSecop {
 
     public static boolean esNumeroDeContratoValido(String idContrato) {
         return idContrato != null && ID_CONTRATO.matcher(idContrato).matches();
+    }
+
+    public static boolean esNumeroDeProcesoValido(String idProceso) {
+        return idProceso != null && ID_PROCESO.matcher(idProceso).matches();
     }
 
     /** La ficha del contrato, o vacío si el SECOP todavía no lo publica. */
@@ -95,6 +121,7 @@ public class DatosAbiertosSecop {
                 fecha(f, "fecha_de_fin_del_contrato"),
                 fecha(f, "fecha_inicio_liquidacion"),
                 fecha(f, "fecha_fin_liquidacion"),
+                texto(f, "proceso_de_compra"),
                 texto(f, "nombre_supervisor"),
                 texto(f, "nombre_ordenador_del_gasto"),
                 texto(f, "modalidad_de_contratacion"),
@@ -106,23 +133,39 @@ public class DatosAbiertosSecop {
                 url(f, "urlproceso")));
     }
 
-    /** El índice de documentos del expediente, sin repetidos y en orden de nombre. */
-    public List<Documento> documentos(String idContrato) {
-        JsonNode filas = consultar(DOCUMENTOS, "n_mero_de_contrato", idContrato);
+    /**
+     * El índice de documentos del expediente, sin repetidos y en orden de
+     * nombre. Que venga vacío no dice que el contrato no tenga expediente: casi
+     * siempre dice que estos datos abiertos no lo cubren (ver
+     * {@link #DOCUMENTOS}).
+     *
+     * @param procesoDeCompra identificador del proceso con que está armado el
+     *                        conjunto de datos; si no viene, o no tiene esa
+     *                        forma, se busca solo por contrato
+     */
+    public List<Documento> documentos(String idContrato, String procesoDeCompra) {
         Map<String, Documento> unicos = new LinkedHashMap<>();
-        if (filas != null && filas.isArray()) {
-            for (JsonNode d : filas) {
-                String nombre = texto(d, "nombre_archivo");
-                if (nombre == null) continue;
-                String clave = Optional.ofNullable(texto(d, "id_documento")).orElse(nombre);
-                BigDecimal tamano = numero(d, "tamanno_archivo");
-                unicos.putIfAbsent(clave, new Documento(nombre, tamano == null ? null : tamano.longValue(),
-                        fecha(d, "fecha_carga"), url(d, "url_descarga_documento")));
-            }
+        acumular(unicos, consultar(DOCUMENTOS, "n_mero_de_contrato", idContrato));
+        if (esNumeroDeProcesoValido(procesoDeCompra)) {
+            acumular(unicos, consultar(DOCUMENTOS, "proceso", procesoDeCompra));
         }
         List<Documento> lista = new ArrayList<>(unicos.values());
         lista.sort(Comparator.comparing(Documento::nombre, String.CASE_INSENSITIVE_ORDER));
         return lista;
+    }
+
+    private void acumular(Map<String, Documento> unicos, JsonNode filas) {
+        if (filas == null || !filas.isArray()) {
+            return;
+        }
+        for (JsonNode d : filas) {
+            String nombre = texto(d, "nombre_archivo");
+            if (nombre == null) continue;
+            String clave = Optional.ofNullable(texto(d, "id_documento")).orElse(nombre);
+            BigDecimal tamano = numero(d, "tamanno_archivo");
+            unicos.putIfAbsent(clave, new Documento(nombre, tamano == null ? null : tamano.longValue(),
+                    fecha(d, "fecha_carga"), url(d, "url_descarga_documento")));
+        }
     }
 
     /**
@@ -144,14 +187,15 @@ public class DatosAbiertosSecop {
         return new ArrayList<>(unicas.values());
     }
 
-    private JsonNode consultar(String dataset, String campo, String idContrato) {
-        if (!esNumeroDeContratoValido(idContrato)) {
-            throw new IllegalArgumentException("Número de contrato no válido para consultar el SECOP: " + idContrato);
+    private JsonNode consultar(String dataset, String campo, String identificador) {
+        if (!esNumeroDeContratoValido(identificador) && !esNumeroDeProcesoValido(identificador)) {
+            throw new IllegalArgumentException(
+                    "Identificador no válido para consultar el SECOP: " + identificador);
         }
         try {
             return restClient.get()
                     .uri(u -> u.path("/{dataset}.json")
-                            .queryParam(campo, idContrato)
+                            .queryParam(campo, identificador)
                             .queryParam("$limit", 100)
                             .build(dataset))
                     .accept(MediaType.APPLICATION_JSON)
@@ -205,6 +249,11 @@ public class DatosAbiertosSecop {
      * aceptan los del SECOP: terminan como enlaces que el supervisor abre desde
      * el panel, y un dato externo no debe poder convertirse en un enlace a otro
      * sitio —o en un {@code javascript:}— por mucho que la fuente sea oficial.
+     *
+     * <p>Ojo con los de descarga de documentos
+     * ({@code /Public/Archive/RetrieveFile/Index?DocumentId=…}): responden 403 a
+     * un programa. Valen para que el supervisor los abra en su navegador, no
+     * para que SICOT baje el archivo.
      */
     static String url(JsonNode fila, String campo) {
         JsonNode v = fila.get(campo);

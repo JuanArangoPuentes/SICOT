@@ -48,7 +48,8 @@ export function armarBorrador(tipo: TipoDeCorreo, c: ContratoResponse): Borrador
     if (suministro) {
       avisos.push(
         'En un suministro el correo debe llevar las cantidades exactas de cada bien. SICOT todavía no las tiene: ' +
-          'cópielas de la oferta económica del contrato (paso 2.3, documentos del expediente).',
+          'cópielas de la oferta económica, que está en el expediente del proceso en el SECOP II (el enlace, en el ' +
+          'paso 2.3).',
       )
     }
     const cuerpo = [
@@ -98,8 +99,8 @@ export function armarBorrador(tipo: TipoDeCorreo, c: ContratoResponse): Borrador
     asunto: `Inicio del contrato ${c.numeroContrato} — acompañamiento de SST y ambiental`,
     cuerpo,
     avisos: [
-      'Los correos de los profesionales de SST y ambiental están en el estudio previo del contrato, publicado en ' +
-        'el SECOP II (paso 2.3, documentos del expediente). Agréguelos como destinatarios.',
+      'Los correos de los profesionales de SST y ambiental están en el estudio previo del contrato, dentro del ' +
+        'expediente del proceso en el SECOP II (el enlace, en el paso 2.3). Agréguelos como destinatarios.',
     ],
   }
 }

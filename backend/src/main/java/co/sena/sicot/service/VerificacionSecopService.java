@@ -48,6 +48,23 @@ public class VerificacionSecopService {
 
     private static final String SIN_DATO = "(sin dato)";
 
+    /**
+     * Lo que se le dice al supervisor cuando el índice del expediente viene
+     * vacío, que con los contratos de ahora es siempre. Antes la sección
+     * desaparecía sin más y el paso 2.4 le pedía copiar las cantidades de un
+     * documento que SICOT nunca le mostraba.
+     */
+    /** Cuando el conjunto de datos de archivos no responde. No es lo mismo que no cubrir el contrato. */
+    static final String INDICE_NO_CONSULTADO =
+            "No se pudo consultar el índice de documentos del expediente. Lo demás de esta verificación sí "
+            + "llegó; el expediente se abre con el enlace del proceso.";
+
+    static final String SIN_INDICE_DE_DOCUMENTOS =
+            "Los datos abiertos del SECOP no traen la lista de archivos de este contrato: ese conjunto de "
+            + "datos no se actualiza desde 2021 y no cubre los contratos nuevos. El expediente se abre con "
+            + "el enlace del proceso, y ahí están los dos documentos que hacen falta: la oferta económica, "
+            + "con las cantidades exactas, y el estudio previo, con los contactos de SST y ambiental.";
+
     private final ContratoService contratoService;
     private final DatosAbiertosSecop datosAbiertos;
     private final Clock reloj;
@@ -80,10 +97,38 @@ public class VerificacionSecopService {
                         + "la verificación se hace con el enlace del proceso.", ahora, enlace);
             }
             Ficha ficha = encontrada.get();
+            // Lo que sigue son consultas aparte, a otros dos conjuntos de datos.
+            // Cada una va en su propio try: la ficha ya llegó, y que falle el
+            // índice del expediente o las pólizas no puede borrar del panel la
+            // comparación que el supervisor vino a ver. Antes, un fallo de
+            // cualquiera de las dos dejaba la verificación entera en «no hay
+            // conexión con datos.gov.co», que además era mentira.
+            List<VerificacionSecopResponse.Documento> documentos = List.of();
+            String avisoDocumentos = SIN_INDICE_DE_DOCUMENTOS;
+            try {
+                // El expediente está archivado bajo el proceso de compra, no
+                // bajo el número de contrato: se busca por los dos.
+                documentos = datosAbiertos.documentos(numero, ficha.procesoDeCompra());
+                if (!documentos.isEmpty()) {
+                    avisoDocumentos = null;
+                }
+            } catch (DatosAbiertosSecop.NoDisponible e) {
+                log.warn("Índice de documentos del contrato {} no consultado: {}", numero, e.getMessage());
+                avisoDocumentos = INDICE_NO_CONSULTADO;
+            }
+            List<VerificacionSecopResponse.Garantia> garantias = List.of();
+            try {
+                garantias = datosAbiertos.garantias(numero);
+            } catch (DatosAbiertosSecop.NoDisponible e) {
+                // Sin aviso propio: la mayoría de los contratos no tienen
+                // pólizas registradas, así que una lista vacía no promete nada
+                // que no esté —a diferencia del índice de documentos, al que el
+                // proceso sí manda al supervisor.
+                log.warn("Pólizas del contrato {} no consultadas: {}", numero, e.getMessage());
+            }
             return new VerificacionSecopResponse(true, null, ahora,
                     enlace != null ? enlace : ficha.enlaceProceso(),
-                    ficha, comparar(contrato, ficha),
-                    datosAbiertos.documentos(numero), datosAbiertos.garantias(numero));
+                    ficha, comparar(contrato, ficha), documentos, avisoDocumentos, garantias);
         } catch (DatosAbiertosSecop.NoDisponible e) {
             log.warn("Verificación del contrato {} contra el SECOP sin conexión: {}", numero, e.getMessage());
             return VerificacionSecopResponse.noDisponible("No hay conexión con datos.gov.co en este momento. "
