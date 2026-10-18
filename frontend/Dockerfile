@@ -62,8 +62,10 @@ USER root
 #
 # libexpat, por lo mismo (CI del 18-10-2026): la base trae 2.8.5-r0, con
 # CVE-2026-77214 (HIGH, lectura fuera del búfer al parsear XML), y Alpine ya
-# publicó 2.9.0-r0. El backend lleva la misma línea.
-RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0"
+# publicó 2.9.0-r0. El backend lleva la misma línea. Y libx11, del mismo día:
+# 1.8.13-r0 trae CVE-2026-88806 (HIGH, desbordamiento de montículo con un
+# servidor X malicioso) y 1.8.14-r0 la corrige.
+RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
