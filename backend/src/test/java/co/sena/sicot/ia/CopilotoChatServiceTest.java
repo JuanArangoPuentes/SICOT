@@ -177,6 +177,26 @@ class CopilotoChatServiceTest {
     }
 
     /**
+     * Medido en vivo el 18-10-2026: a «el contratista no ha respondido, ¿qué
+     * hago?» (sub-paso 2.4) el modelo terminó con «pulse "Firmar documento"
+     * una vez tenga el acta firmada», un botón que en el 2.4 no existe. La
+     * regla de cada botón ya estaba arriba en el prompt; repetida al final, que
+     * es lo que un modelo pequeño más atiende, el mismo turno ya no la mezcla.
+     */
+    @Test
+    void elRecordatorioFinalDiceQueBotonVaEnCadaSubPaso() {
+        servicio.responder(1L, "el contratista no ha respondido el correo, ¿qué hago?", null);
+
+        String prompt = promptCapturado();
+        String recordatorio = prompt.substring(prompt.lastIndexOf("Recuerde:"));
+        assertThat(recordatorio)
+                .contains("«Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3")
+                .contains("en 2.1, 3.1 y 3.2 se carga lo que piden")
+                .contains("«Marcar completado»")
+                .contains("nunca lo que hará usted");
+    }
+
+    /**
      * La regla de arriba tiene una excepción real desde el 22-09-2026: en 3.1 y
      * 3.2 el supervisor carga la foto de la entrega (EvidenciaFotografica). El
      * prompt decía que no se podía cargar nada «ni en 3.1-3.3», y el modelo

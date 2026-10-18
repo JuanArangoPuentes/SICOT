@@ -704,8 +704,9 @@ public class CopilotoChatService {
                 %s
                 %s
                 Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Diga lo que hace el supervisor \
-                («envíe…», «llame…», «pulse…»), nunca lo que hará usted («verificaré», «contactaré»). Responda \
-                solo al supervisor, en texto plano.\
+                («envíe…», «llame…»), nunca lo que hará usted («verificaré», «contactaré»). Si nombra un \
+                botón: «Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3; en 2.1, 3.1 y 3.2 se carga lo que \
+                piden; en los demás, «Marcar completado». Responda solo al supervisor, en texto plano.\
                 """.formatted(INSTRUCCIONES,
                         EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato.strip()),
                         estadoEnPocasLineas(etapas), hoyYCronograma, formatearHistorial(historial),
