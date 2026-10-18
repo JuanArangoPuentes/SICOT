@@ -19,7 +19,16 @@ WORKDIR /app
 # wget se usa en el HEALTHCHECK de abajo; en la imagen alpine viene por
 # BusyBox, pero se declara explícito para que un cambio de imagen base no
 # rompa la comprobación en silencio.
-RUN apk add --no-cache wget \
+#
+# La base trae libexpat 2.8.5-r0, con CVE-2026-77214 (HIGH): lectura fuera del
+# búfer al parsear XML. Alpine ya publicó 2.9.0-r0, así que el arreglo es
+# gratis, y esperar a que Temurin reconstruya su imagen dejaba cerrado el
+# escaneo de imágenes, que es un chequeo obligatorio (CI del 18-10-2026). Se
+# sube SOLO ese paquete, por lo mismo que el libtiff del frontend: el resto de
+# la imagen sigue siendo la que fija la etiqueta. Cuando la imagen de Temurin
+# traiga 2.9.0-r0 o posterior, la primera línea sobra y se quita.
+RUN apk add --no-cache "libexpat>=2.9.0-r0" \
+    && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 COPY --from=build /build/target/sicot-backend-*.jar app.jar
 RUN chown sicot:sicot app.jar
