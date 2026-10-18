@@ -55,6 +55,18 @@ sección siguiente. Están informados día por día en MDL-247. **A 14-10-2026: 
 pasan y 1 sigue sin recorrer** — el 1, porque exige la llave real de
 publicación. Ningún punto queda a medias.
 
+**Recorrido del 18-10-2026, con el APK oficial de la 0.5.0** —
+`SICOT_0.5.0_android-arm64.apk` descargado de la versión publicada, firmado
+por el CI con la **llave real**— sobre el mismo emulador Android 14 (la imagen
+`x86_64` traduce `arm64`) y detrás de Caddy. Se recorrieron el **1** (por
+primera vez con la llave real), el 2, el 3, el 6, el 13, el 16 y, con matiz, el
+17. **A 18-10-2026 los 17 tienen resultado**, pero el 4, 5, 7, 8, 9, 10, 11, 12,
+14 y 15 son de los recorridos del 7 al 14 de octubre, sobre código anterior.
+De esos, los que la 0.5.0 toca de verdad son el **7 y el 11**: el Copiloto
+responde ahora en vivo y se recupera de un corte volviendo a pedir la misma
+respuesta, así que lo que esos puntos vigilan —salir de la aplicación mientras
+responde— corre por un camino nuevo y conviene recorrerlos en un teléfono real.
+
 > **Corrección del 14-10-2026 a la cuenta anterior.** Aquí decía «12 pasan, 1
 > pasa a medias y 4 siguen sin recorrer», y el punto 17 figuraba «Sin recorrer».
 > Las dos cosas eran el mismo error arrastrado: el informe del 8 de octubre sumó
@@ -65,23 +77,23 @@ publicación. Ningún punto queda a medias.
 
 | # | Qué hacer | Qué tiene que pasar | Resultado |
 | --- | --- | --- | --- |
-| 1 | Instalar el APK encima de la versión anterior | Se instala sin desinstalar y conserva la dirección del servidor | Sin recorrer — exige la llave real de publicación. El 14-10 se instaló encima con el almacén de **depuración** y la dirección del servidor se conservó: es indicio, no el punto |
-| 2 | Escribir una dirección `http://` en Servidor | Aviso de que Android bloquea las conexiones sin cifrar, **antes** de intentar entrar. Con el campo vacío, el pie dice qué dirección se usaría y que en el teléfono es el propio teléfono | Pasa · 07-10-2026 |
-| 3 | Entrar con la dirección `https://` del Centro | Abre la bandeja del supervisor | Pasa · 14-10-2026 |
+| 1 | Instalar el APK encima de la versión anterior | Se instala sin desinstalar y conserva la dirección del servidor | Pasa · 18-10-2026 — el APK oficial de la 0.5.0, firmado con la llave real, se instaló encima de la 0.4.0 oficial sin desinstalar (`versionCode` 4000 → 5000, misma fecha de primera instalación) y conservó la dirección `https://` del servidor; la pantalla de acceso dice «SICOT v0.5.0» |
+| 2 | Escribir una dirección `http://` en Servidor | Aviso de que Android bloquea las conexiones sin cifrar, **antes** de intentar entrar. Con el campo vacío, el pie dice qué dirección se usaría y que en el teléfono es el propio teléfono | Pasa · 18-10-2026 — en el APK oficial de la 0.5.0, en Configuración › Servidor (en el APK de pruebas, que sí acepta `http://`, el aviso ya no sale, a propósito) |
+| 3 | Entrar con la dirección `https://` del Centro | Abre la bandeja del supervisor | Pasa · 18-10-2026 — APK oficial de la 0.5.0 contra `https://10.0.2.2.nip.io` (Caddy): la bandeja abrió en 6 s |
 | 4 | Documentos → «Descargar» sobre un acta firmada | Se abre «Guardar como» del sistema; el PDF queda en Descargas y se abre en el visor; SICOT dice que quedó guardado | Pasa · 07-10-2026 |
 | 5 | Registros → «Descargar registros (CSV)» | Igual que el 4, con un CSV que abre en una hoja de cálculo | Pasa · 07-10-2026 |
-| 6 | Escribir en el campo del copiloto | El teclado **no** tapa el campo, el botón de enviar ni las sugerencias | Pasa · 14-10-2026 — recorrido otra vez sobre el APK reconstruido de ese día, que es lo que la marca «a recomprobar» pedía |
+| 6 | Escribir en el campo del copiloto | El teclado **no** tapa el campo, el botón de enviar ni las sugerencias | Pasa · 18-10-2026 — en el APK oficial de la 0.5.0, con el teclado abierto se ven el campo, el botón de enviar y las sugerencias encima |
 | 7 | Preguntar al copiloto, salir a otra aplicación un par de minutos y volver | Si la respuesta no llegó, SICOT dice que se cortó por salir de la aplicación y vuelve a preguntar solo; la respuesta aparece | Pasa · 08-10-2026 |
 | 8 | En el sub-paso 3.1 o 3.2, «Tomar foto de la entrega» | Se abre directamente la cámara, **no** la galería. Al cargar la foto, la evidencia dice cuándo se tomó y, si la cámara guarda la ubicación, dónde | Pasa · 08-10-2026 — la cámara se abrió de verdad, confirmado con el `mCurrentFocus` del sistema |
 | 9 | Repetir el 8 sin permiso de cámara: negarlo cuando Android lo pida, o quitarlo en Ajustes › Aplicaciones › SICOT › Permisos | SICOT dice que no se tomó ninguna foto, cómo activar el permiso y que puede usar «Elegir una foto» | Pasa · 08-10-2026 |
 | 10 | En el mismo sub-paso, «Elegir una foto» | Se abre el selector del sistema y la foto queda cargada; si llegó sin ubicación, SICOT lo dice en vez de omitirlo | Pasa · 08-10-2026 |
 | 11 | «Firmar documento» en el documento con observaciones y, mientras el Copiloto redacta, salir a otra aplicación o apagar la pantalla un par de minutos | Al volver, SICOT dice que la conexión se cortó por salir de la aplicación —no culpa al Copiloto ni al servidor— y no firma nada por su cuenta: el sub-paso sigue abierto | Pasa con matiz · 14-10-2026 — no firmó nada por su cuenta y el sub-paso siguió abierto; el aviso de corte no llegó a salir porque la petición terminó en el servidor y se recuperó al volver (ver abajo) |
 | 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar | Pasa · 14-10-2026 — «Cancelar» dejó el 3.4 en PENDIENTE; «Firmar» lo cerró y firmó el documento |
-| 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación | Pasa · 14-10-2026 — las dos mitades: vuelve a la vista anterior, y en la pantalla de acceso sale de la aplicación **también después de cerrar sesión** |
+| 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación | Pasa · 14-10-2026 — las dos mitades: vuelve a la vista anterior, y en la pantalla de acceso sale de la aplicación **también después de cerrar sesión**. El 18-10, en el APK oficial de la 0.5.0, se recomprobó la segunda mitad: tras cerrar sesión, «atrás» llevó al lanzador |
 | 14 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT | Pasa · 08-10-2026 — el 14-10 se recomprobó solo que el selector del sistema se abre |
 | 15 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece | Pasa · 14-10-2026 — con el GCCON-F-031 real (881 kB) cargado para poder borrarlo; el catálogo queda como estaba |
-| 16 | Cerrar sesión | Vuelve a la pantalla de acceso | Pasa · 14-10-2026 |
-| 17 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece | Pasa · 08-10-2026 — la pantalla **sí** se apagó, que es el caso que el punto anticipa; la consulta terminó en el servidor (83,9 s) y al desbloquear la respuesta estaba ahí, referida al sub-paso 3.4 |
+| 16 | Cerrar sesión | Vuelve a la pantalla de acceso | Pasa · 18-10-2026 — APK oficial de la 0.5.0 |
+| 17 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece | Pasa con matiz · 18-10-2026 — en el APK oficial de la 0.5.0, mientras el Copiloto respondía (55 s) la ventana tuvo `FLAG_KEEP_SCREEN_ON` y lo soltó al llegar la respuesta (`dumpsys window`): el puente que la mantiene encendida sobrevive a R8. No se dejó el teléfono quieto más que el apagado automático. El 08-10, sin ese puente, la pantalla se apagó y al desbloquear la respuesta estaba ahí (83,9 s) |
 
 El 8 vigila algo que se rompe sin ruido: desde Android 11, la aplicación solo
 ve la cámara si el manifiesto declara la consulta `IMAGE_CAPTURE` en
@@ -209,6 +221,23 @@ adb shell "mkdir -p /data/misc/user/0/cacerts-added   && cp /data/local/tmp/cadd
 
 Después, en Configuración › Servidor del APK: `https://sicot.centro.test`.
 
+**Sin partición de sistema escribible** (el emulador arrancado sin
+`-writable-system`, como el 18-10-2026), el paso 3 no se puede hacer. Sirve un
+nombre de `nip.io`, que resuelve a la IP que lleva dentro: `10.0.2.2.nip.io` es
+el anfitrión visto desde el emulador. Para no tener que instalar otra raíz, el
+Caddy nuevo reutiliza el almacén del anterior, que ya emitió la que el emulador
+tiene instalada:
+
+```bash
+docker cp sicot-apk-proxy:/data ./caddy-data && docker stop sicot-apk-proxy
+docker run -d --name sicot-apk-proxy-nip --network sicot_default -p 443:443 -p 80:80 \
+  -e SICOT_DOMINIO=10.0.2.2.nip.io -e SICOT_TLS=internal \
+  -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/caddy-data:/data" caddy:2.11.4-alpine
+```
+
+y en Servidor, `https://10.0.2.2.nip.io`. Necesita que el emulador resuelva
+nombres de Internet; la conexión en sí no sale del equipo.
+
 Dos avisos sobre el APK que se instala:
 
 - Los emuladores corrientes son `x86_64` y el APK que publica el CI es
@@ -218,3 +247,7 @@ Dos avisos sobre el APK que se instala:
   y no se instala (ADR-013). Para la prueba sirve firmarla con el almacén de
   depuración del SDK; lo que esa firma no permite comprobar es el punto 1,
   instalar encima de la versión anterior publicada, que exige la llave real.
+- Desde la 0.5.0 no hace falta compilar: la imagen `x86_64` de Android 14 del
+  SDK traduce `arm64`, y el APK oficial que adjunta el CI a la versión se
+  instala y corre en el emulador (comprobado el 18-10-2026). Con él sí se puede
+  recorrer el punto 1.
