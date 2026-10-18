@@ -49,7 +49,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     .filter(Usuario::isActivo)
                     .orElse(null);
             if (usuario != null
-                    && jwtService.isTokenValid(token, email)
+                    && jwtService.isTokenValid(token, usuario)
                     && SecurityContextHolder.getContext().getAuthentication() == null) {
                 var authorities = List.of(new SimpleGrantedAuthority("ROLE_" + usuario.getRol().name()));
                 var authentication = new UsernamePasswordAuthenticationToken(

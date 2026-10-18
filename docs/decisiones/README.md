@@ -6,9 +6,9 @@ discutió— si no estuvieran escritas.
 
 ## Por qué existen
 
-SICOT tiene un horizonte de tres a cuatro años y lo sostiene un equipo pequeño
-que va a rotar. La persona que mantenga este sistema en 2029 casi con seguridad
-no es ninguna de las que lo escribió. Un comentario en el código explica *qué*
+SICOT tiene un horizonte de tres a cuatro años y hoy lo construye una sola
+persona. La persona que mantenga este sistema en 2029 casi con seguridad no es
+la que lo escribió. Un comentario en el código explica *qué*
 hace una línea; un ADR explica *por qué el sistema es así y no de las otras dos
 formas que también funcionaban*.
 
@@ -61,3 +61,4 @@ parte del valor.
 | [011](./ADR-011-arranque-fail-closed-y-compuertas-de-seguridad.md) | Arranque fail closed y qué escáner es compuerta en el CI | Aceptada |
 | [012](./ADR-012-aplicacion-movil.md) | Qué es "la aplicación móvil" de SICOT | Aceptada |
 | [013](./ADR-013-firma-y-distribucion-del-apk.md) | Cómo se firma y se reparte la aplicación de Android | Aceptada |
+| [014](./ADR-014-salir-de-spring-boot-3-5.md) | Cuándo y cómo salir de Spring Boot 3.5 | Propuesta |

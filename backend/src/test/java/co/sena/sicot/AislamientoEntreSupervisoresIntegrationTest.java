@@ -138,10 +138,10 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
         asignarSupervisor(contratoBId, idSupB);
         activar(contratoBId);
 
-        long[] etapaSubA = primeraEtapaYSubetapa(contratoAId);
+        long[] etapaSubA = etapaEnCursoYSuPrimeraSubetapa(contratoAId);
         etapaAId = etapaSubA[0];
         subAId = etapaSubA[1];
-        subBId = primeraEtapaYSubetapa(contratoBId)[1];
+        subBId = etapaEnCursoYSuPrimeraSubetapa(contratoBId)[1];
 
         alertaAId = seedAlerta(contratoAId);
         alertaBId = seedAlerta(contratoBId);
@@ -295,7 +295,7 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(post("/api/contratos/{id}/documentos/generar", contratoAId)
                         .header("Authorization", "Bearer " + tokenB)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\"}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\"}"))
                 .andExpect(status().is4xxClientError());
         verifyNoInteractions(ollamaClient);
         assertThat(documentoRepository.count())
@@ -531,6 +531,41 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .isEqualTo(codigoInexistente);
     }
 
+    /**
+     * El código ya era el mismo, pero el mensaje no: «Contrato con id 999 no
+     * fue encontrado(a).» frente a «no existe o no tiene acceso». Recorriendo
+     * ids, el texto decía qué existía y era de otros supervisores.
+     */
+    @Test
+    void unRecursoAjenoYUnoInexistenteDanElMismoMensaje() throws Exception {
+        assertThat(mensajeDe(get("/api/contratos/{id}", 999_999_999L)))
+                .isEqualTo(mensajeDe(get("/api/contratos/{id}", contratoAId)))
+                .doesNotContain("999999999");
+        assertThat(mensajeDe(patch("/api/alertas/{id}/leida", 999_999_999L)))
+                .isEqualTo(mensajeDe(patch("/api/alertas/{id}/leida", alertaAId)));
+        assertThat(mensajeDe(get("/api/contratos/{contratoId}/documentos/{id}/archivo", contratoBId, 999_999_999L)))
+                .isEqualTo(mensajeDe(get("/api/contratos/{contratoId}/documentos/{id}/archivo",
+                        contratoAId, docAPendienteId)));
+    }
+
+    /** Gestión no está restringida por contrato: no hay nada que ocultarle y conserva el detalle. */
+    @Test
+    void gestionConservaElMensajeConcretoDeUnContratoInexistente() throws Exception {
+        String cuerpo = mockMvc.perform(get("/api/contratos/{id}", 999_999_999L)
+                        .header("Authorization", "Bearer " + tokenGestion))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(mensajeDeError(cuerpo)).contains("999999999");
+    }
+
+    private String mensajeDe(org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder peticion)
+            throws Exception {
+        String cuerpo = mockMvc.perform(peticion.header("Authorization", "Bearer " + tokenB))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+        return mensajeDeError(cuerpo);
+    }
+
     @Test
     void firmarUnDocumentoAjenoNoDebeRevelarSiYaEstaFirmado() throws Exception {
         String mensajePendiente = mensajeDeError(mockMvc.perform(
@@ -605,16 +640,21 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isOk());
     }
 
-    private long[] primeraEtapaYSubetapa(long contratoId) throws Exception {
+    private long[] etapaEnCursoYSuPrimeraSubetapa(long contratoId) throws Exception {
         String respuesta = mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + tokenGestion))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         JsonNode etapas = objectMapper.readTree(respuesta);
-        JsonNode primera = etapas.get(0);
+        // La etapa en curso, no la primera: la etapa 1 (designación) nace
+        // completa cuando el contrato ya tiene supervisor, y una subetapa que ya
+        // está COMPLETADA no sirve para probar que un intento ajeno no la cierra.
+        // Y la 2.2, no la 2.1: el paso del acta no se cierra sin el acta firmada
+        // y la evidencia del envío, y aquí se prueba el acceso, no esa compuerta.
+        JsonNode enCurso = etapas.get(1);
         return new long[]{
-                primera.get("id").asLong(),
-                primera.get("subEtapas").get(0).get("id").asLong()
+                enCurso.get("id").asLong(),
+                enCurso.get("subEtapas").get(1).get("id").asLong()
         };
     }
 

@@ -15,7 +15,7 @@ import type { ErrorResponse } from './types'
  * vacía sea una elección válida y no caiga al valor de desarrollo.
  */
 const origenConfigurado = import.meta.env.VITE_API_URL
-const ORIGEN_COMPILADO =
+export const ORIGEN_COMPILADO =
   origenConfigurado === undefined || origenConfigurado === null ? 'http://localhost:8080' : origenConfigurado
 
 /** Dónde se guarda la dirección del servidor elegida en esta máquina. */
@@ -129,6 +129,24 @@ function segundosDeEspera(res: Response): number | undefined {
   return Number.isFinite(segundos) && segundos > 0 ? segundos : undefined
 }
 
+/**
+ * Códigos con los que responde un intermediario (proxy, balanceador, túnel)
+ * cuando el backend no contestó a tiempo o no estaba: 502, 504 y los 520-524
+ * de Cloudflare. El 503 queda fuera a propósito: es el «Ollama no disponible»
+ * del propio backend, que llega con su mensaje en JSON.
+ */
+export const CODIGOS_DE_PASARELA = new Set([502, 504, 520, 521, 522, 523, 524])
+
+/**
+ * ¿Es un corte del camino y no una respuesta del servidor de SICOT? Un fallo
+ * de red (fetch sin respuesta: TypeError) o la página de error de un
+ * intermediario, que llega sin el JSON del backend.
+ */
+export function esCorteDelCamino(e: unknown): boolean {
+  if (e instanceof TypeError) return true
+  return e instanceof ApiError && CODIGOS_DE_PASARELA.has(e.status) && e.detail === undefined
+}
+
 async function lanzarError(res: Response, path: string): Promise<never> {
   let detail: ErrorResponse | undefined
   try {
@@ -136,12 +154,14 @@ async function lanzarError(res: Response, path: string): Promise<never> {
   } catch {
     // cuerpo vacío o no JSON
   }
-  throw new ApiError(
-    res.status,
-    detail?.message ?? `Error ${res.status}`,
-    detail,
-    res.status === 429 ? segundosDeEspera(res) : undefined,
-  )
+  // Sin el JSON del backend, «Error 524» no le dice nada a nadie: lo que pasó
+  // es que un intermediario se cansó de esperar.
+  const mensaje =
+    detail?.message ??
+    (CODIGOS_DE_PASARELA.has(res.status)
+      ? `El servidor de SICOT no respondió a tiempo (error ${res.status} del intermediario).`
+      : `Error ${res.status}`)
+  throw new ApiError(res.status, mensaje, detail, res.status === 429 ? segundosDeEspera(res) : undefined)
 }
 
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -169,6 +189,23 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   const text = await res.text()
   return text ? (JSON.parse(text) as T) : (undefined as T)
+}
+
+/**
+ * La respuesta tal cual, para leerla a medida que llega (la respuesta en vivo
+ * del Copiloto). Los errores se lanzan igual que en {@link apiFetch}.
+ */
+export async function apiFetchRespuesta(path: string, options: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(options.headers)
+  headers.set('Content-Type', 'application/json')
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
+
+  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
+  if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
+  if (!res.ok) {
+    await lanzarError(res, path)
+  }
+  return res
 }
 
 export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {

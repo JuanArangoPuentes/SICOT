@@ -1,16 +1,18 @@
-// Datos y contenidos del flujo de supervisión GCCON-P-010.
-// Esta es la configuración/base de conocimiento del proceso (etapas, textos del
-// tutorial, respuestas del copiloto, catálogo de documentos formales) — NO son
-// datos de un contrato de ejemplo.
-// Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios de lógica.
-
-import type { Step } from '@/types/domain'
+// Datos del flujo de supervisión GCCON-P-010 que la interfaz necesita y el
+// backend no le da: el documento de cada subetapa, qué documentos formales arma
+// SICOT, dónde se piden fotos de la entrega y los mensajes de cierre de cada
+// paso del tutorial. Es la base de conocimiento local del proceso — NO son
+// datos de un contrato de ejemplo. Las etapas reales de un contrato vienen del
+// backend.
 
 // Sub-pasos cuyo documento formal arma SICOT con los datos del contrato; el supervisor lo revisa y lo firma.
 // Corregido contra fuentes reales (Datos SICOT, ver memoria de proyecto
 // project_sicot_gccon_p010_grounded): el Oficio de Pago GRF-F-089 ("SCM") lo
 // firma el Ordenador del gasto, no el supervisor — no se incluye aquí.
-export const AI_GENERATED_DOCS = new Set(['2.7', '3.4', '4.3', '5.3', '6.3'])
+// El Acta de Inicio (antes 2.7) salió de esta lista el 15-10-2026: según el
+// proceso real que documentó el supervisor, la elabora Contratación y llega por
+// correo, así que SICOT la recibe firmada en el paso 2.1 en vez de generarla.
+export const AI_GENERATED_DOCS = new Set(['3.4', '4.3', '5.3', '6.3'])
 
 // Sub-pasos donde el supervisor aporta fotos de la entrega en el Centro: la
 // verificación física en bodega (3.1) y la evidencia fotográfica que el propio
@@ -19,253 +21,60 @@ export const AI_GENERATED_DOCS = new Set(['2.7', '3.4', '4.3', '5.3', '6.3'])
 // va a mirar.
 export const SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA = new Set(['3.1', '3.2'])
 
-// GCCON-P-010 — Etapas de supervisión de contratos
-export const STEPS_INITIAL: Step[] = [
-  {
-    id: 1,
-    title: 'INICIO — Estudios y Suscripción',
-    status: 'active',
-    subSteps: [
-      {
-        id: '1.1',
-        label: 'Identificación de la necesidad institucional',
-        responsible: 'Área requirente',
-        document: 'Ficha de necesidad',
-        completed: false,
-      },
-      {
-        id: '1.2',
-        label: 'Conformación de la Unidad de Contratación',
-        responsible: 'Ordenador del gasto',
-        document: 'Acto administrativo',
-        completed: false,
-      },
-      {
-        id: '1.3',
-        label: 'Elaboración de estudios previos (GCCON-F-046)',
-        responsible: 'Unidad de Contratación',
-        document: 'GCCON-F-046',
-        completed: false,
-      },
-      {
-        id: '1.4',
-        label: 'Expedición del CDP y aprobación de garantías',
-        responsible: 'Unidad de Contratación',
-        document: 'CDP + Póliza',
-        completed: false,
-      },
-      {
-        id: '1.5',
-        label: 'Suscripción y publicación en SECOP II',
-        responsible: 'Unidad de Contratación',
-        document: 'Contrato SECOP II',
-        completed: false,
-      },
-      {
-        id: '1.6',
-        label: 'Designación formal del supervisor',
-        responsible: 'Ordenador del gasto',
-        document: 'C.I. Supervisión',
-        completed: false,
-      },
-    ],
-  },
-  {
-    id: 2,
-    title: 'INICIO — Acta de Inicio (GCCON-F-018)',
-    status: 'pending',
-    subSteps: [
-      {
-        id: '2.1',
-        label: 'Revisión del objeto y alcance del contrato',
-        responsible: 'Supervisor',
-        document: 'Contrato SECOP II',
-        completed: false,
-      },
-      {
-        id: '2.2',
-        label: 'Verificación de datos del contratista y NIT',
-        responsible: 'Supervisor',
-        document: 'RUT / Cámara comercio',
-        completed: false,
-      },
-      {
-        id: '2.3',
-        label: 'Confirmación de fecha de inicio y duración',
-        responsible: 'Supervisor',
-        document: 'Cronograma',
-        completed: false,
-      },
-      {
-        id: '2.4',
-        label: 'Establecimiento de responsabilidades y puntos de control',
-        responsible: 'Supervisor',
-        document: 'Matriz de control',
-        completed: false,
-      },
-      {
-        id: '2.5',
-        label: 'Verificación de afiliaciones a seguridad social',
-        responsible: 'Supervisor',
-        document: 'Certificado PILA',
-        completed: false,
-      },
-      {
-        id: '2.6',
-        label: 'Registro de garantías vigentes',
-        responsible: 'Unidad de Contratación',
-        document: 'Póliza de cumplimiento',
-        completed: false,
-      },
-      {
-        id: '2.7',
-        label: 'Firma del Acta de Inicio (GCCON-F-018)',
-        responsible: 'Supervisor',
-        document: 'GCCON-F-018',
-        completed: false,
-        aiGenerated: true,
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: 'INSPECCIÓN — Monitoreo y Ejecución',
-    status: 'pending',
-    subSteps: [
-      {
-        id: '3.1',
-        label: 'Verificación física de la entrega en bodega',
-        responsible: 'Supervisor',
-        document: 'Acta de visita',
-        completed: false,
-      },
-      {
-        id: '3.2',
-        label: 'Carga de evidencia fotográfica georreferenciada',
-        responsible: 'Supervisor',
-        document: 'Registro fotográfico',
-        completed: false,
-      },
-      {
-        id: '3.3',
-        label: 'Comparación cantidad/calidad vs. ficha técnica',
-        responsible: 'Supervisor',
-        document: 'Lista de chequeo',
-        completed: false,
-      },
-      {
-        id: '3.4',
-        label: 'Firma del Informe de Supervisión (GCCON-F-031)',
-        responsible: 'Supervisor',
-        document: 'GCCON-F-031',
-        completed: false,
-        aiGenerated: true,
-      },
-    ],
-  },
-  {
-    id: 4,
-    title: 'RECEPCIÓN — Acta de Recibo a Satisfacción',
-    status: 'pending',
-    subSteps: [
-      {
-        id: '4.1',
-        label: 'Verificación de aportes a seguridad social (PILA)',
-        responsible: 'Supervisor',
-        document: 'Planilla PILA',
-        completed: false,
-      },
-      {
-        id: '4.2',
-        label: 'Verificación de factura electrónica DIAN (FEV)',
-        responsible: 'Supervisor',
-        document: 'FEV DIAN',
-        completed: false,
-      },
-      {
-        id: '4.3',
-        label: 'Firma del Acta de Recibo a Satisfacción (GIL-F-010)',
-        responsible: 'Supervisor',
-        document: 'GIL-F-010',
-        completed: false,
-        aiGenerated: true,
-      },
-    ],
-  },
-  {
-    // "ESUCON" no es un código de formato oficial confirmado — se mantiene
-    // en el título por ser el término que usa el CTMA, pero el documento en
-    // sí se modela como "Certificación de cumplimiento" (PENDIENTE_DE_DEFINIR).
-    // El Oficio de Pago (GRF-F-089) lo firma el Ordenador del gasto, no el
-    // supervisor, así que no aparece como sub-paso de firma aquí.
-    id: 5,
-    title: 'CERTIFICACIÓN — Cumplimiento y Trámite de Pago',
-    status: 'pending',
-    subSteps: [
-      {
-        id: '5.1',
-        label: 'Verificación de vigencia de garantías',
-        responsible: 'Supervisor',
-        document: 'Póliza vigencia',
-        completed: false,
-      },
-      {
-        id: '5.2',
-        label: 'Revisión de orden de pago y CRP',
-        responsible: 'Supervisor',
-        document: 'CRP',
-        completed: false,
-      },
-      {
-        id: '5.3',
-        label: 'Firma de la Certificación de cumplimiento',
-        responsible: 'Supervisor',
-        document: 'Certificación de cumplimiento',
-        completed: false,
-        aiGenerated: true,
-      },
-    ],
-  },
-  {
-    id: 6,
-    title: 'CIERRE — Informe Final y Archivo (GCCON-F-030)',
-    status: 'pending',
-    subSteps: [
-      {
-        id: '6.1',
-        label: 'Verificación de cumplimiento total del objeto contractual',
-        responsible: 'Supervisor',
-        document: 'Informe final',
-        completed: false,
-      },
-      {
-        id: '6.2',
-        label: 'Evaluación de modificaciones o adiciones (si aplica)',
-        responsible: 'Supervisor',
-        document: 'Adición / prórroga SECOP II',
-        completed: false,
-      },
-      {
-        id: '6.3',
-        label: 'Firma del Informe Final de Supervisión (GCCON-F-030)',
-        responsible: 'Supervisor',
-        document: 'GCCON-F-030',
-        completed: false,
-        aiGenerated: true,
-      },
-      {
-        id: '6.4',
-        label: 'Cierre y archivo del expediente digital en SIGEP',
-        responsible: 'Unidad de Contratación',
-        document: 'Expediente SIGEP',
-        completed: false,
-      },
-    ],
-  },
-]
+// Lo que el paso del acta exige antes de cerrarse. Coincide con
+// Subetapa.documentosRequeridos en el backend, que es quien lo hace cumplir.
+export const ACTA_FIRMADA_Y_ENVIO = 'ACTA_FIRMADA_Y_ENVIO'
+
+// Los pasos 2.2 a 2.4 del proceso real traen una herramienta en el panel. Se
+// reconocen por el nombre de la subetapa y no por el código: los contratos
+// creados antes del 15-10-2026 tienen otras subetapas con esos mismos códigos
+// («2.2 Verificación de datos del contratista y NIT»…) y no deben mostrarla.
+export type HerramientaDelPaso = 'VERIFICACION_SECOP' | 'CORREO_SST' | 'CORREO_CONTRATISTA'
+export const HERRAMIENTA_POR_PASO: Record<string, HerramientaDelPaso> = {
+  'Aviso a los profesionales SST y ambiental': 'CORREO_SST',
+  'Verificación de especificaciones en SECOP II': 'VERIFICACION_SECOP',
+  'Contacto con el contratista y acuerdo de entregas': 'CORREO_CONTRATISTA',
+}
+
+// Documento que se maneja en cada subetapa, por su código.
+//
+// Es lo único de la definición del proceso que la plantilla del backend
+// (GcconP010Plantilla.java) no trae: títulos, rótulos, responsables y estado de
+// cada subetapa llegan del servidor en mapEtapas. Aquí había una copia completa
+// de todas las subetapas (STEPS_INITIAL) de la que solo se leía este campo, y
+// quien la editaba creía estar cambiando lo que se ve en pantalla.
+//
+// Las etapas 1 y 2 siguen el proceso real que documentó el supervisor Alex
+// Zapata el 15-10-2026 (docs/producto/LISTA_CHEQUEO_ALEX.md); las 3 a 6 siguen
+// GCCON-P-010 hasta que él documente esa parte. Un contrato anterior a esa fecha
+// con un código que ya no existe (1.4 a 1.6, 2.5 a 2.7) cae en la descripción
+// de su subetapa, que trae el servidor.
+export const DOCUMENTO_POR_SUBETAPA: Record<string, string> = {
+  '1.1': 'Contrato SECOP II',
+  '1.2': 'GCCON-F-032',
+  '1.3': 'Registro en SICOT',
+  '2.1': 'Acta firmada + evidencia del envío',
+  '2.2': 'Correo a SST y ambiental',
+  '2.3': 'SECOP II',
+  '2.4': 'Correo al contratista',
+  '3.1': 'Acta de visita',
+  '3.2': 'Registro fotográfico',
+  '3.3': 'Lista de chequeo',
+  '3.4': 'GCCON-F-031',
+  '4.1': 'Planilla PILA',
+  '4.2': 'FEV DIAN',
+  '4.3': 'GIL-F-010',
+  '5.1': 'Póliza vigencia',
+  '5.2': 'CRP',
+  '5.3': 'Certificación de cumplimiento',
+  '6.1': 'Informe final',
+  '6.2': 'Adición / prórroga SECOP II',
+  '6.3': 'GCCON-F-030',
+  '6.4': 'Expediente SIGEP',
+}
 
 export const TUTORIAL: Record<string, string> = {
-  welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá las 6 etapas del proceso GCCON-P-010. Yo lo voy a guiar paso a paso — en cada etapa activa le explico qué hacer, y los documentos formales los arma SICOT con los datos del contrato; usted los revisa y los firma. Haga clic en "Iniciar Paso" cuando esté listo para empezar.`,
+  welcome: `Este es su panel de supervisión. Cuando se le asigne un contrato, aquí verá sus 6 etapas. La designación ya queda registrada por el apoyo a la supervisión, así que usted empieza en el Acta de Inicio. Yo lo voy a guiar paso a paso — en cada etapa activa le explico qué hacer; el acta la recibe de Contratación, y los demás documentos formales los arma SICOT con los datos del contrato para que usted los revise y los firme. Haga clic en "Iniciar Paso" cuando esté listo para empezar.`,
 
   // La guía de cada sub-paso no vive aquí: la arma data/guiaSubPaso.ts con la
   // descripción y el responsable de la plantilla GCCON-P-010, sin llamar al
@@ -273,9 +82,9 @@ export const TUTORIAL: Record<string, string> = {
   // la respuesta se cortaba a los 240 s). Aquí solo quedan los mensajes de
   // cierre de cada paso, que son un resumen de transición.
   step1done:
-    'Ha completado el Paso 1 — Inicio. Ahora empieza su participación activa: en el Paso 2 usted revisa los datos del contratista, confirma el cronograma y firma el Acta de Inicio GCCON-F-018, que SICOT arma con los datos del contrato.',
+    'La designación quedó registrada. Ahora empieza su participación activa: en el Paso 2 firma y devuelve el Acta de Inicio que le envía Contratación, avisa a los profesionales SST y ambiental, verifica el contrato en el SECOP II y acuerda las entregas con el contratista.',
   step2done:
-    'Ha completado el Paso 2 — Inicio. El Acta GCCON-F-018 quedó firmada y registrada. Ahora avanzamos al Paso 3: Inspección, donde verificará la entrega física en bodega.',
+    'Ha completado el Paso 2 — Inicio. El Acta de Inicio firmada y la evidencia de su envío quedaron en el expediente, y el contrato quedó verificado contra el SECOP II. Ahora avanzamos al Paso 3: Inspección, donde verificará la entrega física en bodega.',
   step3done:
     'Ha completado el Paso 3 — Inspección. El Informe GCCON-F-031 quedó firmado y registrado en el expediente. Ahora avanzamos al Paso 4: Recepción formal con el Acta GIL-F-010.',
   step4done:
@@ -283,7 +92,7 @@ export const TUTORIAL: Record<string, string> = {
   step5done:
     'Ha completado el Paso 5 — Certificación. Su certificación quedó firmada; el trámite de pago ahora sigue con el Ordenador del gasto. Avanzamos al Paso 6: Cierre, el último de su supervisión.',
   step6done:
-    'Ha completado el Paso 6 — Cierre. Su supervisión del contrato quedó formalmente cerrada: Acta de Inicio, Informe de Supervisión, Acta de Recibo, Certificación de cumplimiento e Informe Final quedaron firmados y registrados en el expediente.',
+    'Ha completado el Paso 6 — Cierre. Su supervisión del contrato quedó formalmente cerrada: el Acta de Inicio firmada, el Informe de Supervisión, el Acta de Recibo, la Certificación de cumplimiento y el Informe Final quedaron registrados en el expediente.',
 }
 
 // NOTA: la coincidencia de palabras clave (CHAT_RESPONSES) que vivía aquí se
@@ -294,18 +103,14 @@ export const TUTORIAL: Record<string, string> = {
 
 // Documentos formales que arma SICOT — se siguen en la pestaña Documentos
 // (GCCON-P-010 / GCCON-M-002). Claves de generación (`tipo`) coinciden con
-// PlantillaDocumentoIA.CATALOGO en el backend.
+// PlantillaDocumentoIA.CATALOGO en el backend, y `llevaObservaciones` con su
+// campo del mismo nombre: la Certificación no tiene apartado de observaciones
+// en el formato oficial. El Acta de Inicio ya no está: la elabora Contratación
+// y el supervisor la carga firmada en el paso 2.1.
 export const FORMAL_DOCS = [
   {
-    subStepId: '2.7',
-    tipo: 'ACTA_INICIO',
-    name: 'Acta de Inicio',
-    code: 'GCCON-F-018',
-    step: 2,
-    desc: 'Fecha de inicio, duración, alcance y responsabilidades del supervisor.',
-  },
-  {
     subStepId: '3.4',
+    llevaObservaciones: true,
     tipo: 'INFORME_SUPERVISION',
     name: 'Informe de Supervisión',
     code: 'GCCON-F-031',
@@ -314,6 +119,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '4.3',
+    llevaObservaciones: true,
     tipo: 'ACTA_RECIBO',
     name: 'Acta de Recibo a Satisfacción',
     code: 'GIL-F-010',
@@ -322,6 +128,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '5.3',
+    llevaObservaciones: false,
     tipo: 'CERTIFICACION_CUMPLIMIENTO',
     name: 'Certificación de cumplimiento',
     code: 'PENDIENTE_DE_DEFINIR',
@@ -330,6 +137,7 @@ export const FORMAL_DOCS = [
   },
   {
     subStepId: '6.3',
+    llevaObservaciones: true,
     tipo: 'INFORME_FINAL',
     name: 'Informe Final de Supervisión',
     code: 'GCCON-F-030',

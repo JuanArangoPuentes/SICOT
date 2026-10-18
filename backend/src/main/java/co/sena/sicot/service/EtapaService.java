@@ -7,8 +7,11 @@ import co.sena.sicot.entity.Etapa;
 import co.sena.sicot.entity.Subetapa;
 import co.sena.sicot.entity.enums.EstadoEtapa;
 import co.sena.sicot.entity.enums.EstadoSubetapa;
+import co.sena.sicot.entity.enums.TipoDocumento;
+import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.EtapaMapper;
+import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.security.SecurityUtils;
@@ -24,13 +27,16 @@ public class EtapaService {
     private final SubetapaRepository subetapaRepository;
     private final ContratoService contratoService;
     private final RegistroService registroService;
+    private final DocumentoRepository documentoRepository;
 
     public EtapaService(EtapaRepository etapaRepository, SubetapaRepository subetapaRepository,
-                        ContratoService contratoService, RegistroService registroService) {
+                        ContratoService contratoService, RegistroService registroService,
+                        DocumentoRepository documentoRepository) {
         this.etapaRepository = etapaRepository;
         this.subetapaRepository = subetapaRepository;
         this.contratoService = contratoService;
         this.registroService = registroService;
+        this.documentoRepository = documentoRepository;
     }
 
     @Transactional
@@ -80,6 +86,9 @@ public class EtapaService {
         if (sentido == TransicionesDeEstado.Sentido.SIN_CAMBIO) {
             return EtapaMapper.toSubetapaResponse(subetapa);
         }
+        if (nuevoEstado == EstadoSubetapa.COMPLETADA) {
+            exigirDocumentos(subetapa);
+        }
 
         subetapa.setEstado(nuevoEstado);
         subetapaRepository.save(subetapa);
@@ -100,6 +109,40 @@ public class EtapaService {
 
         recalcularEtapa(subetapa.getEtapa());
         return EtapaMapper.toSubetapaResponse(subetapa);
+    }
+
+    /**
+     * El paso del acta de inicio «queda esperando», como lo describe el
+     * proceso real, hasta que el supervisor carga el acta firmada y la
+     * evidencia de que la devolvió por correo. Se exige aquí y no solo en el
+     * panel: cerrar el paso con una llamada directa a la API dejaba el
+     * expediente sin el acta, que es lo único que el paso tiene que dejar.
+     *
+     * <p>La regla es deliberadamente simple: al menos un PDF que no sea la
+     * evidencia (el acta) y al menos dos documentos en el paso (el acta y la
+     * evidencia). Hasta el 18-10-2026 bastaba cualquier PDF: dos PDF de la
+     * evidencia del envío cerraban el paso sin el acta. La evidencia se
+     * reconoce por el nombre con que la guarda el panel
+     * ({@code ActaFirmadaYEnvio.NOMBRE_EVIDENCIA}).
+     */
+    /** El nombre con que el panel guarda la evidencia del envío del acta (ActaFirmadaYEnvio.tsx). */
+    static final String NOMBRE_DE_LA_EVIDENCIA = "Evidencia del envío del acta";
+
+    private void exigirDocumentos(Subetapa subetapa) {
+        if (!GcconP010Plantilla.ACTA_FIRMADA_Y_ENVIO.equals(subetapa.getDocumentosRequeridos())) {
+            return;
+        }
+        long cargados = documentoRepository.countBySubetapaId(subetapa.getId());
+        boolean hayPdf = documentoRepository.existsBySubetapaIdAndTipoAndNombreNotLike(subetapa.getId(),
+                TipoDocumento.PDF, NOMBRE_DE_LA_EVIDENCIA + "%");
+        if (!hayPdf || cargados < 2) {
+            String cuantos = cargados == 0 ? "Todavía no ha cargado ninguno."
+                    : !hayPdf ? "Hay " + cargados + (cargados == 1 ? " cargado" : " cargados")
+                            + ", pero falta el acta firmada en PDF."
+                    : "Falta uno: hay 1 documento cargado.";
+            throw new BusinessException("Para cerrar este paso cargue el Acta de Inicio firmada (PDF) y la evidencia"
+                    + " de que la devolvió por correo (pantallazo o PDF del correo). " + cuantos);
+        }
     }
 
     @Transactional(readOnly = true)

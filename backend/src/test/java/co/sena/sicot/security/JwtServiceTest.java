@@ -4,10 +4,13 @@ import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,7 +54,7 @@ class JwtServiceTest {
         String token = jwt.generateToken(supervisor);
 
         assertThat(jwt.extractEmail(token)).isEqualTo("supervisor@soy.sena.edu.co");
-        assertThat(jwt.isTokenValid(token, "supervisor@soy.sena.edu.co")).isTrue();
+        assertThat(jwt.isTokenValid(token, supervisor)).isTrue();
     }
 
     @Test
@@ -102,7 +105,47 @@ class JwtServiceTest {
         JwtService jwt = new JwtService(SECRETO, OCHO_HORAS_MS);
         String token = jwt.generateToken(usuario("supervisor@soy.sena.edu.co", Rol.SUPERVISOR));
 
-        assertThat(jwt.isTokenValid(token, "administrador@soy.sena.edu.co")).isFalse();
+        assertThat(jwt.isTokenValid(token, usuario("administrador@soy.sena.edu.co", Rol.ADMINISTRADOR))).isFalse();
+    }
+
+    /**
+     * Restablecer la contraseña de una cuenta comprometida tiene que cortar a
+     * quien tenga un token anterior, no dejarlo operar hasta que caduque.
+     */
+    @Test
+    void unTokenEmitidoAntesDeRevocarLasSesionesDejaDeValer() {
+        JwtService jwt = new JwtService(SECRETO, OCHO_HORAS_MS);
+        Usuario supervisor = usuario("supervisor@soy.sena.edu.co", Rol.SUPERVISOR);
+        String anterior = jwt.generateToken(supervisor);
+
+        supervisor.revocarSesiones();
+
+        assertThat(jwt.isTokenValid(anterior, supervisor)).isFalse();
+        assertThat(jwt.isTokenValid(jwt.generateToken(supervisor), supervisor)).isTrue();
+    }
+
+    /**
+     * Los tokens emitidos antes de que existiera la versión no la traen: valen
+     * para una cuenta que nunca cambió de credenciales (desplegar no cierra la
+     * sesión de nadie) y dejan de valer en cuanto cambian.
+     */
+    @Test
+    void unTokenSinVersionValeComoLaVersionInicial() {
+        JwtService jwt = new JwtService(SECRETO, OCHO_HORAS_MS);
+        Usuario supervisor = usuario("supervisor@soy.sena.edu.co", Rol.SUPERVISOR);
+        Date ahora = new Date();
+        String sinVersion = Jwts.builder()
+                .subject(supervisor.getEmail())
+                .issuedAt(ahora)
+                .expiration(new Date(ahora.getTime() + OCHO_HORAS_MS))
+                .signWith(Keys.hmacShaKeyFor(Base64.getDecoder().decode(SECRETO)))
+                .compact();
+
+        assertThat(jwt.isTokenValid(sinVersion, supervisor)).isTrue();
+
+        supervisor.revocarSesiones();
+
+        assertThat(jwt.isTokenValid(sinVersion, supervisor)).isFalse();
     }
 
     @Test

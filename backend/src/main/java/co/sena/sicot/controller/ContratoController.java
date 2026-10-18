@@ -7,8 +7,10 @@ import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.dto.cronograma.CronogramaResponse;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.CronogramaService;
+import co.sena.sicot.service.VerificacionSecopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -31,10 +33,13 @@ public class ContratoController {
 
     private final ContratoService contratoService;
     private final CronogramaService cronogramaService;
+    private final VerificacionSecopService verificacionSecop;
 
-    public ContratoController(ContratoService contratoService, CronogramaService cronogramaService) {
+    public ContratoController(ContratoService contratoService, CronogramaService cronogramaService,
+                              VerificacionSecopService verificacionSecop) {
         this.cronogramaService = cronogramaService;
         this.contratoService = contratoService;
+        this.verificacionSecop = verificacionSecop;
     }
 
     @Operation(summary = "Listar contratos", description = "Filtros opcionales por supervisor y estado.")
@@ -179,5 +184,29 @@ public class ContratoController {
     @GetMapping("/{id}/cronograma")
     public ResponseEntity<CronogramaResponse> cronograma(@PathVariable Long id) {
         return ResponseEntity.ok(CronogramaResponse.de(cronogramaService.de(id)));
+    }
+
+    /**
+     * Lo que publica el SECOP II del contrato, con las diferencias frente a lo
+     * registrado en SICOT (paso 2.3 del proceso real del supervisor).
+     *
+     * <p>Mismo patrón de autorización que el cronograma: sin {@code @PreAuthorize},
+     * porque {@code ContratoService.buscar} ya restringe al SUPERVISOR a su
+     * contrato. Responde 200 también cuando datos.gov.co no contesta, con
+     * {@code disponible=false} y el motivo: no tener red no es un error del
+     * supervisor ni del sistema.
+     */
+    @Operation(summary = "Verificación del contrato contra los datos abiertos del SECOP II")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Verificación (o motivo por el que no se pudo hacer)",
+                    content = @Content(schema = @Schema(implementation = VerificacionSecopResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/secop")
+    public ResponseEntity<VerificacionSecopResponse> verificarEnSecop(@PathVariable Long id) {
+        return ResponseEntity.ok(verificacionSecop.verificar(id));
     }
 }

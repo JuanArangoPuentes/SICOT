@@ -37,8 +37,12 @@ export function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCre
       setError('El nombre completo es obligatorio.')
       return
     }
-    if (!correo.endsWith('@soy.sena.edu.co')) {
-      setError('El correo debe pertenecer al dominio @soy.sena.edu.co')
+    // Los funcionarios del SENA usan @sena.edu.co (el supervisor real es
+    // afzapatar@sena.edu.co) y los aprendices @soy.sena.edu.co. Hasta el
+    // 18-10-2026 solo se admitía el segundo: no se podía dar de alta a ningún
+    // supervisor real con su correo.
+    if (!/@(soy\.)?sena\.edu\.co$/i.test(correo)) {
+      setError('El correo debe ser institucional del SENA (@sena.edu.co o @soy.sena.edu.co)')
       return
     }
     if (!tel.trim()) {
@@ -151,12 +155,12 @@ export function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCre
           style={{ width: '100%', padding: '9px 10px' }}
         />
       </Field>
-      <Field label="Correo institucional (@soy.sena.edu.co)">
+      <Field label="Correo institucional del SENA">
         <input
           type="email"
           value={correo}
           onChange={(e) => setCorreo(e.target.value)}
-          placeholder="usuario@soy.sena.edu.co"
+          placeholder="usuario@sena.edu.co"
           style={{ width: '100%', padding: '9px 10px' }}
         />
       </Field>

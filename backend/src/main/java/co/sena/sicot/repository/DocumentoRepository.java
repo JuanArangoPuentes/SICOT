@@ -3,6 +3,7 @@ package co.sena.sicot.repository;
 import co.sena.sicot.dto.documento.DocumentoResponse;
 import co.sena.sicot.dto.seguimiento.DocumentoResumen;
 import co.sena.sicot.entity.Documento;
+import co.sena.sicot.entity.enums.TipoDocumento;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -45,7 +46,6 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
                 fmt.nombre,
                 d.nombre,
                 d.tipo,
-                d.rutaArchivo,
                 d.estado,
                 d.tamanioBytes,
                 d.generadoPorIa,
@@ -74,12 +74,25 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      * generación para no crear un segundo «Acta de Inicio» después de firmada
      * la primera: el borrador sobrante quedaba como tarea pendiente en la
      * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     *
+     * <p>Solo cuenta lo que generó SICOT, con el mismo criterio que el panel:
+     * un PDF cargado a mano y firmado con nombre parecido («Acta de Inicio
+     * firmada por el contratista») bloqueaba la generación, el panel no lo
+     * reconocía como el acta del paso, y el sub-paso no se cerraba nunca
+     * (revisión del 29-09-2026).
      */
-    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNotNull(
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
-    /** El borrador sin firmar más reciente de un formato en una subetapa. */
-    java.util.Optional<Documento> findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndFirmaIdIsNullOrderByFechaSubidaDesc(
+    /**
+     * El borrador sin firmar más reciente de un formato en una subetapa, entre
+     * los que generó SICOT. Sin la condición de «generado», un PDF cargado a
+     * mano cuyo nombre empezara igual («Acta de Inicio firmada por el
+     * contratista») se tomaba por borrador y la regeneración lo sobrescribía
+     * (revisión adversarial del 28-09-2026).
+     */
+    java.util.Optional<Documento>
+            findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
             Long contratoId, Long subetapaId, String prefijoNombre);
 
     /**
@@ -88,6 +101,18 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
      */
     boolean existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
             Long contratoId, Long subetapaId, String nombre, Long id);
+
+    /**
+     * Cuántos documentos se cargaron en un paso. Lo usa la compuerta del paso
+     * del acta de inicio, que no se cierra sin el acta firmada y la evidencia
+     * del envío. Es un conteo: no trae el contenido binario.
+     */
+    long countBySubetapaId(Long subetapaId);
+
+    boolean existsBySubetapaIdAndTipo(Long subetapaId, TipoDocumento tipo);
+
+    /** ¿Hay en el sub-paso un documento de este tipo cuyo nombre no encaja con el patrón? (EtapaService) */
+    boolean existsBySubetapaIdAndTipoAndNombreNotLike(Long subetapaId, TipoDocumento tipo, String patron);
 
     /**
      * Resumen de los documentos de varios contratos, sin contenido binario.

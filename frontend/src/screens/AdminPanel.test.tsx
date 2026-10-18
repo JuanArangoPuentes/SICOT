@@ -1,8 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPanel from './AdminPanel'
 import { PrefsProvider } from '@/prefs'
 import { sesionAdministrador } from '@/test/dobles'
+import { ApiError } from '@/services/api/client'
+import type { FormatoDocumentalResponse } from '@/services/api/types'
 
 /**
  * Pruebas del panel de administración, después de partirlo de 913 a 370 líneas.
@@ -108,5 +110,43 @@ describe('AdminPanel', () => {
     montar()
 
     await waitFor(() => expect(screen.getAllByText(/usuarios/i).length).toBeGreaterThan(0))
+  })
+
+  describe('descargar un formato', () => {
+    const formato: FormatoDocumentalResponse = {
+      id: 4,
+      codigo: 'GCCON-F-018',
+      nombre: 'Acta de Inicio',
+      version: '03',
+      tipoArchivo: 'DOCX',
+      nombreArchivo: 'GCCON-F-018.docx',
+      tamanioBytes: 20480,
+      estado: 'VIGENTE',
+      subidoPorNombre: null,
+      fechaActualizacion: '2026-09-01T08:00:00Z',
+    }
+
+    async function descargar(resultado: () => Promise<unknown>) {
+      const servicio = await import('@/services/formatoService')
+      vi.mocked(servicio.getFormatos).mockResolvedValue([formato])
+      vi.mocked(servicio.descargarFormato).mockImplementation(resultado as typeof servicio.descargarFormato)
+      montar({ vista: 'documentos' })
+      fireEvent.click(await screen.findByRole('button', { name: /descargar/i }))
+    }
+
+    // Antes: `.catch(() => {})`. Con la sesión caducada o el formato borrado,
+    // el botón no hacía nada visible.
+    it('si falla, dice por qué', async () => {
+      await descargar(() => Promise.reject(new ApiError(404, 'El formato ya no existe.')))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('El formato ya no existe.')
+    })
+
+    // En el APK el «Guardar como» se cierra sin más señal.
+    it('en el teléfono confirma que quedó guardado', async () => {
+      await descargar(() => Promise.resolve('guardado'))
+
+      expect(await screen.findByRole('status')).toHaveTextContent('«GCCON-F-018.docx» quedó guardado en el teléfono.')
+    })
   })
 })

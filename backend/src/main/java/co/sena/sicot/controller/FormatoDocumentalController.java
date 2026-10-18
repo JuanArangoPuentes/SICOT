@@ -4,6 +4,7 @@ import co.sena.sicot.dto.formato.FormatoDocumentalResponse;
 import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.FormatoDocumentalService;
+import co.sena.sicot.service.NombreDeDescarga;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,7 +13,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -22,7 +22,6 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
@@ -95,11 +94,9 @@ public class FormatoDocumentalController {
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long id) {
         FormatoDocumental formato = formatoService.buscarConContenido(id);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename(formato.getNombreArchivo(), StandardCharsets.UTF_8)
-                .build();
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        NombreDeDescarga.cabecera(formato.getNombreArchivo(), formato.getContentType()))
                 // Ver ArchivoValidator.mediaTypeSeguro: un Content-Type inválido
                 // guardado antes de la corrección haría fallar la descarga con 500.
                 .contentType(ArchivoValidator.mediaTypeSeguro(formato.getContentType()))

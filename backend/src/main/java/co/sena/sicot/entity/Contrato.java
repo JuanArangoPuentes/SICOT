@@ -73,6 +73,21 @@ public class Contrato {
     @Column(name = "centro_costo", length = 100)
     private String centroCosto;
 
+    /** Enlace del proceso en SECOP II, tal como lo trae el acto de designación (GCCON-F-032). */
+    @Column(name = "enlace_secop", length = 500)
+    private String enlaceSecop;
+
+    /** Nombre del «apoyo a la supervisión» que nombra la designación: quien registra el contrato. */
+    @Column(name = "apoyo_supervision", length = 255)
+    private String apoyoSupervision;
+
+    @Column(name = "fecha_designacion")
+    private LocalDate fechaDesignacion;
+
+    /** Correo del contratista según el acta de inicio; el supervisor le escribe desde el paso 2.4. */
+    @Column(name = "correo_contratista", length = 255)
+    private String correoContratista;
+
     @CreationTimestamp
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private Instant fechaCreacion;
@@ -128,6 +143,18 @@ public class Contrato {
 
     public String getCentroCosto() { return centroCosto; }
     public void setCentroCosto(String centroCosto) { this.centroCosto = centroCosto; }
+
+    public String getEnlaceSecop() { return enlaceSecop; }
+    public void setEnlaceSecop(String enlaceSecop) { this.enlaceSecop = enlaceSecop; }
+
+    public String getApoyoSupervision() { return apoyoSupervision; }
+    public void setApoyoSupervision(String apoyoSupervision) { this.apoyoSupervision = apoyoSupervision; }
+
+    public LocalDate getFechaDesignacion() { return fechaDesignacion; }
+    public void setFechaDesignacion(LocalDate fechaDesignacion) { this.fechaDesignacion = fechaDesignacion; }
+
+    public String getCorreoContratista() { return correoContratista; }
+    public void setCorreoContratista(String correoContratista) { this.correoContratista = correoContratista; }
 
     public Instant getFechaCreacion() { return fechaCreacion; }
     public Instant getFechaActualizacion() { return fechaActualizacion; }

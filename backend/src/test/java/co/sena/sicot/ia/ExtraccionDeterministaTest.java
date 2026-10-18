@@ -435,4 +435,270 @@ class ExtraccionDeterministaTest {
     void unaMencionDeContratoDeObraNoEsElTitulo() {
         assertThat(ExtraccionDeterminista.tipo("OBJETO: INTERVENTORIA TECNICA AL CONTRATO DE OBRA No. 45")).isNull();
     }
+
+    // Los documentos del contrato CO1.PCCNTR.10057820 (Lote 4, Suministros
+    // Maybe), que el supervisor entregó el 15-10-2026. Los renglones están
+    // copiados tal como los devuelve PDFBox sobre los PDF reales, espacios de
+    // sobra incluidos: antes de medirlos se daba por hecho que de esa acta
+    // salía todo, y en realidad el valor y la tipología volvían vacíos, y del
+    // formato de designación salía un número de contrato truncado.
+
+    private static final String ACTA_LOTE_4 = """
+            Número y fecha del registro presupuestal 123726 del 14/10/2026\s
+            Fecha de aprobación de las garantías 14/10/2026\s
+            Fecha de inicio 14/10/2026\s
+            Fecha de terminación 15/12/2026\s
+
+            CONTRATO  CO1.PCCNTR.10057820\s
+            TIPOLOGÍA Suministro \s
+            OBJETO 5_9205_306 Contratar el suministro de materiales para la formación para los\s
+            diferentes programas de formación del Centro Tecnológico del Mobiliario\s
+            VALOR 45.900.300 \s
+            PLAZO  67 días\s
+            LUGAR DE EJECUCIÓN Centro Tecnológico del Mobiliario\s
+            CONTRATISTA SUMINISTROS MAYBE S.A.S\s
+            NIT. 800154801\s
+            REPRESENTANTE LEGAL LUZ MARINA MEJIA PEREZ \s
+            SUPERVISOR DESIGNADO ALEX FERNANDO ZAPATA RIOS \s
+
+            2
+            GCCON-F-018 V.06
+
+            ALEX FERNANDO ZAPATA RIOS\s
+            Supervisor\s
+
+            SUMINISTROS MAYBE S.A.S\s
+            NIT. 800154801-6,\s
+            Representante legal\s
+            maybesuministros@gmail.com\s
+
+            Elaboró: Carolinne Moreno Triana – Apoyo Contratación Bienes y servicios.\s
+            """;
+
+    /** La tabla del GCCON-F-032 es estrecha y parte el número en dos renglones. */
+    private static final String DESIGNACION_LOTE_4 = """
+            1\s
+            GCCON-F-032 V.03\s
+
+            FORMATO DE DESIGNACIÓN DE SUPERVISOR Y/O APOYO A LA SUPERVISIÓN\s
+
+            Itagüí, 9 de octubre de 2026 \s
+
+            PARA  Alex Fernando Zapata Rios (Supervisor)\s
+                                         Yeison Dariel Zapata Monsalve (Apoyo a la supervisión)\s
+            DE  Carlos Mario Castañeda Monsalve\s
+            ASUNTO Designación de supervisor(a) y/o apoyo a la supervisión\s
+
+            Me permito comunicarle que ha sido designado(a) como supervisor y/o apoyo a la supervisión del (los)\s
+            siguiente(s) contrato(s) o convenios(s).\s
+
+            CONTRATO NRO. CONTRATISTA OBJETO\s
+            CO1.PCCNTR.1005
+            7820\s
+            SUMINISTROS MAYBE S.A.S \s
+            5_9205_306 Contratar el suministro\s
+            de materiales para la formación para\s
+            los diferentes programas de\s
+            formación del Centro Tecnológico del\s
+            Mobiliario\s
+            Link\s
+            https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?
+            noticeUID=CO1.NTC.10815297&isFromPublicArea=True&isModal=False\s
+
+            En caso de presentar incompatibilidad y/o conflicto de interés para ejercer como supervisor(a) y/o apoyo\s
+            a la supervisión en el contrato referido, deberá manifestarlo por escrito máximo al día siguiente de la\s
+            """;
+
+    private static final String ENLACE_LOTE_4 = "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/"
+            + "Index?noticeUID=CO1.NTC.10815297&isFromPublicArea=True&isModal=False";
+
+    @Test
+    @DisplayName("de la designación salen el enlace del SECOP entero, el supervisor, el apoyo y la fecha")
+    void laDesignacionTraeLoQueNecesitaElPaso1() {
+        ExtraccionContratoResponse r = extractor.extraer(DESIGNACION_LOTE_4);
+
+        assertThat(r.enlaceSecop()).isEqualTo(ENLACE_LOTE_4);
+        assertThat(r.supervisorDesignado()).isEqualTo("Alex Fernando Zapata Rios");
+        assertThat(r.apoyoSupervision()).isEqualTo("Yeison Dariel Zapata Monsalve");
+        assertThat(r.fechaDesignacion()).isEqualTo("2026-10-09");
+    }
+
+    @Test
+    @DisplayName("el contratista y el objeto se leen de la tabla de la designación, sin preguntarle al modelo")
+    void laTablaDeLaDesignacionTraeContratistaYObjeto() {
+        ExtraccionContratoResponse r = extractor.extraer(DESIGNACION_LOTE_4);
+
+        assertThat(r.proveedor()).isEqualTo("SUMINISTROS MAYBE S.A.S");
+        assertThat(r.objeto()).isEqualTo("5_9205_306 Contratar el suministro de materiales para la formación para los"
+                + " diferentes programas de formación del Centro Tecnológico del Mobiliario");
+        // Con el objeto el tipo se deduce («suministro»): no queda nada para el modelo.
+        assertThat(ExtraccionDeterminista.tipoPorObjeto(r.objeto())).isEqualTo("Suministro de Bienes");
+    }
+
+    @Test
+    @DisplayName("del acta salen el supervisor designado y el correo del contratista, no una fecha de designación")
+    void elActaTraeElCorreoDelContratista() {
+        ExtraccionContratoResponse r = extractor.extraer(ACTA_LOTE_4);
+
+        assertThat(r.supervisorDesignado()).isEqualTo("ALEX FERNANDO ZAPATA RIOS");
+        assertThat(r.correoContratista()).isEqualTo("maybesuministros@gmail.com");
+        // El acta no es una designación: su «En Itagüí, el 14 de octubre» no es
+        // la fecha en que se designó al supervisor.
+        assertThat(r.fechaDesignacion()).isNull();
+        assertThat(r.enlaceSecop()).isNull();
+    }
+
+    @Test
+    @DisplayName("un enlace completo no se pega con la primera palabra del párrafo de abajo")
+    void elEnlaceNoArrastraElParrafoSiguiente() {
+        assertThat(ExtraccionDeterminista.enlaceSecop("""
+                Link
+                https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1
+                Conforme a lo anterior, el supervisor…
+                """)).isEqualTo("https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1");
+    }
+
+    @Test
+    @DisplayName("un enlace que no es del SECOP no se toma como enlace del proceso")
+    void soloSeTomanEnlacesDelSecop() {
+        assertThat(ExtraccionDeterminista.enlaceSecop("Link https://otro-sitio.example/Index?noticeUID=1")).isNull();
+    }
+
+    @Test
+    @DisplayName("los correos del SENA no se toman como correo del contratista")
+    void losCorreosDelSenaNoSonDelContratista() {
+        assertThat(ExtraccionDeterminista.correoDelContratista(
+                "Supervisor afzapatar@sena.edu.co\nCONTRATISTA Maderas S.A.S\nventas@proveedor.com.co"))
+                .isEqualTo("ventas@proveedor.com.co");
+        assertThat(ExtraccionDeterminista.correoDelContratista("Elaboró: abogada@soy.sena.edu.co")).isNull();
+    }
+
+    // Sondeo del 16-10-2026 sobre los documentos institucionales reales: dos
+    // campos salían con datos que no eran del contrato.
+
+    @Test
+    @DisplayName("solo se toma el correo que está junto al contratista, no el primero del documento")
+    void unCorreoAjenoNoPasaPorElDelContratista() {
+        // Sintético: un correo en otra parte del documento no se toma por el del contratista.
+        String acta = """
+                Numero y fecha del registro presupuestal 56725 del 17 de junio de 2025
+                Consultas de la planilla: planillas@operador.com.co
+
+                EVENTOS SUPERNOVA S.A.S.
+                NIT. 900.478.852-5,
+                Representante legal
+                contacto@eventossupernova.com
+                """;
+
+        assertThat(ExtraccionDeterminista.correoDelContratista(acta)).isEqualTo("contacto@eventossupernova.com");
+    }
+
+    /**
+     * El bloque de firmas del acta real CO1.PCCNTR.7986334, tal como lo da el
+     * PDF y en una sola línea, como lo junta el .docx del mismo acta. Hasta el
+     * 18-10-2026 el .docx no daba ningún correo porque el ancla exigía
+     * comienzo de línea: el mismo documento daba resultados distintos.
+     */
+    @Test
+    @DisplayName("el correo del bloque de firma del contratista sale igual del PDF y del .docx")
+    void elCorreoDelBloqueDeFirmaSaleIgualDelPdfYDelDocx() {
+        String pdf = """
+                LAURA CAROLINA RESTREPO TORO
+                Supervisora
+
+
+                CARLOS MARIO REINA MEJÍA
+                NIT. 900.478.852-5
+                EVENTOS SUPERNOVA S.A.S.
+                Representante Legal
+                seguridadsocialcres@gmail.com
+                """;
+        String docx = "LAURA CAROLINA RESTREPO TORO Supervisora CARLOS MARIO REINA MEJÍA NIT. 900.478.852-5 "
+                + "EVENTOS SUPERNOVA S.A.S. Representante Legal seguridadsocialcres@gmail.com";
+
+        assertThat(ExtraccionDeterminista.correoDelContratista(pdf)).isEqualTo("seguridadsocialcres@gmail.com");
+        assertThat(ExtraccionDeterminista.correoDelContratista(docx)).isEqualTo("seguridadsocialcres@gmail.com");
+    }
+
+    /**
+     * Un GCCON-F-031 en blanco trae «Valor inicial del contrato $00.000.000».
+     * Tomado como valor, llegaba «00000000» a Gestión e impedía completar el
+     * valor real desde el SECOP. En el diligenciado, el valor está rotulado
+     * «VALOR ACTUAL DEL CONTRATO».
+     */
+    @Test
+    @DisplayName("el marcador $00.000.000 de un formato en blanco no es un valor, y se lee VALOR ACTUAL DEL CONTRATO")
+    void elValorEnCeroDeUnFormatoEnBlancoNoEsUnValor() {
+        assertThat(extractor.extraer("Valor inicial del contrato $00.000.000\nPlazo inicial del contrato").valor())
+                .isNull();
+        assertThat(extractor.extraer("""
+                Valor inicial del contrato $00.000.000
+                VALOR ACTUAL DEL CONTRATO 20.600.000 COP
+                """).valor()).isEqualTo("20600000");
+        // Los centavos no se suman a la cifra.
+        assertThat(extractor.extraer("VALOR DEL CONTRATO 20.000.000,00").valor()).isEqualTo("20000000");
+    }
+
+    @Test
+    @DisplayName("lee FECHA DE TERMINACIÓN en mayúsculas y las fechas sin «de» antes del año")
+    void leeLasFechasEnMayusculasYSinDeAntesDelAno() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                FECHA DE INICIO 12 de junio 2026
+                FECHA DE TERMINACIÓN 15 de julio 2026
+                """);
+
+        assertThat(r.vigenciaInicio()).isEqualTo("2026-06-12");
+        assertThat(r.vigenciaFin()).isEqualTo("2026-07-15");
+        assertThat(extractor.extraer("FECHA DE TERMINACIÓN 15/12/2026").vigenciaFin()).isEqualTo("2026-12-15");
+    }
+
+    @Test
+    @DisplayName("un formato en blanco no deja sus marcadores como si fueran datos")
+    void losHuecosDelFormatoNoSonDatos() {
+        // El GCCON-F-031 sin diligenciar rotulaba el contratista así, y llegaba
+        // al formulario de Gestión como el nombre de una empresa.
+        ExtraccionContratoResponse r = extractor.extraer("""
+                CONTRATISTA [Incluya el nombre del contratista]
+                OBJETO [Incluya el objeto del contrato]
+                """);
+
+        assertThat(r.proveedor()).isNull();
+        assertThat(r.objeto()).isNull();
+    }
+
+    @Test
+    @DisplayName("del acta real del Lote 4 sale todo, incluido el valor sin símbolo de peso")
+    void elActaDelLote4SaleCompleta() {
+        ExtraccionContratoResponse r = extractor.extraer(ACTA_LOTE_4);
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.10057820");
+        assertThat(r.valor()).isEqualTo("45900300");
+        assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
+        assertThat(r.proveedor()).isEqualTo("SUMINISTROS MAYBE S.A.S");
+        // El acta escribe el NIT sin el dígito de verificación en esta fila; se
+        // copia lo que dice el documento, no lo que uno esperaría que dijera.
+        assertThat(r.nit()).isEqualTo("800154801");
+        assertThat(r.representanteLegal()).isEqualTo("LUZ MARINA MEJIA PEREZ");
+        assertThat(r.vigenciaInicio()).isEqualTo("2026-10-14");
+        assertThat(r.vigenciaFin()).isEqualTo("2026-12-15");
+        assertThat(r.registroPresupuestal()).isEqualTo("123726");
+        assertThat(r.lugarEjecucion()).isEqualTo("Centro Tecnológico del Mobiliario");
+        assertThat(extractor.estaCompleta(r)).isTrue();
+    }
+
+    @Test
+    @DisplayName("el número partido por la tabla de la designación se recompone entero")
+    void elNumeroPartidoPorLaTablaSaleEntero() {
+        assertThat(extractor.extraer(DESIGNACION_LOTE_4).idContrato()).isEqualTo("CO1.PCCNTR.10057820");
+    }
+
+    @Test
+    @DisplayName("un número completo no se pega con el número de página de abajo")
+    void unNumeroCompletoNoArrastraLaLineaSiguiente() {
+        assertThat(extractor.extraer("""
+                CONTRATO  CO1.PCCNTR.10057820
+                2
+                GCCON-F-018 V.06
+                """).idContrato()).isEqualTo("CO1.PCCNTR.10057820");
+    }
 }

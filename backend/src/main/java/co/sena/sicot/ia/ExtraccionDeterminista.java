@@ -63,9 +63,110 @@ public class ExtraccionDeterminista {
     /**
      * Número de proceso de SECOP II. El prefijo es estable en toda la
      * contratación estatal colombiana, que es lo que lo hace fiable aquí.
+     *
+     * <p>La continuación de la segunda línea existe por la tabla del formato de
+     * designación GCCON-F-032: la celda es estrecha y parte el número en dos
+     * renglones («CO1.PCCNTR.1005» y debajo «7820»). Sin esto el patrón casaba
+     * con el primer pedazo y devolvía un número truncado —un contrato que no
+     * existe— en vez de no devolver nada, que es el peor de los dos errores.
      */
     private static final Pattern NUMERO_CONTRATO =
-            Pattern.compile("\\bCO1\\.PCCNTR\\.[A-Z0-9]+");
+            Pattern.compile("\\bCO1\\.PCCNTR\\.([A-Z0-9]+)(?:[ \\t]*\\n[ \\t]*([0-9]{1,8})(?![0-9A-Z]))?");
+
+    /**
+     * Comienzo del enlace del proceso en SECOP II, que trae el acto de
+     * designación en su fila «Link». Solo caracteres de URL: el texto que lo
+     * rodea en un PDF no debe colarse en algo que el panel ofrece para abrir.
+     */
+    private static final Pattern ENLACE_SECOP =
+            Pattern.compile("https://community\\.secop\\.gov\\.co/[\\w\\-./?=&%#:+~]+");
+
+    /** El renglón siguiente, por si PDFBox partió la URL al ancho de la celda. */
+    private static final Pattern CONTINUACION_DE_URL =
+            Pattern.compile("[ \\t]*\\n[ \\t]*([\\w\\-./?=&%#:+~]+)");
+
+    /** Un trozo que empieza como parámetro de consulta («noticeUID=…»). */
+    private static final Pattern PARAMETRO_DE_URL = Pattern.compile("&?[A-Za-z0-9_]+=.*");
+
+    /**
+     * Encabezado de la tabla del GCCON-F-032: «CONTRATO NRO. CONTRATISTA
+     * OBJETO». Debajo vienen, en ese orden y sin rótulos por fila, el número
+     * (a veces partido en dos renglones), el contratista y el objeto en varios
+     * renglones, hasta la fila «Link».
+     */
+    private static final Pattern TABLA_DESIGNACION = Pattern.compile(
+            "CONTRATO[ \\t]+NRO\\.?[ \\t]+CONTRATISTA[ \\t]+OBJETO[ \\t]*\\n",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** El acto de designación se reconoce por su título, no por su nombre de archivo. */
+    private static final Pattern ES_DESIGNACION = Pattern.compile(
+            "DESIGNACI[OÓ]N[ \\t]+DE[ \\t]+SUPERVISOR", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Las personas del encabezado «PARA» de la designación: «Alex Fernando
+     * Zapata Rios (Supervisor)» y debajo «Yeison Dariel Zapata Monsalve (Apoyo
+     * a la supervisión)». El rol entre paréntesis es lo que las distingue, así
+     * que se exige completo: el cuerpo del formato dice «supervisor(a)» y eso no
+     * debe confundirse con un nombre.
+     */
+    private static final Pattern SUPERVISOR_EN_DESIGNACION = Pattern.compile(
+            "^[ \\t]*(?:PARA[ \\t]+)?(\\p{L}[\\p{L} ]{4,80}?)[ \\t]*\\([ \\t]*Supervisora?[ \\t]*\\)",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    private static final Pattern APOYO_EN_DESIGNACION = Pattern.compile(
+            "^[ \\t]*(?:PARA[ \\t]+)?(\\p{L}[\\p{L} ]{4,80}?)[ \\t]*\\([ \\t]*Apoyo[ \\t]+a[ \\t]+la[ \\t]+supervisi[oó]n[ \\t]*\\)",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** Fila «SUPERVISOR DESIGNADO …» del Acta de Inicio GCCON-F-018 V.06. */
+    private static final Pattern SUPERVISOR_ETIQUETA = Pattern.compile(
+            "^[ \\t]*SUPERVISOR[ \\t]+DESIGNADO[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * «Itagüí, 9 de octubre de 2026»: ciudad, coma y fecha al comienzo de una
+     * línea. Solo se usa en la designación; el acta escribe «En Itagüí, el 14 de
+     * octubre…», con un «el» que este patrón no admite a propósito.
+     */
+    private static final Pattern CIUDAD_Y_FECHA = Pattern.compile(
+            "^[ \\t]*\\p{L}[\\p{L} .\\-]{2,40},[ \\t]+(\\d{1,2}[ \\t]+de[ \\t]+\\p{L}+[ \\t]+de[ \\t]+\\d{4})",
+            Pattern.MULTILINE | Pattern.UNICODE_CASE);
+
+    private static final Pattern CORREO = Pattern.compile("[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+");
+
+    /**
+     * Dónde empieza a buscarse el correo del contratista: tras el rótulo del
+     * contratista, su NIT o su representante legal, también a mitad de línea
+     * (el .docx junta la fila de firmas en una sola). Antes se tomaba el primer
+     * correo del documento que no fuera del SENA, aunque estuviera en otra
+     * parte del acta.
+     *
+     * <p>Corrección del 18-10-2026 a lo que decía aquí: en el acta real
+     * CO1.PCCNTR.7986334 el correo «seguridadsocialcres@gmail.com» va justo
+     * debajo de «Representante Legal», en el bloque de firma del contratista,
+     * igual que el del Lote 4. Por posición es el del contratista, y se
+     * propone; si no lo es, solo Gestión puede saberlo, y por eso el formulario
+     * lo pide confirmar.
+     */
+    private static final Pattern ANCLA_DEL_CONTRATISTA = Pattern.compile(
+            "\\b(?:REPRESENTANTE\\s+LEGAL|CONTRATISTA|NIT\\.?\\s)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Cuánto texto después del ancla se mira. En el acta del Lote 4 el correo
+     * está dos renglones debajo del NIT; pasado ese bloque ya es otra cosa.
+     */
+    private static final int ALCANCE_DEL_ANCLA = 200;
+
+    /** «[Incluya el nombre del contratista]»: un hueco del formato, no un dato. */
+    private static final Pattern MARCADOR_DE_PLANTILLA = Pattern.compile("\\[.*\\]", Pattern.DOTALL);
+
+    /**
+     * Por debajo de esto se asume que la celda partió el número: los
+     * consecutivos de SECOP II rondan los ocho dígitos y ninguno real es tan
+     * corto. Solo entonces se pega la línea siguiente, para no tragarse por
+     * descuido un número de página que vaya debajo de un número completo.
+     */
+    private static final int DIGITOS_MINIMOS_CONTRATO = 7;
 
     /**
      * NIT del contratista.
@@ -88,6 +189,17 @@ public class ExtraccionDeterminista {
      * la forma canónica en estos documentos es «… PESOS ($184.750.000) M/CTE».
      */
     private static final Pattern VALOR = Pattern.compile("\\$\\s?([\\d.]{5,20})");
+
+    /**
+     * El valor cuando va en una fila de tabla y sin símbolo de peso, que es como
+     * lo escribe el Acta de Inicio GCCON-F-018: «VALOR 45.900.300». Exigir el
+     * «$» dejaba el campo vacío en toda acta real, aunque la cifra estuviera
+     * ahí a la vista.
+     */
+    private static final Pattern VALOR_ETIQUETA = Pattern.compile(
+            "^[ \\t]*VALOR(?:[ \\t]+(?:TOTAL|INICIAL|ACTUAL))?(?:[ \\t]+DEL[ \\t]+CONTRATO)?[ \\t]*:?[ \\t]*\\$?[ \\t]*"
+                    + "(\\d[\\d.,]{4,19})",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final Pattern VIGENCIA = Pattern.compile(
             "desde\\s+el\\s+(.{5,45}?)\\s+hasta\\s+el\\s+(.{5,45}?)[,.]",
@@ -149,7 +261,8 @@ public class ExtraccionDeterminista {
 
     /** «02 de febrero de 2026» → 2026-02-02. */
     private static final Pattern FECHA_EN_LETRAS = Pattern.compile(
-            "(\\d{1,2})\\s+de\\s+(\\p{L}+)\\s+de\\s+(\\d{4})", Pattern.CASE_INSENSITIVE);
+            "(\\d{1,2})\\s+de\\s+(\\p{L}+)\\s+(?:del?\\s+)?(\\d{4})",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
      * «11/08/2025» → 2025-08-11. Día primero, que es como se escribe la fecha
@@ -223,7 +336,7 @@ public class ExtraccionDeterminista {
     /** La pareja de {@link #FECHA_INICIO_ETIQUETA} al otro extremo del plazo. */
     private static final Pattern FECHA_FIN_ETIQUETA = Pattern.compile(
             "^[^\\n]*?Fecha\\s+de\\s+(?:terminaci[oó]n|finalizaci[oó]n)[ \\t]*:?[ \\t]*(.{5,60}?)[ \\t]*$",
-            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
 
     // ── Tercera familia: «Etiqueta: valor» en línea, y la prosa más común ───
@@ -317,8 +430,15 @@ public class ExtraccionDeterminista {
             "cuyo\\s+objeto\\s+(?:es|lo\\s+constituye|consiste\\s+en)\\s*:?\\s*(.{10,800}?)(?:\\.(?=[ \\t]*\\R)|\\.\\s+(?=\\p{Lu})|,\\s+celebrado|\\z)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE | Pattern.DOTALL);
 
+    /**
+     * «TIPOLOGÍA» va junto a «TIPO DE CONTRATO» porque el Acta de Inicio
+     * GCCON-F-018 rotula esa fila «TIPOLOGÍA Suministro», y la lista de chequeo
+     * del supervisor la llama «TIPOLOGÍA CONTRACTUAL». Es el mismo dato con tres
+     * nombres según el documento.
+     */
     private static final Pattern TIPO_ETIQUETA = Pattern.compile(
-            "^[^\\n:]{0,4}?TIPO[ \\t]+DE[ \\t]+CONTRATO[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
+            "^[^\\n:]{0,4}?(?:TIPO[ \\t]+DE[ \\t]+CONTRATO|TIPOLOG[IÍ]A(?:[ \\t]+CONTRACTUAL)?)"
+                    + "[ \\t]*:?[ \\t]*(\\S[^\\n]*)$",
             Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
@@ -433,19 +553,198 @@ public class ExtraccionDeterminista {
             fin = aIso(primerGrupo(FECHA_FIN_ETIQUETA, texto, 1));
         }
 
+        boolean esDesignacion = ES_DESIGNACION.matcher(texto).find();
+        String supervisor = normalizarEspacios(primerGrupo(SUPERVISOR_EN_DESIGNACION, texto, 1));
+        if (supervisor == null) {
+            supervisor = normalizarEspacios(primerGrupo(SUPERVISOR_ETIQUETA, texto, 1));
+        }
+
+        String objeto = objeto(texto);
+        String[] tabla = esDesignacion ? contratistaYObjetoDeLaDesignacion(texto) : null;
+        if (tabla != null) {
+            if (proveedor == null) proveedor = tabla[0];
+            if (objeto == null) objeto = tabla[1];
+        }
+
         return new ExtraccionContratoResponse(
-                primerGrupo(NUMERO_CONTRATO, texto, 0),
-                objeto(texto),
-                proveedor,
+                numeroDeContrato(texto),
+                descartarMarcador(objeto),
+                descartarMarcador(proveedor),
                 nit,
-                representante,
-                soloDigitos(primerGrupo(VALOR, texto, 1)),
+                descartarMarcador(representante),
+                valorDelContrato(texto),
                 inicio,
                 fin,
-                lugar(texto),
+                descartarMarcador(lugar(texto)),
                 conAlgunDigito(primerGrupo(REGISTRO_PRESUPUESTAL, texto, 1)),
-                tipo(texto)
+                tipo(texto),
+                enlaceSecop(texto),
+                supervisor,
+                normalizarEspacios(primerGrupo(APOYO_EN_DESIGNACION, texto, 1)),
+                esDesignacion ? aIso(primerGrupo(CIUDAD_Y_FECHA, texto, 1)) : null,
+                correoDelContratista(texto),
+                List.of()
         );
+    }
+
+    /**
+     * El enlace del proceso en SECOP II, reuniendo los renglones en que PDFBox
+     * lo parte. En la designación del Lote 4 llega así, cortado justo después
+     * del «?»:
+     * <pre>
+     * https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?
+     * noticeUID=CO1.NTC.10815297&amp;isFromPublicArea=True&amp;isModal=False
+     * </pre>
+     * Solo se pega el renglón siguiente cuando la URL quedó claramente a medias
+     * (termina en «?», «&amp;», «=» o «/») o cuando el renglón empieza como un
+     * parámetro: así no se le pega la primera palabra del párrafo de abajo.
+     */
+    static String enlaceSecop(String texto) {
+        Matcher m = ENLACE_SECOP.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        StringBuilder url = new StringBuilder(m.group());
+        int desde = m.end();
+        Matcher sigue = CONTINUACION_DE_URL.matcher(texto);
+        for (int i = 0; i < 3 && desde < texto.length(); i++) {
+            sigue.region(desde, texto.length());
+            if (!sigue.lookingAt()) {
+                break;
+            }
+            String trozo = sigue.group(1);
+            char ultimo = url.charAt(url.length() - 1);
+            boolean aMedias = ultimo == '?' || ultimo == '&' || ultimo == '=' || ultimo == '/';
+            if (!aMedias && !PARAMETRO_DE_URL.matcher(trozo).matches()) {
+                break;
+            }
+            url.append(trozo);
+            desde = sigue.end();
+        }
+        String limpia = url.toString().replaceAll("[.,;)]+$", "");
+        return limpia.length() <= 500 ? limpia : null;
+    }
+
+    /**
+     * Contratista y objeto de la tabla del acto de designación.
+     *
+     * <p>Sin esto, la designación no traía objeto legible y la extracción le
+     * preguntaba al modelo: con el acto real del Lote 4 tardó 211 segundos en
+     * un equipo sin GPU (15-10-2026), para un dato que está impreso en la
+     * tabla. Leerlo aquí lo deja en milisegundos y sin modelo.
+     *
+     * @return {@code [contratista, objeto]}, o {@code null} si el documento no
+     *         trae esa tabla o viene vacía
+     */
+    static String[] contratistaYObjetoDeLaDesignacion(String texto) {
+        Matcher m = TABLA_DESIGNACION.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        String[] lineas = texto.substring(m.end()).split("\n", -1);
+        int i = 0;
+        // El número va primero, a veces partido: «CO1.PCCNTR.1005» y debajo «7820».
+        while (i < lineas.length && (lineas[i].isBlank() || lineas[i].strip().startsWith("CO1.PCCNTR")
+                || lineas[i].strip().matches("\\d{1,8}"))) {
+            i++;
+        }
+        if (i >= lineas.length) {
+            return null;
+        }
+        String contratista = normalizarEspacios(lineas[i]);
+        i++;
+        StringBuilder objeto = new StringBuilder();
+        while (i < lineas.length && objeto.length() < MAX_OBJETO) {
+            String linea = lineas[i].strip();
+            if (linea.isEmpty() || linea.equalsIgnoreCase("Link") || linea.startsWith("http")) {
+                break;
+            }
+            if (objeto.length() > 0) objeto.append(' ');
+            objeto.append(linea);
+            i++;
+        }
+        String elObjeto = normalizarEspacios(objeto.toString());
+        if (contratista == null || elObjeto == null || elObjeto.length() < 10) {
+            return null;
+        }
+        return new String[]{contratista, elObjeto.replaceAll("[.\\s]+$", "")};
+    }
+
+    /**
+     * El correo del contratista: el primero del documento que no sea del SENA.
+     * En el acta de inicio es el único que aparece, bajo el bloque de firma del
+     * representante legal; los del SENA son de quien elaboró o del supervisor.
+     */
+    static String correoDelContratista(String texto) {
+        Matcher ancla = ANCLA_DEL_CONTRATISTA.matcher(texto);
+        while (ancla.find()) {
+            int hasta = Math.min(texto.length(), ancla.end() + ALCANCE_DEL_ANCLA);
+            Matcher m = CORREO.matcher(texto).region(ancla.end(), hasta);
+            while (m.find()) {
+                String correo = m.group().toLowerCase(Locale.ROOT).replaceAll("[.]+$", "");
+                if (!correo.endsWith("sena.edu.co")) {
+                    return correo;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Descarta los marcadores de hueco de los formatos del SENA, que vienen
+     * entre corchetes: un GCCON-F-031 en blanco rotula el contratista como
+     * «[Incluya el nombre del contratista]», y así llegaba al formulario de
+     * Gestión como si fuera el nombre de una empresa (sondeo del 16-10-2026
+     * sobre los documentos reales). Un formato sin diligenciar tiene que dejar
+     * el campo vacío, no inventarlo.
+     */
+    static String descartarMarcador(String v) {
+        return v == null || MARCADOR_DE_PLANTILLA.matcher(v).matches() ? null : v;
+    }
+
+    /**
+     * El número de contrato, recomponiéndolo si la tabla lo partió en dos
+     * renglones. Ver {@link #NUMERO_CONTRATO}.
+     */
+    static String numeroDeContrato(String texto) {
+        Matcher m = NUMERO_CONTRATO.matcher(texto);
+        if (!m.find()) {
+            return null;
+        }
+        String consecutivo = m.group(1);
+        if (consecutivo.length() < DIGITOS_MINIMOS_CONTRATO && m.group(2) != null) {
+            consecutivo += m.group(2);
+        }
+        return "CO1.PCCNTR." + consecutivo;
+    }
+
+    /**
+     * El valor en dígitos: primero la forma canónica del contrato («… PESOS
+     * ($45.900.300) M/CTE»), que es la más fiable porque el símbolo de peso no
+     * deja dudas, y si no está, la fila rotulada del acta.
+     */
+    private static String valorDelContrato(String texto) {
+        String conSimbolo = primerValorReal(VALOR, texto);
+        return conSimbolo != null ? conSimbolo : primerValorReal(VALOR_ETIQUETA, texto);
+    }
+
+    /**
+     * La primera cifra que no sea solo ceros. Un GCCON-F-031 en blanco trae
+     * «Valor inicial del contrato $00.000.000»: tomado como valor, llegaba
+     * «00000000» al formulario y, como lo leído del documento gana, impedía
+     * completar el valor real desde el SECOP (sondeo del 17-10-2026 sobre los
+     * formatos reales). Los centavos («20.000.000,00») no se suman a la cifra.
+     */
+    private static String primerValorReal(Pattern patron, String texto) {
+        Matcher m = patron.matcher(texto);
+        while (m.find()) {
+            String cifra = m.group(1).replaceFirst(",\\d{1,2}$", "");
+            String digitos = soloDigitos(cifra);
+            if (digitos != null && !digitos.matches("0+")) {
+                return digitos;
+            }
+        }
+        return null;
     }
 
     /**

@@ -10,7 +10,13 @@
 // instante. El copiloto sigue disponible para preguntas de más detalle: es el
 // motor el que resuelve lo que es fijo, para que baste una IA pequeña.
 
-import { AI_GENERATED_DOCS, FORMAL_DOCS, SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA } from '@/data/contractFlow'
+import {
+  ACTA_FIRMADA_Y_ENVIO,
+  AI_GENERATED_DOCS,
+  FORMAL_DOCS,
+  HERRAMIENTA_POR_PASO,
+  SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA,
+} from '@/data/contractFlow'
 import type { Step, SubStep } from '@/types/domain'
 
 export function guiaDelSubPaso(step: Step, sub: SubStep): string {
@@ -22,7 +28,7 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
 
   const doc = AI_GENERATED_DOCS.has(sub.id) ? FORMAL_DOCS.find((d) => d.subStepId === sub.id) : undefined
   // Solo al cerrar el último sub-paso de un paso se le piden al supervisor las
-  // observaciones (SupervisorPanel.handleActionSubStep). 2.7, 3.4, 4.3 y 5.3 lo
+  // observaciones (SupervisorPanel.handleActionSubStep). 3.4, 4.3 y 5.3 lo
   // son; 6.3 no (el último del Paso 6 es 6.4), y su documento se genera y firma
   // al pulsar el botón. Prometer las observaciones en 6.3 dejaba al supervisor
   // esperando una pregunta que no llegaba, con el Informe Final ya firmado.
@@ -33,9 +39,47 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
         `${doc.code === 'PENDIENTE_DE_DEFINIR' ? '' : ` (${doc.code})`} con los datos exactos del contrato, ` +
         'y usted lo revisa y lo firma con su firma electrónica. ' +
         (pideObservaciones
-          ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. '
+          ? doc.llevaObservaciones
+            ? 'Antes le pediré que me cuente qué hizo en el paso: eso va como observaciones del documento. ' +
+              // Desde el 29-09-2026 la redacción del Copiloto se muestra antes
+              // de firmar: decir que va «tal cual» o firmarla sin enseñarla
+              // eran las dos cosas que no podían pasar.
+              'Si el Copiloto la redacta en lenguaje formal, se la mostraré junto a lo que usted escribió para que ' +
+              'decida antes de firmar. '
+            : // La Certificación no tiene apartado de observaciones:
+              // prometer que la descripción iría al documento era falso desde
+              // que sigue el formato oficial (28-09-2026).
+              'Antes le pediré que me cuente qué hizo en el paso, para revisarlo con usted. '
           : 'Se genera y se firma en el momento, sin observaciones: revise antes que todo lo del paso esté hecho. ') +
-        'Lo que SICOT no sabe (facturas, pólizas, pagos) queda marcado como «dato pendiente».',
+        'Justo antes de generarlo le pediré los datos que el formato necesita y el contrato no tiene (facturas, ' +
+        'pólizas, cédulas…); lo que deje vacío queda marcado como «dato pendiente».',
+    )
+  } else if (sub.documentosRequeridos === ACTA_FIRMADA_Y_ENVIO) {
+    // El proceso real: el acta la elabora Contratación y llega por correo; el
+    // paso queda esperando hasta tener el acta firmada y la evidencia del envío.
+    partes.push(
+      'Qué hacer en SICOT: cuando haya firmado el acta y la haya devuelto respondiendo el correo de Contratación, ' +
+        'cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío (el pantallazo o el PDF del correo ' +
+        'que respondió). Cuando las dos aparezcan como cargadas, márquelo como completado: SICOT no lo deja cerrar ' +
+        'sin ellas.',
+    )
+  } else if (HERRAMIENTA_POR_PASO[sub.label] === 'VERIFICACION_SECOP') {
+    partes.push(
+      'Qué hacer en SICOT: debajo de este sub-paso verá lo que el SECOP II publica del contrato y lo que no coincide ' +
+        'con lo registrado en SICOT. Las cantidades y las especificaciones no vienen en esos datos: abra el proceso ' +
+        'en el SECOP II con el enlace del sub-paso y revíselas en la oferta económica y el estudio previo del ' +
+        'expediente; cuando esté todo revisado, márquelo como completado.',
+    )
+  } else if (HERRAMIENTA_POR_PASO[sub.label] === 'CORREO_SST') {
+    partes.push(
+      'Qué hacer en SICOT: abra el borrador del correo, agregue como destinatarios a los profesionales de SST y ' +
+        'ambiental —sus correos están en el estudio previo, que se abre entrando al proceso en el SECOP II con el ' +
+        'enlace del sub-paso de verificación— y envíelo desde su correo. Después, márquelo como completado.',
+    )
+  } else if (HERRAMIENTA_POR_PASO[sub.label] === 'CORREO_CONTRATISTA') {
+    partes.push(
+      'Qué hacer en SICOT: abra el borrador del correo al contratista, complete las cantidades exactas si es un ' +
+        'suministro y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo como completado.',
     )
   } else if (SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(sub.id)) {
     // La vista previa no es la carga: hasta pulsar «Cargar evidencia» la foto

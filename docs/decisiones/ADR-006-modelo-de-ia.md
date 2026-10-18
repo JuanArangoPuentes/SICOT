@@ -176,3 +176,138 @@ El paso pendiente, si se quiere cerrar esto, es un conjunto de preguntas abierta
 reales de supervisión con su respuesta esperada, y medir 3B contra él. Mientras
 eso no exista, bajar el modelo sería cambiar un problema medido por una
 suposición.
+
+---
+
+## Revisión — 1 de octubre de 2026: las sugerencias rápidas tampoco pasan por el modelo
+
+Misma doctrina que la revisión anterior, aplicada a lo que el supervisor más
+pulsa: las cinco sugerencias rápidas del panel del Copiloto.
+
+**Lo que se encontró.** Ninguna entraba por un atajo. Cuatro preguntaban datos
+fijos del catálogo —qué es el GCCON-F-031, quién lo firma, en qué sub-paso se
+genera— que el prompt le pasaba al modelo para que los repitiera; la quinta
+pedía el paso actual, que es justo lo que los modelos pequeños fallan (tabla de
+arriba). Cada pulsación era una inferencia completa en CPU: hasta ~158 s la
+primera del contrato, decenas de segundos las siguientes. Además, `GuiaDelPasoActual`
+comparaba sus frases solo en minúsculas: «¿qué documento falta?» o «qué
+necesito» no coincidían con ninguna y se iban al modelo.
+
+**Lo que se hizo.**
+
+- `FichaDeDocumentoFormal` contesta sin modelo qué es cada documento formal,
+  en qué sub-paso lo arma SICOT, quién firma y su estado en ese contrato. El
+  código y el nombre salen de `PlantillaDocumentoIA.CATALOGO`, el mismo con el
+  que se arma el PDF.
+- `PreguntaNormalizada` quita tildes, signos y mayúsculas a la pregunta y a
+  las frases señal por igual, y exige que la frase empiece en una palabra
+  («qué falta» ya no se encuentra dentro de «porque faltan»).
+- La guía del paso actual dice además qué botón pulsar en el sub-paso
+  siguiente, con la misma regla que la guía del tutorial (`guiaSubPaso.ts`).
+- Las preguntas condicionales («¿qué hago si…?») se dejan al modelo aunque
+  traigan la frase: piden consejo sobre un caso, no el estado del contrato.
+
+Las pruebas afirman el texto exacto de cada respuesta y que ninguna de las
+cinco sugerencias llama a Ollama.
+
+**Lo que se corrigió en el prompt de paso.** Decía que SICOT no deja cargar
+archivos «ni en 3.1-3.3»; desde el 22-09-2026 en 3.1 y 3.2 se cargan las
+fotos de la entrega, y el modelo contradecía a la guía del tutorial. También
+decía que el Copiloto redacta los documentos, cuando los arma
+`RedactorDeDocumentos` con código y el modelo solo redacta las observaciones.
+
+---
+
+## Revisión — 2 de octubre de 2026: órdenes, datos del contrato y revisión del paso
+
+Misma doctrina, aplicada a lo que la auditoría del 2-10-2026 encontró que
+seguía llegando al modelo sin necesidad, o llegando mal.
+
+**Lo que se encontró.** El panel invitaba a darle órdenes al Copiloto y toda
+orden iba al modelo, sin ninguna regla de que no puede ejecutar nada: un
+modelo de 3B/7B podía contestar «listo, marqué el 2.3» sin que nada hubiera
+pasado, redactar en el chat un acta con datos que nadie dio, o —por la
+advertencia de inyección pensada para documentos— decirle al supervisor que
+su propio mensaje parecía un intento de darle instrucciones. «¿Cuántos días
+me quedan?» y «¿voy atrasado?» se contestaban sin la fecha de hoy ni el
+semáforo. El valor del contrato le llegaba como `450000000.00`. Y el ejemplo
+de estilo con «le falta 4.2», el que los modelos pequeños copiaron en la
+medición del 14 de septiembre, seguía en el prompt.
+
+**Lo que se hizo.**
+
+- `OrdenDelSupervisor` atiende sin modelo las órdenes reconocibles (lista
+  cerrada de verbos y objetos) y devuelve una acción que la interfaz ofrece
+  como botón. Ninguna firma, marca ni genera: abren la pantalla donde el
+  supervisor decide.
+- `FichaDelContrato` contesta el valor (formateado y en letras), las fechas,
+  los días que quedan con la zona horaria del Centro y el atraso con el mismo
+  `Cronograma` de la pantalla Alertas.
+- `GuiaDelPasoActual` contesta sobre el paso, sub-paso o documento que nombre
+  la pregunta, incluido «¿ya puedo firmar…?», en vez de contestar siempre el
+  paso en curso.
+- `PreguntaNormalizada` entiende las abreviaturas del teléfono («en q paso
+  voy») y el «sí» que afirma.
+- Cada respuesta dice su `fuente` (`SISTEMA` o `MODELO`).
+- Al modelo le llegan la regla de que no ejecuta nada, el valor formateado,
+  la fecha de hoy y el cronograma; el ejemplo con datos de un paso se quitó.
+  El historial tiene un presupuesto total y su ventana avanza por bloques
+  para no romper la caché del prefijo.
+- La revisión antes de cerrar un paso la arma el servidor (`revisarPaso`),
+  con un prompt propio y corto, sin el historial ni el prompt general.
+
+Coste: cero inferencias nuevas. Las órdenes y los datos del contrato se
+responden en milisegundos y funcionan con Ollama apagado.
+
+---
+
+## Revisión — 18 de octubre de 2026: un prompt de la mitad y la respuesta en vivo
+
+Esta revisión **no cambia el modelo**: `qwen2.5:7b` sigue siendo el del Copiloto.
+Cambia cuánto lee en cada pregunta y cuándo empieza a verse la respuesta.
+
+### Lo que se midió
+
+En el portátil del Centro (i5-10210U, 4 núcleos, sin GPU, 16 GB con Docker y el
+navegador abiertos), con el prompt real del Copiloto y diez preguntas abiertas
+de supervisión (de dónde sale la póliza, qué hacer con una entrega incompleta,
+la PILA, la factura, el acta firmada en papel, una orden de marcar, un dato que
+el contrato no tiene, muebles dañados, un saludo, informe final frente a acta de
+liquidación):
+
+| Modelo y prompt | Primera pregunta (frío) | Siguientes | Calidad |
+| --- | --- | --- | --- |
+| `qwen2.5:7b`, prompt de entonces (3227 tokens) | **507 s** (436 s solo leyendo) | ~107 s | correcta |
+| `qwen2.5:7b`, prompt compacto (1321 tokens) | **216 s** | **10-40 s** | buena, con errores menores |
+| `qwen2.5:3b`, prompt compacto | 96 s | 9-16 s | **mala**: «marcaré como completado», la PILA a la Unidad de Gestión Contractual, que el acta de liquidación «está en el Oficio de Pago» |
+| `qwen3:4b-instruct`, prompt compacto | 107 s | 23-50 s | regular: inventó un campo «Fecha de envío»; no escribe más rápido que el de 7B en esta CPU |
+
+El prompt había crecido de 1545 a 3227 tokens con las reglas que se le fueron
+añadiendo (no ejecutar, la delimitación de los datos, el cronograma) y con las
+21 subetapas repetidas con su estado. Leerlo es lo que cuesta en CPU, y se paga
+entero la primera vez de cada contrato.
+
+### La decisión
+
+1. **Prompt compacto.** Las mismas reglas en `INSTRUCCIONES`, el proceso real de
+   21 sub-pasos escrito una vez, y el estado del contrato en pocas líneas: cada
+   paso con su estado y solo los sub-pasos del que está en curso. Va primero lo
+   que no cambia nunca, para que la caché del prefijo de Ollama lo reutilice
+   entre preguntas.
+2. **Respuesta en vivo** (`POST /copiloto/chat/en-vivo`, NDJSON). El modelo
+   escribe a unos 3 tokens por segundo: una respuesta de 80 tokens tarda medio
+   minuto, y antes se miraba «Pensando…» todo ese rato. Ahora se ve formarse.
+   El servidor manda además un aviso cada 10 s mientras el modelo lee el
+   contrato, para que un intermediario que corta a los 60-100 s sin datos
+   (nginx, Cloudflare) no corte la respuesta.
+3. **No se baja de modelo.** El de 3B es el doble de rápido pero se equivoca en
+   la mitad de las preguntas abiertas, que son justo las que llegan al modelo:
+   las de respuesta fija ya las contestan los atajos en milisegundos.
+
+### Cuándo revisar
+
+- Si el equipo del servidor tiene GPU o más núcleos: con el mismo conjunto de
+  diez preguntas se puede volver a medir un modelo mayor.
+- Si aparece un modelo pequeño que pase las diez preguntas sin errores: el
+  conjunto y el arnés de medición están descritos arriba; las preguntas son las
+  de esta tabla.

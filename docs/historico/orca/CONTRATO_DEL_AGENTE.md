@@ -1,4 +1,9 @@
-# Contrato del agente — flota Orca de SICOT
+# Contrato del agente — flota Orca de SICOT (histórico)
+
+> **Esto es historia, no instrucciones.** La flota Orca se cerró en septiembre de
+> 2026 y SICOT lo construye una sola persona. Lo que manda hoy es
+> `.github/copilot-instructions.md`; este documento se conserva porque explica el
+> porqué de varias reglas del proyecto, no para seguirlo.
 
 Este documento lo lee **todo** agente que Orca arranca en un worktree de SICOT,
 antes que cualquier otra cosa. Su tarea concreta está en `.claude/orca/TAREA.md`
