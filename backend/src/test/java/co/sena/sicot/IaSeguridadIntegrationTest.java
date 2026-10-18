@@ -233,12 +233,14 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
         // esta prueba estaría afirmando la respuesta de la plantilla en vez de
         // la del cliente simulado — y dejaría de comprobar lo que le importa,
         // que es que el camino completo hasta Ollama se abre para el supervisor
-        // asignado y se cierra para el ajeno.
+        // asignado y se cierra para el ajeno. Hasta el 18-10-2026 era «¿de dónde
+        // saco la póliza de cumplimiento?», que desde entonces contesta
+        // FichaDelInsumo sin modelo.
         String tokenAsignado = login("supervisor@soy.sena.edu.co", "Supervisor123*");
         mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
                         .header("Authorization", "Bearer " + tokenAsignado)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"pregunta\":\"¿de dónde saco la póliza de cumplimiento?\"}"))
+                        .content("{\"pregunta\":\"¿qué hago si el contratista entrega muebles dañados?\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.respuesta").value("respuesta de prueba del Copiloto"))
                 .andExpect(jsonPath("$.fuente").value("MODELO"));
