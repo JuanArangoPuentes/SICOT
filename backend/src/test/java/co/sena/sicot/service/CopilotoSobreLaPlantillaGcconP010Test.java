@@ -18,8 +18,9 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Los atajos sin modelo del Copiloto, sobre las 27 subetapas que se siembran de
- * verdad en cada contrato nuevo.
+ * Los atajos sin modelo del Copiloto, sobre las 21 subetapas que se siembran de
+ * verdad en cada contrato nuevo (proceso real del supervisor desde el
+ * 15-10-2026: las etapas 1 y 2 son las que documentó Alex Zapata).
  *
  * <p>{@code FichaDeDocumentoFormal} y {@code GuiaDelPasoActual} saben en qué
  * sub-paso se arma cada documento y en cuáles se carga la foto. Si alguien
@@ -31,8 +32,11 @@ class CopilotoSobreLaPlantillaGcconP010Test {
     private final FichaDeDocumentoFormal ficha = new FichaDeDocumentoFormal();
     private final GuiaDelPasoActual guia = new GuiaDelPasoActual();
 
+    /** Como lo crea Gestión: con su supervisor, así que la designación (etapa 1) ya viene hecha. */
     private static List<Etapa> contratoNuevo() {
-        return GcconP010Plantilla.crearEtapas(new Contrato());
+        Contrato c = new Contrato();
+        c.setSupervisor(new co.sena.sicot.entity.Usuario());
+        return GcconP010Plantilla.crearEtapas(c);
     }
 
     private static List<EtapaResponse> comoLasDevuelveLaApi(List<Etapa> etapas) {
@@ -46,7 +50,6 @@ class CopilotoSobreLaPlantillaGcconP010Test {
 
     @ParameterizedTest(name = "{0} se arma en {1}")
     @CsvSource(delimiter = '|', value = {
-            "¿Qué es el GCCON-F-018?             | 2.7 | GCCON-F-018",
             "¿Qué es el GCCON-F-031?             | 3.4 | GCCON-F-031",
             "¿Qué es el GIL-F-010?               | 4.3 | GIL-F-010",
             "¿Qué es la certificación de cumplimiento? | 5.3 | Certificación de cumplimiento",
@@ -65,39 +68,43 @@ class CopilotoSobreLaPlantillaGcconP010Test {
     }
 
     /**
-     * Lo que ve un supervisor que acaba de recibir el contrato y pulsa la
-     * primera sugerencia rápida. El paso 1 lo hacen otros (el área requirente,
-     * la Unidad de Contratación, el Ordenador del gasto), y la guía tiene que
-     * decirlo en vez de mandarlo a hacerlo él.
+     * El Acta de Inicio ya no la arma SICOT: la ficha dice dónde se carga
+     * firmada, con el estado real de ese sub-paso, y no promete «Firmar
+     * documento».
      */
     @Test
-    @DisplayName("contrato recién creado: el texto exacto de la sugerencia «¿Qué me falta en este paso?»")
+    @DisplayName("la ficha del Acta de Inicio dice que se carga firmada en el 2.1, no que SICOT la arma")
+    void laFichaDelActaDiceDondeSeCarga() {
+        List<Etapa> etapas = contratoNuevo();
+
+        assertThat(ficha.responder("¿Qué es el GCCON-F-018?", comoLasDevuelveLaApi(etapas)).orElseThrow())
+                .contains("SICOT no la arma")
+                .contains("Dónde se carga: en el sub-paso 2.1 (Paso 2: INICIO — Acta de Inicio y arranque "
+                        + "(GCCON-F-018)), que en este contrato está en curso.")
+                .doesNotContain("Firmar documento")
+                .doesNotContain("2.7");
+    }
+
+    /**
+     * Lo que ve un supervisor que acaba de recibir el contrato y pulsa la
+     * primera sugerencia rápida: la designación ya está hecha y le toca el
+     * acta, que tiene que cargar firmada con la evidencia del envío.
+     */
+    @Test
+    @DisplayName("contrato recién creado: la sugerencia «¿Qué me falta en este paso?» lo manda a cargar el acta")
     void laSugerenciaDelPasoActualEnUnContratoNuevo() {
         List<EtapaResponse> etapas = comoLasDevuelveLaApi(contratoNuevo());
         String pregunta = "¿Qué me falta en el paso en el que estoy y cómo lo registro en SICOT?";
 
         assertThat(ficha.puedeResponder(pregunta)).isFalse();
         assertThat(guia.puedeResponder(pregunta)).isTrue();
-        assertThat(guia.responder(etapas).orElseThrow()).isEqualTo("""
-                Está en el paso 1: INICIO — Estudios y Suscripción.
-
-                Lo que le falta aquí:
-
-                1.1 Identificación de la necesidad institucional  ← en curso
-                1.2 Conformación de la Unidad de Contratación
-                1.3 Elaboración de estudios previos (GCCON-F-046)
-                1.4 Expedición del CDP y aprobación de garantías
-                1.5 Suscripción y publicación en SECOP II
-                1.6 Designación formal del supervisor
-
-                Empiece por 1.1: Identificación de la necesidad institucional. Planteamiento de la necesidad de \
-                bienes y servicios (PAA). Responsable: Área requirente.
-
-                En SICOT: este sub-paso lo realiza Área requirente; márquelo como completado cuando le confirmen \
-                que está hecho.
-
-                Si necesita detalle de alguno de estos sub-pasos —qué documento sirve de soporte, de dónde sale \
-                un insumo— pregúnteme por él y se lo explico.""");
+        assertThat(guia.responder(etapas).orElseThrow())
+                .startsWith("Está en el paso 2: INICIO — Acta de Inicio y arranque (GCCON-F-018).")
+                .contains("2.1 Firma y devolución del Acta de Inicio (GCCON-F-018)  ← en curso")
+                .contains("2.4 Contacto con el contratista y acuerdo de entregas")
+                .contains("Empiece por 2.1: Firma y devolución del Acta de Inicio (GCCON-F-018).")
+                .contains("cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío")
+                .doesNotContain("márquelo como completado cuando le confirmen");
     }
 
     @ParameterizedTest(name = "en {0} la guía dice «Cargar evidencia»")

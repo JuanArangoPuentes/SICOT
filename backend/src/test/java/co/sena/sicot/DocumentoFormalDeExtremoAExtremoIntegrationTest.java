@@ -157,7 +157,9 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
 
-        assertThat(plantillas).hasSize(5);
+        // Los cuatro que arma SICOT: el Acta de Inicio la elabora Contratación.
+        assertThat(plantillas).hasSize(4);
+        assertThat(plantillas.toString()).doesNotContain("ACTA_INICIO");
         JsonNode certificado = null;
         for (JsonNode p : plantillas) {
             if (p.get("tipo").asText().equals("CERTIFICACION_CUMPLIMIENTO")) {
@@ -259,24 +261,26 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
 
     // ── Hallazgos de la revisión adversarial del 28-09-2026 ─────────────────
 
-    private long pasoDelActa() throws Exception {
+    private long pasoDelInforme() throws Exception {
         JsonNode etapas = objectMapper.readTree(mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        return etapas.get(1).get("subEtapas").get(0).get("id").asLong(); // 2.1, el paso del acta
+        // 3.4, el Informe de Supervisión. Hasta el 18-10-2026 estas pruebas
+        // generaban el Acta de Inicio, que SICOT ya no arma: la API la rechaza.
+        return etapas.get(2).get("subEtapas").get(3).get("id").asLong();
     }
 
-    private long generarActa(long subetapa) throws Exception {
-        return generarActaConHuella(subetapa).get("id").asLong();
+    private long generarInforme(long subetapa) throws Exception {
+        return generarInformeConHuella(subetapa).get("id").asLong();
     }
 
     /** La respuesta de la generación: el id y la huella del borrador que se firma. */
-    private JsonNode generarActaConHuella(long subetapa) throws Exception {
+    private JsonNode generarInformeConHuella(long subetapa) throws Exception {
         return objectMapper.readTree(mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapa + "}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
     }
@@ -322,12 +326,12 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void generarNoSobrescribeUnDocumentoCargadoAManoConUnNombreParecido() throws Exception {
-        long subetapa = pasoDelActa();
+        long subetapa = pasoDelInforme();
         byte[] escaneado = "%PDF-1.4 acta escaneada firmada en papel".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         Documento cargado = new Documento();
         cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
         cargado.setSubetapa(subetapaRepository.findById(subetapa).orElseThrow());
-        cargado.setNombre("Acta de Inicio firmada por el contratista");
+        cargado.setNombre("Informe de Supervisión firmado en papel");
         cargado.setTipo(TipoDocumento.PDF);
         cargado.setContentType("application/pdf");
         cargado.setContenido(escaneado);
@@ -335,7 +339,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         cargado.setEstado(EstadoDocumento.PENDIENTE);
         long idCargado = documentoRepository.save(cargado).getId();
 
-        long generado = generarActa(subetapa);
+        long generado = generarInforme(subetapa);
 
         assertThat(generado).isNotEqualTo(idCargado);
         assertThat(documentoRepository.findById(idCargado).orElseThrow().getContenido()).isEqualTo(escaneado);
@@ -349,7 +353,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
     @Test
     void unDocumentoGeneradoSoloLoFirmaElSupervisorDelContrato() throws Exception {
         asegurarFirmaDelAdministrador();
-        JsonNode generado = generarActaConHuella(pasoDelActa());
+        JsonNode generado = generarInformeConHuella(pasoDelInforme());
         long id = generado.get("id").asLong();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
@@ -391,7 +395,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void unDocumentoGeneradoNoSeFirmaSinLaHuellaDelBorradorRevisado() throws Exception {
-        long id = generarActa(pasoDelActa());
+        long id = generarInforme(pasoDelInforme());
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
                         .header("Authorization", "Bearer " + supervisor))
@@ -412,7 +416,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void siNoSePuedeEstamparLaFirmaElDocumentoNoQuedaFirmado() throws Exception {
-        long id = generarActa(pasoDelActa());
+        long id = generarInforme(pasoDelInforme());
         Documento documento = documentoRepository.findById(id).orElseThrow();
         byte[] danado;
         try (PDDocument pdf = Loader.loadPDF(documento.getContenido())) {
@@ -437,20 +441,35 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(sinFirmar.getContenido()).isEqualTo(danado);
     }
 
+    /**
+     * Desde el 15-10-2026 el acta la elabora Contratación y el supervisor la
+     * carga firmada en el paso 2.1. Generada por SICOT, contaba como «acta
+     * firmada» para cerrar ese paso sin la real.
+     */
+    @Test
+    void elActaDeInicioYaNoSeGeneraEnSicot() throws Exception {
+        mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tipo\":\"ACTA_INICIO\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("SICOT ya no arma el Acta de Inicio")));
+    }
+
     /** Si Gestión corrige el número del contrato, el borrador regenerado lleva el nombre nuevo. */
     @Test
     void alRegenerarElBorradorTomaElNumeroDeContratoActual() throws Exception {
-        long subetapa = pasoDelActa();
-        long primero = generarActa(subetapa);
+        long subetapa = pasoDelInforme();
+        long primero = generarInforme(subetapa);
         var contrato = contratoRepository.findById(contratoId).orElseThrow();
         contrato.setNumeroContrato("CO1.PCCNTR.8151685-CORREGIDO");
         contratoRepository.save(contrato);
 
-        long segundo = generarActa(subetapa);
+        long segundo = generarInforme(subetapa);
 
         assertThat(segundo).isEqualTo(primero);
         assertThat(documentoRepository.findById(segundo).orElseThrow().getNombre())
-                .isEqualTo("Acta de Inicio — CO1.PCCNTR.8151685-CORREGIDO");
+                .isEqualTo("Informe de Supervisión — CO1.PCCNTR.8151685-CORREGIDO");
     }
 
     // ── Hallazgos de la revisión del 29-09-2026 ─────────────────────────────
@@ -476,8 +495,8 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void trasReasignarElContratoElBorradorDelSupervisorAnteriorNoSeFirmaSinRegenerarlo() throws Exception {
-        long subetapa = pasoDelActa();
-        JsonNode generado = generarActaConHuella(subetapa);
+        long subetapa = pasoDelInforme();
+        JsonNode generado = generarInformeConHuella(subetapa);
         long id = generado.get("id").asLong();
         String nuevo = supervisorNuevoConFirma();
         var contrato = contratoRepository.findById(contratoId).orElseThrow();
@@ -494,7 +513,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                         post("/api/contratos/{c}/documentos/generar", contratoId)
                                 .header("Authorization", "Bearer " + nuevo)
                                 .contentType(MediaType.APPLICATION_JSON)
-                                .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                                .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapa + "}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         assertThat(regenerado.get("id").asLong()).isEqualTo(id);
@@ -518,7 +537,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         String generado = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\"}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\"}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(generado).get("id").asLong();
@@ -542,11 +561,11 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void unDocumentoCargadoAManoYFirmadoNoImpideGenerarElDelPaso() throws Exception {
-        long subetapa = pasoDelActa();
+        long subetapa = pasoDelInforme();
         Documento cargado = new Documento();
         cargado.setContrato(contratoRepository.findById(contratoId).orElseThrow());
         cargado.setSubetapa(subetapaRepository.findById(subetapa).orElseThrow());
-        cargado.setNombre("Acta de Inicio firmada por el contratista");
+        cargado.setNombre("Informe de Supervisión firmado en papel");
         cargado.setTipo(TipoDocumento.PDF);
         cargado.setContentType("application/pdf");
         byte[] escaneado = "%PDF-1.4 escaneado".getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -556,7 +575,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         cargado.setFirmaId("FIRMA-EN-PAPEL");
         documentoRepository.save(cargado);
 
-        assertThat(generarActa(subetapa)).isPositive();
+        assertThat(generarInforme(subetapa)).isPositive();
     }
 
     /**
@@ -566,11 +585,11 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
      */
     @Test
     void soloSeFirmaElBorradorQueElSupervisorRevisó() throws Exception {
-        long subetapa = pasoDelActa();
+        long subetapa = pasoDelInforme();
         String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa + "}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapa + "}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.huellaDelBorrador").exists())
                 .andReturn().getResponse().getContentAsString();
@@ -580,7 +599,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapa
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapa
                                 + ",\"datos\":{\"cedulaSupervisor\":\"98.587.121\"}}"))
                 .andExpect(status().isOk());
 

@@ -1,5 +1,6 @@
 package co.sena.sicot.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,6 +50,11 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource))
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> {
+                    // La respuesta en vivo del Copiloto termina con un segundo
+                    // despacho asíncrono de la MISMA petición, que ya se autorizó
+                    // al entrar. El filtro del JWT no corre en ese despacho, así
+                    // que sin esta línea se rechazaba como anónimo al cerrar.
+                    auth.dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll();
                     auth.requestMatchers("/api/auth/**").permitAll();
                     // Swagger queda público solo en desarrollo (sicot.swagger.public=true, el
                     // default). En "prod" (application-prod.properties lo fija en false) exigir

@@ -319,19 +319,45 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
                         .header("Authorization", "Bearer " + tokenAsignado)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"pregunta\":\"firma el acta de inicio\",\"idSolicitud\":\"0f1e-2d3c\"}"))
+                        .content("{\"pregunta\":\"firma el informe de supervisión\",\"idSolicitud\":\"0f1e-2d3c\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.fuente").value("SISTEMA"))
                 .andExpect(jsonPath("$.accion.tipo").value("ABRIR_DOCUMENTO"))
-                .andExpect(jsonPath("$.accion.subpaso").value("2.7"))
-                .andExpect(jsonPath("$.accion.documentoTipo").value("ACTA_INICIO"))
+                .andExpect(jsonPath("$.accion.subpaso").value("3.4"))
+                .andExpect(jsonPath("$.accion.documentoTipo").value("INFORME_SUPERVISION"))
                 .andExpect(jsonPath("$.respuesta", containsString("Yo no puedo firmar")));
 
         // La subetapa sigue pendiente: la orden no firmó ni marcó nada.
         mockMvc.perform(get("/api/contratos/{id}/etapas", contratoId)
                         .header("Authorization", "Bearer " + tokenAsignado))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[?(@.numero == 2)].subEtapas[?(@.codigo == '2.7')].estado").value("PENDIENTE"));
+                .andExpect(jsonPath("$[?(@.numero == 3)].subEtapas[?(@.codigo == '3.4')].estado").value("PENDIENTE"));
+        verifyNoInteractions(ollamaClient);
+    }
+
+    /**
+     * Desde el 15-10-2026 el Acta de Inicio la elabora Contratación: la orden
+     * de firmarla lleva al sub-paso donde se carga firmada, no a un 2.7 que ya
+     * no existe ni a un «Firmar documento» que SICOT no ofrece.
+     */
+    @Test
+    void laOrdenDeFirmarElActaDeInicioLlevaAlSubPasoDondeSeCarga() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-ACTA", supervisorAsignadoId);
+        String tokenAsignado = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + tokenAsignado)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"firma el acta de inicio\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fuente").value("SISTEMA"))
+                .andExpect(jsonPath("$.accion.tipo").value("IR_A_SUBPASO"))
+                .andExpect(jsonPath("$.accion.subpaso").value("2.1"))
+                .andExpect(jsonPath("$.accion.documentoTipo").doesNotExist())
+                .andExpect(jsonPath("$.respuesta", containsString("no se firma dentro de SICOT")))
+                .andExpect(jsonPath("$.respuesta", containsString("Contratación")));
         verifyNoInteractions(ollamaClient);
     }
 

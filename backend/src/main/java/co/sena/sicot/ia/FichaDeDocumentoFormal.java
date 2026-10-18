@@ -36,6 +36,14 @@ import java.util.stream.Collectors;
  * {@code frontend/src/data/contractFlow.ts}; el estado del sub-paso, el del
  * contrato real.
  *
+ * <h2>El Acta de Inicio ya no es un documento de SICOT</h2>
+ * Desde el 15-10-2026 la elabora la Unidad de Contratación y llega por correo
+ * (proceso real del supervisor, docs/producto/PROCESO_REAL_EN_SICOT.md): el
+ * supervisor la firma, la devuelve y la carga firmada con la evidencia del
+ * envío en el sub-paso del acta. Su ficha dice eso, y el sub-paso se busca por
+ * lo que exige ({@link #ACTA_FIRMADA_Y_ENVIO}) y no por el código: en los
+ * contratos de antes de esa fecha el «2.1» es otro sub-paso.
+ *
  * <h2>Cuándo NO responde</h2>
  * Igual que {@link GuiaDelPasoActual}, es deliberadamente conservadora: solo
  * contesta si la pregunta nombra un documento conocido <b>y</b> pregunta qué
@@ -61,20 +69,44 @@ public class FichaDeDocumentoFormal {
      * @param descripcion la línea que dice qué es o qué contiene, o {@code null}.
      * @param aclaracion  lo que hay que decir siempre para que no se confunda
      *                    con otro documento, o {@code null}.
+     * @param seCargaEn   si SICOT no lo arma pero el supervisor lo carga firmado,
+     *                    lo que exige el sub-paso donde se carga
+     *                    ({@code SubetapaResponse.documentosRequeridos}); si no,
+     *                    {@code null}.
      */
     record Documento(String clave, String codigo, String nombre, String subpaso, String descripcion, String firma,
-                     String aclaracion, Pattern reconocer) {
+                     String aclaracion, Pattern reconocer, String seCargaEn) {
+
+        Documento(String clave, String codigo, String nombre, String subpaso, String descripcion, String firma,
+                  String aclaracion, Pattern reconocer) {
+            this(clave, codigo, nombre, subpaso, descripcion, firma, aclaracion, reconocer, null);
+        }
     }
+
+    /** Dónde está un sub-paso en el contrato. */
+    record Ubicacion(EtapaResponse etapa, SubetapaResponse sub) {
+    }
+
+    /**
+     * Lo que exige el sub-paso del acta antes de cerrarse: el mismo valor que
+     * {@code GcconP010Plantilla.ACTA_FIRMADA_Y_ENVIO}, que es de otro paquete.
+     */
+    static final String ACTA_FIRMADA_Y_ENVIO = "ACTA_FIRMADA_Y_ENVIO";
 
     private static final String FIRMA_DEL_SUPERVISOR =
             "usted, como supervisor, con la firma electrónica que el Administrador le asignó a su cuenta.";
 
     static final List<Documento> DOCUMENTOS = List.of(
-            delCatalogo("ACTA_INICIO", "2.7",
-                    "Qué contiene: fecha de inicio, duración, alcance y responsabilidades del supervisor.",
-                    FIRMA_DEL_SUPERVISOR + " El formato lleva además la firma del representante legal del contratista.",
-                    null,
-                    "gccon ?f ?018", "acta de inicio"),
+            // Va primero: «el acta» a secas da esta y la de recibo, en ese orden
+            // (candidatosDeUnNombreAbreviado).
+            new Documento(null, "GCCON-F-018", "Acta de Inicio", null,
+                    "Qué contiene: los datos del contrato, el registro presupuestal, la aprobación de las garantías "
+                            + "y las fechas de inicio y de terminación con las que arranca la ejecución.",
+                    "usted, como supervisor, y el representante legal del contratista.",
+                    "En SICOT: SICOT no la arma. La elabora la Unidad de Contratación y se la envía por correo; "
+                            + "usted la firma, la devuelve respondiendo ese mismo correo y carga en SICOT el acta "
+                            + "firmada (PDF) y la evidencia del envío. El paso no se cierra sin las dos.",
+                    reconocedor("gccon ?f ?018", "acta de inicio"), ACTA_FIRMADA_Y_ENVIO),
             delCatalogo("INFORME_SUPERVISION", "3.4",
                     "Qué contiene: control de la ejecución, inspección física, novedades y avances del contrato.",
                     FIRMA_DEL_SUPERVISOR, null,
@@ -243,6 +275,18 @@ public class FichaDeDocumentoFormal {
             if (d.aclaracion() != null) {
                 sb.append('\n').append(d.aclaracion());
             }
+            if (d.seCargaEn() != null) {
+                // Sin etapas a la vista no se sabe de qué contrato se habla: se
+                // dice dónde va en general, sin afirmar que este no lo tiene.
+                sb.append(dondeSeCarga(d, etapas)
+                        .map(u -> "\nDónde se carga: en el sub-paso %s (Paso %d: %s), que en este contrato está %s."
+                                .formatted(u.sub().codigo(), u.etapa().numero(), u.etapa().nombre(), estado(u.sub())))
+                        .orElse(etapas.isEmpty()
+                                ? "\nDónde se carga: en el sub-paso del acta, en el paso 2."
+                                : "\nEste contrato es de antes del proceso actual y no tiene dónde cargarla: fírmela, "
+                                        + "devuélvala por correo a Contratación y marque como completado el sub-paso "
+                                        + "del acta."));
+            }
             return sb.toString();
         }
         if (d.aclaracion() != null) {
@@ -263,6 +307,29 @@ public class FichaDeDocumentoFormal {
                 .ifPresent(s -> sb.append("\nEn este contrato, el sub-paso %s está %s."
                         .formatted(s.codigo(), estado(s))));
         return sb.toString();
+    }
+
+    /**
+     * El sub-paso donde se carga firmado un documento que SICOT no arma (el
+     * Acta de Inicio), buscado por lo que exige y no por su código.
+     */
+    static Optional<Ubicacion> dondeSeCarga(Documento d, List<EtapaResponse> etapas) {
+        if (d.seCargaEn() == null || etapas == null) {
+            return Optional.empty();
+        }
+        for (EtapaResponse e : etapas) {
+            for (SubetapaResponse s : e.subEtapas() == null ? List.<SubetapaResponse>of() : e.subEtapas()) {
+                if (d.seCargaEn().equals(s.documentosRequeridos())) {
+                    return Optional.of(new Ubicacion(e, s));
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** La ficha del Acta de Inicio, que se carga firmada en vez de armarse. */
+    static Documento actaDeInicio() {
+        return DOCUMENTOS.get(0);
     }
 
     private static String encabezado(Documento d) {

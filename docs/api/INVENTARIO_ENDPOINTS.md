@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-06 contra el código: 15 controladores, 47 endpoints.**
+**Revisado el 2026-10-18 contra el código: 15 controladores, 49 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -35,6 +35,7 @@
 | 12 | ContratoController | PATCH | /api/contratos/{id}/supervisor | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 14 | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
+| 48 | ContratoController | GET | /api/contratos/{id}/secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (también si datos.gov.co no responde: `disponible=false` y el motivo) | `VerificacionSecopResponse` |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 16 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 17 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
@@ -46,6 +47,7 @@
 | 23 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/generar (cuerpo: `tipo`, `notas`, `datos` por clave, `redactarConIa` y, desde el 30-09-2026, `tablas`: filas de obligaciones, amparos u órdenes de pago; en el Informe Final, órdenes que se leen como cifras y no suman el total pagado → 400) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `DocumentoGeneradoResponse` (los campos de `DocumentoResponse` más `observaciones`, `observacionesRedactadasConIa`, `motivoNotasTalCual` y `huellaDelBorrador`) |
 | 24 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (`?huellaRevisada=` obligatorio para lo generado por SICOT: solo firma si el borrador sigue siendo el revisado; opcional en lo cargado) | SUPERVISOR | @PreAuthorize + Service verifica que sea el supervisor asignado del contrato, también en lo cargado | 200 | `DocumentoResponse` |
 | 25 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat (cuerpo: `pregunta`, `historial` y, desde el 2026-10-02, `idSolicitud` opcional —el reintento con el mismo id recibe la respuesta del primer intento en vez de otra inferencia— y `revisarPaso` opcional 1..6 —revisión consultiva antes de cerrar el paso, con las instrucciones armadas en el servidor—) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse`: `respuesta`, `fuente` (`SISTEMA` si la armó SICOT sin modelo, `MODELO` si la escribió Ollama) y `accion` (pantalla que el supervisor puede abrir con un botón, o `null`; ninguna firma, marca ni genera) |
+| 49 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat/en-vivo (desde el 2026-10-18; mismo cuerpo que `/chat`) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + `CopilotoChatService.exigirAcceso` **antes de abrir la respuesta**: un contrato ajeno da 404 con su código, no un error dentro de un 200 | 200 | NDJSON: eventos `inicio`, `espera` (cada 10 s), `texto` (`t`), y `fin` (con la `ChatResponse` completa) o `error` (`status`, `mensaje`) |
 | 26 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/precalentar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato **antes de encolar** (desde el 2026-10-02; antes respondía 202 a cualquier id) | **202** | vacío |
 | 27 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
 | 28 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |

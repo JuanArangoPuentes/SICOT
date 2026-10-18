@@ -37,12 +37,17 @@ class OrdenDelSupervisorTest {
         return new SubetapaResponse(id, codigo, nombre, null, estado, "Supervisor");
     }
 
-    /** Un contrato en el paso 3: el Acta de Inicio firmada, la foto de 3.1 cargada y el 3.2 pendiente. */
+    /**
+     * Un contrato en el paso 3 con el proceso real: el Acta de Inicio cargada
+     * firmada en el 2.1, la foto de 3.1 cargada y el 3.2 pendiente.
+     */
     private static List<EtapaResponse> contratoEnElPaso3() {
         return List.of(
-                new EtapaResponse(2L, 2, "INICIO — Acta de Inicio", EstadoEtapa.COMPLETADA, 100, List.of(
-                        sub(23, "2.3", "Verificación de pólizas", EstadoSubetapa.COMPLETADA),
-                        sub(27, "2.7", "Firma del Acta de Inicio (GCCON-F-018)", EstadoSubetapa.COMPLETADA))),
+                new EtapaResponse(2L, 2, "INICIO — Acta de Inicio y arranque (GCCON-F-018)", EstadoEtapa.COMPLETADA,
+                        100, List.of(
+                        new SubetapaResponse(21L, "2.1", "Firma y devolución del Acta de Inicio (GCCON-F-018)", null,
+                                EstadoSubetapa.COMPLETADA, "Supervisor", "ACTA_FIRMADA_Y_ENVIO"),
+                        sub(23, "2.3", "Verificación de especificaciones en SECOP II", EstadoSubetapa.COMPLETADA))),
                 new EtapaResponse(3L, 3, "INSPECCIÓN — Monitoreo y Ejecución", EstadoEtapa.EN_CURSO, 25, List.of(
                         sub(31, "3.1", "Verificación física de la entrega en bodega", EstadoSubetapa.COMPLETADA),
                         sub(32, "3.2", "Carga de evidencia fotográfica georreferenciada", EstadoSubetapa.PENDIENTE),
@@ -54,16 +59,19 @@ class OrdenDelSupervisorTest {
                         List.of(sub(53, "5.3", "Firma de la Certificación de cumplimiento", EstadoSubetapa.PENDIENTE))));
     }
 
-    /** El Acta de Inicio firmada (id 900) y un borrador del Acta de Recibo sin firmar (id 901). */
+    /**
+     * El Acta de Inicio firmada que cargó el supervisor en el 2.1 (id 900) y un
+     * borrador del Acta de Recibo sin firmar (id 901).
+     */
     private List<DocumentoResponse> documentos() {
         lecturasDeDocumentos.incrementAndGet();
         return List.of(
-                documento(900L, 27L, Instant.parse("2026-09-20T15:00:00Z")),
-                documento(901L, 43L, null));
+                documento(900L, 21L, Instant.parse("2026-09-20T15:00:00Z"), "Acta de Inicio firmada"),
+                documento(901L, 43L, null, "Documento 901"));
     }
 
-    private static DocumentoResponse documento(long id, long subetapaId, Instant fechaFirma) {
-        return new DocumentoResponse(id, 1L, subetapaId, null, null, null, "Documento " + id, TipoDocumento.PDF,
+    private static DocumentoResponse documento(long id, long subetapaId, Instant fechaFirma, String nombre) {
+        return new DocumentoResponse(id, 1L, subetapaId, null, null, null, nombre, TipoDocumento.PDF,
                 fechaFirma == null ? EstadoDocumento.PENDIENTE : EstadoDocumento.APROBADO, 1000L, true,
                 fechaFirma == null ? null : "FIRMA-1", fechaFirma, null, null, "Alex Zapata", Instant.now(), null,
                 null, null);
@@ -92,7 +100,7 @@ class OrdenDelSupervisorTest {
             abre la carga de fotos              | ABRIR_EVIDENCIA     | 3.2
             sube la foto de la entrega          | ABRIR_EVIDENCIA     | 3.2
             llévame al siguiente paso           | ABRIR_EVIDENCIA     | 3.2
-            descarga el acta de inicio          | DESCARGAR_DOCUMENTO | 2.7
+            descarga el acta de inicio          | DESCARGAR_DOCUMENTO | 2.1
             descarga los documentos             | MOSTRAR_DOCUMENTOS  |
             muéstrame las alertas               | MOSTRAR_ALERTAS     |
             cambia el tema a claro              | IR_A_CONFIGURACION  |
@@ -154,10 +162,11 @@ class OrdenDelSupervisorTest {
     @Test
     @DisplayName("descargar solo se ofrece con un documento firmado que existe")
     void descargarSoloUnDocumentoFirmado() {
+        // El acta no la arma SICOT: se descarga la que el supervisor cargó firmada.
         ChatResponse firmada = interpretar("descarga el acta de inicio").orElseThrow();
         assertThat(firmada.accion().tipo()).isEqualTo(TipoAccion.DESCARGAR_DOCUMENTO);
         assertThat(firmada.accion().documentoId()).isEqualTo(900L);
-        assertThat(firmada.accion().etiqueta()).isEqualTo("Descargar Acta de Inicio");
+        assertThat(firmada.accion().etiqueta()).isEqualTo("Descargar el Acta de Inicio firmada");
 
         ChatResponse borrador = interpretar("descarga el acta de recibo").orElseThrow();
         assertThat(borrador.accion().tipo()).isEqualTo(TipoAccion.ABRIR_DOCUMENTO);
@@ -185,9 +194,9 @@ class OrdenDelSupervisorTest {
     void unNombreAmbiguoPideAclaracion() {
         ChatResponse r = interpretar("genera el acta").orElseThrow();
 
-        assertThat(r.respuesta()).isEqualTo("¿Cuál de ellos? «Acta de Inicio» (GCCON-F-018) va en el sub-paso 2.7 y "
-                + "«Acta de Recibo a Satisfacción de Bienes» (GIL-F-010) va en el sub-paso 4.3. Dígame cuál y le "
-                + "dejo el botón para abrirlo.");
+        assertThat(r.respuesta()).isEqualTo("¿Cuál de ellos? «Acta de Inicio» (GCCON-F-018), que llega de "
+                + "Contratación y se carga firmada y «Acta de Recibo a Satisfacción de Bienes» (GIL-F-010) va en el "
+                + "sub-paso 4.3. Dígame cuál y le dejo el botón para abrirlo.");
         assertThat(r.accion()).isNull();
     }
 
@@ -205,7 +214,8 @@ class OrdenDelSupervisorTest {
     void cargarOtroArchivoNoExiste() {
         ChatResponse r = interpretar("sube la factura").orElseThrow();
 
-        assertThat(r.respuesta()).startsWith("En SICOT solo se cargan fotos de la entrega, en los sub-pasos 3.1 y 3.2.");
+        assertThat(r.respuesta()).startsWith("En SICOT se cargan el Acta de Inicio firmada con la evidencia de su "
+                + "envío (en el sub-paso del acta, paso 2) y las fotos de la entrega (3.1 y 3.2).");
         assertThat(r.accion()).isNull();
     }
 

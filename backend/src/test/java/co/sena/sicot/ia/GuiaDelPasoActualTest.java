@@ -262,11 +262,20 @@ class GuiaDelPasoActualTest {
     @DisplayName("dice qué botón pulsar según el sub-paso: firmar, cargar la foto o marcar completado")
     void diceQueBotonPulsarSegunElSubPaso() {
         assertThat(GuiaDelPasoActual.comoSeRegistra(
-                sub("2.7", "Firma del Acta de Inicio (GCCON-F-018)", null, EstadoSubetapa.PENDIENTE, "Supervisor")))
-                .isEqualTo("En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «Acta de "
-                        + "Inicio» (GCCON-F-018) con los datos exactos del contrato: le pide los datos que el contrato "
-                        + "no tiene, le muestra el borrador en «Revisar antes de firmar» y solo se firma cuando usted "
-                        + "pulsa «Firmar».");
+                sub("3.4", "Firma del Informe de Supervisión (GCCON-F-031)", null, EstadoSubetapa.PENDIENTE,
+                        "Supervisor")))
+                .isEqualTo("En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «Informe de "
+                        + "Supervisión» (GCCON-F-031) con los datos exactos del contrato: le pide los datos que el "
+                        + "contrato no tiene, le muestra el borrador en «Revisar antes de firmar» y solo se firma "
+                        + "cuando usted pulsa «Firmar».");
+        // El paso del acta (proceso real): se carga firmada, con la evidencia del
+        // envío. Es el texto de guiaSubPaso.ts para el mismo sub-paso.
+        assertThat(GuiaDelPasoActual.comoSeRegistra(new SubetapaResponse(1L, "2.1",
+                "Firma y devolución del Acta de Inicio (GCCON-F-018)", null, EstadoSubetapa.EN_CURSO, "Supervisor",
+                "ACTA_FIRMADA_Y_ENVIO")))
+                .startsWith("En SICOT: cuando haya firmado el acta y la haya devuelto respondiendo el correo de "
+                        + "Contratación, cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío")
+                .endsWith("SICOT no lo deja cerrar sin ellas.");
         // La Certificación no tiene código oficial: no se le pone ninguno.
         assertThat(GuiaDelPasoActual.comoSeRegistra(
                 sub("5.3", "Firma de la Certificación de cumplimiento", null, EstadoSubetapa.PENDIENTE, "Supervisor")))
@@ -373,21 +382,34 @@ class GuiaDelPasoActualTest {
      * real del 2.7, y no afirma que no pueda: SICOT no obliga a seguir el orden.
      */
     @Test
-    @DisplayName("«¿ya puedo firmar el acta de inicio?» dice el estado del 2.7 y lo que queda antes")
+    @DisplayName("«¿ya puedo firmar el acta de inicio?» dice el estado del sub-paso donde se carga firmada")
     void yaPuedoFirmarElActaDeInicio() {
-        ChatResponse r = respuesta("¿Ya puedo firmar el Acta de Inicio?");
+        List<EtapaResponse> etapas = List.of(
+                etapa(2, "INICIO — Acta de Inicio y arranque (GCCON-F-018)", EstadoEtapa.EN_CURSO, 0, List.of(
+                        new SubetapaResponse(21L, "2.1", "Firma y devolución del Acta de Inicio (GCCON-F-018)", null,
+                                EstadoSubetapa.EN_CURSO, "Supervisor", "ACTA_FIRMADA_Y_ENVIO"),
+                        sub("2.2", "Aviso a los profesionales SST y ambiental", null, EstadoSubetapa.PENDIENTE,
+                                "Supervisor"))),
+                etapa(4, "RECEPCIÓN — Acta de Recibo", EstadoEtapa.PENDIENTE, 0, List.of(
+                        sub("4.3", "Firma del Acta de Recibo a Satisfacción (GIL-F-010)", null,
+                                EstadoSubetapa.PENDIENTE, "Supervisor"))));
+        String pregunta = "¿Ya puedo firmar el Acta de Inicio?";
+        assertThat(guia.puedeResponder(pregunta)).isTrue();
 
+        ChatResponse r = guia.responder(pregunta, etapas).orElseThrow();
+
+        // Ya no dice que SICOT la arma en un 2.7 que no existe: es el 2.1, donde
+        // se carga firmada.
         assertThat(r.respuesta())
-                .startsWith("Sub-paso 2.7: Firma del Acta de Inicio (GCCON-F-018), del paso 2: INICIO — Acta de "
-                        + "Inicio. Está pendiente.")
-                .contains("Antes de él, en ese mismo paso, sigue pendiente:\n\n2.3 Verificación de pólizas")
-                .contains("SICOT arma «Acta de Inicio» (GCCON-F-018) con los datos exactos del contrato: "
-                        + FlujoDeFirma.CORTO)
-                .doesNotContain("Todavía no");
-        assertThat(r.accion().tipo()).isEqualTo(ChatResponse.TipoAccion.ABRIR_DOCUMENTO);
-        assertThat(r.accion().documentoTipo()).isEqualTo("ACTA_INICIO");
+                .startsWith("Sub-paso 2.1: Firma y devolución del Acta de Inicio (GCCON-F-018)")
+                .contains("cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío")
+                .doesNotContain("Firmar documento")
+                .doesNotContain("2.7");
+        assertThat(r.accion().subpaso()).isEqualTo("2.1");
+        assertThat(r.accion().documentoTipo()).isNull();
         // «El acta» a secas: la que le queda por delante, nombrada en la respuesta.
-        assertThat(respuesta("¿ya puedo firmar el acta?").respuesta()).startsWith("Sub-paso 2.7:");
+        assertThat(guia.responder("¿ya puedo firmar el acta?", etapas).orElseThrow().respuesta())
+                .startsWith("Sub-paso 2.1:");
     }
 
     @Test

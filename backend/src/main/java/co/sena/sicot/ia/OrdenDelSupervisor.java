@@ -82,6 +82,12 @@ public class OrdenDelSupervisor {
             "evidencias", "camara");
     private static final Set<String> OTROS_ARCHIVOS = Set.of("factura", "rut", "pila", "planilla", "poliza",
             "documento", "archivo", "pdf", "soporte", "certificado");
+    /** El nombre con que el panel guarda el acta firmada que carga el supervisor (ActaFirmadaYEnvio.tsx). */
+    private static final String NOMBRE_DEL_ACTA_CARGADA = "Acta de Inicio firmada";
+
+    /** Junto a «evidencia», dicen que es la del envío del acta y no una foto de la entrega. */
+    private static final Set<String> ENVIO = Set.of("envio", "enviada", "enviado", "correo", "devolucion",
+            "devolvi", "devuelta");
     private static final Set<String> DOCUMENTO_SIN_NOMBRE = Set.of("documento", "formato");
     private static final Set<String> MARCADO = Set.of("completado", "completada", "hecho", "listo", "terminado",
             "realizado");
@@ -282,16 +288,33 @@ public class OrdenDelSupervisor {
     }
 
     private Optional<ChatResponse> cargar(PreguntaNormalizada objeto, Contexto ctx) {
+        // El acta firmada y la evidencia de su envío se cargan en el sub-paso
+        // del acta (2.1 en el proceso real). Va antes que las fotos: «carga la
+        // evidencia del envío» mandaba a la carga de fotos de la bodega.
+        boolean evidenciaDelEnvio = objeto.tienePalabra("evidencia")
+                && ENVIO.stream().anyMatch(objeto::tienePalabra);
+        if (objeto.tienePalabra("acta") || evidenciaDelEnvio) {
+            Optional<FichaDeDocumentoFormal.Ubicacion> donde =
+                    FichaDeDocumentoFormal.dondeSeCarga(FichaDeDocumentoFormal.actaDeInicio(), ctx.etapas());
+            if (donde.isPresent()) {
+                FichaDeDocumentoFormal.Ubicacion u = donde.get();
+                return Optional.of(ChatResponse.delSistema(("Yo no cargo archivos: en el sub-paso %s pulse "
+                        + "«Cargar» para el acta firmada (PDF) y para la evidencia de que la devolvió (el pantallazo "
+                        + "o el PDF del correo). Con las dos cargadas, márquelo como completado.")
+                        .formatted(u.sub().codigo()), AccionesDelCopiloto.abrirSubpaso(u.etapa().numero(), u.sub())));
+            }
+        }
         if (FOTOS.stream().anyMatch(objeto::tienePalabra)) {
             return Optional.of(fotos(ctx.etapas()));
         }
         if (OTROS_ARCHIVOS.stream().anyMatch(objeto::tienePalabra)) {
-            // La misma prohibición que el prompt: fuera de las fotos de 3.1 y
-            // 3.2 no hay dónde cargar nada, y decir lo contrario manda al
-            // supervisor a buscar un botón que no existe.
-            return Optional.of(ChatResponse.delSistema("En SICOT solo se cargan fotos de la entrega, en los "
-                    + "sub-pasos 3.1 y 3.2. Lo demás (factura, póliza, RUT, PILA…) lo verifica usted fuera de SICOT "
-                    + "y después marca el sub-paso como completado."));
+            // Lo mismo que dice el prompt: fuera del acta y de las fotos no hay
+            // dónde cargar nada, y decir lo contrario manda al supervisor a
+            // buscar un botón que no existe.
+            return Optional.of(ChatResponse.delSistema("En SICOT se cargan el Acta de Inicio firmada con la "
+                    + "evidencia de su envío (en el sub-paso del acta, paso 2) y las fotos de la entrega (3.1 y 3.2). "
+                    + "Lo demás (factura, póliza, RUT, PILA…) lo verifica usted fuera de SICOT y después marca el "
+                    + "sub-paso como completado."));
         }
         return Optional.empty();
     }
@@ -316,6 +339,9 @@ public class OrdenDelSupervisor {
     /** Generar, firmar, marcar, abrir o descargar un documento formal concreto. */
     private ChatResponse sobreElDocumento(Verbo verbo, FichaDeDocumentoFormal.Documento d, Contexto ctx) {
         String nombre = "«%s»%s".formatted(d.nombre(), d.codigo() == null ? "" : " (" + d.codigo() + ")");
+        if (d.subpaso() == null && d.seCargaEn() != null) {
+            return sobreElActaQueSeCarga(verbo, d, nombre, ctx);
+        }
         if (d.subpaso() == null) {
             // El Oficio de Pago: ni es del supervisor ni lo arma SICOT.
             Optional<Ubicado> certificacion = ubicar("5.3", ctx.etapas());
@@ -365,6 +391,58 @@ public class OrdenDelSupervisor {
                 abrir);
     }
 
+    /**
+     * El Acta de Inicio: SICOT no la arma ni la firma; llega de Contratación
+     * y el supervisor la carga firmada con la evidencia del envío. Hasta el
+     * 18-10-2026 se respondía como un documento que se firma en el 2.7, un
+     * sub-paso que el proceso real ya no tiene.
+     */
+    private ChatResponse sobreElActaQueSeCarga(Verbo verbo, FichaDeDocumentoFormal.Documento d, String nombre,
+                                              Contexto ctx) {
+        Optional<FichaDeDocumentoFormal.Ubicacion> donde = FichaDeDocumentoFormal.dondeSeCarga(d, ctx.etapas());
+        // Femenino a propósito: el único documento que se carga en vez de
+        // armarse es el Acta de Inicio.
+        String intro = switch (verbo) {
+            case GENERAR -> "Yo no genero %s, y SICOT tampoco la arma: ";
+            case FIRMAR -> "Yo no puedo firmar %s, y no se firma dentro de SICOT: ";
+            case MARCAR -> "Yo no marco sub-pasos. Sobre %s: ";
+            default -> "%s no la arma SICOT: ";
+        };
+        String comoSeHace = "la elabora la Unidad de Contratación y se la envía por correo. Usted la firma, la "
+                + "devuelve respondiendo ese correo y carga en SICOT el acta firmada (PDF) y la evidencia del envío";
+        if (donde.isEmpty()) {
+            return ChatResponse.delSistema(intro.formatted(nombre) + comoSeHace + ". Este contrato es de antes del "
+                    + "proceso actual y no tiene ese sub-paso: fírmela, devuélvala por correo y marque como "
+                    + "completado el sub-paso del acta.");
+        }
+        FichaDeDocumentoFormal.Ubicacion u = donde.get();
+        ChatResponse.Accion abrir = AccionesDelCopiloto.abrirSubpaso(u.etapa().numero(), u.sub());
+        if (verbo == Verbo.DESCARGAR) {
+            // El acta que el supervisor cargó, con el nombre que le pone el panel
+            // (ActaFirmadaYEnvio.NOMBRE_ACTA).
+            Optional<DocumentoResponse> cargada = ctx.documentos().get().stream()
+                    .filter(x -> Objects.equals(x.subetapaId(), u.sub().id()))
+                    .filter(x -> x.nombre() != null && x.nombre().startsWith(NOMBRE_DEL_ACTA_CARGADA))
+                    .findFirst();
+            return cargada
+                    .map(x -> ChatResponse.delSistema("El acta firmada que cargó en el sub-paso %s está en el "
+                            .formatted(u.sub().codigo()) + "expediente. Con el botón de abajo la descarga.",
+                            AccionesDelCopiloto.descargarCargado(u.sub().codigo(), x,
+                                    "Descargar el Acta de Inicio firmada")))
+                    .orElseGet(() -> ChatResponse.delSistema("Todavía no ha cargado el acta firmada: " + comoSeHace
+                            + ", en el sub-paso %s. Con el botón de abajo abre ese sub-paso."
+                                    .formatted(u.sub().codigo()), abrir));
+        }
+        if (u.sub().estado() == EstadoSubetapa.COMPLETADA) {
+            return ChatResponse.delSistema("El sub-paso %s, donde se cargan el acta firmada y la evidencia del "
+                    .formatted(u.sub().codigo()) + "envío, ya está completado.", abrir);
+        }
+        return ChatResponse.delSistema(intro.formatted(nombre) + comoSeHace + ", en el sub-paso %s (paso %d: %s), "
+                .formatted(u.sub().codigo(), u.etapa().numero(), u.etapa().nombre())
+                + "que está %s. Con las dos cargadas, márquelo como completado; con el botón de abajo abre ese "
+                .formatted(estado(u.sub())) + "sub-paso.", abrir);
+    }
+
     /** «El documento», sin decir cuál: el primero del procedimiento que no está completado. */
     private ChatResponse elDocumentoQueSigue(Verbo verbo, PreguntaNormalizada objeto, Contexto ctx) {
         // «Firma el documento del paso 3»: el de ese paso.
@@ -374,6 +452,15 @@ public class OrdenDelSupervisor {
                 .toList();
         if (paso.isPresent()) {
             String prefijo = paso.get().numero() + ".";
+            // En el paso del acta no se firma nada en SICOT: se carga el acta
+            // firmada. Se reconoce por lo que exige el sub-paso, no por el número.
+            FichaDeDocumentoFormal.Documento acta = FichaDeDocumentoFormal.actaDeInicio();
+            boolean esElPasoDelActa = FichaDeDocumentoFormal.dondeSeCarga(acta, ctx.etapas())
+                    .map(u -> u.etapa().numero() == paso.get().numero())
+                    .orElse(false);
+            if (esElPasoDelActa) {
+                return sobreElDocumento(verbo, acta, ctx);
+            }
             return formales.stream()
                     .filter(d -> d.subpaso().startsWith(prefijo))
                     .findFirst()
@@ -387,8 +474,8 @@ public class OrdenDelSupervisor {
                         .orElse(false))
                 .findFirst()
                 .map(d -> sobreElDocumento(verbo, d, ctx))
-                .orElseGet(() -> ChatResponse.delSistema("Los cinco documentos formales de este contrato ya están "
-                        + "firmados. Puede descargarlos desde Documentos.", AccionesDelCopiloto.mostrarDocumentos()));
+                .orElseGet(() -> ChatResponse.delSistema("Los cuatro documentos formales que arma SICOT en este "
+                        + "contrato ya están firmados. Puede descargarlos desde Documentos.", AccionesDelCopiloto.mostrarDocumentos()));
     }
 
     /**
@@ -409,7 +496,8 @@ public class OrdenDelSupervisor {
         List<String> opciones = new ArrayList<>();
         for (FichaDeDocumentoFormal.Documento d : candidatos) {
             opciones.add("«%s»%s%s".formatted(d.nombre(), d.codigo() == null ? "" : " (" + d.codigo() + ")",
-                    d.subpaso() == null ? ", que no arma SICOT" : " va en el sub-paso " + d.subpaso()));
+                    d.seCargaEn() != null ? ", que llega de Contratación y se carga firmada"
+                            : d.subpaso() == null ? ", que no arma SICOT" : " va en el sub-paso " + d.subpaso()));
         }
         return Optional.of(ChatResponse.delSistema("¿Cuál de ellos? " + String.join(" y ", opciones)
                 + ". Dígame cuál y le dejo el botón para abrirlo."));

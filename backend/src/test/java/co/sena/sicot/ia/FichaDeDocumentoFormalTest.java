@@ -187,13 +187,20 @@ class FichaDeDocumentoFormalTest {
         assertThat(ficha.responder(SUGERENCIA_F010, null)).isPresent();
     }
 
+    /**
+     * Desde el 15-10-2026 el acta la elabora Contratación y el supervisor la
+     * carga firmada: la ficha ya no dice que SICOT la arma en el 2.7.
+     */
     @Test
-    @DisplayName("Acta de Inicio: dice que también la firma el representante legal")
+    @DisplayName("Acta de Inicio: la firman el supervisor y el representante legal, y SICOT no la arma")
     void fichaDelActaDeInicio() {
         assertThat(ficha.responder("¿Quién firma el acta de inicio?", List.of()).orElseThrow())
                 .contains("Acta de Inicio (GCCON-F-018).")
-                .contains("Dónde se genera: en el sub-paso 2.7.")
-                .contains(FIRMA + " El formato lleva además la firma del representante legal del contratista.");
+                .contains("Quién firma: usted, como supervisor, y el representante legal del contratista.")
+                .contains("SICOT no la arma. La elabora la Unidad de Contratación")
+                .contains("Dónde se carga: en el sub-paso del acta, en el paso 2.")
+                .doesNotContain("Firmar documento")
+                .doesNotContain("2.7");
     }
 
     @Test

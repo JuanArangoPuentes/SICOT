@@ -61,4 +61,9 @@ final class AccionesDelCopiloto {
         return new Accion(TipoAccion.DESCARGAR_DOCUMENTO, null, d.subpaso(), d.clave(), firmado.id(),
                 "Descargar " + d.nombre());
     }
+
+    /** Un documento que el supervisor cargó en un sub-paso (el acta firmada): se descarga tal cual. */
+    static Accion descargarCargado(String subpaso, DocumentoResponse cargado, String etiqueta) {
+        return new Accion(TipoAccion.DESCARGAR_DOCUMENTO, null, subpaso, null, cargado.id(), etiqueta);
+    }
 }

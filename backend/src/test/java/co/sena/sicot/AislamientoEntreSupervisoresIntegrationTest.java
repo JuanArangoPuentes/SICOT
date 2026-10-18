@@ -295,7 +295,7 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(post("/api/contratos/{id}/documentos/generar", contratoAId)
                         .header("Authorization", "Bearer " + tokenB)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\"}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\"}"))
                 .andExpect(status().is4xxClientError());
         verifyNoInteractions(ollamaClient);
         assertThat(documentoRepository.count())

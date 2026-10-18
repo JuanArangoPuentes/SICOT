@@ -1,5 +1,6 @@
 package co.sena.sicot.controller;
 
+import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.dto.documento.DocumentoResponse;
 import co.sena.sicot.dto.documento.VerificacionIntegridadResponse;
 import co.sena.sicot.dto.ia.GenerarDocumentoRequest;
@@ -34,6 +35,9 @@ import java.util.List;
 @Validated
 @Tag(name = "Documentos", description = "Documentos y evidencias de un contrato")
 public class DocumentoController {
+
+    /** Clave del Acta de Inicio en el catálogo: se rechaza al generar (ver generar). */
+    private static final String ACTA_DE_INICIO = "ACTA_INICIO";
 
     /** Estado de integridad del documento que acompaña a cada descarga. */
     static final String CABECERA_INTEGRIDAD = "X-SICOT-Integridad";
@@ -188,6 +192,14 @@ public class DocumentoController {
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
     public ResponseEntity<co.sena.sicot.dto.documento.DocumentoGeneradoResponse> generar(
             @PathVariable Long contratoId, @Valid @RequestBody GenerarDocumentoRequest request) {
+        // El formato sigue en el catálogo (lo usan las pruebas de fidelidad del
+        // PDF y los documentos de prueba), pero desde el 15-10-2026 el acta la
+        // elabora Contratación y el supervisor la carga firmada. Generada aquí,
+        // un acta de SICOT en el paso del acta lo dejaba cerrar sin la real.
+        if (ACTA_DE_INICIO.equals(request.tipo())) {
+            throw new BusinessException("SICOT ya no arma el Acta de Inicio: la elabora la Unidad de Contratación. "
+                    + "Cárguela firmada, con la evidencia de su envío, en el sub-paso del acta (paso 2).");
+        }
         return ResponseEntity.ok(generacionDocumentoService.generar(contratoId, request.subetapaId(), request.tipo(),
                 request.notas(), request.datos(), request.tablas(), !Boolean.FALSE.equals(request.redactarConIa())));
     }

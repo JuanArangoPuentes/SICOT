@@ -232,7 +232,7 @@ public class GuiaDelPasoActual {
         }
         // El Oficio de Pago no es del supervisor ni tiene sub-paso: la guía no
         // tiene nada exacto que decir de él.
-        if (FichaDeDocumentoFormal.nombrados(p).stream().anyMatch(d -> d.subpaso() == null)) {
+        if (FichaDeDocumentoFormal.nombrados(p).stream().anyMatch(d -> d.subpaso() == null && d.seCargaEn() == null)) {
             return false;
         }
         // Con un documento no: «explícame el acta de inicio» pide qué es, y eso
@@ -403,8 +403,10 @@ public class GuiaDelPasoActual {
      * nombre, así que no hay confusión posible.
      */
     private static Optional<String> subpasoDelDocumento(PreguntaNormalizada p, List<EtapaResponse> etapas) {
-        Optional<String> nombrado = FichaDeDocumentoFormal.nombrados(p).stream()
-                .map(FichaDeDocumentoFormal.Documento::subpaso)
+        List<FichaDeDocumentoFormal.Documento> nombrados = FichaDeDocumentoFormal.nombrados(p);
+        Optional<String> nombrado = nombrados.stream()
+                .map(d -> d.subpaso() != null ? d.subpaso()
+                        : FichaDeDocumentoFormal.dondeSeCarga(d, etapas).map(u -> u.sub().codigo()).orElse(null))
                 .filter(Objects::nonNull)
                 .findFirst();
         if (nombrado.isPresent()) {
@@ -415,12 +417,14 @@ public class GuiaDelPasoActual {
             return Optional.empty();
         }
         return candidatos.stream()
-                .map(FichaDeDocumentoFormal.Documento::subpaso)
+                .map(d -> d.subpaso() != null ? d.subpaso()
+                        : FichaDeDocumentoFormal.dondeSeCarga(d, etapas).map(u -> u.sub().codigo()).orElse(null))
+                .filter(Objects::nonNull)
                 .filter(codigo -> etapas.stream()
                         .flatMap(e -> e.subEtapas() == null ? Stream.empty() : e.subEtapas().stream())
                         .noneMatch(s -> codigo.equals(s.codigo()) && s.estado() == EstadoSubetapa.COMPLETADA))
                 .findFirst()
-                .or(() -> Optional.of(candidatos.get(candidatos.size() - 1).subpaso()));
+                .or(() -> Optional.ofNullable(candidatos.get(candidatos.size() - 1).subpaso()));
     }
 
     private static OptionalInt pasoNombrado(PreguntaNormalizada p) {
@@ -482,6 +486,34 @@ public class GuiaDelPasoActual {
             return "En SICOT: cuando tenga lo necesario, pulse «Firmar documento». SICOT arma «%s»%s con los datos "
                     .formatted(d.nombre(), d.codigo() == null ? "" : " (" + d.codigo() + ")")
                     + "exactos del contrato: " + FlujoDeFirma.CORTO;
+        }
+        // El paso del acta y las herramientas de 2.2 a 2.4 del proceso real,
+        // con el texto de guiaSubPaso.ts. Las herramientas se reconocen por el
+        // nombre, igual que HERRAMIENTA_POR_PASO: los contratos de antes del
+        // 15-10-2026 tienen otros sub-pasos con esos mismos códigos.
+        if (FichaDeDocumentoFormal.ACTA_FIRMADA_Y_ENVIO.equals(sub.documentosRequeridos())) {
+            return "En SICOT: cuando haya firmado el acta y la haya devuelto respondiendo el correo de Contratación, "
+                    + "cargue en este sub-paso el acta firmada (PDF) y la evidencia del envío (el pantallazo o el PDF "
+                    + "del correo que respondió). Cuando las dos aparezcan como cargadas, márquelo como completado: "
+                    + "SICOT no lo deja cerrar sin ellas.";
+        }
+        String nombre = sub.nombre() == null ? "" : sub.nombre().strip();
+        if (nombre.equals("Verificación de especificaciones en SECOP II")) {
+            return "En SICOT: debajo de este sub-paso verá lo que el SECOP II publica del contrato y lo que no "
+                    + "coincide con lo registrado en SICOT. Las cantidades y las especificaciones no vienen en esos "
+                    + "datos: abra el proceso en el SECOP II con el enlace del sub-paso y revíselas en la oferta "
+                    + "económica y el estudio previo del expediente; cuando esté todo revisado, márquelo como "
+                    + "completado.";
+        }
+        if (nombre.equals("Aviso a los profesionales SST y ambiental")) {
+            return "En SICOT: abra el borrador del correo, agregue como destinatarios a los profesionales de SST y "
+                    + "ambiental —sus correos están en el estudio previo, que se abre entrando al proceso en el SECOP "
+                    + "II— y envíelo desde su correo. Después, márquelo como completado.";
+        }
+        if (nombre.equals("Contacto con el contratista y acuerdo de entregas")) {
+            return "En SICOT: abra el borrador del correo al contratista, complete las cantidades exactas si es un "
+                    + "suministro y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo "
+                    + "como completado.";
         }
         if (SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA.contains(sub.codigo())) {
             return "En SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», "

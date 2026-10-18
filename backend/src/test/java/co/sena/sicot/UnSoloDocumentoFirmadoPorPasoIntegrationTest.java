@@ -78,7 +78,7 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
-        subetapaId = etapas.get(1).get("subEtapas").get(0).get("id").asLong(); // 2.1, el paso del acta
+        subetapaId = etapas.get(2).get("subEtapas").get(3).get("id").asLong(); // 3.4, el Informe de Supervisión
 
         String miFirma = mockMvc.perform(get("/api/firmas/mia").header("Authorization", "Bearer " + supervisor))
                 .andReturn().getResponse().getContentAsString();
@@ -105,9 +105,9 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapaId + "}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapaId + "}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("Ya hay un «Acta de Inicio» firmado")));
+                .andExpect(jsonPath("$.message", containsString("Ya hay un «Informe de Supervisión» firmado")));
     }
 
     @Test
@@ -143,7 +143,7 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
         String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapaId + "}"))
+                        .content("{\"tipo\":\"INFORME_SUPERVISION\",\"subetapaId\":" + subetapaId + "}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return objectMapper.readTree(r);

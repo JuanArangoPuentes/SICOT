@@ -71,6 +71,9 @@ public class IAController {
     @GetMapping("/plantillas")
     public List<PlantillaDocumentoResponse> plantillas() {
         return PlantillaDocumentoIA.CATALOGO.values().stream()
+                // Solo los que SICOT arma: el Acta de Inicio llega de Contratación
+                // (ver DocumentoController.generar).
+                .filter(p -> !"ACTA_INICIO".equals(p.clave()))
                 .sorted(Comparator.comparing(PlantillaDocumentoIA::clave))
                 .map(p -> new PlantillaDocumentoResponse(p.clave(), p.codigo(), p.nombre(), p.llevaObservaciones(),
                         p.campos().stream()
