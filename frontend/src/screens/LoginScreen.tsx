@@ -258,7 +258,9 @@ export default function LoginScreen({
         </div>
 
         {/* Bottom version */}
-        <div style={{ fontSize: 11, color: s.idTextMuted, position: 'relative' }}>SICOT v3.0 · GCCON-P-010</div>
+        <div style={{ fontSize: 11, color: s.idTextMuted, position: 'relative' }}>
+          SICOT v{__VERSION_DE_SICOT__} · GCCON-P-010
+        </div>
       </div>
 
       {/* ── Right: Form panel (40%) — fondo blanco ── */}

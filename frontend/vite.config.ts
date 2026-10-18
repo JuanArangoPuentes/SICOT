@@ -1,6 +1,15 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'node:path'
+import { readFileSync } from 'node:fs'
+
+// La versión que se muestra en la pantalla de acceso sale de la misma fuente que
+// el instalador y el APK (tauri.conf.json). Antes ponía «SICOT v3.0» escrito a
+// mano, que no correspondía a ninguna versión publicada: quien probaba la 0.5.0
+// en otro teléfono no tenía cómo saber desde la aplicación qué había instalado.
+const versionDeSicot: string = JSON.parse(
+  readFileSync(path.resolve(import.meta.dirname, 'src-tauri/tauri.conf.json'), 'utf8'),
+).version
 
 // Los metadatos de la página (idioma, título, descripción, robots) están
 // escritos en index.html y public/robots.txt. Hasta el 02-10-2026 los ponía un
@@ -20,6 +29,9 @@ export default defineConfig(({ mode }) => {
       minify: !emitSourcemaps,
     },
     plugins: [react()],
+    define: {
+      __VERSION_DE_SICOT__: JSON.stringify(versionDeSicot),
+    },
     resolve: {
       alias: {
         '@': path.resolve(import.meta.dirname, './src'),

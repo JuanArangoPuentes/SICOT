@@ -13,3 +13,6 @@ playwright/.cache/
 # Gradle (2,5 GB medidos el 24-09-2026) y solo transferirlo tardaba más de
 # cinco minutos antes de empezar a compilar.
 src-tauri/
+# Salvo este archivo: de él sale la versión que muestra la pantalla de acceso
+# (vite.config.ts), y sin él la compilación de la imagen web falla.
+!src-tauri/tauri.conf.json
