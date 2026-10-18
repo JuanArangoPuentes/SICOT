@@ -115,22 +115,20 @@ public class ContratoService {
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
         contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
-        if (request.supervisorId() != null) {
-            contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
-        }
+        Usuario supervisor = request.supervisorId() != null ? buscarSupervisor(request.supervisorId()) : null;
+        contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
         registroService.registrar(guardado, "CONTRATO_CREADO",
                 "Contrato " + numero + " creado en estado BORRADOR.");
-        if (guardado.getSupervisor() != null) {
-            // Gestión crea el contrato con el supervisor en una sola llamada, y
-            // solo se registraba CONTRATO_CREADO: la regla que avisa al
-            // supervisor escucha SUPERVISOR_ASIGNADO, así que por el camino
-            // normal el supervisor nunca se enteraba de su designación. Es justo
-            // lo que el proceso real le pide al sistema en el paso 1.
-            Usuario supervisor = guardado.getSupervisor();
-            registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
-                    "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        // Elegir al supervisor en el mismo formulario de creación es el camino
+        // habitual de Gestión, y antes no dejaba SUPERVISOR_ASIGNADO: el
+        // supervisor no recibía la alerta ni el correo (las dispara esa acción
+        // de la auditoría) y solo se avisaba si después se reasignaba con el
+        // PATCH. Ahora los dos caminos registran lo mismo, que es justo lo que
+        // el proceso real le pide al sistema en el paso 1.
+        if (supervisor != null) {
+            registrarAsignacion(guardado, supervisor);
             registroService.registrar(guardado, "DESIGNACION_REGISTRADA",
                     "Etapa 1 (designación de la supervisión) completada al registrar el contrato con su supervisor;"
                             + " el proceso arranca en la firma del Acta de Inicio.");
@@ -176,10 +174,16 @@ public class ContratoService {
     public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
         Contrato contrato = buscar(id);
         Usuario supervisor = buscarSupervisor(request.supervisorId());
+        if (contrato.getSupervisor() != null && contrato.getSupervisor().getId().equals(supervisor.getId())) {
+            // Ya es su supervisor: no hay asignación nueva que auditar ni que
+            // avisar. Como cada asignación avisa por sí misma (ver
+            // NotificacionDeSupervisorAsignado), repetir la misma elección le
+            // mandaría otra vez la alerta y el correo de «se le asignó».
+            return ContratoMapper.toResponse(contrato);
+        }
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
-        registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
-                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        registrarAsignacion(guardado, supervisor);
         // Si el contrato nació sin supervisor, asignárselo es la designación:
         // la etapa 1 queda hecha y el supervisor arranca en el paso del acta.
         List<Etapa> etapas = etapaRepository.findByContratoIdOrderByNumeroAsc(guardado.getId());
@@ -190,6 +194,17 @@ public class ContratoService {
                             + " a la firma del Acta de Inicio.");
         }
         return ContratoMapper.toResponse(guardado);
+    }
+
+    /**
+     * Deja la acción SUPERVISOR_ASIGNADO en la auditoría. Es lo que, al
+     * confirmarse la transacción, dispara la regla NotificacionDeSupervisorAsignado
+     * (alerta en el panel y correo al supervisor), así que todo camino que
+     * asigne un supervisor tiene que pasar por aquí.
+     */
+    private void registrarAsignacion(Contrato contrato, Usuario supervisor) {
+        registroService.registrar(contrato, "SUPERVISOR_ASIGNADO",
+                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
     }
 
     @Transactional
@@ -228,6 +243,14 @@ public class ContratoService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Usuario (supervisor)", supervisorId));
         if (supervisor.getRol() != Rol.SUPERVISOR) {
             throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
+        }
+        // /api/usuarios lista también las cuentas desactivadas, así que Gestión
+        // podía elegir a alguien que ya no puede iniciar sesión: el contrato
+        // quedaba a cargo de una cuenta muerta, el aviso iba a nadie y ningún
+        // documento podía firmarlo su supervisor, sin que nada lo dijera.
+        if (!supervisor.isActivo()) {
+            throw new BusinessException("El supervisor seleccionado (" + supervisor.getNombre()
+                    + ") está desactivado. Elija un supervisor activo.");
         }
         return supervisor;
     }

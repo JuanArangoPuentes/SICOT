@@ -65,7 +65,11 @@ se dibuja casilla por casilla (`HojaActaDeRecibo`) con la geometría medida en
 la impresión real (Excel la imprime al 55 %). SICOT la dibuja al 60 % y
 centrada, con la misma geometría y la letra algo más legible. El texto que no
 cabe en su casilla se reduce de letra hasta 4,5 pt antes de salirse. Se
-conserva «SATISFACCION» sin tilde, que es texto fijo del formato.
+conserva «SATISFACCION» sin tilde, que es texto fijo del formato. El VALOR
+TOTAL y la FECHA DE VENCIMIENTO son los actuales: el acta pide las
+adiciones y prórrogas (como el GCCON-F-031) y, si hubo, el valor o la fecha
+actual; sin esa declaración quedan pendientes, porque el acta no tiene
+casilla donde se vea que el valor registrado podría no ser el vigente.
 
 **Certificación de cumplimiento (ESUCON).** No tiene código oficial confirmado
 y no se le inventa uno. Usa el logo negro, Arial (**Liberation Sans**) de
@@ -103,7 +107,12 @@ presentar tal como salía. Qué tablas pide cada formato está en
   escriba después queda como lo escribió, igual que en el real. Las órdenes de
   pago tienen que sumar el valor total pagado: si todas se leen como cifras y
   no suman, la generación se rechaza antes de llamar al modelo, porque el
-  documento se contradiría.
+  documento se contradiría. Por lo mismo, con el objeto cumplido «a
+  satisfacción» ninguna obligación general puede decir NO o PARCIALMENTE.
+  El 2.5 (pagos de seguridad social) tiene su propio dato: sin él queda
+  pendiente, y la frase del real («cumplió a cabalidad con el objeto y las
+  obligaciones contractuales») solo va si el supervisor declaró los pagos y
+  el objeto cumplido (auditoría del 02-10-2026).
 - **Amparos:** si el supervisor los da, van solo los de su póliza, con la
   fecha y el valor en el formato de la tabla («$ 4.000.000,00»). Si no, la
   lista fija del formato con «[dato pendiente: vigencia y valor]»; antes esas

@@ -372,8 +372,6 @@ export function AvatarIcon({ id, size = 24, style, className }: IconProps & { id
       return <IconAvatarGestor {...props} />
     case 'sena':
       return <IconAvatarSena {...props} />
-    case 'custom':
-      return <IconUpload {...props} />
     default:
       return <IconAvatarBot {...props} />
   }
@@ -451,26 +449,6 @@ export function IconHistory({ size = 18, style, className }: IconProps) {
       <path d="M3 3v5h5" />
       <path d="M3.05 13A9 9 0 1 0 6 5.3L3 8" />
       <path d="M12 7v5l4 2" />
-    </svg>
-  )
-}
-
-export function IconChart({ size = 18, style, className }: IconProps) {
-  return (
-    <svg
-      className={className}
-      style={{ ...base(size), ...style }}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 3v18h18" />
-      <rect x="7" y="11" width="3" height="6" rx="1" />
-      <rect x="12.5" y="7" width="3" height="10" rx="1" />
-      <rect x="18" y="13" width="3" height="4" rx="1" />
     </svg>
   )
 }

@@ -54,6 +54,43 @@ describe('marcarLoQueNoEstaEn', () => {
     ).toEqual([])
   })
 
+  // Auditoría del 02-10-2026: la raíz de cinco letras de una palabra de
+  // relleno también cubría palabras que cambian el hecho. «entre» tapaba
+  // «entregó», «corre» tapaba «correctamente» y «nuevo» tapaba «nuevos»:
+  // justo el cambio de verbo, la valoración y el dato añadido de este caso.
+  it('marca los verbos, valoraciones y cantidades que comparten raíz con una palabra de relleno', () => {
+    expect(
+      marcadas(
+        'El contratista entregó correctamente tres monitores nuevos.',
+        'se devolvieron al contratista 3 monitores',
+      ),
+    ).toEqual(['entregó', 'correctamente', 'nuevos'])
+    expect(marcadas('Se revisaron todos los equipos según el contratista.', 'revisé los equipos')).toEqual([
+      'todos',
+      'según',
+      'contratista',
+    ])
+    expect(
+      marcadas('El contratista presentó la factura y se constató la construcción.', 'el contratista la factura'),
+    ).toEqual(['presentó', 'constató', 'construcción'])
+  })
+
+  it('una preposición de las notas no da por dicha una palabra que solo comparte sus letras', () => {
+    // «entre semana» no dice que nadie entregara nada.
+    expect(
+      marcadas('El contratista entregó tres monitores.', 'entre semana se devolvieron al contratista 3 monitores'),
+    ).toEqual(['entregó'])
+  })
+
+  it('los giros formales siguen sin marcarse', () => {
+    expect(
+      marcadas(
+        'Durante la visita, mediante la revisión correspondiente, se efectuó el conteo de las sillas entre las bodegas.',
+        'en la visita conté las sillas de las bodegas, hice la revisión',
+      ),
+    ).toEqual([])
+  })
+
   it('los tramos, unidos, son el texto exacto', () => {
     const texto = '¿Llegó el 50 %? Sí: «buen estado», 3 m², línea\nnueva.'
     expect(

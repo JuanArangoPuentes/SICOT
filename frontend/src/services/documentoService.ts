@@ -2,9 +2,11 @@
 // (Ollama local, sin costo de licencia). Todas las llamadas pasan por el
 // backend; el frontend nunca habla con Ollama directamente.
 
-import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
+import { abrirArchivo, guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import { apiFetch, apiFetchBlob } from './api/client'
+import { historialParaElCopiloto } from './historialCopiloto'
 import type {
+  ChatRequest,
   ChatResponse,
   DocumentoGeneradoResponse,
   DocumentoResponse,
@@ -79,6 +81,25 @@ export async function descargarDocumento(
   documentoId: number,
   nombreArchivo: string,
 ): Promise<ResultadoGuardado> {
+  const blob = await traerArchivo(contratoId, documentoId, nombreArchivo)
+  return guardarArchivo(blob, nombreConExtension(nombreArchivo, blob.type))
+}
+
+// El borrador completo de un documento generado, para leerlo antes de
+// firmar: lo que no se ve en el diálogo de revisión —el número y el valor del
+// contrato, las tablas, los datos pendientes en rojo— queda firmado tal cual.
+// El nombre lleva «BORRADOR» para que no se confunda con el firmado, que se
+// descarga después con el nombre del documento.
+export async function verBorrador(
+  contratoId: number,
+  documentoId: number,
+  nombreArchivo: string,
+): Promise<ResultadoGuardado | 'abierto'> {
+  const blob = await traerArchivo(contratoId, documentoId, nombreArchivo)
+  return abrirArchivo(blob, nombreConExtension(`BORRADOR ${nombreArchivo}`, blob.type))
+}
+
+async function traerArchivo(contratoId: number, documentoId: number, nombreArchivo: string): Promise<Blob> {
   const blob = await apiFetchBlob(`/api/contratos/${contratoId}/documentos/${documentoId}/archivo`)
   // Un archivo vacío no se guarda: se bajaba un «.pdf» de 0 bytes que el
   // lector daba por dañado (auditoría del 28-09-2026). El backend ya responde
@@ -86,7 +107,7 @@ export async function descargarDocumento(
   if (blob.size === 0) {
     throw new Error(`El archivo de «${nombreArchivo}» llegó vacío; no se guardó.`)
   }
-  return guardarArchivo(blob, nombreConExtension(nombreArchivo, blob.type))
+  return blob
 }
 
 const EXTENSIONES: Record<string, string> = {
@@ -162,16 +183,29 @@ export function precalentarCopiloto(contratoId: number): void {
 // Chat real del Copiloto IA (Ollama) — reemplaza el antiguo CHAT_RESPONSES por
 // coincidencia de palabras clave. La respuesta viene anclada a los datos
 // reales del contrato y al estado real de sus etapas (ver CopilotoChatService).
-// `historial` son los turnos previos de esta conversación (opcional) — le dan
-// memoria real al Copiloto para que las preguntas de seguimiento tengan
-// sentido en vez de responderse como si la conversación empezara de cero.
-export function preguntarCopiloto(contratoId: number, pregunta: string, historial?: ChatMsg[]): Promise<ChatResponse> {
+// `historial` es el chat tal como se ve (opcional) — le da memoria real al
+// Copiloto para que las preguntas de seguimiento tengan sentido en vez de
+// responderse como si la conversación empezara de cero. Se recorta aquí, y no
+// en quien llama, porque el tope lo pone el backend: ver historialCopiloto.ts.
+//
+// `opciones.idSolicitud` y `opciones.revisarPaso`: ver ChatRequest.
+export function preguntarCopiloto(
+  contratoId: number,
+  pregunta: string,
+  historial?: ChatMsg[],
+  opciones?: { idSolicitud?: string; revisarPaso?: number },
+): Promise<ChatResponse> {
+  const cuerpo: ChatRequest = {
+    pregunta,
+    historial:
+      historial &&
+      historialParaElCopiloto(historial).map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
+    idSolicitud: opciones?.idSolicitud,
+    revisarPaso: opciones?.revisarPaso,
+  }
   return apiFetch<ChatResponse>(`/api/contratos/${contratoId}/copiloto/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      pregunta,
-      historial: historial?.map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
-    }),
+    body: JSON.stringify(cuerpo),
   })
 }

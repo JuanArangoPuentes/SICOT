@@ -126,9 +126,4 @@ public class PlanificadorDeAutomatizaciones {
             log.error("Fallo recuperando tareas pendientes al arrancar.", e);
         }
     }
-
-    /** Expone la configuración efectiva para la pantalla de operación. */
-    public AutomatizacionProperties configuracion() {
-        return propiedades;
-    }
 }

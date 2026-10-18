@@ -193,22 +193,31 @@ public class DocumentoController {
     }
 
     @Operation(summary = "Firmar un documento con la firma electrónica de la cuenta actual",
-            description = "Con ?huellaRevisada= (la huellaDelBorrador que devolvió la generación), solo se firma "
-                    + "si el borrador sigue siendo el que el supervisor revisó; si no, 400.")
+            description = "Solo lo firma el supervisor asignado al contrato. Un documento generado por SICOT exige "
+                    + "?huellaRevisada= (la huellaDelBorrador que devolvió la generación): solo se firma si el "
+                    + "borrador sigue siendo el que el supervisor revisó; sin ella o con otra, 400. En un documento "
+                    + "cargado es opcional.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Documento firmado",
                     content = @Content(schema = @Schema(implementation = DocumentoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "No se puede firmar: ya está firmado o sin contenido, "
+                    + "falta la huella del borrador revisado o ya no es ese, quien firma no es el supervisor del "
+                    + "contrato, no tiene firma electrónica activa o no se pudo poner la firma visible",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "403", description = "Sin rol SUPERVISOR/ADMINISTRADOR o no es el supervisor del contrato o sin firma asignada",
+            @ApiResponse(responseCode = "403", description = "Sin rol SUPERVISOR",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Documento no encontrado",
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado, o de un contrato que no es el asignado a este supervisor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
     })
     @PostMapping("/{id}/firmar")
-    @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
+    // Solo SUPERVISOR: los documentos de un contrato los firma su supervisor
+    // asignado, y Gestión solo asigna usuarios con ese rol. El servicio lo
+    // vuelve a comprobar contra el contrato (auditoría del 02-10-2026).
+    @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id,
                                                     @RequestParam(required = false) String huellaRevisada) {
         return ResponseEntity.ok(documentoService.firmar(id, huellaRevisada));

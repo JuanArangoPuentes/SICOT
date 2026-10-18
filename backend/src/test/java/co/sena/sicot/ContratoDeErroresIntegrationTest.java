@@ -1,6 +1,7 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
+import co.sena.sicot.exception.GlobalExceptionHandler;
 import co.sena.sicot.ia.IaNoDisponibleException;
 import co.sena.sicot.ia.OllamaClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,10 +13,14 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.multipart.MultipartException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -131,6 +136,46 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
                         .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idContrato").value("CO1.PCCNTR.PRUEBA"));
+    }
+
+    /**
+     * Subir un formato sin el campo «codigo» es un error de quien envía: tiene
+     * que ser un 400 que diga qué falta, no un 500 «error interno» con traza.
+     */
+    @Test
+    void unParametroObligatorioQueNoVinoEs400YDiceCual() throws Exception {
+        MockMultipartFile archivo = new MockMultipartFile(
+                "archivo", "formato.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
+
+        mockMvc.perform(multipart("/api/formatos").file(archivo).param("nombre", "Formato sin código")
+                        .header("Authorization", "Bearer " + login("administrador@soy.sena.edu.co", "Admin123*")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("codigo")));
+    }
+
+    /** Pedir en Accept un formato que la ruta no produce es un 406, no un fallo del servidor. */
+    @Test
+    void unAcceptQueLaRutaNoProduceEs406() throws Exception {
+        mockMvc.perform(get("/api/contratos")
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*"))
+                        .accept(MediaType.IMAGE_PNG))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    /**
+     * Una carga multipart ilegible (sin boundary, cortada a mitad) la detecta el
+     * contenedor al leer el cuerpo, y MockMvc no lo reproduce: se prueba el
+     * manejador directamente.
+     */
+    @Test
+    void unaCargaMultipartIlegibleEs400() {
+        var respuesta = new GlobalExceptionHandler().cargaMalFormada(
+                new MultipartException("Failed to parse multipart servlet request"),
+                new ServletWebRequest(
+                        new MockHttpServletRequest("POST", "/api/contratos/1/documentos")));
+
+        assertThat(respuesta.getStatusCode().value()).isEqualTo(400);
+        assertThat(respuesta.getBody().message()).contains("incompleta o mal formada");
     }
 
     @Test

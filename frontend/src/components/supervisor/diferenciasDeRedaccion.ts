@@ -34,68 +34,96 @@ const raiz = (palabra: string) => normalizar(palabra).slice(0, 5)
  * realizó», «se procedió», «correspondiente», «durante». Resaltarlos solo
  * haría ruido. Lo que sí puede cambiar el sentido («verificó», «observaciones»,
  * «según») no está aquí a propósito.
+ *
+ * Por raíz van solo los giros cuya raíz no comparte ninguna palabra que diga
+ * otra cosa, para cubrir todas sus conjugaciones. El resto va como palabra
+ * exacta: hasta el 02-10-2026 todo iba por raíz, y «entre» tapaba «entregó»,
+ * «corre» tapaba «correctamente», «nuevo» tapaba «nuevos», «prese» tapaba
+ * «presentó» y «const» tapaba «constató»; el cambio de verbo, la valoración y
+ * el dato añadido que este resaltado existe para señalar quedaban sin marca.
+ * «todos» y «nuevo» salieron de la lista: afirman una cantidad o un hecho.
  */
-const RELLENO = new Set([
-  'reali',
-  'efect',
-  'proce',
-  'encue',
-  'corre',
-  'respe',
-  'media',
-  'duran',
-  'debid',
+const RAICES_DE_RELLENO = new Set(['reali', 'regis', 'indic', 'menci', 'refer', 'relac'])
+
+const PALABRAS_DE_RELLENO = new Set([
+  'efectuo',
+  'efectuar',
+  'efectuado',
+  'efectuada',
+  'efectuaron',
+  'procedio',
+  'proceder',
+  'procedieron',
+  'encuentra',
+  'encuentran',
+  'correspondiente',
+  'correspondientes',
+  'corresponde',
+  'corresponden',
+  'respecto',
+  'respectivo',
+  'respectiva',
+  'respectivos',
+  'respectivas',
+  'respectivamente',
+  'mediante',
+  'durante',
+  'debido',
   'dicho',
   'dicha',
+  'dichos',
+  'dichas',
   'mismo',
   'misma',
-  'cuale',
-  'siend',
+  'mismos',
+  'mismas',
+  'cuales',
+  'siendo',
   'estan',
-  'estab',
-  'dentr',
+  'estaba',
+  'estaban',
+  'dentro',
   'parte',
-  'asimi',
-  'adema',
-  'embar',
-  'mient',
-  'aunqu',
+  'asimismo',
+  'ademas',
+  'embargo',
+  'mientras',
+  'aunque',
   'tanto',
-  'const',
-  'regis',
-  'indic',
-  'menci',
-  'refer',
-  'relac',
-  'actua',
-  'prese',
-  'conti',
-  'sigui',
+  'consta',
+  'constar',
+  'constancia',
+  'actual',
+  'actualmente',
+  'presente',
+  'continuacion',
+  'siguiente',
+  'siguientes',
   'cabe',
   'cual',
   'quien',
-  'tambi',
+  'quienes',
+  'tambien',
   'luego',
   'hecho',
   'haber',
   'habia',
+  'habian',
   'hayan',
   'puede',
+  'pueden',
   'pudo',
   'sobre',
   'entre',
   'hasta',
   'desde',
-  'todos',
-  'todas',
   'cada',
   'otro',
   'otra',
   'estos',
   'estas',
   'aquel',
-  'nuevo',
-  'nueva',
+  'aquella',
   // palabras de función de cuatro letras
   'para',
   'esta',
@@ -112,8 +140,12 @@ const RELLENO = new Set([
   'bajo',
 ])
 
-/** Números, ordinales y meses en letras: los comprueba el backend por su valor, no por la palabra. */
-const NUMEROS = new Set([
+/**
+ * Números, ordinales y meses en letras: los comprueba el backend por su valor,
+ * no por la palabra. «segundo» va entero porque su raíz es la de «según», que
+ * cambia de quién es lo que se afirma.
+ */
+const RAICES_NUMERICAS = new Set([
   'uno',
   'una',
   'dos',
@@ -139,7 +171,6 @@ const NUMEROS = new Set([
   'mil',
   'millo',
   'prime',
-  'segun',
   'terce',
   'cuart',
   'quint',
@@ -158,9 +189,27 @@ const NUMEROS = new Set([
   'dicie',
 ])
 
+const PALABRAS_NUMERICAS = new Set(['segundo', 'segunda', 'segundos', 'segundas'])
+
+/** Si la palabra (ya normalizada) no aporta hechos o es una cifra en letras. */
+function noCuenta(palabra: string): boolean {
+  const r = palabra.slice(0, 5)
+  return (
+    PALABRAS_DE_RELLENO.has(palabra) ||
+    RAICES_DE_RELLENO.has(r) ||
+    PALABRAS_NUMERICAS.has(palabra) ||
+    RAICES_NUMERICAS.has(r)
+  )
+}
+
+/**
+ * Las raíces de las palabras con contenido del texto. Las de relleno no
+ * cuentan: «entre semana» no da por dicho que alguien «entregó» algo, aunque
+ * las dos palabras empiecen igual.
+ */
 function raicesDe(texto: string): Set<string> {
   const r = new Set<string>()
-  for (const p of normalizar(texto).match(/\p{L}{3,}/gu) ?? []) r.add(p.slice(0, 5))
+  for (const p of normalizar(texto).match(/\p{L}{3,}/gu) ?? []) if (!PALABRAS_DE_RELLENO.has(p)) r.add(p.slice(0, 5))
   return r
 }
 
@@ -174,8 +223,7 @@ export function marcarLoQueNoEstaEn(texto: string, otro: string): Tramo[] {
   const tramos: Tramo[] = []
   for (const parte of texto.split(/(\p{L}+)/u)) {
     if (parte === '') continue
-    const r = raiz(parte)
-    const marcada = /^\p{L}{4,}$/u.test(parte) && !delOtro.has(r) && !RELLENO.has(r) && !NUMEROS.has(r)
+    const marcada = /^\p{L}{4,}$/u.test(parte) && !delOtro.has(raiz(parte)) && !noCuenta(normalizar(parte))
     const ultimo = tramos[tramos.length - 1]
     if (ultimo && ultimo.marcada === marcada) ultimo.texto += parte
     else tramos.push({ texto: parte, marcada })

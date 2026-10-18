@@ -4,7 +4,7 @@
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom'
 import { PrefsProvider } from '@/prefs'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
@@ -27,6 +27,7 @@ const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { clearSession, getSession } from '@/services/session'
+import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
 import { onUnauthorized, setAuthToken } from '@/services/api/client'
 import { getContratos } from '@/services/contratoService'
 import { getRegistrosContrato } from '@/services/registroService'
@@ -120,6 +121,7 @@ function AppInner() {
   const [session, setSession] = useState<AuthResponse | null>(() => getSession())
   const navigate = useNavigate()
   const location = useLocation()
+  const tipoDeNavegacion = useNavigationType()
   const enLogin = location.pathname === '/login'
   // Etapas del contrato real (autoridad: backend). Nunca se usan datos de
   // ejemplo como etapas reales: sin contrato el estado queda vacío y el panel
@@ -140,6 +142,10 @@ function AppInner() {
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
   const [errorContrato, setErrorContrato] = useState(false)
+  // Cuántas veces se pidió abrir el Copiloto desde el avatar flotante. Es un
+  // contador y no un booleano para que cada clic vuelva a abrirlo aunque el
+  // supervisor lo haya plegado después del anterior.
+  const [pedidosCopiloto, setPedidosCopiloto] = useState(0)
 
   const refreshRegistros = async () => {
     if (!contrato) return
@@ -216,21 +222,59 @@ function AppInner() {
 
   const handleLogin = (auth: AuthResponse) => {
     setSession(auth)
+    // La entrada a la sesión es la base de la pila: `replace` no mueve el
+    // índice del historial, así que desde aquí se cuentan las vistas que se
+    // apilen (ver services/pilaDeNavegacion.ts).
+    reiniciarProfundidad()
     navigate(rutaDeRol(auth), { replace: true })
   }
 
   const logout = () => {
     clearSession()
     setSession(null)
-    // `replace` a propósito: tras cerrar sesión, el botón atrás no debe devolver
-    // a una pantalla del panel que ya no se puede cargar.
-    navigate('/login', { replace: true })
     setTourActive(false)
+
+    // Cerrar sesión tiene que dejar el historial como estaba al entrar, no solo
+    // tapar la última entrada.
+    //
+    // Antes esto era un `navigate('/login', { replace: true })` a secas, y el
+    // comentario decía que `replace` evitaba que «atrás» volviera a una
+    // pantalla del panel. Reemplaza, sí, pero solo la entrada de arriba: las
+    // que se apilaron al cambiar de vista siguen debajo. En el teléfono eso se
+    // ve como que el botón «atrás» deja de funcionar —cada pulsación va a una
+    // ruta del panel, el guardia de sesión la devuelve a `/login` y la pantalla
+    // no cambia— hasta agotar tantas pulsaciones como vistas se visitaron. En
+    // un arranque limpio, sin nada apilado, sí salía de la aplicación: por eso
+    // el fallo solo aparecía DESPUÉS de cerrar sesión (punto 13 de
+    // docs/operacion/PRUEBA_MANUAL_APK.md, observado el 08-10-2026).
+    //
+    // El navegador no permite borrar entradas, así que se retrocede sobre ellas
+    // y es el guardia de sesión el que aterriza en `/login` con `replace` al no
+    // encontrar sesión. El resultado es una pila de un solo elemento: «atrás»
+    // vuelve a cerrar la aplicación, como en un arranque limpio.
+    const apiladas = profundidadDeNavegacion()
+    reiniciarProfundidad()
+    if (apiladas > 0) navigate(-apiladas)
+    else navigate('/login', { replace: true })
   }
 
   useEffect(() => {
     onUnauthorized(() => logout())
   }, [])
+
+  // Lleva la cuenta de las entradas de historial que apila la sesión, que es lo
+  // que `logout` necesita para dejar el historial como estaba al entrar. Se
+  // apunta aquí, en un solo sitio, porque las vistas se cambian desde varios
+  // componentes (la barra lateral, las alertas, el avatar del Copiloto) y lo
+  // que importa no es quién navegó sino cuántas entradas hay.
+  //
+  // `location.key` identifica la entrada: sin él, StrictMode contaría dos veces
+  // la misma navegación en desarrollo. La primera carga llega como POP con la
+  // clave `default` y resta sobre una cuenta que ya está en cero, que es
+  // inofensivo (la cuenta no baja de cero).
+  useEffect(() => {
+    registrarNavegacion(tipoDeNavegacion, location.key)
+  }, [location.key, tipoDeNavegacion])
 
   // Mantiene el token del cliente sincronizado con la sesión activa.
   // Al recargar la página la sesión se restaura desde localStorage y este
@@ -243,6 +287,17 @@ function AppInner() {
     () => (location.pathname.startsWith('/gestion') ? TOUR_GESTION : TOUR_SUPERVISOR),
     [location.pathname],
   )
+
+  // El avatar flotante abre el Copiloto del contrato. Solo hay uno que abrir en
+  // el panel del supervisor con contrato asignado; en Gestión, Administración o
+  // sin contrato el avatar flotante no se ofrece.
+  const abrirCopiloto =
+    session?.rol === 'SUPERVISOR' && contrato
+      ? () => {
+          setPedidosCopiloto((n) => n + 1)
+          navigate('/supervisor/contrato')
+        }
+      : undefined
 
   // Envoltura que protege una ruta.
   //
@@ -298,6 +353,7 @@ function AppInner() {
                 onStartTour={() => setTourActive(true)}
                 registros={registros}
                 onRefreshRegistros={refreshRegistros}
+                pedidosCopiloto={pedidosCopiloto}
               />
             ))}
           />
@@ -335,7 +391,7 @@ function AppInner() {
           tour={tour}
           tourActive={tourActive}
           onTourEnd={() => setTourActive(false)}
-          onOpenChat={() => setSettingsOpen(false)}
+          onOpenChat={abrirCopiloto}
         />
       )}
     </>

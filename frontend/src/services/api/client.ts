@@ -15,7 +15,7 @@ import type { ErrorResponse } from './types'
  * vacía sea una elección válida y no caiga al valor de desarrollo.
  */
 const origenConfigurado = import.meta.env.VITE_API_URL
-const ORIGEN_COMPILADO =
+export const ORIGEN_COMPILADO =
   origenConfigurado === undefined || origenConfigurado === null ? 'http://localhost:8080' : origenConfigurado
 
 /** Dónde se guarda la dirección del servidor elegida en esta máquina. */

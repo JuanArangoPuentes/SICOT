@@ -81,10 +81,14 @@ public class NotificacionDeSupervisorAsignado implements ReglaDeEvento {
             return List.of();
         }
 
-        // La clave incluye el supervisor, no la fecha: reasignar el contrato a
-        // otra persona SÍ debe avisar de nuevo — es un hecho distinto—, mientras
-        // que reprocesar el mismo evento no.
-        String sufijo = ":contrato=" + contrato.contratoId() + ":supervisor=" + contrato.supervisorEmail();
+        // El hecho es la asignación concreta, y la identifica el instante en que
+        // quedó en la auditoría: reprocesar el mismo evento no duplica, pero
+        // cada asignación avisa, también la que devuelve el contrato a quien ya
+        // lo tuvo. Con el correo del supervisor en la clave, pasar el contrato
+        // de A a B y de vuelta a A no avisaba a A la segunda vez, porque su
+        // clave seguía en la tabla. (Asignar al que ya es el supervisor no
+        // llega aquí: ContratoService no lo registra como asignación.)
+        String sufijo = ":contrato=" + contrato.contratoId() + ":asignacion=" + evento.ocurridoEn().toEpochMilli();
 
         // El primer paso que se le anuncia es el del proceso real: el acta la
         // elabora Contratación y llega por correo; el supervisor la firma, la

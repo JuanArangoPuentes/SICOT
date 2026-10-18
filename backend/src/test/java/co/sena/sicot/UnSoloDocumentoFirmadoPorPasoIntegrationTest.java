@@ -7,6 +7,7 @@ import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
+import co.sena.sicot.service.HuellaDeDocumento;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -92,11 +93,12 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
 
     @Test
     void unReintentoDevuelveElMismoBorradorYUnaVezFirmadoNoSeGeneraOtro() throws Exception {
-        long primero = generar();
-        long reintento = generar();
-        assertThat(reintento).isEqualTo(primero);
+        long primero = generar().get("id").asLong();
+        JsonNode reintento = generar();
+        assertThat(reintento.get("id").asLong()).isEqualTo(primero);
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, primero)
+                        .param("huellaRevisada", reintento.get("huellaDelBorrador").asText())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 
@@ -110,8 +112,10 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
 
     @Test
     void unBorradorDuplicadoHeredadoNoSePuedeFirmarSiYaHayUnoFirmado() throws Exception {
-        long primero = generar();
+        JsonNode generado = generar();
+        long primero = generado.get("id").asLong();
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, primero)
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 
@@ -129,19 +133,20 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
         long idDuplicado = documentoRepository.save(duplicado).getId();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, idDuplicado)
+                        .param("huellaRevisada", HuellaDeDocumento.calcular(duplicado.getContenido()))
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("Ya hay un")));
     }
 
-    private long generar() throws Exception {
+    private JsonNode generar() throws Exception {
         String r = mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"tipo\":\"ACTA_INICIO\",\"subetapaId\":" + subetapaId + "}"))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(r).get("id").asLong();
+        return objectMapper.readTree(r);
     }
 
     private String login(String email, String password) throws Exception {

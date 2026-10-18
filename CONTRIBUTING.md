@@ -1,9 +1,10 @@
 # Cómo contribuir a SICOT
 
 Este documento existe porque el flujo de trabajo del proyecto funcionaba, pero
-solo vivía en la memoria de quienes ya estaban. SICOT tiene un horizonte de
-tres a cuatro años y un equipo que rota: lo que no está escrito, se pierde en
-el siguiente relevo.
+solo vivía en la cabeza de quien lo construye. SICOT lo desarrolla una sola
+persona, con un horizonte de tres a cuatro años: lo que no está escrito se
+pierde en el siguiente relevo, y en 2029 quien mantenga esto casi con seguridad
+no será quien lo escribió.
 
 ## Antes de tocar código
 

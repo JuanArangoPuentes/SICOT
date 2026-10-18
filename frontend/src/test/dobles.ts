@@ -76,7 +76,6 @@ export function documento(parcial: Partial<DocumentoResponse> = {}): DocumentoRe
     formatoNombre: null,
     nombre: 'Acta de Inicio',
     tipo: 'PDF',
-    rutaArchivo: '',
     estado: 'PENDIENTE',
     tamanioBytes: 12_345,
     generadoPorIa: false,
