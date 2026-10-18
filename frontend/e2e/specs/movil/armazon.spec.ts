@@ -131,7 +131,7 @@ test.describe('armazón en pantalla estrecha', () => {
 
     await page.locator('.usermenu-avatar').click()
     await page.getByRole('button', { name: /Cerrar sesión/ }).click()
-    await expect(page.getByPlaceholder('correo@soy.sena.edu.co')).toBeVisible()
+    await expect(page.getByPlaceholder('usuario@sena.edu.co')).toBeVisible()
   })
 })
 

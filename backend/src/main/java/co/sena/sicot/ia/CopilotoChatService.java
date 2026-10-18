@@ -703,8 +703,9 @@ public class CopilotoChatService {
                 %s
                 %s
                 %s
-                Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Responda solo al supervisor, en \
-                texto plano.\
+                Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Diga lo que hace el supervisor \
+                («envíe…», «llame…», «pulse…»), nunca lo que hará usted («verificaré», «contactaré»). Responda \
+                solo al supervisor, en texto plano.\
                 """.formatted(INSTRUCCIONES,
                         EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato.strip()),
                         estadoEnPocasLineas(etapas), hoyYCronograma, formatearHistorial(historial),

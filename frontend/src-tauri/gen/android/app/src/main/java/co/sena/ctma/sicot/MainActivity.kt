@@ -15,13 +15,16 @@ class MainActivity : TauriActivity() {
   }
 
   /**
-   * La página pide la pantalla encendida mientras espera a la IA (ver
-   * PantallaEncendida). Es el único puente que se expone al JavaScript.
+   * Los dos puentes que se exponen al JavaScript, ambos de un solo método y sin
+   * datos del usuario: la pantalla encendida mientras se espera a la IA (ver
+   * PantallaEncendida) y si este APK acepta `http://` (ver Compilacion), para
+   * no avisar de un bloqueo que el APK de pruebas no tiene.
    */
   // nosemgrep: kotlin.lang.security.webview-javascript-interface
   override fun onWebViewCreate(webView: WebView) {
     super.onWebViewCreate(webView)
     webView.addJavascriptInterface(PantallaEncendida(this), "SicotPantalla")
+    webView.addJavascriptInterface(Compilacion(this), "SicotCompilacion")
   }
 
   /**

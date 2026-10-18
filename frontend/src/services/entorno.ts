@@ -23,6 +23,21 @@ export function enAndroid(): boolean {
 }
 
 /**
+ * ¿El APK instalado es el de pruebas, que acepta `http://`?
+ *
+ * Lo responde el puente nativo `SicotCompilacion` (Compilacion.kt). Cualquier
+ * fallo del puente cuenta como «no»: es la respuesta que conserva el aviso.
+ */
+function compilacionQueAceptaHttp(): boolean {
+  const puente = (window as unknown as { SicotCompilacion?: { aceptaHttp?: () => boolean } }).SicotCompilacion
+  try {
+    return puente?.aceptaHttp?.() === true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Aviso cuando la dirección configurada va a quedar bloqueada por Android.
  *
  * <h2>Qué problema resuelve</h2>
@@ -42,11 +57,15 @@ export function enAndroid(): boolean {
  * todavía**; inventarlo sería peor que dejarlo sin escribir, y así está dicho en
  * ADR-012. Lo único que se hace aquí es que el fallo deje de ser mudo.
  *
- * <h2>Por qué avisa también en una compilación de depuración</h2>
- * Desde JavaScript no hay forma de saber si el APK instalado es de depuración
- * —donde `http://` sí funciona— o de publicación. Se avisa en las dos: quien
- * configura el servidor no sabe qué compilación le instalaron, y un aviso de más
- * cuesta una frase, mientras que un aviso de menos cuesta el diagnóstico entero.
+ * <h2>Por qué no avisa en el APK de pruebas</h2>
+ * Desde el 18-10-2026 se publica, además del APK oficial, uno de pruebas
+ * (compilación de depuración) que SÍ acepta `http://`, para probar contra un
+ * portátil de la red local sin montar certificados. Con el aviso, quien lo
+ * usaba bien leía que su conexión no iba a funcionar. JavaScript solo no puede
+ * distinguir las dos compilaciones; lo pregunta al puente nativo
+ * `SicotCompilacion` (Compilacion.kt). Si el puente no está —un APK anterior a
+ * este cambio—, se avisa como antes: un aviso de más cuesta una frase, uno de
+ * menos cuesta el diagnóstico entero.
  *
  * @returns el aviso, o `null` si no aplica.
  */
@@ -54,6 +73,7 @@ export function avisoTraficoSinCifrar(direccion: string): string | null {
   const limpia = direccion.trim()
   if (!limpia.toLowerCase().startsWith('http://')) return null
   if (!enAplicacionEmpaquetada() || !enAndroid()) return null
+  if (compilacionQueAceptaHttp()) return null
   return (
     'Android bloquea las conexiones sin cifrar. Con esta dirección la aplicación ' +
     'no podrá hablar con el servidor y no mostrará ningún error al intentarlo. ' +

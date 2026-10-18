@@ -88,7 +88,7 @@ en `INSTALACION.md`, apartado *SICOT en el teléfono*, y en
 | --- | --- |
 | «Esta instalación todavía no tiene la dirección del servidor» | Falta el paso 2.2 / 3.3. |
 | «No se pudo conectar con el servidor» | Que el portátil y el dispositivo estén en la misma wifi, la IP (cambia si el portátil se reconecta), la regla del firewall y que `docker compose ps` muestre el backend `healthy`. Desde el navegador del otro dispositivo, `http://<IP>:8080/actuator/health` tiene que responder `{"status":"UP"}`. |
-| En el APK oficial, «Android bloquea las conexiones sin cifrar» | Es lo esperado con `http://`: use el APK de pruebas o monte `https://`. |
+| En el APK oficial, «Android bloquea las conexiones sin cifrar» | Es lo esperado con `http://`: use el APK de pruebas o monte `https://`. El APK de pruebas no muestra ese aviso, porque él sí conecta por `http://`; si lo muestra, el instalado es el oficial. |
 
 ## Y fuera de la red local
 

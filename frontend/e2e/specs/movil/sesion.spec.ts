@@ -36,7 +36,7 @@ test('en la pantalla de acceso recién abierta, «atrás» no tiene nada detrás
   // a `/login`, que es lo que haría fallar la aserción del otro caso sin que el
   // cierre de sesión tuviera nada que ver.
   await page.goto('/')
-  await expect(page.getByPlaceholder('correo@soy.sena.edu.co')).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByPlaceholder('usuario@sena.edu.co')).toBeVisible({ timeout: 15_000 })
   await expect(page).toHaveURL(/\/login$/)
 
   await page.goBack()
@@ -57,7 +57,7 @@ test('tras cerrar sesión, «atrás» tampoco tiene nada detrás', async ({ page
   await page.getByRole('button', { name: /^Abrir menú de/ }).click()
   await page.getByRole('button', { name: 'Cerrar sesión' }).click()
   await expect(page).toHaveURL(/\/login$/)
-  await expect(page.getByPlaceholder('correo@soy.sena.edu.co')).toBeVisible()
+  await expect(page.getByPlaceholder('usuario@sena.edu.co')).toBeVisible()
 
   // La afirmación del punto 13: el historial quedó como en un arranque limpio,
   // así que una sola pulsación de «atrás» sale de SICOT. Con el fallo presente

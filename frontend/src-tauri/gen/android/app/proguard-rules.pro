@@ -27,3 +27,11 @@
 -keepclassmembers class co.sena.ctma.sicot.PantallaEncendida {
     @android.webkit.JavascriptInterface public *;
 }
+
+# El puente que dice si el APK acepta http:// (Compilacion.kt), por lo mismo:
+# sin la regla, en la compilación de publicación la página no lo encontraría y
+# el aviso «Android bloquea…» seguiría saliendo, que ahí es lo correcto; pero
+# el día que alguien lo use para otra cosa fallaría sin decir nada.
+-keepclassmembers class co.sena.ctma.sicot.Compilacion {
+    @android.webkit.JavascriptInterface public *;
+}

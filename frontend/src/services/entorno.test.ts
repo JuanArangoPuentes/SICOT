@@ -17,12 +17,35 @@ function simularApkAndroid() {
 
 afterEach(() => {
   delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__
+  delete (window as unknown as Record<string, unknown>).SicotCompilacion
   vi.restoreAllMocks()
 })
 
 describe('avisoTraficoSinCifrar', () => {
   it('avisa cuando el APK de Android apunta a una dirección http://', () => {
     simularApkAndroid()
+    expect(avisoTraficoSinCifrar('http://192.168.1.50:8080')).toContain('Android bloquea')
+  })
+
+  it('no avisa en el APK de pruebas, que sí acepta http://', () => {
+    simularApkAndroid()
+    ;(window as unknown as Record<string, unknown>).SicotCompilacion = { aceptaHttp: () => true }
+    expect(avisoTraficoSinCifrar('http://192.168.1.50:8080')).toBeNull()
+  })
+
+  it('sigue avisando en el APK oficial, que lo dice el puente', () => {
+    simularApkAndroid()
+    ;(window as unknown as Record<string, unknown>).SicotCompilacion = { aceptaHttp: () => false }
+    expect(avisoTraficoSinCifrar('http://192.168.1.50:8080')).toContain('Android bloquea')
+  })
+
+  it('si el puente falla, avisa: es la respuesta que no deja el fallo mudo', () => {
+    simularApkAndroid()
+    ;(window as unknown as Record<string, unknown>).SicotCompilacion = {
+      aceptaHttp: () => {
+        throw new Error('puente roto')
+      },
+    }
     expect(avisoTraficoSinCifrar('http://192.168.1.50:8080')).toContain('Android bloquea')
   })
 
