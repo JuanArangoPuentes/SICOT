@@ -25,6 +25,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -575,12 +576,22 @@ public class CopilotoChatService {
         }
 
         String prompt = promptDelChat(contrato, etapas, historial, pregunta, cronograma);
-        return ChatResponse.delModelo(inferir(contratoId, contrato.getNumeroContrato(), prompt,
-                esPreguntaDelSupervisor, alEscribir));
+        String delModelo = inferir(contratoId, contrato.getNumeroContrato(), prompt, esPreguntaDelSupervisor,
+                alEscribir);
+        // Lo único que se corrige de lo que escribe el modelo: que mande a cargar
+        // en SICOT algo que SICOT no recibe (ver CorrectorDeCargas). En vivo, el
+        // supervisor ve primero el texto tal como sale y después este, que es el
+        // que queda en el chat.
+        String corregida = CorrectorDeCargas.corregir(delModelo, pregunta, etapas);
+        if (!Objects.equals(corregida, delModelo)) {
+            log.info("Respuesta del contrato {}: se quitó una indicación de cargar en SICOT algo que no se carga.",
+                    contratoId);
+        }
+        return ChatResponse.delModelo(corregida);
     }
 
     /** Qué atajo contestó, para saber qué más cubre su respuesta. */
-    private enum Ruta { FICHA_DEL_DOCUMENTO, GUIA_DEL_PASO, FICHA_DEL_CONTRATO }
+    private enum Ruta { FICHA_DEL_DOCUMENTO, GUIA_DEL_PASO, FICHA_DEL_INSUMO, FICHA_DEL_CONTRATO }
 
     private record Atajo(Ruta ruta, ChatResponse respuesta) {
     }
@@ -598,6 +609,13 @@ public class CopilotoChatService {
             if (guia.isPresent()) {
                 return Optional.of(new Atajo(Ruta.GUIA_DEL_PASO, guia.get()));
             }
+        }
+        // «¿Cómo verifico la factura?», «¿dónde reviso las pólizas?»: hasta el
+        // 18-10-2026 iban al modelo, que las contestaba sobre el paso en curso
+        // o mandando a cargar en SICOT lo que no se carga (ver FichaDelInsumo).
+        Optional<ChatResponse> insumo = FichaDelInsumo.responder(pregunta, etapas);
+        if (insumo.isPresent()) {
+            return Optional.of(new Atajo(Ruta.FICHA_DEL_INSUMO, insumo.get()));
         }
         return fichaDelContrato.responder(pregunta, contrato, cronograma)
                 .map(r -> new Atajo(Ruta.FICHA_DEL_CONTRATO, r));
@@ -637,6 +655,7 @@ public class CopilotoChatService {
         return switch (ruta) {
             case FICHA_DEL_DOCUMENTO -> fichaDeDocumentoFormal.cubre(trozo);
             case GUIA_DEL_PASO -> guiaDelPasoActual.cubre(trozo);
+            case FICHA_DEL_INSUMO -> FichaDelInsumo.cubre(trozo);
             case FICHA_DEL_CONTRATO -> fichaDelContrato.cubre(trozo);
         };
     }
@@ -706,7 +725,8 @@ public class CopilotoChatService {
                 Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Diga lo que hace el supervisor \
                 («envíe…», «llame…»), nunca lo que hará usted («verificaré», «contactaré»). Si nombra un \
                 botón: «Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3; en 2.1, 3.1 y 3.2 se carga lo que \
-                piden; en los demás, «Marcar completado». Responda solo al supervisor, en texto plano.\
+                piden; en los demás no se carga nada en SICOT (ni factura, ni planilla, ni póliza): se \
+                verifica afuera y se pulsa «Marcar completado». Responda solo al supervisor, en texto plano.\
                 """.formatted(INSTRUCCIONES,
                         EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato.strip()),
                         estadoEnPocasLineas(etapas), hoyYCronograma, formatearHistorial(historial),

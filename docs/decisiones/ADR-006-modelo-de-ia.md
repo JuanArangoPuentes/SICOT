@@ -304,6 +304,36 @@ entero la primera vez de cada contrato.
    la mitad de las preguntas abiertas, que son justo las que llegan al modelo:
    las de respuesta fija ya las contestan los atajos en milisegundos.
 
+### Lo que el 7B seguía haciendo mal, y cómo se cerró (misma fecha)
+
+Con el prompt compacto ya en marcha, la misma batería contra el contrato real
+CO1.PCCNTR.10057820 (en el 2.1) mostró tres fallos que el prompt no corregía,
+aunque la regla estaba escrita dos veces:
+
+- **Mandaba a cargar en SICOT lo que SICOT no recibe**: «envíe la factura a
+  SICOT», «cargue la evidencia pulsando «Cargar»» en las pólizas.
+- **Contestaba sobre el paso en curso**: a «¿dónde reviso las pólizas?»,
+  instrucciones del 2.1 y el 2.4.
+- **Inventaba trámites**: «envíe la planilla PILA a la Unidad de Gestión
+  Contractual para revisión».
+
+Lo que se hizo:
+
+- `FichaDelInsumo` atiende sin modelo «¿cómo / dónde verifico?» la factura, la
+  PILA, las pólizas y el SECOP: dónde se consigue (lo mismo que dice el prompt),
+  qué sub-paso es, su estado en el contrato y cómo se registra. Los casos con
+  problema («¿y si la póliza está vencida?») siguen yendo al modelo.
+- `CorrectorDeCargas` revisa lo que escribe el modelo: si la pregunta es de un
+  insumo cuyo sub-paso no recibe archivos y una frase manda a cargarlo en SICOT,
+  la quita y añade cómo se registra ese sub-paso. Es lo único que se corrige.
+- El recordatorio del final del prompt dice qué botón va en cada sub-paso; con
+  eso dejó de mandar a pulsar «Firmar documento» en el 2.4.
+
+Medido después, en vivo y con el backend reconstruido: las cuatro preguntas de
+insumos en 0,1-1,2 s y con el sub-paso correcto; la de la póliza vencida, en el
+modelo, ya sin mandar a cargar nada. Por el proxy Caddy de producción la
+respuesta en vivo llega igual: avisos cada 10 s, primer texto a los ~20 s.
+
 ### Cuándo revisar
 
 - Si el equipo del servidor tiene GPU o más núcleos: con el mismo conjunto de

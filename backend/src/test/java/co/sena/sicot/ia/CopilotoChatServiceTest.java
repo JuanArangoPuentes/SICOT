@@ -169,7 +169,9 @@ class CopilotoChatServiceTest {
      */
     @Test
     void elPromptRecuerdaQueNoExisteFormaDeAdjuntarArchivosEnUnSubPaso() {
-        servicio.responder(1L, "¿dónde subo la factura?", null);
+        // «¿Dónde subo la factura?» ya no llega al modelo desde el 18-10-2026
+        // (la contesta FichaDelInsumo); esta sí, y es el mismo riesgo.
+        servicio.responder(1L, "el contratista me mandó la factura, ¿la tengo que guardar en algún lado?", null);
 
         assertThat(promptCapturado())
                 .contains("En los demás sub-pasos no se adjunta nada")
@@ -182,6 +184,8 @@ class CopilotoChatServiceTest {
      * una vez tenga el acta firmada», un botón que en el 2.4 no existe. La
      * regla de cada botón ya estaba arriba en el prompt; repetida al final, que
      * es lo que un modelo pequeño más atiende, el mismo turno ya no la mezcla.
+     * Y el mismo día, a «¿qué reviso en la factura electrónica?» (4.2), «envíe
+     * la factura a SICOT»: en el 4.2 no se carga nada, por eso lo dice explícito.
      */
     @Test
     void elRecordatorioFinalDiceQueBotonVaEnCadaSubPaso() {
@@ -192,6 +196,7 @@ class CopilotoChatServiceTest {
         assertThat(recordatorio)
                 .contains("«Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3")
                 .contains("en 2.1, 3.1 y 3.2 se carga lo que piden")
+                .contains("en los demás no se carga nada en SICOT (ni factura, ni planilla, ni póliza)")
                 .contains("«Marcar completado»")
                 .contains("nunca lo que hará usted");
     }

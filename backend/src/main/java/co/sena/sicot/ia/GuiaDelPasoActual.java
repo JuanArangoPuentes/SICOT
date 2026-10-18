@@ -51,9 +51,11 @@ import java.util.stream.Stream;
  * <h2>Qué gana el proyecto</h2>
  * La respuesta pasa de ~150 s a microsegundos, es correcta por construcción, sus
  * pruebas pueden afirmar el texto exacto, y funciona en un equipo sin Ollama.
- * Al modelo le quedan las preguntas abiertas —«¿de dónde saco la póliza?»,
- * «¿qué pasa si el contratista se atrasa?»—, que es donde sí aporta y donde no
- * se le está pidiendo repetir cifras.
+ * Al modelo le quedan las preguntas abiertas —«¿qué pasa si el contratista se
+ * atrasa?»—, que es donde sí aporta y donde no se le está pidiendo repetir
+ * cifras. «¿De dónde saco la póliza?» estaba aquí como ejemplo de pregunta
+ * abierta hasta el 18-10-2026, cuando se midió que el modelo la contestaba
+ * sobre el paso en curso: ahora la atiende {@link FichaDelInsumo}.
  *
  * <h2>Cuando la pregunta nombra otro paso, un sub-paso o un documento</h2>
  * Hasta el 2-10-2026 la plantilla contestaba siempre el paso en curso:
