@@ -134,6 +134,27 @@ public class ExtraccionDeterminista {
     private static final Pattern CORREO = Pattern.compile("[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+");
 
     /**
+     * Dónde empieza a buscarse el correo del contratista: tras el rótulo del
+     * contratista, su NIT o su representante legal. Antes se tomaba el primer
+     * correo del documento que no fuera del SENA, y en un acta real
+     * (CO1.PCCNTR.7986334) eso devolvía «seguridadsocialcres@gmail.com», que no
+     * es del contratista. Con ese dato, el borrador del paso 2.4 se habría
+     * dirigido a un tercero.
+     */
+    private static final Pattern ANCLA_DEL_CONTRATISTA = Pattern.compile(
+            "^[ \\t]*(?:REPRESENTANTE[ \\t]+LEGAL|CONTRATISTA|NIT\\.?[ \\t])",
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /**
+     * Cuánto texto después del ancla se mira. En el acta del Lote 4 el correo
+     * está dos renglones debajo del NIT; pasado ese bloque ya es otra cosa.
+     */
+    private static final int ALCANCE_DEL_ANCLA = 200;
+
+    /** «[Incluya el nombre del contratista]»: un hueco del formato, no un dato. */
+    private static final Pattern MARCADOR_DE_PLANTILLA = Pattern.compile("\\[.*\\]", Pattern.DOTALL);
+
+    /**
      * Por debajo de esto se asume que la celda partió el número: los
      * consecutivos de SECOP II rondan los ocho dígitos y ninguno real es tan
      * corto. Solo entonces se pega la línea siguiente, para no tragarse por
@@ -539,14 +560,14 @@ public class ExtraccionDeterminista {
 
         return new ExtraccionContratoResponse(
                 numeroDeContrato(texto),
-                objeto,
-                proveedor,
+                descartarMarcador(objeto),
+                descartarMarcador(proveedor),
                 nit,
-                representante,
+                descartarMarcador(representante),
                 valorDelContrato(texto),
                 inicio,
                 fin,
-                lugar(texto),
+                descartarMarcador(lugar(texto)),
                 conAlgunDigito(primerGrupo(REGISTRO_PRESUPUESTAL, texto, 1)),
                 tipo(texto),
                 enlaceSecop(texto),
@@ -647,14 +668,30 @@ public class ExtraccionDeterminista {
      * representante legal; los del SENA son de quien elaboró o del supervisor.
      */
     static String correoDelContratista(String texto) {
-        Matcher m = CORREO.matcher(texto);
-        while (m.find()) {
-            String correo = m.group().toLowerCase(Locale.ROOT).replaceAll("[.]+$", "");
-            if (!correo.endsWith("sena.edu.co")) {
-                return correo;
+        Matcher ancla = ANCLA_DEL_CONTRATISTA.matcher(texto);
+        while (ancla.find()) {
+            int hasta = Math.min(texto.length(), ancla.end() + ALCANCE_DEL_ANCLA);
+            Matcher m = CORREO.matcher(texto).region(ancla.end(), hasta);
+            while (m.find()) {
+                String correo = m.group().toLowerCase(Locale.ROOT).replaceAll("[.]+$", "");
+                if (!correo.endsWith("sena.edu.co")) {
+                    return correo;
+                }
             }
         }
         return null;
+    }
+
+    /**
+     * Descarta los marcadores de hueco de los formatos del SENA, que vienen
+     * entre corchetes: un GCCON-F-031 en blanco rotula el contratista como
+     * «[Incluya el nombre del contratista]», y así llegaba al formulario de
+     * Gestión como si fuera el nombre de una empresa (sondeo del 16-10-2026
+     * sobre los documentos reales). Un formato sin diligenciar tiene que dejar
+     * el campo vacío, no inventarlo.
+     */
+    static String descartarMarcador(String v) {
+        return v == null || MARCADOR_DE_PLANTILLA.matcher(v).matches() ? null : v;
     }
 
     /**

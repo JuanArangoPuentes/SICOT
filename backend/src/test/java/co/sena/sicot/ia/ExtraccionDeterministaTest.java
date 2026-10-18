@@ -568,9 +568,44 @@ class ExtraccionDeterministaTest {
     @DisplayName("los correos del SENA no se toman como correo del contratista")
     void losCorreosDelSenaNoSonDelContratista() {
         assertThat(ExtraccionDeterminista.correoDelContratista(
-                "Supervisor afzapatar@sena.edu.co\nContratista ventas@proveedor.com.co"))
+                "Supervisor afzapatar@sena.edu.co\nCONTRATISTA Maderas S.A.S\nventas@proveedor.com.co"))
                 .isEqualTo("ventas@proveedor.com.co");
         assertThat(ExtraccionDeterminista.correoDelContratista("Elaboró: abogada@soy.sena.edu.co")).isNull();
+    }
+
+    // Sondeo del 16-10-2026 sobre los documentos institucionales reales: dos
+    // campos salían con datos que no eran del contrato.
+
+    @Test
+    @DisplayName("solo se toma el correo que está junto al contratista, no el primero del documento")
+    void unCorreoAjenoNoPasaPorElDelContratista() {
+        // Un acta real (CO1.PCCNTR.7986334) trae antes el correo de seguridad
+        // social; con él, el borrador del paso 2.4 se habría dirigido a un tercero.
+        String acta = """
+                Numero y fecha del registro presupuestal 56725 del 17 de junio de 2025
+                Planilla de seguridad social: seguridadsocialcres@gmail.com
+
+                EVENTOS SUPERNOVA S.A.S.
+                NIT. 900.478.852-5,
+                Representante legal
+                contacto@eventossupernova.com
+                """;
+
+        assertThat(ExtraccionDeterminista.correoDelContratista(acta)).isEqualTo("contacto@eventossupernova.com");
+    }
+
+    @Test
+    @DisplayName("un formato en blanco no deja sus marcadores como si fueran datos")
+    void losHuecosDelFormatoNoSonDatos() {
+        // El GCCON-F-031 sin diligenciar rotulaba el contratista así, y llegaba
+        // al formulario de Gestión como el nombre de una empresa.
+        ExtraccionContratoResponse r = extractor.extraer("""
+                CONTRATISTA [Incluya el nombre del contratista]
+                OBJETO [Incluya el objeto del contrato]
+                """);
+
+        assertThat(r.proveedor()).isNull();
+        assertThat(r.objeto()).isNull();
     }
 
     @Test
