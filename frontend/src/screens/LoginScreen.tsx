@@ -330,7 +330,7 @@ export default function LoginScreen({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="correo@soy.sena.edu.co"
+                placeholder="usuario@sena.edu.co"
                 style={{
                   width: '100%',
                   padding: '12px 12px 12px 36px',

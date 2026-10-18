@@ -217,7 +217,43 @@ describe('GestionPanel', () => {
           numeroRegistroPresupuestal: 'RP-2026-118',
           fechaRegistroPresupuestal: '2026-02-20',
           centroCosto: 'CTMA-01',
+          // Los de la designación también viajan: el PUT reemplaza el contrato
+          // entero, y hasta el 18-10-2026 la corrección los borraba.
+          enlaceSecop: null,
+          apoyoSupervision: null,
+          fechaDesignacion: null,
+          correoContratista: null,
         }),
+      )
+    })
+
+    it('al corregir conserva el enlace del SECOP, el apoyo, la fecha de designación y el correo del contratista', async () => {
+      const { getContratos, actualizarContrato } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([
+        contrato({
+          enlaceSecop: 'https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1',
+          apoyoSupervision: 'Yeison Zapata',
+          fechaDesignacion: '2026-10-10',
+          correoContratista: 'ventas@maderasdelnorte.com',
+        }),
+      ])
+      vi.mocked(actualizarContrato).mockResolvedValue(contrato())
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Corregir los datos generales de CTMA-2026-0184'))
+      fireEvent.click(screen.getByText('Guardar los cambios'))
+
+      await waitFor(() =>
+        expect(actualizarContrato).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({
+            enlaceSecop: 'https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1',
+            apoyoSupervision: 'Yeison Zapata',
+            fechaDesignacion: '2026-10-10',
+            correoContratista: 'ventas@maderasdelnorte.com',
+          }),
+        ),
       )
     })
 

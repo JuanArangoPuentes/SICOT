@@ -33,7 +33,7 @@
 // sin que el supervisor salga de SICOT: {@link mantenerPantallaEncendida} la
 // pide encendida mientras dura una petición larga de IA.
 
-import { ApiError } from './api/client'
+import { ApiError, esCorteDelCamino } from './api/client'
 
 /**
  * Identificador de una pregunta al Copiloto (ChatRequest.idSolicitud): uno por
@@ -67,8 +67,9 @@ export function idDeSolicitud(): string {
  * antes. Por eso «Pensando…» sigue pidiendo mantener la pantalla encendida.
  */
 export function mantenerPantallaEncendida(): () => void {
+  const soltarNativo = pedirPantallaNativa()
   const wakeLock = 'wakeLock' in navigator ? navigator.wakeLock : undefined
-  if (!wakeLock) return () => {}
+  if (!wakeLock) return soltarNativo
   let activo = true
   let pidiendo = false
   let pedido: WakeLockSentinel | null = null
@@ -92,10 +93,40 @@ export function mantenerPantallaEncendida(): () => void {
   document.addEventListener('visibilitychange', alVolver)
   void pedir()
   return () => {
+    soltarNativo()
     activo = false
     document.removeEventListener('visibilitychange', alVolver)
     void pedido?.release().catch(() => {})
     pedido = null
+  }
+}
+
+/**
+ * El puente nativo del APK (PantallaEncendida.kt): mantiene la pantalla
+ * encendida con la bandera de la ventana de Android, que sí se cumple. En el
+ * WebView del APK la Screen Wake Lock API existe pero no hace nada: la prueba
+ * manual del 08-10-2026 vio apagarse la pantalla a mitad de una respuesta.
+ *
+ * Se cuentan los pedidos: si el chat y la generación de un documento piden a la
+ * vez, la pantalla se suelta cuando terminan los dos.
+ */
+let pedidosDePantalla = 0
+
+interface PuenteDePantalla {
+  mantener(encendida: boolean): void
+}
+
+function pedirPantallaNativa(): () => void {
+  const puente = (window as unknown as { SicotPantalla?: PuenteDePantalla }).SicotPantalla
+  if (!puente) return () => {}
+  pedidosDePantalla++
+  if (pedidosDePantalla === 1) puente.mantener(true)
+  let soltado = false
+  return () => {
+    if (soltado) return
+    soltado = true
+    pedidosDePantalla--
+    if (pedidosDePantalla === 0) puente.mantener(false)
   }
 }
 
@@ -176,5 +207,82 @@ async function vigilada<T>(peticion: () => Promise<T>): Promise<T> {
     throw e
   } finally {
     vigia.terminar()
+  }
+}
+
+/**
+ * Esperas entre reintentos cuando la conexión se corta por el camino —sin red
+ * un momento, o un intermediario que se cansó de esperar (502, 504, 524)—.
+ * Suman algo más de ocho minutos: el tiempo que el servidor puede seguir con
+ * una misma respuesta (dos veces `sicot.ia.timeout-seconds` más un margen),
+ * durante el que la guarda para el reintento con el mismo idSolicitud.
+ */
+const ESPERAS_TRAS_UN_CORTE_MS = [3_000, 10_000, 20_000, 30_000, 60_000, 60_000, 60_000, 60_000, 60_000, 60_000, 60_000]
+
+/**
+ * Si el primer intento falla antes de esto, lo más probable es que el servidor
+ * no esté al alcance (dirección equivocada, sin red): no tiene sentido esperar
+ * ocho minutos para decirlo. Se reintenta dos veces y se informa.
+ */
+const UN_CORTE_RAPIDO_MS = 15_000
+const REINTENTOS_SI_NO_HAY_SERVIDOR = 2
+
+const esperar = (ms: number) => new Promise<void>((resolver) => setTimeout(resolver, ms))
+
+/**
+ * Como {@link repetirAlVolverSiSeCorta}, y además repite la petición cuando la
+ * conexión se corta sin respuesta del servidor de SICOT aunque la página no se
+ * haya ocultado: un fallo de red o la página de error de un intermediario.
+ *
+ * <h2>Por qué</h2>
+ * Hasta el 18-10-2026 un corte así —un proxy que corta a los 100 s mientras el
+ * modelo todavía escribía, un microcorte del wifi— terminaba en «verifique que
+ * Ollama esté disponible», que era falso: el servidor seguía calculando la
+ * respuesta y la guardaba para un reintento que nadie hacía. Si el supervisor
+ * volvía a preguntar, salía otro idSolicitud y otra inferencia compitiendo por
+ * la CPU (auditoría del 17-10-2026).
+ *
+ * `peticion` se repite tal cual, con el mismo idSolicitud: el servidor
+ * reconoce la pregunta y entrega la respuesta que está terminando, o la que ya
+ * terminó. Un error con respuesta del servidor (un 503 de Ollama, un 400) sale
+ * tal cual, sin reintento.
+ */
+export async function repetirSiSeCorta<T>(
+  peticion: () => Promise<T>,
+  avisos: { alCortarsePorSegundoPlano: () => void; alCortarseLaConexion: () => void },
+): Promise<T> {
+  let cortesPorSegundoPlano = 0
+  let cortesDelCamino = 0
+  let avisado = false
+  // Se decide en el primer corte y se mantiene: si entonces falló enseguida,
+  // el servidor no está al alcance, y los reintentos (que también fallan
+  // enseguida) no lo convierten en un corte a mitad de una respuesta.
+  let sinServidor: boolean | null = null
+  for (;;) {
+    const inicio = Date.now()
+    try {
+      return await vigilada(peticion)
+    } catch (e) {
+      if (e instanceof CortadaPorSegundoPlano) {
+        // Una vez se avisa y se repite al volver; si se vuelve a cortar por lo
+        // mismo, se dice en vez de seguir intentando a ciegas.
+        if (cortesPorSegundoPlano > 0) throw e
+        cortesPorSegundoPlano++
+        avisos.alCortarsePorSegundoPlano()
+        await esperarPrimerPlano()
+        continue
+      }
+      if (!esCorteDelCamino(e)) throw e
+      if (sinServidor === null) sinServidor = Date.now() - inicio < UN_CORTE_RAPIDO_MS
+      const tope = sinServidor ? REINTENTOS_SI_NO_HAY_SERVIDOR : ESPERAS_TRAS_UN_CORTE_MS.length
+      if (cortesDelCamino >= tope) throw e
+      if (!avisado && !sinServidor) {
+        avisos.alCortarseLaConexion()
+        avisado = true
+      }
+      await esperar(ESPERAS_TRAS_UN_CORTE_MS[cortesDelCamino])
+      cortesDelCamino++
+      await esperarPrimerPlano()
+    }
   }
 }

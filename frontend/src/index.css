@@ -952,6 +952,11 @@ input[type='radio'] {
        desplace en vez de empujar al compositor. */
     max-height: 60% !important;
     min-height: 0 !important;
+    /* El panel trae en línea `min-width: 340px`: en un teléfono con el tamaño
+       de pantalla ampliado (320-340 px de ancho útil) quedaba más ancho que su
+       contenedor y el botón de enviar salía recortado (auditoría del
+       17-10-2026). */
+    min-width: 0 !important;
   }
 }
 @media (max-width: 1000px) {

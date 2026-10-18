@@ -88,7 +88,7 @@ import {
   firmarDocumento,
   getPlantillasDocumento,
   precalentarCopiloto,
-  preguntarCopiloto,
+  preguntarCopilotoEnVivo,
   descargarDocumento,
 } from '@/services/documentoService'
 import { getMiFirma } from '@/services/firmaService'
@@ -97,11 +97,12 @@ import {
   esperarPrimerPlano,
   idDeSolicitud,
   mantenerPantallaEncendida,
-  repetirAlVolverSiSeCorta,
+  repetirSiSeCorta,
   vigilarSegundoPlano,
 } from '@/services/segundoPlano'
 import { intencionEnLaRevision } from '@/services/revisionDelPaso'
 import { ApiError } from '@/services/api/client'
+import { motivoDelFalloDeDescarga } from '@/services/falloDeDescarga'
 import { mapEtapas } from '@/services/mappers'
 import { fechaDelCentro, formatFecha } from '@/services/format'
 
@@ -135,6 +136,19 @@ const QUICK_SUGGESTIONS: Array<{ label: string; question: string }> = [
 // modelo (ver historialCopiloto.ts); un servidor anterior al 02-10-2026 no
 // manda fuente, y todo lo suyo pasaba por el modelo o se trataba como tal.
 // La acción solo se guarda: se ejecuta cuando el supervisor pulsa su botón.
+/**
+ * Por qué no llegó la respuesta del Copiloto, dicho con lo que se sabe. Hasta
+ * el 18-10-2026 todo fallo sin respuesta del servidor decía «verifique que
+ * Ollama esté disponible», aunque lo que fallara fuera la red o un
+ * intermediario y el modelo estuviera respondiendo.
+ */
+const porQueNoRespondio = (e: unknown): string => {
+  if (e instanceof ApiError || e instanceof CortadaPorSegundoPlano) return e.message
+  if (e instanceof TypeError)
+    return 'No hubo respuesta del servidor de SICOT: revise la conexión del equipo y vuelva a intentarlo.'
+  return 'No se pudo completar la consulta al Copiloto. Vuelva a intentarlo en un momento.'
+}
+
 const mensajeDelCopiloto = ({ respuesta, fuente, accion }: ChatResponse): ChatMsg => ({
   role: 'ai',
   text: respuesta,
@@ -471,6 +485,9 @@ export default function SupervisorPanel({
   // puede tardar, así que se deshabilita el envío en vez de dejar que se
   // acumulen preguntas superpuestas.
   const [pensando, setPensando] = useState(false)
+  // Lo que el Copiloto lleva escrito de la respuesta en curso (respuesta en
+  // vivo). Vacío mientras el modelo todavía lee el contrato.
+  const [respuestaEnCurso, setRespuestaEnCurso] = useState('')
   // La revisión del paso que espera al modelo (su idSolicitud), para saber al
   // llegar su respuesta si el supervisor la dejó; y lo mismo como estado, para
   // pintar «sin esperar la revisión» en el botón de confirmar.
@@ -489,6 +506,7 @@ export default function SupervisorPanel({
   // cuando el supervisor quiere leer la ficha o las gráficas a ancho completo;
   // vuelve a abrirse desde el botón de la cabecera.
   const [copilotoAbierto, setCopilotoAbierto] = useState(true)
+  const descargandoDesdeElChat = useRef(false)
   // El avatar flotante lo abre aunque esté plegado: App ya llevó a la vista
   // Contrato, que es donde vive el panel.
   useEffect(() => {
@@ -609,6 +627,11 @@ export default function SupervisorPanel({
      */
     opciones?: { firmar?: { documentoId: number; huella: string }; redactarConIa?: boolean },
   ) => {
+    // Lo que pasa con un documento formal (falta la firma, «estoy armando…»,
+    // el fallo al generar o firmar) se dice en el chat del Copiloto: si estaba
+    // plegado, se abre, o el botón parecía no hacer nada (punto abierto de la
+    // prueba manual del APK, 14-10-2026).
+    if (AI_GENERATED_DOCS.has(subStepId)) setCopilotoAbierto(true)
     const sub = steps.flatMap((s) => s.subSteps).find((ss) => ss.id === subStepId)
     if (AI_GENERATED_DOCS.has(subStepId)) {
       const doc = FORMAL_DOCS.find((d) => d.subStepId === subStepId)
@@ -871,6 +894,8 @@ export default function SupervisorPanel({
         ? FORMAL_DOCS.find((d) => d.subStepId === subStepId)?.name
         : undefined
       setRevisionPaso({ stepId, subStepId, listaParaConfirmar: false, documento })
+      // La revisión espera en el chat: con el panel plegado, nada cambiaba en pantalla.
+      setCopilotoAbierto(true)
       const resumenSubPasos = step.subSteps.map((ss) => `- ${ss.id} ${ss.label}`).join('\n')
       setChatMsgs((prev) => [
         ...prev,
@@ -912,22 +937,26 @@ export default function SupervisorPanel({
       // servidor, así que si el teléfono la corta se repite al volver, con el
       // mismo idSolicitud para no pagar otra inferencia. Si mientras tanto el
       // supervisor la dejó (confirmó o canceló), no se repite.
-      const respuesta = await repetirAlVolverSiSeCorta(
+      const respuesta = await repetirSiSeCorta(
         () =>
           sigueEnCurso()
-            ? preguntarCopiloto(contrato.id, descripcion, undefined, { idSolicitud, revisarPaso: paso })
+            ? preguntarCopilotoEnVivo(contrato.id, descripcion, undefined, { idSolicitud, revisarPaso: paso }, (t) => {
+                if (sigueEnCurso()) setRespuestaEnCurso(t)
+              })
             : Promise.reject(new Error('Revisión abandonada')),
-        () => {
-          if (sigueEnCurso()) avisarQueSeRepite()
+        {
+          alCortarsePorSegundoPlano: () => {
+            if (sigueEnCurso()) avisarQueSeRepite()
+          },
+          alCortarseLaConexion: () => {
+            if (sigueEnCurso()) avisarQueSeReintenta()
+          },
         },
       )
       if (sigueEnCurso()) setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
       if (!sigueEnCurso()) return
-      const mensaje =
-        e instanceof ApiError || e instanceof CortadaPorSegundoPlano
-          ? e.message
-          : 'No se pudo conectar con el Copiloto IA (Ollama).'
+      const mensaje = porQueNoRespondio(e)
       // Unos mensajes traen su punto final y otros no; pegarle siempre uno
       // dejaba «(Ollama).. Puede confirmar».
       const frase = /[.!?]$/.test(mensaje) ? mensaje : `${mensaje}.`
@@ -945,6 +974,7 @@ export default function SupervisorPanel({
         revisionEnCurso.current = null
         setRevisando(false)
         setPensando(false)
+        setRespuestaEnCurso('')
         setRevisionPaso((prev) => (prev ? { ...prev, listaParaConfirmar: true } : prev))
       }
     }
@@ -959,6 +989,7 @@ export default function SupervisorPanel({
     revisionEnCurso.current = null
     setRevisando(false)
     setPensando(false)
+    setRespuestaEnCurso('')
   }
 
   const confirmarRevision = () => {
@@ -996,6 +1027,18 @@ export default function SupervisorPanel({
       },
     ])
 
+  // La conexión se cortó por el camino (sin red un momento, o un intermediario
+  // que se cansó de esperar) con SICOT en pantalla. El servidor sigue con la
+  // respuesta y la guarda para el reintento, que lleva el mismo idSolicitud.
+  const avisarQueSeReintenta = () =>
+    setChatMsgs((prev) => [
+      ...prev,
+      {
+        role: 'ai',
+        text: 'Se cortó la conexión con el servidor antes de que llegara la respuesta. El servidor la sigue preparando; la vuelvo a pedir en unos segundos.',
+      },
+    ])
+
   // Pregunta real al Copiloto IA (Ollama, vía CopilotoChatService en el
   // backend) — anclada a los datos reales del contrato y al estado real de
   // sus etapas. Ya no hay coincidencia de palabras clave local.
@@ -1007,19 +1050,16 @@ export default function SupervisorPanel({
     // inferencia mientras la del primer intento sigue en la CPU.
     const idSolicitud = idDeSolicitud()
     try {
-      const respuesta = await repetirAlVolverSiSeCorta(
-        () => preguntarCopiloto(contrato.id, texto, chatMsgs, { idSolicitud }),
-        avisarQueSeRepite,
+      const respuesta = await repetirSiSeCorta(
+        () => preguntarCopilotoEnVivo(contrato.id, texto, chatMsgs, { idSolicitud }, setRespuestaEnCurso),
+        { alCortarsePorSegundoPlano: avisarQueSeRepite, alCortarseLaConexion: avisarQueSeReintenta },
       )
       setChatMsgs((prev) => [...prev, mensajeDelCopiloto(respuesta)])
     } catch (e) {
-      const mensaje =
-        e instanceof ApiError || e instanceof CortadaPorSegundoPlano
-          ? e.message
-          : 'No se pudo conectar con el Copiloto IA (Ollama). Verifique que esté disponible e inténtelo de nuevo.'
-      setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude responder: ${mensaje}` }])
+      setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude responder: ${porQueNoRespondio(e)}` }])
     } finally {
       setPensando(false)
+      setRespuestaEnCurso('')
     }
   }
 
@@ -1114,18 +1154,22 @@ export default function SupervisorPanel({
           setTab('documentos')
           return
         }
+        // Un segundo toque mientras baja un PDF de varios MB abría otro «Guardar
+        // como»: la vista Documentos ya lo evitaba, el botón del chat no.
+        if (descargandoDesdeElChat.current) return
+        descargandoDesdeElChat.current = true
         descargarDocumento(contrato.id, doc.id, doc.nombre)
           .then((resultado) => {
             if (resultado === 'guardado')
               setChatMsgs((prev) => [...prev, { role: 'ai', text: `«${doc.nombre}» quedó guardado en el teléfono.` }])
           })
           .catch((e) => {
-            // El motivo real cuando lo hay, como en la vista Documentos.
-            const motivo =
-              e instanceof ApiError || (e instanceof Error && e.message.includes('vacío'))
-                ? e.message
-                : 'Intente de nuevo en un momento.'
-            setChatMsgs((prev) => [...prev, { role: 'ai', text: `No pude descargar «${doc.nombre}»: ${motivo}` }])
+            // El mismo motivo que en la vista Documentos: «intente de nuevo» solo
+            // cuando reintentar puede arreglarlo.
+            setChatMsgs((prev) => [...prev, { role: 'ai', text: motivoDelFalloDeDescarga(e, `«${doc.nombre}»`) }])
+          })
+          .finally(() => {
+            descargandoDesdeElChat.current = false
           })
         return
       }
@@ -1829,6 +1873,7 @@ export default function SupervisorPanel({
               contrato={contrato}
               chatMsgs={chatMsgs}
               pensando={pensando}
+              respuestaEnCurso={respuestaEnCurso}
               tutorialMode={tutorialMode}
               revisionPaso={revisionPaso}
               activeStep={activeStep}

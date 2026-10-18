@@ -234,3 +234,25 @@ describe('mantenerPantallaEncendida', () => {
     expect(() => soltar()).not.toThrow()
   })
 })
+
+describe('mantenerPantallaEncendida · el puente nativo del APK', () => {
+  afterEach(() => {
+    delete (window as unknown as { SicotPantalla?: unknown }).SicotPantalla
+  })
+
+  it('pide la pantalla encendida a Android y la suelta cuando terminan todos los que la pidieron', () => {
+    const mantener = vi.fn()
+    ;(window as unknown as { SicotPantalla: { mantener: typeof mantener } }).SicotPantalla = { mantener }
+
+    const soltarChat = mantenerPantallaEncendida()
+    const soltarDocumento = mantenerPantallaEncendida()
+    expect(mantener).toHaveBeenCalledExactlyOnceWith(true)
+
+    soltarChat()
+    soltarChat()
+    expect(mantener).toHaveBeenCalledTimes(1)
+    soltarDocumento()
+    expect(mantener).toHaveBeenLastCalledWith(false)
+    expect(mantener).toHaveBeenCalledTimes(2)
+  })
+})

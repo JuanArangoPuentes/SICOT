@@ -19,3 +19,11 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# El puente que la página usa para mantener la pantalla encendida mientras
+# espera a la IA (PantallaEncendida.kt). Sin esta regla, R8 renombra o quita el
+# método en la compilación de publicación y la llamada desde JavaScript falla
+# en silencio: justo la compilación que instala el supervisor.
+-keepclassmembers class co.sena.ctma.sicot.PantallaEncendida {
+    @android.webkit.JavascriptInterface public *;
+}

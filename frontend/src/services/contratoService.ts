@@ -52,6 +52,17 @@ export function cambiarEstadoContrato(id: number, estado: EstadoContrato): Promi
   })
 }
 
+/**
+ * Asigna o cambia el supervisor del contrato. Asignarlo a un contrato que nació
+ * sin él completa la designación (etapa 1) y le avisa al supervisor.
+ */
+export function asignarSupervisor(id: number, supervisorId: number): Promise<ContratoResponse> {
+  return apiFetch<ContratoResponse>(`/api/contratos/${id}/supervisor`, {
+    method: 'PATCH',
+    body: JSON.stringify({ supervisorId }),
+  })
+}
+
 // Lo que publica el SECOP II del contrato, con las diferencias frente a SICOT
 // (paso 2.3 del proceso real). Sin conexión responde 200 con disponible=false
 // y el motivo: no es un error que haya que mostrar como fallo.

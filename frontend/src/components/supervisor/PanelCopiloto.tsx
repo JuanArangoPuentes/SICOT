@@ -33,6 +33,7 @@ export default function PanelCopiloto({
   contrato,
   chatMsgs,
   pensando,
+  respuestaEnCurso = '',
   tutorialMode,
   revisionPaso,
   revisando = false,
@@ -53,6 +54,11 @@ export default function PanelCopiloto({
   contrato: ContratoResponse
   chatMsgs: ChatMsg[]
   pensando: boolean
+  /**
+   * Lo que el Copiloto lleva escrito de la respuesta en curso. Vacío mientras
+   * el modelo todavía lee el contrato (o con un servidor sin respuesta en vivo).
+   */
+  respuestaEnCurso?: string
   tutorialMode: boolean
   revisionPaso: RevisionPaso | null
   /** La revisión del paso está esperando al modelo (no una pregunta suelta). */
@@ -99,7 +105,7 @@ export default function PanelCopiloto({
   useEffect(() => {
     const lista = listaDeMensajes.current
     if (lista) lista.scrollTop = lista.scrollHeight
-  }, [chatMsgs.length, pensando])
+  }, [chatMsgs.length, pensando, respuestaEnCurso])
 
   return (
     <div
@@ -262,7 +268,33 @@ export default function PanelCopiloto({
           </div>
         ))}
 
-        {pensando && (
+        {pensando && respuestaEnCurso && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }} aria-live="polite">
+            <div
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: '50%',
+                background: 'var(--accent-soft)',
+                border: '1px solid var(--accent-line)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                marginTop: 2,
+                color: 'var(--accent)',
+              }}
+            >
+              <AvatarIcon id={prefs.avatarId} size={13} />
+            </div>
+            <div className="copiloto-msg" data-testid="respuesta-en-curso" style={{ maxWidth: '92%' }}>
+              {respuestaEnCurso}
+              <span style={{ color: 'var(--text-muted)' }}> ▍</span>
+            </div>
+          </div>
+        )}
+
+        {pensando && !respuestaEnCurso && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
             <div
               style={{
@@ -293,8 +325,8 @@ export default function PanelCopiloto({
               {/* En un teléfono, apagarse la pantalla o cambiar de aplicación
                   corta la petición: SICOT pide la pantalla encendida, pero no
                   todos los WebView lo permiten. */}
-              Pensando… puede tardar uno o varios minutos según la carga del servidor. Mantenga SICOT abierto, con la
-              pantalla encendida, hasta que responda.
+              Pensando… la primera respuesta sobre un contrato puede tardar uno o varios minutos según el equipo del
+              servidor; las siguientes, segundos. Mantenga SICOT abierto, con la pantalla encendida, hasta que responda.
             </div>
           </div>
         )}

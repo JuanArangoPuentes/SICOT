@@ -25,16 +25,24 @@ vi.mock('@/services/alertaService', () => ({
   getAlertasContrato: vi.fn(),
   marcarAlertaLeida: vi.fn(),
 }))
-vi.mock('@/services/documentoService', () => ({
-  getDocumentosContrato: vi.fn(),
-  generarDocumento: vi.fn(),
-  firmarDocumento: vi.fn(),
-  precalentarCopiloto: vi.fn(),
-  preguntarCopiloto: vi.fn(),
-  verificarIntegridad: vi.fn(),
-  descargarDocumento: vi.fn(),
-  getPlantillasDocumento: vi.fn(),
-}))
+vi.mock('@/services/documentoService', () => {
+  const preguntarCopiloto = vi.fn()
+  return {
+    getDocumentosContrato: vi.fn(),
+    generarDocumento: vi.fn(),
+    firmarDocumento: vi.fn(),
+    precalentarCopiloto: vi.fn(),
+    preguntarCopiloto,
+    // La respuesta en vivo, como la daría un servidor sin ella: la misma
+    // pregunta de siempre. Función simple y no vi.fn(): así la conserva el
+    // restoreAllMocks de setup.ts.
+    preguntarCopilotoEnVivo: (contratoId: number, pregunta: string, historial?: unknown, opciones?: unknown) =>
+      preguntarCopiloto(contratoId, pregunta, historial, opciones),
+    verificarIntegridad: vi.fn(),
+    descargarDocumento: vi.fn(),
+    getPlantillasDocumento: vi.fn(),
+  }
+})
 vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
 }))

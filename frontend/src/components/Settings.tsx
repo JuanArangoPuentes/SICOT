@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AVATARS, FONT_OPTIONS, PRESETS, usePrefs, type PresetId, type Prefs } from '@/prefs'
 import { Field, Modal } from './ui'
 import { CLAVE_SERVIDOR, ORIGEN_COMPILADO, apiBase } from '@/services/api/client'
@@ -18,6 +18,12 @@ export default function Settings({
 }) {
   const { prefs, patch, reset } = usePrefs()
   const [section, setSection] = useState<Section>(initialSection)
+  // El componente queda montado: sin esto abría en la última pestaña usada, y
+  // «Servidor:» en la pantalla de acceso llevaba a la galería de temas en vez
+  // de al campo de la dirección (auditoría del 17-10-2026).
+  useEffect(() => {
+    if (open) setSection(initialSection)
+  }, [open, initialSection])
 
   if (!open) return null
 

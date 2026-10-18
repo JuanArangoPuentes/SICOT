@@ -27,15 +27,23 @@ interface Props {
 type Pieza = 'acta' | 'evidencia'
 
 /**
- * Qué hay cargado en el paso. El acta es el PDF cargado con su nombre (o, si
- * no hay ninguno así, el primer PDF); la evidencia, cualquier otro documento.
- * Es la misma regla que aplica el backend: al menos un PDF y dos documentos.
+ * Qué hay cargado en el paso, por el nombre con que lo guarda este mismo
+ * componente. El acta es el PDF con su nombre (o, si no hay ninguno así, un PDF
+ * que no sea la evidencia); la evidencia, el documento con su nombre o
+ * cualquier otro que no sea el acta. Es la regla del backend: un PDF que no sea
+ * la evidencia y dos documentos.
+ *
+ * Hasta el 18-10-2026 el acta era «el primer PDF»: si se cargaba primero la
+ * evidencia en PDF, la pantalla la daba por el acta firmada y dejaba cerrar el
+ * paso sin ella.
  */
 export function piezasCargadas(documentos: DocumentoResponse[], subetapaApiId?: number | null) {
   const delPaso = documentos.filter((d) => subetapaApiId != null && d.subetapaId === subetapaApiId)
+  const esEvidencia = (d: DocumentoResponse) => d.nombre.startsWith(NOMBRE_EVIDENCIA)
   const pdfs = delPaso.filter((d) => d.tipo === 'PDF')
-  const acta = pdfs.find((d) => d.nombre.startsWith(NOMBRE_ACTA)) ?? pdfs[0]
-  const evidencia = delPaso.find((d) => d !== acta)
+  const acta = pdfs.find((d) => d.nombre.startsWith(NOMBRE_ACTA)) ?? pdfs.find((d) => !esEvidencia(d))
+  const evidencia =
+    delPaso.find((d) => esEvidencia(d)) ?? delPaso.find((d) => d !== acta && !d.nombre.startsWith(NOMBRE_ACTA))
   return { acta, evidencia }
 }
 

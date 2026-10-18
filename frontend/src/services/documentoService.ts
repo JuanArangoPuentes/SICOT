@@ -3,7 +3,7 @@
 // backend; el frontend nunca habla con Ollama directamente.
 
 import { abrirArchivo, guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
-import { apiFetch, apiFetchBlob } from './api/client'
+import { ApiError, apiFetch, apiFetchBlob, apiFetchRespuesta } from './api/client'
 import { historialParaElCopiloto } from './historialCopiloto'
 import type {
   ChatRequest,
@@ -209,3 +209,104 @@ export function preguntarCopiloto(
     body: JSON.stringify(cuerpo),
   })
 }
+
+/**
+ * Como {@link preguntarCopiloto}, pero la respuesta llega a medida que el
+ * modelo la escribe: `alEscribir` recibe el texto acumulado hasta ese momento
+ * y la promesa se resuelve con la respuesta completa (la misma que daría
+ * `POST /chat`, que manda sobre los trozos).
+ *
+ * <h2>Por qué</h2>
+ * En el portátil del Centro el modelo escribe a unos 3 tokens por segundo:
+ * sin esto el supervisor mira «Pensando…» medio minuto o más en cada
+ * respuesta (ADR-006, revisión del 18-10-2026). Además el servidor manda algo
+ * cada 10 s mientras el modelo lee el contrato, y así un intermediario que
+ * corta a los 60-100 s sin datos no corta la respuesta.
+ *
+ * <h2>Con un servidor anterior</h2>
+ * Si el servidor no tiene la ruta en vivo (404) o el navegador no puede leer
+ * por trozos, se hace la pregunta de siempre con el mismo `idSolicitud`. Si
+ * la conexión se corta a mitad, el error sale como un fallo de red (TypeError)
+ * para que quien llama la repita con el mismo `idSolicitud`: el servidor
+ * terminó la respuesta y la entrega entera.
+ */
+export async function preguntarCopilotoEnVivo(
+  contratoId: number,
+  pregunta: string,
+  historial: ChatMsg[] | undefined,
+  opciones: { idSolicitud?: string; revisarPaso?: number } | undefined,
+  alEscribir: (textoHastaAhora: string) => void,
+): Promise<ChatResponse> {
+  const cuerpo: ChatRequest = {
+    pregunta,
+    historial:
+      historial &&
+      historialParaElCopiloto(historial).map((m) => ({ rol: m.role === 'ai' ? 'ai' : 'user', texto: m.text })),
+    idSolicitud: opciones?.idSolicitud,
+    revisarPaso: opciones?.revisarPaso,
+  }
+  let res: Response
+  try {
+    res = await apiFetchRespuesta(`/api/contratos/${contratoId}/copiloto/chat/en-vivo`, {
+      method: 'POST',
+      body: JSON.stringify(cuerpo),
+    })
+  } catch (e) {
+    // Un servidor de antes del 18-10-2026 no tiene la ruta en vivo.
+    if (e instanceof ApiError && (e.status === 404 || e.status === 405) && !e.detail?.message?.includes('recurso')) {
+      return preguntarCopiloto(contratoId, pregunta, historial, opciones)
+    }
+    throw e
+  }
+  if (!res.body) return preguntarCopiloto(contratoId, pregunta, historial, opciones)
+
+  const lector = res.body.getReader()
+  const decodificador = new TextDecoder()
+  let pendiente = ''
+  let texto = ''
+  for (;;) {
+    const { done, value } = await lector.read()
+    if (value) pendiente += decodificador.decode(value, { stream: !done })
+    let salto = pendiente.indexOf('\n')
+    while (salto >= 0) {
+      const linea = pendiente.slice(0, salto).trim()
+      pendiente = pendiente.slice(salto + 1)
+      salto = pendiente.indexOf('\n')
+      if (!linea) continue
+      const evento = JSON.parse(linea) as EventoEnVivo
+      if (evento.tipo === 'texto') {
+        texto += evento.t
+        alEscribir(texto)
+      } else if (evento.tipo === 'fin') {
+        void lector.cancel().catch(() => {})
+        return evento.respuesta
+      } else if (evento.tipo === 'error') {
+        void lector.cancel().catch(() => {})
+        throw new ApiError(
+          evento.status,
+          evento.mensaje,
+          {
+            timestamp: new Date().toISOString(),
+            status: evento.status,
+            error: 'Error',
+            message: evento.mensaje,
+            path: `/api/contratos/${contratoId}/copiloto/chat/en-vivo`,
+            fieldErrors: null,
+          },
+          evento.reintentarEnSegundos,
+        )
+      }
+    }
+    if (done) break
+  }
+  // Se cerró sin el evento final: la conexión se cortó por el camino. Sale
+  // como fallo de red para que se repita con el mismo idSolicitud.
+  throw new TypeError('La respuesta en vivo del Copiloto se cortó antes de terminar.')
+}
+
+type EventoEnVivo =
+  | { tipo: 'inicio' }
+  | { tipo: 'espera' }
+  | { tipo: 'texto'; t: string }
+  | { tipo: 'fin'; respuesta: ChatResponse }
+  | { tipo: 'error'; status: number; mensaje: string; reintentarEnSegundos?: number }

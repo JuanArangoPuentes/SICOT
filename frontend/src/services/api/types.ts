@@ -154,6 +154,12 @@ export interface ActualizarContratoRequest {
   numeroRegistroPresupuestal?: string | null
   fechaRegistroPresupuestal?: string | null
   centroCosto?: string | null
+  // De la designación (GCCON-F-032) y del acta. El PUT reemplaza el contrato
+  // entero: si no viajan, se guardan vacíos.
+  enlaceSecop?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
 }
 
 export interface CambiarEstadoContratoRequest {

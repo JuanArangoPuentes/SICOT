@@ -103,7 +103,27 @@ export function queUsaLaDireccionVacia(origenCompilado: string): string {
  */
 export function mensajeSinConexion(direccion: string): string {
   const base = 'No se pudo conectar con el servidor.'
-  if (!enAplicacionEmpaquetada() || !enAndroid()) return base
+  if (!enAplicacionEmpaquetada()) return base
+  // Una instalación recién hecha apunta a la dirección de desarrollo, que en
+  // el equipo del supervisor no es ningún servidor: lo primero es escribir la
+  // del Centro. Antes salía el mismo mensaje que con el servidor caído.
+  if (/\/\/(localhost|127\.0\.0\.1)(:|\/|$)/i.test(direccion.trim())) {
+    return (
+      `${base} Esta instalación todavía no tiene la dirección del servidor de su Centro: pulse la dirección ` +
+      'que aparece junto a «Servidor:», abajo, y escriba la que le dé el área de sistemas (empieza por https://).'
+    )
+  }
+  if (!enAndroid()) {
+    // La aplicación de escritorio (WebView2) usa el almacén de certificados de
+    // Windows: con el certificado propio de Caddy sin instalar, no hay página
+    // de advertencia que aceptar como en un navegador; el acceso falla sin más.
+    return direccion.trim().toLowerCase().startsWith('https://')
+      ? `${base} Revise que la dirección sea la correcta. Si el servidor del Centro usa un certificado propio, ` +
+          'instálelo en este equipo: doble clic en el archivo .crt que le dé el área de sistemas → Instalar ' +
+          'certificado → Usuario actual → Colocar todos los certificados en el siguiente almacén → Entidades de ' +
+          'certificación raíz de confianza. Después cierre y vuelva a abrir SICOT.'
+      : `${base} Revise la dirección del servidor (pulse la que aparece junto a «Servidor:»).`
+  }
   if (direccion.trim().toLowerCase().startsWith('https://')) {
     return (
       `${base} Revise que la dirección sea la correcta. Si el servidor del Centro usa un certificado propio, ` +

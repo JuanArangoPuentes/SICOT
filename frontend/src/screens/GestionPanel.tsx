@@ -16,7 +16,13 @@ import {
 } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
-import { getContratos, crearContrato, actualizarContrato, cambiarEstadoContrato } from '@/services/contratoService'
+import {
+  getContratos,
+  crearContrato,
+  actualizarContrato,
+  asignarSupervisor,
+  cambiarEstadoContrato,
+} from '@/services/contratoService'
 import { getUsuarios } from '@/services/usuarioService'
 import { extraerDatosContrato, subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
@@ -54,8 +60,8 @@ const COLUMNAS_REGISTRO =
 // `GcconP010Plantilla.crearEtapas`, que ni siquiera lee `tipoContrato`. Todos
 // los contratos reciben exactamente estas 6 etapas, sin excepción.
 const ETAPAS_GCCON_P010 = [
-  'Inicio — Estudios y Suscripción',
-  'Inicio — Acta de Inicio',
+  'Inicio — Designación de la supervisión (GCCON-F-032)',
+  'Inicio — Acta de Inicio y arranque (GCCON-F-018)',
   'Inspección — Monitoreo y Ejecución',
   'Recepción — Acta de Recibo a Satisfacción',
   'Certificación — Cumplimiento y Trámite de Pago',
@@ -69,7 +75,12 @@ interface SupervisorOption {
   nombre: string
 }
 
-const CENTROS_COSTO = ['920510 — CTMA Formación', '920511 — CTMA Ebanistería', '920512 — CTMA Tapicería']
+// Solo el que respaldan los documentos reales del Centro (el GCCON-F-030 del
+// CO1.PCCNTR.8426076 lo escribe «36-02-00-005-920510 CENTRO TECNOLOGICO DEL
+// MOBILIARIO»). Los «920511 — CTMA Ebanistería» y «920512 — CTMA Tapicería»
+// venían del prototipo de Figma y no aparecen en ningún documento: se quitaron
+// el 18-10-2026 hasta que el Centro los confirme. Ningún valor va por defecto.
+const CENTROS_COSTO = ['920510 — Centro Tecnológico del Mobiliario']
 
 const ESTADO_ROW: Record<EstadoContrato, { label: string; type: ChipType }> = {
   ACTIVO: { label: 'Activo', type: 'vigente' },
@@ -95,13 +106,33 @@ const mapContratoRow = (c: ContratoResponse) => ({
 // Acepta tanto un número limpio como texto descriptivo con el valor embebido
 // (ej. lo que a veces devuelve la extracción con IA: "DIEZ MILLONES DE PESOS
 // ($10.000.000 COP)") — se queda solo con los dígitos.
+//
+// Los centavos no se suman a la cifra: «45900300.5» (como lo devuelve la API)
+// y «45.900.300,50» (como se escribe en Colombia) son el mismo valor. Hasta el
+// 18-10-2026 se borraba también el separador decimal y la corrección de un
+// contrato con centavos multiplicaba su valor por diez o por cien.
 const parseValor = (texto: string): number | null => {
   if (!texto) return null
-  const soloDigitos = texto.replace(/[^\d]/g, '')
-  if (!soloDigitos) return null
-  const n = Number(soloDigitos)
+  const limpio = texto.trim()
+  let n: number
+  if (/^\d+(\.\d{1,2})?$/.test(limpio)) {
+    n = Number(limpio)
+  } else {
+    const soloCifra = (limpio.match(/[\d.,]+/g) ?? []).join('')
+    const sinMiles = soloCifra
+      .replace(/,(\d{1,2})$/, '#$1')
+      .replace(/[.,]/g, '')
+      .replace('#', '.')
+    if (!sinMiles) return null
+    n = Number(sinMiles)
+  }
   return Number.isFinite(n) && n > 0 ? n : null
 }
+
+// El motivo concreto de un 400 de validación (el campo que falla), no el
+// «Error de validación en los datos enviados.» genérico.
+const motivoDelServidor = (e: unknown, siNoHay: string): string =>
+  e instanceof ApiError ? (Object.values(e.detail?.fieldErrors ?? {})[0] ?? e.message) : siNoHay
 
 const displayAIso = (f: string) => {
   const [d, m, y] = f.split('/')
@@ -181,6 +212,10 @@ interface FormularioDeContrato {
   numeroRegistroPresupuestal: string
   fechaRegistroPresupuestal: string
   centroCosto: string
+  enlaceSecop: string
+  apoyoSupervision: string
+  fechaDesignacion: string
+  correoContratista: string
 }
 
 const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
@@ -197,6 +232,10 @@ const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
   numeroRegistroPresupuestal: c.numeroRegistroPresupuestal ?? '',
   fechaRegistroPresupuestal: c.fechaRegistroPresupuestal ?? '',
   centroCosto: c.centroCosto ?? '',
+  enlaceSecop: c.enlaceSecop ?? '',
+  apoyoSupervision: c.apoyoSupervision ?? '',
+  fechaDesignacion: c.fechaDesignacion ?? '',
+  correoContratista: c.correoContratista ?? '',
 })
 
 // El valor guardado puede no estar en la lista de opciones: lo escribió otro
@@ -214,6 +253,9 @@ const CAMPOS_DE_TEXTO: { label: string; campo: keyof FormularioDeContrato; mono:
   { label: 'Valor', campo: 'valor', mono: true },
   { label: 'Lugar de ejecución', campo: 'lugarEjecucion', mono: false },
   { label: 'Número de registro presupuestal', campo: 'numeroRegistroPresupuestal', mono: true },
+  { label: 'Enlace del proceso en SECOP II', campo: 'enlaceSecop', mono: true },
+  { label: 'Apoyo a la supervisión', campo: 'apoyoSupervision', mono: false },
+  { label: 'Correo del contratista', campo: 'correoContratista', mono: true },
 ]
 
 // Fechas con <input type="date"> y no con el campo de texto «dd/mm/aaaa –
@@ -223,6 +265,7 @@ const CAMPOS_DE_FECHA: { label: string; campo: keyof FormularioDeContrato }[] = 
   { label: 'Inicio de la vigencia', campo: 'fechaInicio' },
   { label: 'Fin de la vigencia', campo: 'fechaFin' },
   { label: 'Fecha del registro presupuestal', campo: 'fechaRegistroPresupuestal' },
+  { label: 'Fecha de la designación', campo: 'fechaDesignacion' },
 ]
 
 const opcionesCon = (opciones: readonly string[], valor: string): string[] =>
@@ -253,12 +296,23 @@ export default function GestionPanel({
   const [errorExtraccion, setErrorExtraccion] = useState('')
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [tipo, setTipo] = useState('Suministro de Bienes')
-  const [centro, setCentro] = useState(CENTROS_COSTO[0])
+  // Sin valor por defecto: un tipo o un centro que nadie eligió se guardaba
+  // como si fuera un dato real del contrato.
+  const [tipo, setTipo] = useState('')
+  const [centro, setCentro] = useState('')
   const [supervisor, setSupervisor] = useState('')
   const [adjuntosSubidos, setAdjuntosSubidos] = useState(0)
 
   const [contratos, setContratos] = useState<ReturnType<typeof mapContratoRow>[]>([])
+  // Sin esto, una consulta fallida o en curso se veía como «Aún no tiene
+  // contratos registrados»: un dato falso presentado como real.
+  const [cargandoContratos, setCargandoContratos] = useState(true)
+  const [errorContratos, setErrorContratos] = useState('')
+  // Asignar o cambiar el supervisor de un contrato ya creado.
+  const [contratoParaAsignar, setContratoParaAsignar] = useState<ContratoResponse | null>(null)
+  const [supervisorElegido, setSupervisorElegido] = useState('')
+  const [busyAsignar, setBusyAsignar] = useState(false)
+  const [errorAsignar, setErrorAsignar] = useState('')
   const [supervisores, setSupervisores] = useState<SupervisorOption[]>([])
   const [busyCrear, setBusyCrear] = useState(false)
   const [errorCrear, setErrorCrear] = useState('')
@@ -296,7 +350,14 @@ export default function GestionPanel({
       .then((lista) => {
         if (!cancelado) setContratos(lista.map(mapContratoRow))
       })
-      .catch((err) => console.error('No se pudieron cargar los contratos:', err))
+      .catch((err) => {
+        console.error('No se pudieron cargar los contratos:', err)
+        if (!cancelado)
+          setErrorContratos('No se pudieron consultar los contratos. Revise la conexión y vuelva a intentarlo.')
+      })
+      .finally(() => {
+        if (!cancelado) setCargandoContratos(false)
+      })
     return () => {
       cancelado = true
     }
@@ -312,7 +373,8 @@ export default function GestionPanel({
           .filter((u) => u.rol === 'SUPERVISOR' && u.activo)
           .map((u) => ({ id: u.id, nombre: u.nombre }))
         setSupervisores(sups)
-        setSupervisor(String(sups[0]?.id ?? ''))
+        // No se preselecciona el primero de la lista: ese supervisor recibía
+        // el aviso de una designación que nadie hizo (auditoría del 17-10-2026).
       })
       .catch((err) => console.error('No se pudieron cargar los supervisores:', err))
     return () => {
@@ -323,15 +385,24 @@ export default function GestionPanel({
   const recargarContratos = async () => {
     const lista = await getContratos()
     setContratos(lista.map(mapContratoRow))
+    setErrorContratos('')
   }
 
-  const openUpload = () => {
-    setShowModal(true)
-    setUploadState('idle')
-    setAdjuntosSubidos(0)
-    setExtraccion(null)
-    setErrorExtraccion('')
-    setArchivosSeleccionados([])
+  const reintentarContratos = () => {
+    setCargandoContratos(true)
+    setErrorContratos('')
+    recargarContratos()
+      .catch(() =>
+        setErrorContratos('No se pudieron consultar los contratos. Revise la conexión y vuelva a intentarlo.'),
+      )
+      .finally(() => setCargandoContratos(false))
+  }
+
+  // Todo lo que la ficha anterior dejó escrito. Se limpia al abrir la carga y al
+  // elegir los archivos: si la extracción fallaba, el formulario manual
+  // aparecía con el correo del contratista, el enlace del SECOP y el apoyo del
+  // contrato anterior, y se guardaban en el nuevo.
+  const limpiarFicha = () => {
     setIdContrato('')
     setObjeto('')
     setProveedor('')
@@ -341,15 +412,41 @@ export default function GestionPanel({
     setRepresentanteLegal('')
     setLugarEjecucion('')
     setRegistroPresupuestal('')
-    // Desde que el tipo extraído sí se aplica, el del contrato anterior se
-    // quedaba puesto en la siguiente carga si esta no traía tipo.
-    setTipo('Suministro de Bienes')
+    setEnlaceSecop('')
+    setApoyoSupervision('')
+    setFechaDesignacion('')
+    setCorreoContratista('')
+    setCompletadoDesdeSecop([])
+    setSupervisor('')
+    setTipo('')
+    setCentro('')
+    setErrorCrear('')
+  }
+
+  const openUpload = () => {
+    setShowModal(true)
+    setUploadState('idle')
+    setAdjuntosSubidos(0)
+    setExtraccion(null)
+    setErrorExtraccion('')
+    setArchivosSeleccionados([])
+    limpiarFicha()
   }
 
   const handleFileSelect = () => fileInputRef.current?.click()
 
   const handleFilesChosen = async (archivos: File[]) => {
     if (archivos.length === 0) return
+    // El servidor admite 20 MB por petición, y todos los archivos van juntos.
+    const total = archivos.reduce((suma, a) => suma + a.size, 0)
+    if (total > 20 * 1024 * 1024) {
+      setErrorExtraccion(
+        `Entre todos los archivos suman ${(total / 1024 / 1024).toFixed(1)} MB y el límite es 20 MB por carga. ` +
+          'Cargue menos archivos o los de menor tamaño (la designación y el acta bastan).',
+      )
+      return
+    }
+    limpiarFicha()
     setArchivosSeleccionados(archivos)
     setErrorExtraccion('')
     // Un solo estado de espera: la subida y el análisis van en la misma
@@ -389,7 +486,7 @@ export default function GestionPanel({
       }
       setUploadState('detect')
     } catch (e) {
-      setErrorExtraccion(e instanceof ApiError ? e.message : 'No se pudo analizar el documento con el Copiloto IA.')
+      setErrorExtraccion(motivoDelServidor(e, 'No se pudo analizar el documento. Diligencie los datos a mano.'))
       setUploadState('review')
     }
   }
@@ -411,6 +508,16 @@ export default function GestionPanel({
       setErrorCrear('El valor debe ser un número mayor que cero.')
       return
     }
+    // Una vigencia o una fecha escritas en otro formato se descartaban sin aviso.
+    const vigLeida = parseVigencia(vigencia)
+    if (vigencia.trim() && !vigLeida.inicio && !vigLeida.fin) {
+      setErrorCrear('Escriba la vigencia como dd/mm/aaaa – dd/mm/aaaa.')
+      return
+    }
+    if (fechaDesignacion.trim() && !/^\d{2}\/\d{2}\/\d{4}$/.test(fechaDesignacion.trim())) {
+      setErrorCrear('Escriba la fecha de la designación como dd/mm/aaaa.')
+      return
+    }
     setBusyCrear(true)
     setErrorCrear('')
     try {
@@ -422,13 +529,13 @@ export default function GestionPanel({
         fechaInicio: vig.inicio,
         fechaFin: vig.fin,
         supervisorId: supervisor ? Number(supervisor) : null,
-        tipoContrato: tipo,
+        tipoContrato: tipo || null,
         contratista: proveedor.trim() || null,
         contratistaNit: nit.trim() || null,
         representanteLegal: representanteLegal.trim() || null,
         lugarEjecucion: lugarEjecucion.trim() || null,
         numeroRegistroPresupuestal: registroPresupuestal.trim() || null,
-        centroCosto: centro,
+        centroCosto: centro || null,
         enlaceSecop: enlaceSecop.trim() || null,
         apoyoSupervision: apoyoSupervision.trim() || null,
         fechaDesignacion: /^\d{2}\/\d{2}\/\d{4}$/.test(fechaDesignacion.trim())
@@ -442,6 +549,7 @@ export default function GestionPanel({
       // fallaban, se le decía al usuario que estaban adjuntos igual. El
       // contrato ya está creado, así que un fallo aquí no es motivo para
       // abortar — pero sí para decirlo.
+      let subidos = 0
       if (archivosSeleccionados.length > 0) {
         const resultados = await Promise.all(
           archivosSeleccionados.map((archivo) =>
@@ -450,7 +558,8 @@ export default function GestionPanel({
               .catch(() => false),
           ),
         )
-        setAdjuntosSubidos(resultados.filter(Boolean).length)
+        subidos = resultados.filter(Boolean).length
+        setAdjuntosSubidos(subidos)
       } else {
         setAdjuntosSubidos(0)
       }
@@ -458,11 +567,16 @@ export default function GestionPanel({
       const sup = supervisores.find((s) => String(s.id) === supervisor)
       setLastProcessedContract({ id: creado.numeroContrato, supervisor: sup?.nombre ?? '— Sin asignar —' })
       await recargarContratos()
-      setTimeout(() => {
-        setShowModal(false)
-      }, 1200)
+      // Si algún adjunto no se cargó, la ventana se queda abierta con el aviso:
+      // antes se cerraba sola a los 1,2 s, antes de poder leerlo.
+      const fallaronAdjuntos = subidos < archivosSeleccionados.length
+      if (!fallaronAdjuntos) {
+        setTimeout(() => {
+          setShowModal(false)
+        }, 1200)
+      }
     } catch (e) {
-      setErrorCrear(e instanceof ApiError ? e.message : 'No se pudo crear el contrato.')
+      setErrorCrear(motivoDelServidor(e, 'No se pudo crear el contrato.'))
       setUploadState('review')
     } finally {
       setBusyCrear(false)
@@ -518,13 +632,42 @@ export default function GestionPanel({
         numeroRegistroPresupuestal: edicion.numeroRegistroPresupuestal.trim() || null,
         fechaRegistroPresupuestal: edicion.fechaRegistroPresupuestal || null,
         centroCosto: edicion.centroCosto.trim() || null,
+        enlaceSecop: edicion.enlaceSecop.trim() || null,
+        apoyoSupervision: edicion.apoyoSupervision.trim() || null,
+        fechaDesignacion: edicion.fechaDesignacion || null,
+        correoContratista: edicion.correoContratista.trim() || null,
       })
       await recargarContratos()
       cerrarEdicion()
     } catch (e) {
-      setErrorEditar(e instanceof ApiError ? e.message : 'No se pudo guardar el contrato.')
+      setErrorEditar(motivoDelServidor(e, 'No se pudo guardar el contrato.'))
     } finally {
       setBusyEditar(false)
+    }
+  }
+
+  const abrirAsignacion = (c: ContratoResponse) => {
+    setContratoParaAsignar(c)
+    setSupervisorElegido(c.supervisorId ? String(c.supervisorId) : '')
+    setErrorAsignar('')
+  }
+
+  const guardarAsignacion = async () => {
+    if (!contratoParaAsignar || busyAsignar) return
+    if (!supervisorElegido) {
+      setErrorAsignar('Elija el supervisor.')
+      return
+    }
+    setBusyAsignar(true)
+    setErrorAsignar('')
+    try {
+      await asignarSupervisor(contratoParaAsignar.id, Number(supervisorElegido))
+      await recargarContratos()
+      setContratoParaAsignar(null)
+    } catch (e) {
+      setErrorAsignar(motivoDelServidor(e, 'No se pudo asignar el supervisor.'))
+    } finally {
+      setBusyAsignar(false)
     }
   }
 
@@ -644,7 +787,11 @@ export default function GestionPanel({
                 {lastProcessedContract.supervisor}.
               </div>
             </div>
-            <Chip text="Asignado" type="done" />
+            {lastProcessedContract.supervisor !== '— Sin asignar —' ? (
+              <Chip text="Asignado" type="done" />
+            ) : (
+              <Chip text="Sin supervisor" type="pending" />
+            )}
           </div>
         )}
 
@@ -688,7 +835,22 @@ export default function GestionPanel({
             <span>ACCIONES</span>
           </div>
           {/* Empty state */}
-          {contratos.length === 0 && (
+          {contratos.length === 0 && cargandoContratos && (
+            <div style={{ padding: '40px 16px', textAlign: 'center', fontSize: 12.5, color: 'var(--text-muted)' }}>
+              Consultando los contratos…
+            </div>
+          )}
+          {contratos.length === 0 && !cargandoContratos && errorContratos && (
+            <div role="alert" style={{ padding: '32px 16px', textAlign: 'center' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+                {errorContratos}
+              </div>
+              <button className="btn-ghost" onClick={reintentarContratos} style={{ padding: '6px 14px', fontSize: 12 }}>
+                Reintentar
+              </button>
+            </div>
+          )}
+          {contratos.length === 0 && !cargandoContratos && !errorContratos && (
             <div style={{ padding: '40px 16px', textAlign: 'center' }}>
               <IconClipboardList size={26} style={{ opacity: 0.5, margin: '0 auto 8px' }} />
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
@@ -763,6 +925,16 @@ export default function GestionPanel({
                 >
                   Editar
                 </button>
+                {supervisores.length > 0 && (
+                  <button
+                    className="btn-ghost"
+                    onClick={() => abrirAsignacion(c.contrato)}
+                    style={{ padding: '5px 10px', fontSize: 11.5 }}
+                    title={`Asignar o cambiar el supervisor de ${c.id}`}
+                  >
+                    {c.contrato.supervisorId ? 'Cambiar supervisor' : 'Asignar supervisor'}
+                  </button>
+                )}
                 {/* Solo desde BORRADOR: es la única transición de contrato que el
                     backend tiene confirmada (TransicionesDeEstado.validarContrato
                     cierra «volver a BORRADOR» y deja el resto sin definir). Lo que
@@ -828,7 +1000,7 @@ export default function GestionPanel({
                   Haga clic para seleccionar uno o varios documentos
                   <br />
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    PDF o Word (.docx) — max 20 MB cada uno, hasta 6 archivos
+                    PDF o Word (.docx) — hasta 6 archivos y 20 MB entre todos
                   </span>
                 </p>
               </div>
@@ -838,10 +1010,9 @@ export default function GestionPanel({
                 al contrato de todas formas, se analicen o no.
               </p>
               <p style={{ color: 'var(--accent)', fontSize: 11, marginTop: 8, textAlign: 'center', fontWeight: 600 }}>
-                Recomendado: cargue solo el Acta de Inicio y/o la notificación del supervisor — son los que realmente
-                traen datos del contrato. El Manual de Supervisión y los formatos en blanco (GCCON-F-031, etc.) no
-                aportan datos y son documentos largos que pueden tardar 10+ minutos cada uno en esta máquina sin
-                encontrar nada útil.
+                Recomendado: cargue el acto de designación (GCCON-F-032) y, si ya lo tiene, el Acta de Inicio firmada:
+                de ahí salen el enlace del SECOP, el apoyo, la fecha de inicio, el registro presupuestal y el correo del
+                contratista. El Manual de Supervisión y los formatos en blanco no aportan datos.
               </p>
               <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 8, textAlign: 'center' }}>
                 Si el documento rotula sus datos (como el Acta de Inicio GCCON-F-018), la lectura es inmediata; si no,
@@ -924,8 +1095,13 @@ export default function GestionPanel({
                     </div>
                   ))}
                   <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.5 }}>
-                    Estos datos vienen del documento cargado, no de un catálogo — revise y corrija lo que haga falta en
-                    el siguiente paso.
+                    {completadoDesdeSecop.length === 0
+                      ? 'Estos datos vienen del documento cargado, no de un catálogo — revise y corrija lo que haga falta en el siguiente paso.'
+                      : `Estos datos vienen del documento cargado y, los que el documento no traía (${completadoDesdeSecop
+                          .map((c) => CAMPO_SECOP[c] ?? c)
+                          .join(
+                            ', ',
+                          )}), de los datos abiertos del SECOP II — revise y corrija lo que haga falta en el siguiente paso.`}
                   </p>
                   <div
                     style={{
@@ -1070,17 +1246,19 @@ export default function GestionPanel({
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo de contrato</div>
                   <select value={tipo} onChange={(e) => setTipo(e.target.value)}>
+                    <option value="">— Sin especificar —</option>
                     {CONTRACT_TYPES.map((t) => (
                       <option key={t}>{t}</option>
                     ))}
                   </select>
                   <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
-                    Todos los contratos siguen las mismas 6 etapas del GCCON-P-010.
+                    Todos los contratos siguen las mismas 6 etapas; la 1 y la 2 son las del proceso real del supervisor.
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Centro de costo</div>
                   <select value={centro} onChange={(e) => setCentro(e.target.value)}>
+                    <option value="">— Sin especificar —</option>
                     {CENTROS_COSTO.map((c) => (
                       <option key={c}>{c}</option>
                     ))}
@@ -1089,13 +1267,22 @@ export default function GestionPanel({
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Supervisor asignado</div>
                   <select value={supervisor} onChange={(e) => setSupervisor(e.target.value)}>
-                    {supervisores.length === 0 && <option value="">— Sin asignar —</option>}
+                    <option value="">
+                      {supervisores.length === 0 ? '— Sin asignar —' : '— Elija el supervisor —'}
+                    </option>
                     {supervisores.map((s) => (
                       <option key={s.id} value={String(s.id)}>
                         {s.nombre}
                       </option>
                     ))}
                   </select>
+                  {extraccion?.supervisorDesignado && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
+                      La designación nombra a: <strong>{extraccion.supervisorDesignado}</strong>
+                      {!supervisores.some((s) => mismaPersona(s.nombre, extraccion.supervisorDesignado ?? '')) &&
+                        ' — no coincide con ningún supervisor de SICOT; elíjalo a mano o pídale al Administrador que le cree la cuenta.'}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1118,7 +1305,7 @@ export default function GestionPanel({
               <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
                 <button
                   className="btn-ghost"
-                  onClick={() => setUploadState('idle')}
+                  onClick={openUpload}
                   style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
                 >
                   ✗ Rechazar
@@ -1166,7 +1353,7 @@ export default function GestionPanel({
                 >
                   {adjuntosSubidos === archivosSeleccionados.length
                     ? `${adjuntosSubidos} documento${adjuntosSubidos === 1 ? '' : 's'} adjunto${adjuntosSubidos === 1 ? '' : 's'} al contrato.`
-                    : `Se adjuntaron ${adjuntosSubidos} de ${archivosSeleccionados.length} documentos. Los demás no se pudieron cargar; vuelva a intentarlo desde el contrato.`}
+                    : `Se adjuntaron ${adjuntosSubidos} de ${archivosSeleccionados.length} documentos. El contrato quedó creado; los demás no se pudieron cargar (revise su tamaño y su tipo).`}
                 </p>
               )}
             </div>
@@ -1286,6 +1473,77 @@ export default function GestionPanel({
       )}
 
       {/* Activación del contrato (PATCH /api/contratos/{id}/estado) */}
+      {/* Hasta el 18-10-2026 no había dónde asignar o cambiar el supervisor de
+          un contrato ya creado: uno que nació sin él se quedaba para siempre en
+          la etapa 1, y un supervisor que se iba no se podía desactivar. */}
+      {contratoParaAsignar && (
+        <Modal
+          title={contratoParaAsignar.supervisorId ? 'Cambiar el supervisor' : 'Asignar el supervisor'}
+          onClose={() => setContratoParaAsignar(null)}
+          width={460}
+        >
+          <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+            Contrato <strong>{contratoParaAsignar.numeroContrato}</strong>
+            {contratoParaAsignar.supervisorNombre
+              ? `, hoy a cargo de ${contratoParaAsignar.supervisorNombre}.`
+              : ', todavía sin supervisor.'}
+          </p>
+          <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
+            SICOT le avisa al supervisor que elija y, si el contrato no tenía, da por hecha la designación (paso 1).
+          </p>
+          <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+            Supervisor
+            <select
+              value={supervisorElegido}
+              onChange={(e) => setSupervisorElegido(e.target.value)}
+              style={{ display: 'block', width: '100%', marginTop: 4 }}
+            >
+              <option value="">— Elija el supervisor —</option>
+              {supervisores.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.nombre}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {errorAsignar && (
+            <div
+              role="alert"
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                border: '1px solid var(--chip-red)',
+                background: 'var(--chip-red-bg)',
+                borderRadius: 8,
+                fontSize: 12.5,
+                color: 'var(--text-primary)',
+              }}
+            >
+              {errorAsignar}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+            <button
+              className="btn-ghost"
+              onClick={() => setContratoParaAsignar(null)}
+              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="btn-green"
+              onClick={guardarAsignacion}
+              disabled={busyAsignar}
+              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+            >
+              {busyAsignar ? 'Asignando…' : 'Guardar'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {contratoParaActivar && (
         <Modal title="Activar el contrato" onClose={() => setContratoParaActivar(null)} width={460}>
           <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>

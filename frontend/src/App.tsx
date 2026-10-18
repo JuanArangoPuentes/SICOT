@@ -128,6 +128,9 @@ function AppInner() {
   // lo reemplaza al cargar las etapas del contrato asignado.
   const [steps, setSteps] = useState<Step[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Desde la pantalla de acceso se abre en «Servidor»: es lo primero que hay
+  // que escribir en una instalación nueva del APK o del instalador.
+  const [seccionDeAjustes, setSeccionDeAjustes] = useState<'presets' | 'servidor'>('presets')
   const [tourActive, setTourActive] = useState(false)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [contrato, setContrato] = useState<ContratoResponse | null>(null)
@@ -327,7 +330,13 @@ function AppInner() {
               session ? (
                 <Navigate to={rutaDeRol(session)} replace />
               ) : (
-                <LoginScreen onLogin={handleLogin} onOpenSettings={() => setSettingsOpen(true)} />
+                <LoginScreen
+                  onLogin={handleLogin}
+                  onOpenSettings={() => {
+                    setSeccionDeAjustes('servidor')
+                    setSettingsOpen(true)
+                  }}
+                />
               )
             }
           />
@@ -384,7 +393,14 @@ function AppInner() {
         </Routes>
       </Suspense>
 
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Settings
+        open={settingsOpen}
+        initialSection={seccionDeAjustes}
+        onClose={() => {
+          setSettingsOpen(false)
+          setSeccionDeAjustes('presets')
+        }}
+      />
 
       {!enLogin && session && (
         <AvatarLayer

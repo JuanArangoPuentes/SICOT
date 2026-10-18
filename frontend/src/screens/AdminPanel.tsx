@@ -136,8 +136,9 @@ export default function AdminPanel({
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, activo: actualizado.activo } : x)))
       cargarSeguimiento()
-    } catch {
-      setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
+    } catch (e) {
+      // El motivo del servidor dice qué hacer («tiene asignados 2 contratos en curso: reasígnelos…»).
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo cambiar el estado de ${u.nombre}.`)
     }
   }
 
@@ -149,8 +150,8 @@ export default function AdminPanel({
       // El seguimiento dice qué supervisores tienen firma: sin recargarlo,
       // seguía diciendo «Sin firma electrónica» después de asignarla.
       cargarSeguimiento()
-    } catch {
-      setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
+    } catch (e) {
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo cambiar el estado de la firma de ${f.usuario}.`)
     }
   }
 
@@ -160,8 +161,8 @@ export default function AdminPanel({
     try {
       await eliminarFormato(f.id)
       setFormatos((fs) => fs.filter((x) => x.id !== f.id))
-    } catch {
-      setErrorAccion(`No se pudo eliminar el formato ${f.codigo}.`)
+    } catch (e) {
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo eliminar el formato ${f.codigo}.`)
     }
   }
 

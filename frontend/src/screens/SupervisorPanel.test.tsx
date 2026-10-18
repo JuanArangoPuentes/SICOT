@@ -28,20 +28,28 @@ vi.mock('@/services/alertaService', () => ({
   getAlertasContrato: vi.fn(),
   marcarAlertaLeida: vi.fn(),
 }))
-vi.mock('@/services/documentoService', () => ({
-  getDocumentosContrato: vi.fn(),
-  generarDocumento: vi.fn(),
-  firmarDocumento: vi.fn(),
-  // Se simula aunque ninguna prueba lo compruebe: el panel lo dispara al abrir
-  // el contrato y, sin simular, la prueba saldría a la red de verdad a un
-  // backend que aquí no existe.
-  precalentarCopiloto: vi.fn(),
-  preguntarCopiloto: vi.fn(),
-  verificarIntegridad: vi.fn(),
-  descargarDocumento: vi.fn(),
-  verBorrador: vi.fn(),
-  getPlantillasDocumento: vi.fn(),
-}))
+vi.mock('@/services/documentoService', () => {
+  const preguntarCopiloto = vi.fn()
+  return {
+    getDocumentosContrato: vi.fn(),
+    generarDocumento: vi.fn(),
+    firmarDocumento: vi.fn(),
+    // Se simula aunque ninguna prueba lo compruebe: el panel lo dispara al abrir
+    // el contrato y, sin simular, la prueba saldría a la red de verdad a un
+    // backend que aquí no existe.
+    precalentarCopiloto: vi.fn(),
+    preguntarCopiloto,
+    // La respuesta en vivo, como la daría un servidor sin ella: la misma
+    // pregunta de siempre. Función simple y no vi.fn(): así la conserva el
+    // restoreAllMocks de setup.ts.
+    preguntarCopilotoEnVivo: (contratoId: number, pregunta: string, historial?: unknown, opciones?: unknown) =>
+      preguntarCopiloto(contratoId, pregunta, historial, opciones),
+    verificarIntegridad: vi.fn(),
+    descargarDocumento: vi.fn(),
+    verBorrador: vi.fn(),
+    getPlantillasDocumento: vi.fn(),
+  }
+})
 vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
 }))
@@ -617,7 +625,9 @@ describe('SupervisorPanel', () => {
     await firmarActa()
 
     expect(
-      screen.getByText(/no pude generar «Certificación de cumplimiento»: las notas del supervisor no pueden superar 4000 caracteres/i),
+      screen.getByText(
+        /no pude generar «Certificación de cumplimiento»: las notas del supervisor no pueden superar 4000 caracteres/i,
+      ),
     ).toBeInTheDocument()
   })
 
@@ -663,7 +673,9 @@ describe('SupervisorPanel', () => {
   // de la tabla quedaban firmados sin que nadie abriera el PDF.
   it('un documento sin observaciones también se revisa, con su borrador completo, y no se firma sin «Firmar»', async () => {
     const { documentos } = await prepararRedaccion()
-    documentos.generarDocumento.mockResolvedValue(generado({ nombre: 'Certificación de cumplimiento — CTMA-2026-0184' }))
+    documentos.generarDocumento.mockResolvedValue(
+      generado({ nombre: 'Certificación de cumplimiento — CTMA-2026-0184' }),
+    )
     documentos.verBorrador.mockResolvedValue('abierto')
     await montar({ vista: 'contrato', contrato: contrato(), steps: pasoConActa() })
 
