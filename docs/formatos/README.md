@@ -1,9 +1,18 @@
 # Formatos oficiales que genera SICOT
 
-SICOT genera cinco documentos formales para el supervisor. Desde el 28-09-2026
-cada uno reproduce el formato oficial del SENA que el Centro Tecnológico del
-Mobiliario usa de verdad: mismo encabezado, mismas tablas, mismos textos fijos,
-mismo pie con código y versión. Este documento dice de dónde sale cada cosa,
+SICOT genera cuatro documentos formales para el supervisor —el Informe de
+Supervisión, el Acta de Recibo, la Certificación de cumplimiento y el Informe
+Final—. Desde el 28-09-2026 cada uno reproduce el formato oficial del SENA que el
+Centro Tecnológico del Mobiliario usa de verdad: mismo encabezado, mismas
+tablas, mismos textos fijos, mismo pie con código y versión.
+
+El Acta de Inicio (GCCON-F-018) sigue en el catálogo con su formato, pero desde
+el 15-10-2026 SICOT ya no la genera para el supervisor: la elabora Contratación,
+llega por correo y el supervisor la carga firmada en el paso 2.1 (proceso real,
+`docs/producto/PROCESO_REAL_EN_SICOT.md`). El formato se conserva porque lo usan
+las pruebas de fidelidad del PDF y las actas de los **documentos de prueba**
+que acompañan cada versión
+(`backend/src/test/java/co/sena/sicot/herramientas/GeneradorDeDocumentosDePruebaTest.java`). Este documento dice de dónde sale cada cosa,
 para que quien toque `RedactorDeDocumentos`, `PdfInstitucional` o
 `PlantillaDocumentoIA` no tenga que volver a medir los originales.
 

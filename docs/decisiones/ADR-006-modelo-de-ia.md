@@ -258,3 +258,56 @@ medición del 14 de septiembre, seguía en el prompt.
 
 Coste: cero inferencias nuevas. Las órdenes y los datos del contrato se
 responden en milisegundos y funcionan con Ollama apagado.
+
+---
+
+## Revisión — 18 de octubre de 2026: un prompt de la mitad y la respuesta en vivo
+
+Esta revisión **no cambia el modelo**: `qwen2.5:7b` sigue siendo el del Copiloto.
+Cambia cuánto lee en cada pregunta y cuándo empieza a verse la respuesta.
+
+### Lo que se midió
+
+En el portátil del Centro (i5-10210U, 4 núcleos, sin GPU, 16 GB con Docker y el
+navegador abiertos), con el prompt real del Copiloto y diez preguntas abiertas
+de supervisión (de dónde sale la póliza, qué hacer con una entrega incompleta,
+la PILA, la factura, el acta firmada en papel, una orden de marcar, un dato que
+el contrato no tiene, muebles dañados, un saludo, informe final frente a acta de
+liquidación):
+
+| Modelo y prompt | Primera pregunta (frío) | Siguientes | Calidad |
+| --- | --- | --- | --- |
+| `qwen2.5:7b`, prompt de entonces (3227 tokens) | **507 s** (436 s solo leyendo) | ~107 s | correcta |
+| `qwen2.5:7b`, prompt compacto (1321 tokens) | **216 s** | **10-40 s** | buena, con errores menores |
+| `qwen2.5:3b`, prompt compacto | 96 s | 9-16 s | **mala**: «marcaré como completado», la PILA a la Unidad de Gestión Contractual, que el acta de liquidación «está en el Oficio de Pago» |
+| `qwen3:4b-instruct`, prompt compacto | 107 s | 23-50 s | regular: inventó un campo «Fecha de envío»; no escribe más rápido que el de 7B en esta CPU |
+
+El prompt había crecido de 1545 a 3227 tokens con las reglas que se le fueron
+añadiendo (no ejecutar, la delimitación de los datos, el cronograma) y con las
+21 subetapas repetidas con su estado. Leerlo es lo que cuesta en CPU, y se paga
+entero la primera vez de cada contrato.
+
+### La decisión
+
+1. **Prompt compacto.** Las mismas reglas en `INSTRUCCIONES`, el proceso real de
+   21 sub-pasos escrito una vez, y el estado del contrato en pocas líneas: cada
+   paso con su estado y solo los sub-pasos del que está en curso. Va primero lo
+   que no cambia nunca, para que la caché del prefijo de Ollama lo reutilice
+   entre preguntas.
+2. **Respuesta en vivo** (`POST /copiloto/chat/en-vivo`, NDJSON). El modelo
+   escribe a unos 3 tokens por segundo: una respuesta de 80 tokens tarda medio
+   minuto, y antes se miraba «Pensando…» todo ese rato. Ahora se ve formarse.
+   El servidor manda además un aviso cada 10 s mientras el modelo lee el
+   contrato, para que un intermediario que corta a los 60-100 s sin datos
+   (nginx, Cloudflare) no corte la respuesta.
+3. **No se baja de modelo.** El de 3B es el doble de rápido pero se equivoca en
+   la mitad de las preguntas abiertas, que son justo las que llegan al modelo:
+   las de respuesta fija ya las contestan los atajos en milisegundos.
+
+### Cuándo revisar
+
+- Si el equipo del servidor tiene GPU o más núcleos: con el mismo conjunto de
+  diez preguntas se puede volver a medir un modelo mayor.
+- Si aparece un modelo pequeño que pase las diez preguntas sin errores: el
+  conjunto y el arnés de medición están descritos arriba; las preguntas son las
+  de esta tabla.

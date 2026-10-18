@@ -82,7 +82,8 @@ class GeneradorDeDocumentosDePruebaTest {
                     : null;
             List<BloqueDocumento> bloques = RedactorDeDocumentos.componer(p, c, LocalDate.of(2026, 11, 20),
                     observaciones, datosDeEjemplo(p), tablasDeEjemplo(p));
-            Files.write(muestras.resolve("muestra-" + p.codigo().replace(' ', '_') + "-" + clave.toLowerCase() + ".pdf"),
+            String codigo = p.codigo().startsWith("PENDIENTE") ? "sin-codigo-oficial" : p.codigo();
+            Files.write(muestras.resolve("muestra-" + codigo + "-" + clave.toLowerCase().replace('_', '-') + ".pdf"),
                     escritor.generar(documento(p, c, bloques)));
         }
     }
@@ -92,10 +93,59 @@ class GeneradorDeDocumentosDePruebaTest {
                 c.getSupervisor().getNombre(), ORIGEN, bloques, c.getSupervisor().getId());
     }
 
+    /**
+     * Los datos que el formulario le pide al supervisor, coherentes con el
+     * primer contrato de prueba. Los ejemplos de cada campo son de otro
+     * contrato (fechas de 2025, otra empresa como titular de la cuenta) y una
+     * muestra armada con ellos se contradecía a sí misma.
+     */
+    private static final Map<String, String> DATOS_DEL_CONTRATO_DE_PRUEBA = Map.ofEntries(
+            Map.entry("fechaSuscripcion", "14/10/2026"),
+            Map.entry("fechaAprobacionGarantias", "16/10/2026"),
+            Map.entry("cedulaSupervisor", "43.512.908"),
+            Map.entry("cedulaRepresentante", "71.654.320"),
+            Map.entry("formaDePago", "Un único pago, previa entrega a satisfacción de los bienes y presentación de la "
+                    + "factura electrónica."),
+            Map.entry("prorroga", "N/A"),
+            Map.entry("adicion", "N/A"),
+            Map.entry("informeNumero", "1"),
+            Map.entry("periodoDesde", "21/10/2026"),
+            Map.entry("periodoHasta", "20/11/2026"),
+            Map.entry("fechaExpedicionPoliza", "15/10/2026"),
+            Map.entry("numeroFactura", "FE 1024"),
+            Map.entry("fechaFactura", "18/11/2026"),
+            Map.entry("valorFacturado", "$38.450.000,00"),
+            Map.entry("valorFactura", "$38.450.000,00"),
+            Map.entry("valorEjecutado", "$38.450.000,00"),
+            Map.entry("periodoSeguridadSocial", "Noviembre de 2026"),
+            Map.entry("numeroPlanilla", "9445612301"),
+            Map.entry("fechaPlanilla", "10/11/2026"),
+            Map.entry("actaNumero", "1"),
+            Map.entry("cantidadDevolutivos", "0"),
+            Map.entry("cantidadConsumo", "420"),
+            Map.entry("titularCuenta", "MADERAS DEL VALLE DE ABURRÁ S.A.S."),
+            Map.entry("saldoPorEjecutar", "$0,00"),
+            Map.entry("valorAObligar", "$38.450.000,00"),
+            Map.entry("numeroCdp", "726"),
+            Map.entry("fechaCdp", "01/09/2026"),
+            Map.entry("valorFinal", "$38.450.000,00"),
+            Map.entry("fechaTerminacionFinal", "18/12/2026"),
+            Map.entry("terminacionAnticipada", "N/A"),
+            Map.entry("valorTotalPagado", "$38.450.000,00"),
+            Map.entry("valorTotalEjecutado", "$38.450.000,00"),
+            Map.entry("apoyoSupervision", "Yeison Andrés Zapata Gómez"),
+            Map.entry("fechaDesignacion", "10/10/2026"),
+            Map.entry("fechaCertificadoPagos", "15/12/2026"));
+
+    /** Sin estos dos, el documento toma el valor y la fecha del contrato, que es lo correcto sin adiciones. */
+    private static final List<String> SE_DEJAN_AL_CONTRATO = List.of("valorActual", "fechaTerminacionActual");
+
     private static Map<String, String> datosDeEjemplo(PlantillaDocumentoIA p) {
         Map<String, String> datos = new LinkedHashMap<>();
         for (CampoDelDocumento campo : p.campos()) {
-            datos.put(campo.clave(), campo.ejemplo());
+            if (!SE_DEJAN_AL_CONTRATO.contains(campo.clave())) {
+                datos.put(campo.clave(), DATOS_DEL_CONTRATO_DE_PRUEBA.getOrDefault(campo.clave(), campo.ejemplo()));
+            }
         }
         return datos;
     }
@@ -117,7 +167,7 @@ class GeneradorDeDocumentosDePruebaTest {
                         "MADERAS DEL VALLE DE ABURRÁ S.A.S.", "901.234.567-1", "LUISA FERNANDA OSORIO MEJÍA",
                         "Paola Andrea Mejía Ríos", "56901", "2026-10-02",
                         "43.512.908", "Medellín-Antioquia", "71.654.320", "2026-10-15",
-                        "ventas@maderasaburra.com.co", "2026-10-20"),
+                        "ventas@maderasaburra.com.co", "2026-10-20", "Dos (02) meses"),
                 caso("02-acta-inicio-compraventa-maquinaria.pdf", 2L, "CO1.PCCNTR.99000102",
                         "Compraventa de una sierra escuadradora industrial y una canteadora automática con su "
                                 + "instalación, puesta en marcha y capacitación para el taller de carpintería del Centro",
@@ -125,7 +175,7 @@ class GeneradorDeDocumentosDePruebaTest {
                         "INDUSTRIAS TECNOMADERA LTDA.", "900.876.543-2", "CARLOS ANDRÉS RESTREPO GIRALDO",
                         "Jorge Iván Cardona Vélez", "57022", "2026-10-09",
                         "98.587.121", "Envigado-Antioquia", "8.402.117", "2026-10-28",
-                        "contratos@tecnomadera.co", "2026-11-03"),
+                        "contratos@tecnomadera.co", "2026-11-03", "Cuatro (04) meses"),
                 caso("03-acta-inicio-mantenimiento-equipos.pdf", 3L, "CO1.PCCNTR.99000103",
                         "Prestación del servicio de mantenimiento preventivo y correctivo, con suministro de "
                                 + "repuestos, para los equipos de los talleres de mobiliario y del laboratorio de acabados",
@@ -134,7 +184,7 @@ class GeneradorDeDocumentosDePruebaTest {
                         "SANTIAGO ALBERTO HENAO PÉREZ",
                         "Paola Andrea Mejía Ríos", "56988", "2026-10-06",
                         "43.512.908", "Itagüí-Antioquia", "1.036.622.904", "2026-10-22",
-                        "gerencia@stiantioquia.com", "2026-10-26"),
+                        "gerencia@stiantioquia.com", "2026-10-26", "Seis (06) meses"),
                 caso("04-acta-inicio-suministro-herrajes.pdf", 4L, "CO1.PCCNTR.99000104",
                         "Suministro de herrajes, tornillería, bisagras de cazoleta y correderas telescópicas para "
                                 + "las prácticas de ensamble del programa de Tecnología en Diseño de Mobiliario",
@@ -142,7 +192,7 @@ class GeneradorDeDocumentosDePruebaTest {
                         "FERRETERÍA Y HERRAJES LA 80 S.A.S.", "900.112.334-5", "MARÍA CAMILA ZULUAGA ARANGO",
                         "Jorge Iván Cardona Vélez", "57110", "2026-10-30",
                         "98.587.121", "Bello-Antioquia", "1.017.255.680", "2026-11-05",
-                        "comercial@herrajesla80.com", "2026-11-10"),
+                        "comercial@herrajesla80.com", "2026-11-10", "Un (01) mes"),
                 caso("05-acta-inicio-suministro-pinturas-acabados.pdf", 5L, "CO1.PCCNTR.99000105",
                         "Suministro de lacas, sellantes, tintes, solventes y elementos de protección para el "
                                 + "laboratorio de acabados del Centro Tecnológico del Mobiliario",
@@ -150,7 +200,7 @@ class GeneradorDeDocumentosDePruebaTest {
                         "QUÍMICOS Y ACABADOS DEL SUR S.A.S.", "901.678.901-3", "ANDRÉS FELIPE MARÍN TORO",
                         "Paola Andrea Mejía Ríos", "57203", "2026-11-04",
                         "43.512.908", "Sabaneta-Antioquia", "15.380.441", "2026-11-12",
-                        "pedidos@quimicosdelsur.com.co", "2026-11-17"),
+                        "pedidos@quimicosdelsur.com.co", "2026-11-17", "Veinticuatro (24) días"),
                 caso("06-acta-inicio-dotacion-mobiliario-aulas.pdf", 6L, "CO1.PCCNTR.99000106",
                         "Adquisición e instalación de mobiliario escolar ergonómico (mesas, sillas y tableros) para "
                                 + "cuatro aulas de formación del Centro, incluido el transporte y el retiro del mobiliario antiguo",
@@ -158,14 +208,14 @@ class GeneradorDeDocumentosDePruebaTest {
                         "MOBILIARIO CORPORATIVO ANDINO S.A.S.", "900.345.678-9", "DIANA MARCELA LÓPEZ CASTAÑO",
                         "Jorge Iván Cardona Vélez", "57288", "2026-11-11",
                         "98.587.121", "Rionegro-Antioquia", "39.442.016", "2026-11-19",
-                        "licitaciones@mobiliarioandino.com", "2026-11-24"));
+                        "licitaciones@mobiliarioandino.com", "2026-11-24", "Dos (02) meses"));
     }
 
     private static Caso caso(String archivo, long id, String numero, String objeto, String valor, String tipo,
                              String inicio, String fin, String contratista, String nit, String representante,
                              String supervisor, String registro, String fechaRegistro, String cedulaSupervisor,
                              String expedicion, String cedulaRepresentante, String fechaGarantias, String correo,
-                             String fechaDelActa) {
+                             String fechaDelActa, String plazo) {
         Usuario s = new Usuario();
         s.setId(100L + id);
         s.setNombre(supervisor);
@@ -185,6 +235,7 @@ class GeneradorDeDocumentosDePruebaTest {
         c.setNumeroRegistroPresupuestal(registro);
         c.setFechaRegistroPresupuestal(LocalDate.parse(fechaRegistro));
         c.setCorreoContratista(correo);
+        c.setCentroCosto("920510 — Centro Tecnológico del Mobiliario");
         c.setSupervisor(s);
         Map<String, String> datos = new LinkedHashMap<>();
         datos.put("cedulaSupervisor", cedulaSupervisor);
@@ -193,6 +244,8 @@ class GeneradorDeDocumentosDePruebaTest {
         datos.put("fechaAprobacionGarantias", LocalDate.parse(fechaGarantias)
                 .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")));
         datos.put("correoContratista", correo);
+        // En letras, como lo escribe el acta real («6 Meses»), y no deducido de las fechas.
+        datos.put("plazo", plazo);
         return new Caso(archivo, c, datos, LocalDate.parse(fechaDelActa));
     }
 }

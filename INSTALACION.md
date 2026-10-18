@@ -220,8 +220,8 @@ servicios en producción basta `docker compose restart` o `down` sin `-v`.
 ## La aplicación de escritorio del supervisor
 
 Este paquete monta el **servidor**. El supervisor no lo necesita: a él se le
-entrega el instalador `SICOT_0.3.0_x64-setup.exe`, publicado como asset aparte
-en esta misma versión.
+entrega el instalador `SICOT_<versión>_x64-setup.exe`, publicado como asset
+aparte en esta misma versión.
 
 Esa aplicación es la misma SICOT en su propia ventana, y habla con el servidor
 que usted acaba de montar. **Requiere conexión**: no funciona sin red, y es una
@@ -238,6 +238,26 @@ volver a publicarlo ni a reinstalar nada en los equipos.
 Windows advertirá de un «editor desconocido» al instalarlo. Es esperable: el
 instalador todavía no está firmado con un certificado de código, que es de
 pago. Se continúa con *Más información → Ejecutar de todas formas*.
+
+**Si el servidor usa el certificado propio de Caddy** (el caso más probable en
+un Centro, ver ADR-009), el equipo del supervisor tiene que confiar en él, igual
+que el teléfono. La aplicación de escritorio usa el almacén de certificados de
+Windows y, a diferencia de un navegador, no muestra una página de advertencia
+que aceptar: sin la raíz instalada, el acceso falla y SICOT lo dice. Una vez por
+equipo, con el archivo `raiz-sicot.crt` del apartado del teléfono:
+
+- doble clic en el archivo → **Instalar certificado** → **Usuario actual** →
+  **Colocar todos los certificados en el siguiente almacén** → **Entidades de
+  certificación raíz de confianza** → Aceptar el aviso de seguridad; o
+- en PowerShell, sin permisos de administrador:
+  `certutil -user -addstore Root raiz-sicot.crt`.
+
+Después se cierra y se vuelve a abrir SICOT. Con un dominio con certificado
+público, nada de esto hace falta.
+
+Para probar la aplicación en otro computador de la misma red contra el portátil
+de desarrollo (sin certificado, por `http://`), ver
+[`docs/operacion/PROBAR_EN_OTRO_DISPOSITIVO.md`](docs/operacion/PROBAR_EN_OTRO_DISPOSITIVO.md).
 
 Para compilarlo usted mismo, el empaquetado vive en `frontend/src-tauri/` y
 está documentado en [`README.md`](README.md); exige la cadena de Rust y las
