@@ -85,6 +85,18 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                         .content("{\"estado\":\"COMPLETADA\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Acta de Inicio firmada")));
+        // Dos piezas de la evidencia del envío, aunque una sea PDF, no son el
+        // acta: hasta el 18-10-2026 con eso el paso se cerraba sin ella.
+        cargarConNombre(contratoId, pasoDelActaId, supervisorToken, "correo.pdf", "application/pdf",
+                "%PDF-1.4 correo enviado".getBytes(), "Evidencia del envío del acta");
+        cargarConNombre(contratoId, pasoDelActaId, supervisorToken, "respuesta.pdf", "application/pdf",
+                "%PDF-1.4 respuesta de contratacion".getBytes(), "Evidencia del envío del acta (2)");
+        mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDelActaId)
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"COMPLETADA\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("falta el acta firmada")));
         cargar(contratoId, pasoDelActaId, supervisorToken, "acta-firmada.pdf", "application/pdf",
                 "%PDF-1.4 acta firmada".getBytes());
         cargar(contratoId, pasoDelActaId, supervisorToken, "correo-enviado.png", "image/png",
@@ -139,6 +151,17 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                         .multipart("/api/contratos/{id}/documentos", contratoId)
                         .file(new org.springframework.mock.web.MockMultipartFile("archivo", nombre, tipo, bytes))
                         .param("subetapaId", String.valueOf(subetapaId))
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isCreated());
+    }
+
+    private void cargarConNombre(long contratoId, long subetapaId, String token, String archivo, String tipo,
+                                 byte[] bytes, String nombre) throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .multipart("/api/contratos/{id}/documentos", contratoId)
+                        .file(new org.springframework.mock.web.MockMultipartFile("archivo", archivo, tipo, bytes))
+                        .param("subetapaId", String.valueOf(subetapaId))
+                        .param("nombre", nombre)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isCreated());
     }

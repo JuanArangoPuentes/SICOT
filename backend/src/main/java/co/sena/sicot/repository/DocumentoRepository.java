@@ -111,6 +111,9 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
 
     boolean existsBySubetapaIdAndTipo(Long subetapaId, TipoDocumento tipo);
 
+    /** ¿Hay en el sub-paso un documento de este tipo cuyo nombre no encaja con el patrón? (EtapaService) */
+    boolean existsBySubetapaIdAndTipoAndNombreNotLike(Long subetapaId, TipoDocumento tipo, String patron);
+
     /**
      * Resumen de los documentos de varios contratos, sin contenido binario.
      *

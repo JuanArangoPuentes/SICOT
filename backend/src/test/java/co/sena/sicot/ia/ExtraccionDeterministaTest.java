@@ -579,11 +579,10 @@ class ExtraccionDeterministaTest {
     @Test
     @DisplayName("solo se toma el correo que está junto al contratista, no el primero del documento")
     void unCorreoAjenoNoPasaPorElDelContratista() {
-        // Un acta real (CO1.PCCNTR.7986334) trae antes el correo de seguridad
-        // social; con él, el borrador del paso 2.4 se habría dirigido a un tercero.
+        // Sintético: un correo en otra parte del documento no se toma por el del contratista.
         String acta = """
                 Numero y fecha del registro presupuestal 56725 del 17 de junio de 2025
-                Planilla de seguridad social: seguridadsocialcres@gmail.com
+                Consultas de la planilla: planillas@operador.com.co
 
                 EVENTOS SUPERNOVA S.A.S.
                 NIT. 900.478.852-5,
@@ -592,6 +591,65 @@ class ExtraccionDeterministaTest {
                 """;
 
         assertThat(ExtraccionDeterminista.correoDelContratista(acta)).isEqualTo("contacto@eventossupernova.com");
+    }
+
+    /**
+     * El bloque de firmas del acta real CO1.PCCNTR.7986334, tal como lo da el
+     * PDF y en una sola línea, como lo junta el .docx del mismo acta. Hasta el
+     * 18-10-2026 el .docx no daba ningún correo porque el ancla exigía
+     * comienzo de línea: el mismo documento daba resultados distintos.
+     */
+    @Test
+    @DisplayName("el correo del bloque de firma del contratista sale igual del PDF y del .docx")
+    void elCorreoDelBloqueDeFirmaSaleIgualDelPdfYDelDocx() {
+        String pdf = """
+                LAURA CAROLINA RESTREPO TORO
+                Supervisora
+
+
+                CARLOS MARIO REINA MEJÍA
+                NIT. 900.478.852-5
+                EVENTOS SUPERNOVA S.A.S.
+                Representante Legal
+                seguridadsocialcres@gmail.com
+                """;
+        String docx = "LAURA CAROLINA RESTREPO TORO Supervisora CARLOS MARIO REINA MEJÍA NIT. 900.478.852-5 "
+                + "EVENTOS SUPERNOVA S.A.S. Representante Legal seguridadsocialcres@gmail.com";
+
+        assertThat(ExtraccionDeterminista.correoDelContratista(pdf)).isEqualTo("seguridadsocialcres@gmail.com");
+        assertThat(ExtraccionDeterminista.correoDelContratista(docx)).isEqualTo("seguridadsocialcres@gmail.com");
+    }
+
+    /**
+     * Un GCCON-F-031 en blanco trae «Valor inicial del contrato $00.000.000».
+     * Tomado como valor, llegaba «00000000» a Gestión e impedía completar el
+     * valor real desde el SECOP. En el diligenciado, el valor está rotulado
+     * «VALOR ACTUAL DEL CONTRATO».
+     */
+    @Test
+    @DisplayName("el marcador $00.000.000 de un formato en blanco no es un valor, y se lee VALOR ACTUAL DEL CONTRATO")
+    void elValorEnCeroDeUnFormatoEnBlancoNoEsUnValor() {
+        assertThat(extractor.extraer("Valor inicial del contrato $00.000.000\nPlazo inicial del contrato").valor())
+                .isNull();
+        assertThat(extractor.extraer("""
+                Valor inicial del contrato $00.000.000
+                VALOR ACTUAL DEL CONTRATO 20.600.000 COP
+                """).valor()).isEqualTo("20600000");
+        // Los centavos no se suman a la cifra.
+        assertThat(extractor.extraer("VALOR DEL CONTRATO 20.000.000,00").valor()).isEqualTo("20000000");
+    }
+
+    @Test
+    @DisplayName("lee FECHA DE TERMINACIÓN en mayúsculas y las fechas sin «de» antes del año")
+    void leeLasFechasEnMayusculasYSinDeAntesDelAno() {
+        ExtraccionContratoResponse r = extractor.extraer("""
+                FECHA DE INICIO 12 de junio 2026
+                FECHA DE TERMINACIÓN 15 de julio 2026
+                """);
+
+        assertThat(r.vigenciaInicio()).isEqualTo("2026-06-12");
+        assertThat(r.vigenciaFin()).isEqualTo("2026-07-15");
+        assertThat(extractor.extraer("FECHA DE TERMINACIÓN 15/12/2026").vigenciaFin()).isEqualTo("2026-12-15");
     }
 
     @Test

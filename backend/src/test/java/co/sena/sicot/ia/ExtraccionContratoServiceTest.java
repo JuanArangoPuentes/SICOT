@@ -168,7 +168,7 @@ class ExtraccionContratoServiceTest {
     void elPrimerValorNoNuloGanaYUnNuloPosteriorNoLoPisa() {
         given(pdfTextExtractor.extraerTexto(any())).willReturn(
                 "Manual. Contrato CO1.PCCNTR.7986334 para el Suministro de materiales del lote.",
-                "CONTRATO NRO. CO1.PCCNTR.OTRONUMERO\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n"
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n"
                         + "CC o NIT 900123456-7\nVALOR DEL CONTRATO ($10.000.000 COP)");
         given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
                 "{\"objeto\":\"Suministro de materiales\",\"tipoContrato\":null}",
@@ -568,5 +568,32 @@ class ExtraccionContratoServiceTest {
         assertThat(r.supervisorDesignado()).isEqualTo("Alex Fernando Zapata Rios");
         assertThat(r.valor()).isNull();
         assertThat(r.completadoDesdeSecop()).isEmpty();
+    }
+
+    // ── 18-10-2026: un solo contrato por propuesta y el tipo del SECOP ─────
+
+    @Test
+    void documentosDeContratosDistintosNoSeMezclanEnUnaPropuesta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Numero de contrato CO1.PCCNTR.8151794\n",
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n");
+
+        assertThatThrownBy(() -> servicio.extraer(List.of(pdf("notificacion.pdf"), pdf("acta.pdf"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("contratos distintos")
+                .hasMessageContaining("CO1.PCCNTR.8151794")
+                .hasMessageContaining("CO1.PCCNTR.7986334");
+        verifyNoInteractions(ollamaClient);
+    }
+
+    @Test
+    void elTipoQuePublicaElSecopSeUsaConLosNombresDelFormulario() {
+        assertThat(ExtraccionContratoService.tipoDelSecop("Suministros")).isEqualTo("Suministro de Bienes");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Compraventa")).isEqualTo("Compraventa");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Prestación de servicios")).isEqualTo("Servicios");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Obra")).isEqualTo("Obras");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Arrendamiento de inmuebles")).isEqualTo("Arrendamiento");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Otro")).isNull();
+        assertThat(ExtraccionContratoService.tipoDelSecop(null)).isNull();
     }
 }

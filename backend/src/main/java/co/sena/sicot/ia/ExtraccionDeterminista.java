@@ -135,15 +135,21 @@ public class ExtraccionDeterminista {
 
     /**
      * Dónde empieza a buscarse el correo del contratista: tras el rótulo del
-     * contratista, su NIT o su representante legal. Antes se tomaba el primer
-     * correo del documento que no fuera del SENA, y en un acta real
-     * (CO1.PCCNTR.7986334) eso devolvía «seguridadsocialcres@gmail.com», que no
-     * es del contratista. Con ese dato, el borrador del paso 2.4 se habría
-     * dirigido a un tercero.
+     * contratista, su NIT o su representante legal, también a mitad de línea
+     * (el .docx junta la fila de firmas en una sola). Antes se tomaba el primer
+     * correo del documento que no fuera del SENA, aunque estuviera en otra
+     * parte del acta.
+     *
+     * <p>Corrección del 18-10-2026 a lo que decía aquí: en el acta real
+     * CO1.PCCNTR.7986334 el correo «seguridadsocialcres@gmail.com» va justo
+     * debajo de «Representante Legal», en el bloque de firma del contratista,
+     * igual que el del Lote 4. Por posición es el del contratista, y se
+     * propone; si no lo es, solo Gestión puede saberlo, y por eso el formulario
+     * lo pide confirmar.
      */
     private static final Pattern ANCLA_DEL_CONTRATISTA = Pattern.compile(
-            "^[ \\t]*(?:REPRESENTANTE[ \\t]+LEGAL|CONTRATISTA|NIT\\.?[ \\t])",
-            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+            "\\b(?:REPRESENTANTE\\s+LEGAL|CONTRATISTA|NIT\\.?\\s)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
      * Cuánto texto después del ancla se mira. En el acta del Lote 4 el correo
@@ -191,7 +197,8 @@ public class ExtraccionDeterminista {
      * ahí a la vista.
      */
     private static final Pattern VALOR_ETIQUETA = Pattern.compile(
-            "^[ \\t]*VALOR(?:[ \\t]+(?:TOTAL|DEL[ \\t]+CONTRATO))?[ \\t]*:?[ \\t]*\\$?[ \\t]*(\\d[\\d.,]{4,19})",
+            "^[ \\t]*VALOR(?:[ \\t]+(?:TOTAL|INICIAL|ACTUAL))?(?:[ \\t]+DEL[ \\t]+CONTRATO)?[ \\t]*:?[ \\t]*\\$?[ \\t]*"
+                    + "(\\d[\\d.,]{4,19})",
             Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final Pattern VIGENCIA = Pattern.compile(
@@ -254,7 +261,8 @@ public class ExtraccionDeterminista {
 
     /** «02 de febrero de 2026» → 2026-02-02. */
     private static final Pattern FECHA_EN_LETRAS = Pattern.compile(
-            "(\\d{1,2})\\s+de\\s+(\\p{L}+)\\s+de\\s+(\\d{4})", Pattern.CASE_INSENSITIVE);
+            "(\\d{1,2})\\s+de\\s+(\\p{L}+)\\s+(?:del?\\s+)?(\\d{4})",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /**
      * «11/08/2025» → 2025-08-11. Día primero, que es como se escribe la fecha
@@ -328,7 +336,7 @@ public class ExtraccionDeterminista {
     /** La pareja de {@link #FECHA_INICIO_ETIQUETA} al otro extremo del plazo. */
     private static final Pattern FECHA_FIN_ETIQUETA = Pattern.compile(
             "^[^\\n]*?Fecha\\s+de\\s+(?:terminaci[oó]n|finalizaci[oó]n)[ \\t]*:?[ \\t]*(.{5,60}?)[ \\t]*$",
-            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE);
+            Pattern.MULTILINE | Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
 
     // ── Tercera familia: «Etiqueta: valor» en línea, y la prosa más común ───
@@ -716,8 +724,27 @@ public class ExtraccionDeterminista {
      * deja dudas, y si no está, la fila rotulada del acta.
      */
     private static String valorDelContrato(String texto) {
-        String conSimbolo = soloDigitos(primerGrupo(VALOR, texto, 1));
-        return conSimbolo != null ? conSimbolo : soloDigitos(primerGrupo(VALOR_ETIQUETA, texto, 1));
+        String conSimbolo = primerValorReal(VALOR, texto);
+        return conSimbolo != null ? conSimbolo : primerValorReal(VALOR_ETIQUETA, texto);
+    }
+
+    /**
+     * La primera cifra que no sea solo ceros. Un GCCON-F-031 en blanco trae
+     * «Valor inicial del contrato $00.000.000»: tomado como valor, llegaba
+     * «00000000» al formulario y, como lo leído del documento gana, impedía
+     * completar el valor real desde el SECOP (sondeo del 17-10-2026 sobre los
+     * formatos reales). Los centavos («20.000.000,00») no se suman a la cifra.
+     */
+    private static String primerValorReal(Pattern patron, String texto) {
+        Matcher m = patron.matcher(texto);
+        while (m.find()) {
+            String cifra = m.group(1).replaceFirst(",\\d{1,2}$", "");
+            String digitos = soloDigitos(cifra);
+            if (digitos != null && !digitos.matches("0+")) {
+                return digitos;
+            }
+        }
+        return null;
     }
 
     /**
