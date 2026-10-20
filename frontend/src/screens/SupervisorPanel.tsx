@@ -149,6 +149,13 @@ const porQueNoRespondio = (e: unknown): string => {
   return 'No se pudo completar la consulta al Copiloto. Vuelva a intentarlo en un momento.'
 }
 
+/**
+ * Cada cuánto se le recuerda al backend que el panel sigue abierto. Un tercio
+ * del tiempo que Ollama mantiene el modelo cargado (30 minutos): aunque el
+ * navegador retrase un temporizador de una pestaña de fondo, llega antes.
+ */
+const RENOVAR_COPILOTO_MS = 10 * 60 * 1000
+
 const mensajeDelCopiloto = ({ respuesta, fuente, accion }: ChatResponse): ChatMsg => ({
   role: 'ai',
   text: respuesta,
@@ -529,9 +536,27 @@ export default function SupervisorPanel({
   // Va en su propio efecto, y no dentro del de las etapas, porque no tiene
   // nada que ver con ellas: si mañana cambia cómo se cargan las etapas, esto
   // no debería verse arrastrado.
+  //
+  // Y se repite mientras el panel está abierto. Ollama descarga el modelo a
+  // los 30 minutos sin uso (sicot.ia.keep-alive), y con él la caché: el
+  // 20-10-2026 una pregunta hecha 36 minutos después de abrir el contrato
+  // tardó 224 s. Cada 10 minutos —y al volver a la pestaña o a la aplicación,
+  // que en el teléfono detiene los temporizadores en segundo plano— el backend
+  // mira si el contexto sigue en caché: si sigue, solo renueva la carga del
+  // modelo, en menos de un segundo y sin usar la CPU; si no, lo precalienta.
   useEffect(() => {
     if (!contrato) return
-    precalentarCopiloto(contrato.id)
+    const id = contrato.id
+    precalentarCopiloto(id)
+    const cadaDiezMinutos = window.setInterval(() => precalentarCopiloto(id), RENOVAR_COPILOTO_MS)
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') precalentarCopiloto(id)
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      window.clearInterval(cadaDiezMinutos)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
   }, [contrato])
 
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)

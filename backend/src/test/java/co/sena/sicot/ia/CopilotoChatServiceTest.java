@@ -51,6 +51,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -566,6 +567,33 @@ class CopilotoChatServiceTest {
         assertThat(llamadasAOllama.get())
                 .as("el segundo y el tercero solo servirían para hacer esperar al primero")
                 .isEqualTo(1);
+    }
+
+    /**
+     * 20-10-2026: el panel pide el precalentado cada 10 minutos mientras está
+     * abierto. Si cada vez se precalentara entero, serían ~190 s de CPU cada
+     * diez minutos; con el prefijo aún en caché basta con que Ollama no
+     * descargue el modelo.
+     */
+    @Test
+    @DisplayName("con el contexto aún en caché, el precalentado solo renueva la carga del modelo")
+    void conElContextoEnCacheSoloRenuevaLaCarga() {
+        ArgumentCaptor<String> prefijo = ArgumentCaptor.forClass(String.class);
+        given(ollamaClient.tieneEnCache(prefijo.capture())).willReturn(true);
+
+        servicio.precalentar(1L);
+
+        verify(ollamaClient, timeout(2_000)).mantenerCargado();
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+
+        // Lo que se mira es el comienzo exacto del prompt de una pregunta: si
+        // no lo fuera, nunca coincidiría y se precalentaría siempre entero.
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn("respuesta");
+        servicio.responder(1L, "¿qué riesgos ve?", null);
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(ollamaClient).generar(prompt.capture(), anyBoolean());
+        assertThat(prefijo.getValue()).contains("DATOS DEL CONTRATO").doesNotContain("PREGUNTA DEL SUPERVISOR");
+        assertThat(prompt.getValue()).startsWith(prefijo.getValue());
     }
 
     // ─────────────────────────────────────────────────────────────────────────

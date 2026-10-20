@@ -341,3 +341,67 @@ respuesta en vivo llega igual: avisos cada 10 s, primer texto a los ~20 s.
 - Si aparece un modelo pequeño que pase las diez preguntas sin errores: el
   conjunto y el arnés de medición están descritos arriba; las preguntas son las
   de esta tabla.
+
+---
+
+## Revisión — 20 de octubre de 2026: explicar los pasos no es trabajo del modelo, y el modelo no se descarga con SICOT abierto
+
+Esta revisión tampoco cambia el modelo. Corrige dos cosas que hacían esperar
+minutos al supervisor por preguntas que no los merecían.
+
+### Lo que pasó
+
+En el contrato CO1.PCCNTR.99015001, después de una respuesta del modelo, el
+supervisor escribió «¿y el subpaso 2.3?». Tardó **224 s**. Los registros
+mostraron dos causas que se sumaban:
+
+1. **La pregunta fue al modelo.** La guía (`GuiaDelPasoActual`) contestaba «¿qué
+   se hace en el 2.3?», pero no la referencia a secas ni otras formas
+   corrientes de pedir la explicación de un paso. Explicar qué se hace en cada
+   paso y sub-paso es justo lo que el motor existe para contestar al instante;
+   al modelo le corresponden las preguntas de verdad específicas.
+2. **El modelo ya no estaba cargado.** El contrato se había precalentado al
+   abrirlo, pero entre la última respuesta y esa pregunta pasaron 36 minutos, y
+   Ollama descarga el modelo —y con él la caché del prefijo— a los 30
+   (`sicot.ia.keep-alive`). La pregunta pagó la carga desde el disco y la
+   lectura entera del prompt. Haber dejado SICOT abierto una hora no servía de
+   nada: el precalentado no se acumula, vive mientras el modelo siga cargado.
+
+Para dimensionar lo primero: la misma batería, enviada al modelo, contestó que
+el CRP es un «Contrato de Riesgo Proyectado» y que el 1.2 consiste en avisar a
+SST. Las respuestas exactas ya estaban en la base.
+
+### La decisión
+
+- **La guía contesta cualquier pregunta corta que nombre un paso o un
+  sub-paso y pida explicarlo, o solo lo nombre**: por número («el 2.3», «¿cómo
+  hago el 2.4?», «¿quién hace el 1.2?»), por el nombre del paso («explícame la
+  inspección», «¿en qué consiste el cierre?») o por lo que se hace en el
+  sub-paso («¿cómo tomo la foto?», «¿qué es el CRP?», «¿y lo de la bodega?»).
+  El sub-paso por nombre se busca en los nombres del contrato, como en
+  `FichaDelInsumo`: un contrato de antes del 15-10-2026 que no lo tenga no
+  recibe el paso en curso, sigue su camino.
+- **Lo que trae un caso sigue yendo al modelo**: condicionales («si…»),
+  causas («¿por qué…?»), plazos y dinero, y preguntas que cuentan algo más que
+  la referencia (más de dos palabras propias si nombran el número, más de una
+  si nombran el sub-paso por lo que se hace en él, o más de 100 caracteres).
+  «¿Qué necesito para renovar la póliza?» no es una pregunta por el 5.1.
+- **El panel repite el precalentado cada 10 minutos y al volver a la
+  pestaña.** Si el prefijo del contrato sigue en la caché (Ollama tiene el
+  modelo cargado y el último prompt empieza igual), el backend solo le manda a
+  Ollama una petición sin prompt: contesta «load» en menos de un segundo,
+  renueva la expiración y no toca la caché (medido: el mismo prompt de 396
+  tokens pasó de 32 s de lectura a 0,26 s con una de esas en medio). Si no
+  sigue, precalienta entero como antes. No se sube el keep-alive: eso retendría
+  los ~5 GB del modelo también con SICOT cerrado.
+
+### Medido después, en vivo y con el backend reconstruido
+
+Contra el contrato real: «¿y el subpaso 2.3?» y otras doce preguntas de
+explicación (el 2.4, el 2.2, el 3.3, la inspección, el cierre, la foto, el 1.2,
+el paso 5, el CRP, la designación, el contacto con el contratista, la bodega) en
+**100-200 ms** (la primera tras reiniciar el backend, 0,8 s), con el texto del
+sub-paso y su botón. «¿Qué hago si el
+contratista no contesta el correo del 2.4?» siguió yendo al modelo (59 s). El
+precalentado con el contexto en caché: «se renovó la carga del modelo en 312
+ms», y Ollama movió la expiración 30 minutos.

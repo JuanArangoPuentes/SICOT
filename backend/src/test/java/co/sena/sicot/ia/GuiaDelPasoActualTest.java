@@ -452,4 +452,144 @@ class GuiaDelPasoActualTest {
         assertThat(guia.cubre("cómo lo registro en SICOT")).isTrue();
         assertThat(guia.cubre("cuánto vale el contrato")).isFalse();
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 20-10-2026: explicar un paso o un sub-paso es del motor, no del modelo
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Los nombres del proceso real (V20), como los tiene el contrato
+     * CO1.PCCNTR.99015001 en el que se escapó «¿y el subpaso 2.3?»: paso 1
+     * cerrado, el 2.1 cerrado y el resto del paso 2 pendiente.
+     */
+    private static List<EtapaResponse> contratoDelProcesoReal() {
+        return List.of(
+                etapa(1, "INICIO — Designación de la supervisión (GCCON-F-032)", EstadoEtapa.COMPLETADA, 100, List.of(
+                        sub("1.1", "Suscripción y publicación del contrato en SECOP II", null,
+                                EstadoSubetapa.COMPLETADA, "Unidad de Contratación"),
+                        sub("1.2", "Designación del supervisor y del apoyo a la supervisión (GCCON-F-032)",
+                                "El ordenador del gasto designa por escrito al supervisor y al apoyo a la supervisión.",
+                                EstadoSubetapa.COMPLETADA, "Ordenador del gasto"))),
+                etapa(2, "INICIO — Acta de Inicio y arranque (GCCON-F-018)", EstadoEtapa.EN_CURSO, 25, List.of(
+                        new SubetapaResponse(21L, "2.1", "Firma y devolución del Acta de Inicio (GCCON-F-018)",
+                                "Contratación le envía el Acta de Inicio por correo.", EstadoSubetapa.COMPLETADA,
+                                "Supervisor", "ACTA_FIRMADA_Y_ENVIO"),
+                        sub("2.2", "Aviso a los profesionales SST y ambiental", null, EstadoSubetapa.PENDIENTE,
+                                "Supervisor"),
+                        sub("2.3", "Verificación de especificaciones en SECOP II",
+                                "Con el enlace del proceso, verifique en el SECOP II las cantidades, especificaciones "
+                                        + "y valores del contrato.", EstadoSubetapa.PENDIENTE, "Supervisor"),
+                        sub("2.4", "Contacto con el contratista y acuerdo de entregas", null, EstadoSubetapa.PENDIENTE,
+                                "Supervisor"))),
+                etapa(3, "INSPECCIÓN — Monitoreo y Ejecución", EstadoEtapa.PENDIENTE, 0, List.of(
+                        sub("3.1", "Verificación física de la entrega en bodega", null, EstadoSubetapa.PENDIENTE,
+                                "Supervisor"),
+                        sub("3.2", "Carga de evidencia fotográfica georreferenciada", null, EstadoSubetapa.PENDIENTE,
+                                "Supervisor"))),
+                etapa(5, "CERTIFICACIÓN — Cumplimiento y Trámite de Pago", EstadoEtapa.PENDIENTE, 0, List.of(
+                        sub("5.2", "Revisión de orden de pago y CRP", null, EstadoSubetapa.PENDIENTE, "Supervisor"))),
+                etapa(6, "CIERRE — Informe Final y Archivo (GCCON-F-030)", EstadoEtapa.PENDIENTE, 0, List.of(
+                        sub("6.2", "Evaluación de modificaciones o adiciones (si aplica)", null,
+                                EstadoSubetapa.PENDIENTE, "Supervisor"))));
+    }
+
+    private ChatResponse delProcesoReal(String pregunta) {
+        assertThat(guia.puedeResponder(pregunta)).as(pregunta).isTrue();
+        return guia.responder(pregunta, contratoDelProcesoReal()).orElseThrow();
+    }
+
+    @Test
+    @DisplayName("«¿y el subpaso 2.3?» se contesta al instante, con el texto exacto del sub-paso")
+    void yElSubpaso23() {
+        ChatResponse r = delProcesoReal("y el subpaso 2.3?");
+
+        assertThat(r.respuesta()).isEqualTo("""
+                Sub-paso 2.3: Verificación de especificaciones en SECOP II, del paso 2: INICIO — Acta de Inicio y \
+                arranque (GCCON-F-018). Está pendiente. Con el enlace del proceso, verifique en el SECOP II las \
+                cantidades, especificaciones y valores del contrato. Responsable: Supervisor.
+
+                Antes de él, en ese mismo paso, sigue pendiente:
+
+                2.2 Aviso a los profesionales SST y ambiental
+
+                En SICOT: debajo de este sub-paso verá lo que el SECOP II publica del contrato y lo que no coincide \
+                con lo registrado en SICOT. Las cantidades y las especificaciones no vienen en esos datos: abra el \
+                proceso en el SECOP II con el enlace del sub-paso y revíselas en la oferta económica y el estudio \
+                previo del expediente; cuando esté todo revisado, márquelo como completado.""");
+        assertThat(r.accion().subpaso()).isEqualTo("2.3");
+    }
+
+    @Test
+    @DisplayName("nombrar solo el paso o el sub-paso basta: «el 2.3», «¿y el 2.4?», «paso 3 por favor»")
+    void nombrarSoloElPasoOElSubpaso() {
+        assertThat(delProcesoReal("el 2.3").respuesta()).startsWith("Sub-paso 2.3:");
+        assertThat(delProcesoReal("¿Y el sub-paso 2.4?").respuesta()).startsWith("Sub-paso 2.4:");
+        assertThat(delProcesoReal("subpaso 3.2").respuesta()).startsWith("Sub-paso 3.2:");
+        assertThat(delProcesoReal("¿y en el paso 3?").respuesta()).startsWith("Paso 3: INSPECCIÓN");
+        assertThat(delProcesoReal("paso 3 por favor").respuesta()).startsWith("Paso 3: INSPECCIÓN");
+        // El paso en el que va es la pregunta de siempre.
+        assertThat(delProcesoReal("¿y el paso 2?").respuesta()).startsWith("Está en el paso 2");
+    }
+
+    @Test
+    @DisplayName("pedir que le expliquen un paso o un sub-paso, dicho de cualquier forma corriente")
+    void pedirQueLeExpliquen() {
+        assertThat(delProcesoReal("¿Cómo hago el 2.4?").respuesta()).startsWith("Sub-paso 2.4:");
+        assertThat(delProcesoReal("¿qué es el 3.2?").respuesta()).startsWith("Sub-paso 3.2:");
+        assertThat(delProcesoReal("¿Para qué sirve el paso 5?").respuesta()).startsWith("Paso 5: CERTIFICACIÓN");
+        assertThat(delProcesoReal("dime qué hay que hacer en el 2.2").respuesta()).startsWith("Sub-paso 2.2:");
+        assertThat(delProcesoReal("háblame del 6.2").respuesta()).startsWith("Sub-paso 6.2:");
+        assertThat(delProcesoReal("info del 3.1").respuesta()).startsWith("Sub-paso 3.1:");
+        // Un sub-paso cerrado se explica igual, con quién lo hace.
+        assertThat(delProcesoReal("¿quién hace el 1.2?").respuesta())
+                .startsWith("Sub-paso 1.2: Designación del supervisor")
+                .contains("Ya está completado. El ordenador del gasto designa por escrito")
+                .endsWith("Responsable: Ordenador del gasto.");
+    }
+
+    @Test
+    @DisplayName("el paso por su nombre y el sub-paso por lo que se hace en él")
+    void elPasoYElSubpasoPorSuNombre() {
+        assertThat(delProcesoReal("explícame la inspección").respuesta()).startsWith("Paso 3: INSPECCIÓN");
+        assertThat(delProcesoReal("¿En qué consiste el cierre?").respuesta()).startsWith("Paso 6: CIERRE");
+        assertThat(delProcesoReal("¿cómo tomo la foto?").respuesta())
+                .startsWith("Sub-paso 3.2: Carga de evidencia fotográfica")
+                .contains("«Tomar foto de la entrega»");
+        assertThat(delProcesoReal("explícame lo del aviso a SST").respuesta()).startsWith("Sub-paso 2.2:");
+        assertThat(delProcesoReal("¿y lo de la bodega?").respuesta()).startsWith("Sub-paso 3.1:");
+        assertThat(delProcesoReal("¿qué es el CRP?").respuesta()).startsWith("Sub-paso 5.2:");
+        assertThat(delProcesoReal("¿cómo contacto al contratista?").respuesta()).startsWith("Sub-paso 2.4:");
+        // Un paso ya cerrado dice en qué consistió.
+        assertThat(delProcesoReal("explícame la designación").respuesta())
+                .startsWith("El paso 1: INICIO — Designación de la supervisión (GCCON-F-032) ya está completo")
+                .contains("Sus sub-pasos:\n\n1.1 Suscripción y publicación del contrato en SECOP II\n1.2 Designación");
+    }
+
+    @Test
+    @DisplayName("lo específico sigue yendo al modelo aunque nombre un sub-paso")
+    void loEspecificoSigueYendoAlModelo() {
+        assertThat(guia.puedeResponder("¿qué hago en el 2.3 si el SECOP no muestra el contrato?")).isFalse();
+        assertThat(guia.puedeResponder("¿por qué el 2.3 no muestra las cantidades?")).isFalse();
+        assertThat(guia.puedeResponder("¿puedo saltarme el 2.2?")).isFalse();
+        assertThat(guia.puedeResponder("¿la foto debe ir con georreferenciación?")).isFalse();
+        assertThat(guia.puedeResponder("¿y el 2.4 en cuántos días lo tengo que tener?")).isFalse();
+        assertThat(guia.puedeResponder("¿Cómo le explico al contratista en el 2.4 que entregue en dos tandas porque "
+                + "la bodega del centro está llena hasta diciembre?")).isFalse();
+        // «¿Cómo verifico la factura?» es de FichaDelInsumo, que dice además dónde se consigue.
+        assertThat(guia.puedeResponder("¿cómo verifico la factura del 4.2?")).isFalse();
+    }
+
+    @Test
+    @DisplayName("un nombre que el contrato no tiene no se contesta con el paso en curso")
+    void unNombreQueElContratoNoTiene() {
+        // contratoEnElPaso2 es de antes del proceso real: no tiene sub-paso de fotos.
+        assertThat(guia.puedeResponder("¿cómo tomo la foto?")).isTrue();
+        assertThat(guia.responder("¿cómo tomo la foto?", contratoEnElPaso2())).isEmpty();
+    }
+
+    @Test
+    @DisplayName("en la pregunta de siempre, un nombre de sub-paso no cambia de qué se habla")
+    void enLaPreguntaDeSiempreUnNombreNoCambiaElTema() {
+        assertThat(delProcesoReal("¿qué me falta? ya tomé las fotos").respuesta()).startsWith("Está en el paso 2");
+    }
 }

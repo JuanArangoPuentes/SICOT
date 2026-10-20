@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SupervisorPanel from './SupervisorPanel'
 import { PrefsProvider } from '@/prefs'
@@ -510,5 +510,44 @@ describe('SupervisorPanel — la pantalla mientras el Copiloto piensa', () => {
 
     await act(async () => respuesta.resolver({ respuesta: 'Siga con la revisión de los estudios.', fuente: 'MODELO' }))
     expect(release).toHaveBeenCalledOnce()
+  })
+})
+
+describe('SupervisorPanel — el Copiloto se mantiene caliente mientras el panel está abierto', () => {
+  /**
+   * 20-10-2026: el supervisor dejó el contrato abierto y preguntó 36 minutos
+   * después. Ollama había descargado el modelo a los 30, y la pregunta tardó
+   * 224 s. El panel le recuerda al backend cada 10 minutos que sigue abierto,
+   * y también al volver a la pestaña, porque en el teléfono los temporizadores
+   * no corren con la aplicación en segundo plano.
+   */
+  it('pide el precalentado al abrir, cada 10 minutos y al volver a la pestaña, y deja de pedirlo al cerrar', async () => {
+    const { precalentarCopiloto } = await import('@/services/documentoService')
+    vi.mocked(precalentarCopiloto).mockReset()
+    vi.useFakeTimers()
+    try {
+      await montar()
+      expect(precalentarCopiloto).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        vi.advanceTimersByTime(10 * 60 * 1000)
+      })
+      expect(precalentarCopiloto).toHaveBeenCalledTimes(2)
+
+      await act(async () => ponerVisibilidad('hidden'))
+      expect(precalentarCopiloto).toHaveBeenCalledTimes(2)
+      await act(async () => ponerVisibilidad('visible'))
+      expect(precalentarCopiloto).toHaveBeenCalledTimes(3)
+      expect(precalentarCopiloto).toHaveBeenLastCalledWith(contrato().id)
+
+      cleanup()
+      await act(async () => {
+        vi.advanceTimersByTime(30 * 60 * 1000)
+      })
+      ponerVisibilidad('visible')
+      expect(precalentarCopiloto).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

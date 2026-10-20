@@ -46,11 +46,20 @@ class OllamaClientTest {
 
     private volatile int codigoRespuesta = 200;
     private volatile String cuerpoRespuesta = "{\"response\":\"texto redactado por el modelo\"}";
+    private volatile String cuerpoPs = "{\"models\":[]}";
 
     @BeforeEach
     void levantarUnOllamaFalso() throws IOException {
         servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         servidor.createContext("/api/generate", this::responder);
+        servidor.createContext("/api/ps", intercambio -> {
+            byte[] cuerpo = cuerpoPs.getBytes(StandardCharsets.UTF_8);
+            intercambio.getResponseHeaders().add("Content-Type", "application/json");
+            intercambio.sendResponseHeaders(200, cuerpo.length);
+            try (OutputStream salida = intercambio.getResponseBody()) {
+                salida.write(cuerpo);
+            }
+        });
         servidor.start();
     }
 
@@ -323,6 +332,62 @@ class OllamaClientTest {
         // reinicio, sin ningún motivo visible.
         assertThat(respuestas).hasSize(5)
                 .allMatch(r -> r.equals("texto redactado por el modelo"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 20-10-2026: mantener el modelo cargado mientras el panel está abierto
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("renovar la carga manda una petición sin prompt, con el keep_alive y las opciones de siempre")
+    void mantenerCargadoNoPideInferencia() throws Exception {
+        cuerpoRespuesta = "{\"done\":true,\"done_reason\":\"load\"}";
+
+        cliente().mantenerCargado();
+
+        JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
+        assertThat(peticion.get("model").asText()).isEqualTo(MODELO);
+        // Sin prompt Ollama solo carga el modelo y renueva su expiración: no
+        // lee nada ni toca la caché del prefijo.
+        assertThat(peticion.get("prompt").isNull()).isTrue();
+        assertThat(peticion.get("keep_alive").asText()).isEqualTo(KEEP_ALIVE);
+        assertThat(peticion.get("options").has("num_predict")).isTrue();
+    }
+
+    @Test
+    @DisplayName("si Ollama falla al renovar la carga, no sale ningún error")
+    void mantenerCargadoNoRompeNada() {
+        codigoRespuesta = 503;
+        cliente().mantenerCargado();
+        assertThat(peticionesRecibidas).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("sabe si el último prompt sigue en caché: modelo cargado y mismo comienzo")
+    void sabeSiElUltimoPromptSigueEnCache() {
+        OllamaClient cliente = cliente();
+        cuerpoPs = "{\"models\":[{\"name\":\"" + MODELO + "\",\"model\":\"" + MODELO + "\"}]}";
+
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).as("nada mandado aún").isFalse();
+
+        cliente.generar("INSTRUCCIONES + datos del contrato + pregunta", false);
+
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES + datos del contrato")).isTrue();
+        assertThat(cliente.tieneEnCache("OTRAS INSTRUCCIONES")).isFalse();
+    }
+
+    @Test
+    @DisplayName("si Ollama descargó el modelo, la caché se perdió con él aunque lo vuelva a cargar otro")
+    void unModeloDescargadoNoTieneCache() {
+        OllamaClient cliente = cliente();
+        cliente.generar("INSTRUCCIONES + pregunta", false);
+
+        cuerpoPs = "{\"models\":[]}";
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).isFalse();
+
+        // Recargado (por ejemplo con mantenerCargado): el modelo está, la caché no.
+        cuerpoPs = "{\"models\":[{\"name\":\"" + MODELO + "\",\"model\":\"" + MODELO + "\"}]}";
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).isFalse();
     }
 
     private void autenticarComo(long id) {

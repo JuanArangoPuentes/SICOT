@@ -167,6 +167,102 @@ public class GuiaDelPasoActual {
             "explícame", "explica", "qué hay en", "qué se hace en", "en qué consiste", "de qué se trata",
             "qué incluye", "qué tiene");
 
+    /**
+     * Más formas de pedir que le expliquen un paso o un sub-paso, que solo se
+     * atajan si la pregunta es corta y nombra uno (ver {@link #pideQueLeExpliquen}).
+     *
+     * <p>20-10-2026: «¿y el subpaso 2.3?», escrita en el chat del contrato
+     * CO1.PCCNTR.99015001 a continuación de otra respuesta, no traía ninguna
+     * frase de las listas y se fue al modelo: 224 s, con el modelo recién
+     * cargado. Explicar qué se hace en un paso o en un sub-paso es justo lo que
+     * el motor existe para contestar al instante; al modelo le quedan las
+     * preguntas de verdad específicas.
+     */
+    private static final Set<String> PIDE_EXPLICACION = PreguntaNormalizada.normalizarTodas(
+            "explique", "qué significa", "para qué sirve", "para qué es", "háblame", "hábleme", "cuéntame",
+            "cuénteme", "dígame", "detalla", "información", "ayúdame", "ayúdeme", "qué pasa en", "qué hago en",
+            "qué debo", "qué se debe", "qué hay que", "qué se necesita", "qué necesito", "qué pide", "qué piden",
+            "qué implica", "qué requiere", "qué verifico", "qué reviso", "qué se verifica", "qué se revisa",
+            "de qué va");
+
+    /**
+     * Las de {@link #PIDE_EXPLICACION} tan cortas que solo cuentan como palabra
+     * entera: «dime» no debe encontrarse dentro de «dimensiones».
+     */
+    private static final Set<String> PIDE_EXPLICACION_PALABRA = PreguntaNormalizada.normalizarTodas(
+            "cómo", "quién", "qué es", "qué son", "dime", "info", "ayuda", "detalle", "detalles", "responsable");
+
+    /**
+     * Palabras que no añaden pregunta: «¿y el subpaso 2.3?», «el 2.3» o «paso
+     * 4» a secas piden ese paso o ese sub-paso, y nada más. Es la misma idea que
+     * {@code PALABRAS_DE_RELLENO} de {@link FichaDeDocumentoFormal} para «¿y el
+     * acta de inicio?».
+     */
+    private static final Set<String> RELLENO = Set.of("y", "e", "el", "la", "lo", "los", "las", "al", "a", "en",
+            "del", "de", "sub", "subpaso", "paso", "pasos", "etapa", "numero", "no", "entonces", "ahora", "pues",
+            "bueno", "ok", "vale", "listo", "gracias", "por", "favor", "porfa", "que", "hay", "con", "sobre",
+            "acerca", "ese", "este", "esa", "esta", "ver", "tal");
+    private static final Pattern NUMERO_O_NUMERAL = Pattern.compile("[0-9]{1,2}|uno|dos|tres|cuatro|cinco|seis");
+
+    /**
+     * Las palabras con que se pide la explicación, ya normalizadas: no cuentan
+     * como lo que la pregunta trae de más (ver {@link #palabrasDeMas}).
+     * «Necesito» no está, a propósito: en «¿qué necesito para renovar la
+     * póliza?» es parte del caso.
+     */
+    private static final Set<String> DE_LA_PETICION = Set.of("como", "quien", "es", "son", "significa", "sirve",
+            "sirven", "para", "dime", "digame", "info", "informacion", "detalle", "detalles", "detalla", "detallame",
+            "hablame", "hableme", "cuentame", "cuenteme", "explicame", "explica", "explicar", "explique",
+            "expliqueme", "consiste", "trata", "se", "hace", "hacer", "hago", "va", "incluye", "tiene", "pasa",
+            "debo", "debe", "ayuda", "ayudame", "ayudeme", "responsable", "me", "mi", "cual", "cuales");
+
+    /**
+     * Los pasos por su nombre: «explícame la inspección», «¿en qué consiste el
+     * cierre?». Son las palabras con que empiezan los nombres de las seis
+     * etapas del GCCON-P-010 (GcconP010Plantilla). «Acta de inicio» y
+     * «certificación de cumplimiento» no van: son documentos, y su ficha
+     * contesta antes.
+     */
+    private static final Pattern PASO_POR_NOMBRE = Pattern.compile(
+            "(?<= )(designacion|arranque|inspeccion|recepcion|certificacion|cierre)(?= )");
+    private static final Map<String, Integer> PASOS_POR_NOMBRE = Map.of(
+            "designacion", 1, "arranque", 2, "inspeccion", 3, "recepcion", 4, "certificacion", 5, "cierre", 6);
+
+    /**
+     * Un sub-paso nombrado por lo que se hace en él: «¿cómo tomo la foto?»,
+     * «explícame lo del aviso a SST».
+     *
+     * @param enElNombreDelSubpaso cómo se reconoce el sub-paso por su nombre
+     *     normalizado, igual que en {@link FichaDelInsumo}: los contratos de
+     *     antes del 15-10-2026 tienen otros sub-pasos con los mismos códigos,
+     *     así que el código no basta. Si el contrato no tiene un sub-paso con
+     *     ese nombre, la guía no contesta y la pregunta sigue su camino.
+     */
+    private record SubpasoPorNombre(Pattern enLaPregunta, String enElNombreDelSubpaso) {
+    }
+
+    private static final List<SubpasoPorNombre> SUBPASOS_POR_NOMBRE = List.of(
+            porNombre("sst|ambiental|ambientales", "profesionales sst"),
+            porNombre("contactar|contacto|acuerdo de entregas|acordar las entregas|acordar entregas"
+                    + "|fechas de entrega", "contacto con el contratista"),
+            porNombre("foto|fotos|fotografia|fotografias|fotografica|georreferenciad[a-z]*", "evidencia fotografica"),
+            porNombre("bodega", "entrega en bodega"),
+            porNombre("ficha tecnica", "ficha tecnica"),
+            porNombre("pila|planilla|planillas|seguridad social|aportes", "aportes a seguridad social"),
+            porNombre("factura|facturas|fev", "factura electronica"),
+            porNombre("poliza|polizas|garantia|garantias", "vigencia de garantias"),
+            porNombre("orden de pago|crp|registro presupuestal", "orden de pago"),
+            porNombre("modificacion|modificaciones|adicion|adiciones|prorroga|prorrogas", "modificaciones o adiciones"),
+            porNombre("objeto contractual|cumplimiento total", "cumplimiento total"),
+            porNombre("sigep|archivo del expediente|archivar el expediente|cierre del expediente", "sigep"),
+            // Al final, como en FichaDelInsumo: «secop» a secas no basta, el 1.1
+            // también lo nombra («publicación del contrato en SECOP II»).
+            porNombre("secop", "especificaciones en secop"));
+
+    private static SubpasoPorNombre porNombre(String palabras, String enElNombreDelSubpaso) {
+        return new SubpasoPorNombre(Pattern.compile("(?<= )(?:" + palabras + ")(?= )"), enElNombreDelSubpaso);
+    }
+
     /** Lo que la guía ya dice en cada respuesta: «¿… y cómo lo registro en SICOT?» no queda sin contestar. */
     private static final Set<String> COMO_SE_REGISTRA = PreguntaNormalizada.normalizarTodas(
             "cómo lo registro", "cómo se registra", "cómo lo marco", "cómo lo hago", "qué botón");
@@ -241,7 +337,64 @@ public class GuiaDelPasoActual {
         // lo dice la ficha del documento.
         boolean nombraUnPaso = p.coincide(SUBPASO) || p.coincide(PASO) || p.coincide(DESPUES_DEL);
         return p.contieneAlguna(SENALES) || p.esExactamenteAlguna(PREGUNTAS_COMPLETAS)
-                || (nombraUnPaso && p.contieneAlguna(SENALES_CON_OBJETIVO));
+                || (nombraUnPaso && p.contieneAlguna(SENALES_CON_OBJETIVO))
+                || pideQueLeExpliquen(pregunta, p, nombraUnPaso);
+    }
+
+    /**
+     * «¿Y el subpaso 2.3?», «¿cómo hago el 2.4?», «explícame la inspección»,
+     * «¿cómo tomo la foto?»: preguntas cortas que nombran un paso o un sub-paso
+     * —por su número o por lo que se hace en él— y piden que se lo expliquen,
+     * o solo lo nombran.
+     *
+     * <p>Lo que distingue «¿cómo tomo la foto?» de «¿cómo le digo al
+     * contratista que las fotos salieron mal?» es cuánto más trae la pregunta
+     * aparte de la referencia y de la petición: la segunda cuenta un caso, y
+     * ese es del modelo. Por número se admiten dos palabras más («¿qué
+     * necesito para el 2.3?»); por nombre, una sola, porque el nombre es menos
+     * preciso: «¿qué necesito para renovar la póliza?» no pregunta por el 5.1.
+     *
+     * <p>Más corta que el resto de la guía (100 caracteres y no 200), por lo
+     * mismo. Lo que {@link FichaDelInsumo} reconoce («¿cómo verifico la
+     * factura?») se le deja a ella, que dice además dónde se consigue.
+     */
+    private static boolean pideQueLeExpliquen(String pregunta, PreguntaNormalizada p, boolean nombraUnPasoPorNumero) {
+        boolean porNombre = p.coincide(PASO_POR_NOMBRE) || subpasoPorNombre(p).isPresent();
+        if (!(nombraUnPasoPorNumero || porNombre) || p.largo() > 100 || FichaDelInsumo.reconoce(pregunta)) {
+            return false;
+        }
+        int deMas = palabrasDeMas(p);
+        if (deMas == 0) {
+            return true;
+        }
+        boolean pide = p.contieneAlguna(SENALES_CON_OBJETIVO) || p.contieneAlguna(PIDE_EXPLICACION)
+                || p.contieneAlgunaFrase(PIDE_EXPLICACION_PALABRA);
+        return pide && deMas <= (nombraUnPasoPorNumero ? 2 : 1);
+    }
+
+    /**
+     * Las palabras de la pregunta que no son la referencia al paso o al
+     * sub-paso, ni relleno, ni la forma de pedir la explicación. «¿Y el
+     * subpaso 2.3?» y «¿qué es el CRP?» no tienen ninguna; «¿cómo tomo la
+     * foto?», una («tomo»).
+     */
+    private static int palabrasDeMas(PreguntaNormalizada p) {
+        String resto = p.sin(PASO_POR_NOMBRE);
+        for (SubpasoPorNombre s : SUBPASOS_POR_NOMBRE) {
+            resto = s.enLaPregunta().matcher(resto).replaceAll(" ");
+        }
+        int deMas = 0;
+        for (String palabra : resto.strip().split(" +")) {
+            if (!palabra.isEmpty() && !RELLENO.contains(palabra) && !DE_LA_PETICION.contains(palabra)
+                    && !NUMERO_O_NUMERAL.matcher(palabra).matches()) {
+                deMas++;
+            }
+        }
+        return deMas;
+    }
+
+    private static Optional<SubpasoPorNombre> subpasoPorNombre(PreguntaNormalizada p) {
+        return SUBPASOS_POR_NOMBRE.stream().filter(s -> p.coincide(s.enLaPregunta())).findFirst();
     }
 
     /**
@@ -275,8 +428,27 @@ public class GuiaDelPasoActual {
         if (delDocumento.isPresent()) {
             return Optional.of(sobreElSubpaso(delDocumento.get(), etapas));
         }
+        // Los nombres solo cuentan si la pregunta entró por ellos: en «¿qué me
+        // falta? ya tomé las fotos» la pregunta es la de siempre, no el 3.2.
+        boolean porNombre = !p.contieneAlguna(SENALES) && !p.esExactamenteAlguna(PREGUNTAS_COMPLETAS);
+        Optional<SubpasoPorNombre> nombrado = porNombre ? subpasoPorNombre(p) : Optional.empty();
+        if (nombrado.isPresent()) {
+            for (EtapaResponse etapa : etapas) {
+                for (SubetapaResponse s : etapa.subEtapas() == null ? List.<SubetapaResponse>of() : etapa.subEtapas()) {
+                    if (PreguntaNormalizada.normalizar(s.nombre()).contains(nombrado.get().enElNombreDelSubpaso())) {
+                        return Optional.of(sobreElSubpaso(s.codigo(), etapas));
+                    }
+                }
+            }
+            // Un contrato sin ese sub-paso (los de antes del 15-10-2026): lo
+            // que nombra la pregunta no está aquí, y contestar el paso en curso
+            // sería contestar otra cosa.
+            if (!p.coincide(PASO) && !p.coincide(DESPUES_DEL) && !p.coincide(PASO_POR_NOMBRE)) {
+                return Optional.empty();
+            }
+        }
         Optional<EtapaResponse> enCurso = enCurso(etapas);
-        OptionalInt paso = pasoNombrado(p);
+        OptionalInt paso = pasoNombrado(p, porNombre);
         if (paso.isPresent() && (enCurso.isEmpty() || enCurso.get().numero() != paso.getAsInt())) {
             return Optional.of(sobreOtroPaso(paso.getAsInt(), etapas, enCurso));
         }
@@ -334,6 +506,12 @@ public class GuiaDelPasoActual {
         if (pendientes.isEmpty()) {
             sb.append("El paso %d: %s ya está completo: no le queda ningún sub-paso pendiente."
                     .formatted(etapa.numero(), etapa.nombre()));
+            // Lo que tuvo, para quien pregunta en qué consistía («explícame la
+            // designación»).
+            if (etapa.subEtapas() != null && !etapa.subEtapas().isEmpty()) {
+                sb.append("\n\nSus sub-pasos:\n");
+                listar(sb, etapa.subEtapas());
+            }
             accion = AccionesDelCopiloto.irAPaso(etapa.numero());
         } else {
             sb.append("Paso %d: %s".formatted(etapa.numero(), etapa.nombre()));
@@ -377,7 +555,12 @@ public class GuiaDelPasoActual {
         StringBuilder sb = new StringBuilder("Sub-paso %s: %s, del paso %d: %s."
                 .formatted(sub.codigo(), sub.nombre(), etapa.numero(), etapa.nombre()));
         if (sub.estado() == EstadoSubetapa.COMPLETADA) {
-            return ChatResponse.delSistema(sb.append(" Ya está completado.").toString(), accion);
+            // Con lo que se hace en él: «explícame el 2.1» con el 2.1 cerrado
+            // pide la explicación igual, y hasta el 20-10-2026 solo recibía
+            // «Ya está completado».
+            sb.append(" Ya está completado.");
+            detalle(sb, sub);
+            return ChatResponse.delSistema(sb.toString(), accion);
         }
         sb.append(sub.estado() == EstadoSubetapa.EN_CURSO ? " Está en curso." : " Está pendiente.");
         detalle(sb, sub);
@@ -429,16 +612,20 @@ public class GuiaDelPasoActual {
                 .or(() -> Optional.ofNullable(candidatos.get(candidatos.size() - 1).subpaso()));
     }
 
-    private static OptionalInt pasoNombrado(PreguntaNormalizada p) {
+    private static OptionalInt pasoNombrado(PreguntaNormalizada p, boolean porNombre) {
         Optional<MatchResult> despues = p.buscar(DESPUES_DEL);
         if (despues.isPresent()) {
             int anterior = Integer.parseInt(despues.get().group(1));
             return anterior < 6 ? OptionalInt.of(anterior + 1) : OptionalInt.empty();
         }
         // PASO solo deja pasar 1-6 o su nombre, así que parseInt no falla.
-        return p.buscar(PASO)
-                .map(m -> NUMEROS.containsKey(m.group(1)) ? NUMEROS.get(m.group(1)) : Integer.parseInt(m.group(1)))
-                .map(OptionalInt::of)
+        Optional<Integer> porNumero = p.buscar(PASO)
+                .map(m -> NUMEROS.containsKey(m.group(1)) ? NUMEROS.get(m.group(1)) : Integer.parseInt(m.group(1)));
+        if (porNumero.isPresent()) {
+            return OptionalInt.of(porNumero.get());
+        }
+        return (porNombre ? p.buscar(PASO_POR_NOMBRE) : Optional.<MatchResult>empty())
+                .map(m -> OptionalInt.of(PASOS_POR_NOMBRE.get(m.group(1))))
                 .orElse(OptionalInt.empty());
     }
 
