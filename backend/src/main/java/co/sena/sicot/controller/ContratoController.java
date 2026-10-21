@@ -7,9 +7,13 @@ import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.dto.cronograma.CronogramaResponse;
+import co.sena.sicot.dto.pedido.GuardarSolicitudDePedidoRequest;
+import co.sena.sicot.dto.pedido.SolicitudDePedidoResponse;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.service.ContratoService;
 import co.sena.sicot.service.CronogramaService;
+import co.sena.sicot.service.NombreDeDescarga;
+import co.sena.sicot.service.SolicitudDePedidoService;
 import co.sena.sicot.service.VerificacionSecopService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,7 +23,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -34,12 +40,15 @@ public class ContratoController {
     private final ContratoService contratoService;
     private final CronogramaService cronogramaService;
     private final VerificacionSecopService verificacionSecop;
+    private final SolicitudDePedidoService solicitudDePedido;
 
     public ContratoController(ContratoService contratoService, CronogramaService cronogramaService,
-                              VerificacionSecopService verificacionSecop) {
+                              VerificacionSecopService verificacionSecop,
+                              SolicitudDePedidoService solicitudDePedido) {
         this.cronogramaService = cronogramaService;
         this.contratoService = contratoService;
         this.verificacionSecop = verificacionSecop;
+        this.solicitudDePedido = solicitudDePedido;
     }
 
     @Operation(summary = "Listar contratos", description = "Filtros opcionales por supervisor y estado.")
@@ -208,5 +217,77 @@ public class ContratoController {
     @GetMapping("/{id}/secop")
     public ResponseEntity<VerificacionSecopResponse> verificarEnSecop(@PathVariable Long id) {
         return ResponseEntity.ok(verificacionSecop.verificar(id));
+    }
+
+    /**
+     * La solicitud de pedido del contrato: los bienes y cantidades que el
+     * supervisor le pide al contratista en el paso 2.4 del proceso real.
+     *
+     * <p>Sin {@code @PreAuthorize}, igual que el cronograma y la verificación
+     * en SECOP: {@code ContratoService.buscar} ya restringe al SUPERVISOR a sus
+     * contratos, y Gestión y Administración ven todos. Responde 200 con la
+     * lista vacía cuando el supervisor todavía no la ha cargado: no tener
+     * pedido no es un error.
+     */
+    @Operation(summary = "Solicitud de pedido al contratista (paso 2.4), con el control de presupuesto")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "La solicitud de pedido del contrato",
+                    content = @Content(schema = @Schema(implementation = SolicitudDePedidoResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/solicitud-pedido")
+    public ResponseEntity<SolicitudDePedidoResponse> obtenerSolicitudDePedido(@PathVariable Long id) {
+        return ResponseEntity.ok(solicitudDePedido.obtener(id));
+    }
+
+    /**
+     * Reemplaza la solicitud de pedido del contrato. Una lista vacía la borra,
+     * que es cómo se deshace un pegado equivocado.
+     */
+    @Operation(summary = "Guardar la solicitud de pedido al contratista (reemplaza la anterior)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "La solicitud guardada, con el presupuesto recalculado",
+                    content = @Content(schema = @Schema(implementation = SolicitudDePedidoResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Ítems inválidos o con el número repetido",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @PutMapping("/{id}/solicitud-pedido")
+    public ResponseEntity<SolicitudDePedidoResponse> guardarSolicitudDePedido(
+            @PathVariable Long id, @Valid @RequestBody GuardarSolicitudDePedidoRequest request) {
+        return ResponseEntity.ok(solicitudDePedido.guardar(id, request));
+    }
+
+    /**
+     * El Excel que se adjunta al correo del contratista, con el formato que el
+     * supervisor usa hoy. Se genera al pedirlo y no se guarda: ver
+     * {@code SolicitudDePedidoService.generarArchivo}.
+     */
+    @Operation(summary = "Descargar la solicitud de pedido en Excel, para adjuntarla al correo")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "El archivo XLSX",
+                    content = @Content(schema = @Schema(type = "string", format = "binary"))),
+            @ApiResponse(responseCode = "400", description = "La solicitud de pedido está vacía",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado o sin acceso",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @GetMapping("/{id}/solicitud-pedido/archivo")
+    public ResponseEntity<byte[]> descargarSolicitudDePedido(@PathVariable Long id) {
+        byte[] archivo = solicitudDePedido.generarArchivo(id);
+        String nombre = solicitudDePedido.nombreDelArchivo(id);
+        String tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, NombreDeDescarga.cabecera(nombre, tipo))
+                .contentType(MediaType.parseMediaType(tipo))
+                .body(archivo);
     }
 }

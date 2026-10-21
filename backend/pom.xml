@@ -225,6 +225,19 @@
             <version>3.0.8</version>
         </dependency>
 
+        <!-- Generación del XLSX de la solicitud de pedido al contratista (paso 2.4
+             del proceso real). El formato real que usa el supervisor es una hoja
+             de Excel con estructura —encabezado, tabla de ítems, bloque de
+             presupuesto y firma—, no una lista plana: un CSV la perdería y el
+             contratista recibe el archivo que ya conoce. Escribir OOXML a mano
+             sobre java.util.zip era la alternativa sin dependencia, y significaba
+             mantener un generador de formato propio. Apache 2.0. -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.4.1</version>
+        </dependency>
+
         <!-- Detección del tipo real de archivo por contenido (magic bytes), no por
              extensión ni por el Content-Type que manda el navegador -->
         <dependency>
