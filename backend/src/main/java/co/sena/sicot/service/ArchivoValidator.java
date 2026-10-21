@@ -2,6 +2,9 @@ package co.sena.sicot.service;
 
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.apache.tika.Tika;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,8 +13,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -121,7 +126,12 @@ public class ArchivoValidator {
             throw new BusinessException("Formato de archivo no permitido. Solo se aceptan "
                     + descripcionDe(permitidos) + ".");
         }
-        String mimeReal = validarContenidoReal(archivo, tipo);
+        // Los bytes se leen una vez y sirven para las dos comprobaciones: de qué
+        // tipo es (la cabecera) y si se abre de verdad (todo el archivo). El
+        // tamaño ya lo limitó validarTamanio en quien llama.
+        byte[] contenido = bytesDe(archivo);
+        String mimeReal = validarContenidoReal(contenido, archivo.getOriginalFilename(), tipo);
+        validarQueSeAbre(contenido, tipo, archivo.getOriginalFilename());
         return new ArchivoAceptado(tipo, tipo == TipoDocumento.IMAGEN ? mimeReal : contentTypeDe(tipo));
     }
 
@@ -135,13 +145,16 @@ public class ArchivoValidator {
                 : "PDF, DOCX o XLSX";
     }
 
-    private String validarContenidoReal(MultipartFile archivo, TipoDocumento tipoDeclarado) {
-        String mimeReal;
-        try (InputStream contenido = archivo.getInputStream()) {
-            mimeReal = tika.detect(contenido, archivo.getOriginalFilename());
+    private byte[] bytesDe(MultipartFile archivo) {
+        try {
+            return archivo.getBytes();
         } catch (IOException e) {
             throw new BusinessException("No se pudo leer el archivo cargado.");
         }
+    }
+
+    private String validarContenidoReal(byte[] contenido, String nombreArchivo, TipoDocumento tipoDeclarado) {
+        String mimeReal = tika.detect(contenido, nombreArchivo);
         Set<String> mimesEsperados = MIME_REALES_PERMITIDOS.get(tipoDeclarado);
         if (mimesEsperados == null || !mimesEsperados.contains(mimeReal)) {
             throw new BusinessException(
@@ -149,6 +162,76 @@ public class ArchivoValidator {
                             + "no esté corrupto o haya sido renombrado a un formato distinto.");
         }
         return mimeReal;
+    }
+
+    /**
+     * Comprueba que el archivo <b>se abra</b>, y no solo que empiece como si lo
+     * fuera.
+     *
+     * <h2>Por qué hace falta además de la cabecera</h2>
+     * Tika decide por los primeros bytes. Un archivo de texto de 44 bytes cuya
+     * primera línea es «%PDF-1.4» se detecta como {@code application/pdf} y
+     * pasaba la validación: así entró al expediente del contrato de prueba el
+     * 15-10-2026 —SICOT lo guardó con un 201, lo listó como PDF de 44 bytes y
+     * lo sirvió en la descarga— y el lector del supervisor lo daba por dañado
+     * (revisión del 20-10-2026). Al mismo sitio llega un PDF o una foto cuya
+     * subida se cortó a mitad: la cabecera está completa y el archivo no.
+     *
+     * <p>Rechazarlo al cargarlo, y no al descargarlo, es la diferencia entre
+     * un mensaje que dice qué pasa y un expediente con un documento que nadie
+     * puede abrir y que SICOT afirma tener. Un documento del expediente se
+     * firma, se le calcula la huella y se publica: no puede ser un archivo
+     * ilegible.
+     *
+     * <h2>Cómo se comprueba</h2>
+     * Con el mismo lector que usará quien lo descargue: PDFBox para los PDF
+     * —que además tienen que tener alguna página— e ImageIO para las fotos.
+     * Un DOCX o un XLSX no necesitan este paso: para reconocerlos, Tika ya
+     * abrió el ZIP y leyó dentro su declaración de tipo.
+     */
+    private void validarQueSeAbre(byte[] contenido, TipoDocumento tipo, String nombreArchivo) {
+        if (tipo == TipoDocumento.PDF) {
+            validarQueElPdfSeAbre(contenido, nombreArchivo);
+        } else if (tipo == TipoDocumento.IMAGEN) {
+            validarQueLaImagenSeAbre(contenido, nombreArchivo);
+        }
+    }
+
+    private void validarQueElPdfSeAbre(byte[] contenido, String nombreArchivo) {
+        int paginas;
+        try (PDDocument documento = Loader.loadPDF(contenido)) {
+            paginas = documento.getNumberOfPages();
+        } catch (InvalidPasswordException e) {
+            // Un PDF con contraseña SÍ es un PDF: PDFBox leyó su estructura y
+            // por eso sabe que está cifrado. Quien lo descargue lo abrirá con
+            // la contraseña que tenga, y eso no es asunto de SICOT.
+            return;
+        } catch (IOException | RuntimeException e) {
+            // RuntimeException además de IOException porque un PDF roto no
+            // falla siempre igual: según por dónde esté cortado, PDFBox lanza
+            // al leer la tabla de objetos y no una IOException.
+            log.warn("PDF rechazado: no se pudo abrir «{}» ({}).", nombreArchivo, e.toString());
+            throw new BusinessException("El archivo empieza como un PDF pero ningún lector puede abrirlo: "
+                    + "está dañado o la subida se cortó a mitad. Vuelva a exportarlo y cárguelo de nuevo.");
+        }
+        if (paginas < 1) {
+            throw new BusinessException("El PDF cargado no tiene ninguna página. "
+                    + "Vuelva a exportarlo y cárguelo de nuevo.");
+        }
+    }
+
+    private void validarQueLaImagenSeAbre(byte[] contenido, String nombreArchivo) {
+        BufferedImage imagen;
+        try {
+            imagen = ImageIO.read(new ByteArrayInputStream(contenido));
+        } catch (IOException | RuntimeException e) {
+            log.warn("Foto rechazada: no se pudo abrir «{}» ({}).", nombreArchivo, e.toString());
+            imagen = null;
+        }
+        if (imagen == null || imagen.getWidth() < 1 || imagen.getHeight() < 1) {
+            throw new BusinessException("La foto cargada no se puede mostrar: está dañada o la subida se "
+                    + "cortó a mitad. Vuelva a tomarla o a exportarla y cárguela de nuevo.");
+        }
     }
 
     /**

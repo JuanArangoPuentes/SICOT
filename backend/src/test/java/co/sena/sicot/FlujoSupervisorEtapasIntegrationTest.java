@@ -88,9 +88,9 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
         // Dos piezas de la evidencia del envío, aunque una sea PDF, no son el
         // acta: hasta el 18-10-2026 con eso el paso se cerraba sin ella.
         cargarConNombre(contratoId, pasoDelActaId, supervisorToken, "correo.pdf", "application/pdf",
-                "%PDF-1.4 correo enviado".getBytes(), "Evidencia del envío del acta");
+                ArchivoDePrueba.pdfDeUnaPagina("correo enviado"), "Evidencia del envío del acta");
         cargarConNombre(contratoId, pasoDelActaId, supervisorToken, "respuesta.pdf", "application/pdf",
-                "%PDF-1.4 respuesta de contratacion".getBytes(), "Evidencia del envío del acta (2)");
+                ArchivoDePrueba.pdfDeUnaPagina("respuesta de contratacion"), "Evidencia del envío del acta (2)");
         mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDelActaId)
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -98,9 +98,9 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("falta el acta firmada")));
         cargar(contratoId, pasoDelActaId, supervisorToken, "acta-firmada.pdf", "application/pdf",
-                "%PDF-1.4 acta firmada".getBytes());
+                ArchivoDePrueba.pdfDeUnaPagina("acta firmada"));
         cargar(contratoId, pasoDelActaId, supervisorToken, "correo-enviado.png", "image/png",
-                new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0});
+                ArchivoDePrueba.imagen("png"));
 
         // 4. Recorrer cada subetapa de cada etapa, en orden, marcándola COMPLETADA.
         //    Igual que el panel del supervisor: la mayoría van PENDIENTE -> COMPLETADA

@@ -1,5 +1,6 @@
 package co.sena.sicot.service;
 
+import co.sena.sicot.ArchivoDePrueba;
 import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.exception.BusinessException;
 import org.junit.jupiter.api.Test;
@@ -10,6 +11,8 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -94,6 +97,67 @@ class ArchivoValidatorTest {
         assertThatThrownBy(() -> validador.aceptar(foto, ArchivoValidator.OFIMATICOS))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Solo se aceptan PDF, DOCX o XLSX");
+    }
+
+    /**
+     * El archivo exacto que entró al expediente del contrato de prueba el
+     * 15-10-2026: 44 bytes de texto cuya primera línea es «%PDF-1.4». Tika lo
+     * detecta como application/pdf —decide por la cabecera—, SICOT lo guardaba
+     * con un 201 y lo ofrecía para descargar, y el lector del supervisor lo
+     * daba por dañado.
+     */
+    @Test
+    @DisplayName("Un archivo con la cabecera %PDF pero sin estructura se rechaza: ningún lector lo abre")
+    void rechazaUnPdfQueNingunLectorAbre() {
+        byte[] soloLaCabecera = "%PDF-1.4\n% acta firmada de prueba E2E\n%%EOF\n".getBytes(StandardCharsets.UTF_8);
+        MockMultipartFile roto = new MockMultipartFile("archivo", "acta.pdf", "application/pdf", soloLaCabecera);
+
+        assertThatThrownBy(() -> validador.aceptar(roto, ArchivoValidator.EVIDENCIAS_DEL_EXPEDIENTE))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ningún lector puede abrirlo");
+    }
+
+    /** Un PDF cuya subida se cortó a mitad: la cabecera está, el resto no. */
+    @Test
+    @DisplayName("Un PDF truncado se rechaza aunque la cabecera esté completa")
+    void rechazaUnPdfTruncado() {
+        byte[] completo = ArchivoDePrueba.pdfDeUnaPagina("acta de inicio");
+        byte[] aMedias = Arrays.copyOf(completo, completo.length / 2);
+        MockMultipartFile cortado = new MockMultipartFile("archivo", "acta.pdf", "application/pdf", aMedias);
+
+        assertThatThrownBy(() -> validador.aceptar(cortado, ArchivoValidator.EVIDENCIAS_DEL_EXPEDIENTE))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("ningún lector puede abrirlo");
+    }
+
+    @Test
+    @DisplayName("Un PDF real de una página entra al expediente")
+    void aceptaUnPdfReal() {
+        MockMultipartFile acta = new MockMultipartFile(
+                "archivo", "acta.pdf", "application/pdf", ArchivoDePrueba.pdfDeUnaPagina("acta de inicio"));
+
+        ArchivoValidator.ArchivoAceptado aceptado =
+                validador.aceptar(acta, ArchivoValidator.EVIDENCIAS_DEL_EXPEDIENTE);
+
+        assertThat(aceptado.tipo()).isEqualTo(TipoDocumento.PDF);
+        assertThat(aceptado.contentType()).isEqualTo("application/pdf");
+    }
+
+    /**
+     * La foto de la entrega llega desde el teléfono por la red del Centro: una
+     * subida cortada deja los bytes de cabecera y nada más. Guardarla sería
+     * dejar en el expediente una evidencia que no se puede mirar.
+     */
+    @Test
+    @DisplayName("Una foto truncada se rechaza: no se puede mostrar")
+    void rechazaUnaFotoTruncada() throws IOException {
+        byte[] completa = imagenReal("jpg");
+        byte[] aMedias = Arrays.copyOf(completa, 16);
+        MockMultipartFile cortada = new MockMultipartFile("archivo", "entrega.jpg", "image/jpeg", aMedias);
+
+        assertThatThrownBy(() -> validador.aceptar(cortada, ArchivoValidator.EVIDENCIAS_DEL_EXPEDIENTE))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("no se puede mostrar");
     }
 
     @Test
