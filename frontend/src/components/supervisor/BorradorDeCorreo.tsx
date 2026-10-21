@@ -8,8 +8,12 @@
 // lo revise, lo complete y lo mande desde su correo.
 //
 // Lo que SICOT no sabe va entre corchetes y se dice arriba, en vez de
-// inventarlo: los correos de SST y ambiental están en el estudio previo, y las
-// cantidades exactas de los bienes, en la oferta económica.
+// inventarlo: los correos de SST y ambiental están en el estudio previo.
+//
+// Las cantidades de los bienes ya no son un hueco: desde el 21-10-2026 el
+// correo al contratista lleva adjunta la solicitud de pedido en Excel, que es
+// lo que pidió el paso 5 de la lista de chequeo de Alex. El borrador la
+// anuncia, y el adjunto se arma en SolicitudDePedido.tsx, debajo.
 
 import { useState } from 'react'
 import { formatFecha } from '@/services/format'
@@ -47,9 +51,8 @@ export function armarBorrador(tipo: TipoDeCorreo, c: ContratoResponse): Borrador
     }
     if (suministro) {
       avisos.push(
-        'En un suministro el correo debe llevar las cantidades exactas de cada bien. SICOT todavía no las tiene: ' +
-          'cópielas de la oferta económica, que está en el expediente del proceso en el SECOP II (el enlace, en el ' +
-          'paso 2.3).',
+        'En un suministro el correo lleva adjunta la solicitud de pedido con las cantidades exactas. Cárguela ' +
+          'abajo —se pega de la oferta económica— y descargue el Excel para adjuntarlo.',
       )
     }
     const cuerpo = [
@@ -63,9 +66,8 @@ export function armarBorrador(tipo: TipoDeCorreo, c: ContratoResponse): Borrador
       '',
       'Con el fin de dar inicio a la ejecución, les propongo que acordemos las fechas de entrega dentro del plazo del contrato.' +
         (suministro
-          ? ' Los bienes a entregar y sus cantidades son los siguientes:'
+          ? ' Adjunto la solicitud de pedido con los bienes y las cantidades exactas que se deben entregar.'
           : ' Por favor indíquenme en qué fechas prestarían el servicio.'),
-      ...(suministro ? ['', '[Relacione aquí cada bien con su cantidad exacta, según la oferta económica]'] : []),
       '',
       'Quedo atento(a) a su respuesta.',
       '',

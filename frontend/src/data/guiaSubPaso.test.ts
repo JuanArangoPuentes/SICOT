@@ -51,7 +51,7 @@ describe('guiaDelSubPaso', () => {
     )
     expect(
       guiaDelSubPaso(inicio, sub({ id: '2.4', label: 'Contacto con el contratista y acuerdo de entregas' })),
-    ).toContain('complete las cantidades exactas')
+    ).toContain('cargue abajo la solicitud de pedido')
   })
 
   it('en la evidencia fotográfica manda a tomar la foto', () => {

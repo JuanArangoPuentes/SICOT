@@ -57,6 +57,7 @@ import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
 import ActaFirmadaYEnvio from '@/components/supervisor/ActaFirmadaYEnvio'
 import VerificacionSecop from '@/components/supervisor/VerificacionSecop'
 import BorradorDeCorreo, { type TipoDeCorreo } from '@/components/supervisor/BorradorDeCorreo'
+import SolicitudDePedido from '@/components/supervisor/SolicitudDePedido'
 import DatosDelDocumento, {
   guardarTablasDelContrato,
   leerTablasDelContrato,
@@ -1868,6 +1869,14 @@ export default function SupervisorPanel({
                                     tipo={HERRAMIENTA_POR_PASO[ss.label] as TipoDeCorreo}
                                     contrato={contrato}
                                   />
+                                )}
+                              {/* El Excel de bienes y cantidades que, según el paso 5 de la lista
+                                  de chequeo, va adjunto a ese mismo correo. Solo en el del
+                                  contratista: al de SST no se le manda el pedido. */}
+                              {contrato &&
+                                !ss.completed &&
+                                HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
+                                  <SolicitudDePedido contrato={contrato} />
                                 )}
                             </div>
                           )

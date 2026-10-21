@@ -78,8 +78,9 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
     )
   } else if (HERRAMIENTA_POR_PASO[sub.label] === 'CORREO_CONTRATISTA') {
     partes.push(
-      'Qué hacer en SICOT: abra el borrador del correo al contratista, complete las cantidades exactas si es un ' +
-        'suministro y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo como completado.',
+      'Qué hacer en SICOT: si es un suministro, cargue abajo la solicitud de pedido —se pega de la oferta ' +
+        'económica— y descargue el Excel; después abra el borrador del correo al contratista, adjúntelo y envíelo ' +
+        'desde su correo. Cuando hayan acordado las fechas de entrega, márquelo como completado.',
     )
   } else if (SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(sub.id)) {
     // La vista previa no es la carga: hasta pulsar «Cargar evidencia» la foto

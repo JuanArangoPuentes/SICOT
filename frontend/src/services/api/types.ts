@@ -645,3 +645,30 @@ export interface PlantillaDocumento {
 
 /** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
 export type TablasDelDocumento = Record<string, string[][]>
+
+// ─────────── Solicitud de pedido al contratista (paso 2.4) ───────────
+
+/** Una fila del pedido, como la verá el contratista en el Excel adjunto. */
+export interface ItemDeSolicitud {
+  numero: number
+  descripcion: string
+  /** 0 significa «estaba en la oferta y no se pide», como en el formato real. */
+  cantidad: number
+  valorUnitario: number
+  /** Cantidad × valor unitario, calculado por el backend. */
+  valorTotal: number
+}
+
+/**
+ * Los bienes que el supervisor le pide al contratista, con el control de
+ * presupuesto del formato real (ASIGNADO · COMPROMETIDO · QUEDA).
+ */
+export interface SolicitudDePedidoResponse {
+  items: ItemDeSolicitud[]
+  /** El valor del contrato: el tope de lo que se puede pedir. */
+  presupuestoAsignado: number
+  comprometido: number
+  /** Asignado − comprometido; negativo si el pedido se pasa del contrato. */
+  queda: number
+  excedeElContrato: boolean
+}

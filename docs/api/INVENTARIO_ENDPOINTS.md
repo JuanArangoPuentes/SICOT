@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-18 contra el código: 15 controladores, 49 endpoints.**
+**Revisado el 2026-10-21 contra el código: 15 controladores, 52 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -36,6 +36,9 @@
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 14 | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
 | 48 | ContratoController | GET | /api/contratos/{id}/secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (también si datos.gov.co no responde: `disponible=false` y el motivo) | `VerificacionSecopResponse` |
+| 49 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (lista vacía si el supervisor aún no la cargó) | `SolicitudDePedidoResponse` |
+| 50 | ContratoController | PUT | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 · 400 (ítem repetido o inválido) | `SolicitudDePedidoResponse` |
+| 51 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido/archivo | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (XLSX) · 400 (solicitud vacía) | binario |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 16 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 17 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |

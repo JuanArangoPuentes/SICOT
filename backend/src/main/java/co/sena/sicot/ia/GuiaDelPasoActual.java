@@ -700,8 +700,9 @@ public class GuiaDelPasoActual {
                     + "II— y envíelo desde su correo. Después, márquelo como completado.";
         }
         if (nombre.equals("Contacto con el contratista y acuerdo de entregas")) {
-            return "En SICOT: abra el borrador del correo al contratista, complete las cantidades exactas si es un "
-                    + "suministro y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo "
+            return "En SICOT: si es un suministro, cargue abajo la solicitud de pedido —se pega de la oferta "
+                    + "económica— y descargue el Excel; después abra el borrador del correo al contratista, "
+                    + "adjúntelo y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo "
                     + "como completado.";
         }
         if (SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA.contains(sub.codigo())) {
