@@ -1,7 +1,7 @@
 # Lo que hace SICOT en cada paso del proceso real
 
-Estado al 15-10-2026, después de aplicar la lista de chequeo que Alex Zapata
-documentó ese mismo día ([LISTA_CHEQUEO_ALEX.md](LISTA_CHEQUEO_ALEX.md)). Es la
+Estado al 21-10-2026, después de aplicar la lista de chequeo que Alex Zapata
+documentó el 15-10 y completó el 20-10 ([LISTA_CHEQUEO_ALEX.md](LISTA_CHEQUEO_ALEX.md)). Es la
 respuesta a sus columnas «PROCESO EN EL APLICATIVO» y «REQUERIMIENTOS», paso por
 paso, y está escrita para que él la valide.
 
@@ -150,23 +150,54 @@ existe: la carga de archivos al expediente y la lectura de PDF son dos caminos
 que no se tocan —lo que se carga no se lee nunca, y el único extractor es de
 GESTIÓN y saca los 16 campos del formulario de contrato—.
 
+Desde el 21-10-2026 las cantidades sí tienen dónde vivir, aunque se sigan
+transcribiendo: el supervisor las **pega** en la solicitud de pedido del paso 5,
+y de ahí sale el Excel que se le adjunta al contratista. Lo que falta es que
+SICOT las lea del PDF, no que el dato se pierda.
+
 ## Paso 5 — Contacto al contratista
 
 **Lo que pide Alex.** Escribirle al contratista (su correo está en el acta de
 inicio) para presentarse y acordar las entregas; en suministros, con las
 cantidades exactas.
 
+**Lo que pidió además el 20-10-2026.** Que el correo lleve adjunto «un formato
+con el listado de partes y suministros a recibir, […] un documento de excel», y
+dejó el formato que usa hoy: `Solicitud_Maybe.xlsx`, la solicitud de pedido del
+Lote 4. El «cómo será este proceso y dónde se encontrará esta documentación» lo
+dejó por definir.
+
 **Lo que hace SICOT hoy.**
 - Toma el correo del contratista del acta de inicio.
 - Arma el borrador dirigido a él, con el contrato, la vigencia y el
   representante legal, listo para enviarse desde el correo del supervisor.
-- En un suministro, el borrador deja el espacio para las cantidades exactas y
-  avisa que hay que copiarlas de la oferta económica, abriendo el proceso en el
-  SECOP con el enlace del paso 2.3.
+- **Arma la solicitud de pedido y la entrega en Excel**, con la estructura del
+  formato real: encabezado con el contratista y el Centro, el objeto, la tabla
+  (ITEMS · DESCRIPCIÓN · CANTIDAD · VALOR UNITARIO CON IVA · VALOR TOTAL CON
+  IVA), el bloque de presupuesto, el subtotal y la firma del supervisor. El
+  borrador del correo ya no deja el hueco de las cantidades: anuncia el adjunto.
+- **El control de presupuesto es la parte que no es solo una tabla.** ASIGNADO
+  es el valor del contrato, COMPROMETIDO la suma del pedido y QUEDA la
+  diferencia, como en el archivo de Alex, donde de $45.900.300 quedaban $863,58.
+  Si el pedido se pasa, se dice en la pantalla y en rojo dentro del archivo,
+  pero no se bloquea: el supervisor puede estar a mitad de cargar la tabla, y es
+  él quien sabe si lo que no cuadra es una cantidad o el valor registrado.
 
-**Pendiente.** Las cantidades, por lo mismo del paso 4. Y el acta del Lote 4 no
-trae teléfono del contratista, aunque la lista de Alex dice que debería: SICOT
-no inventa uno.
+**Cómo será el proceso, que era lo que quedaba por definir.** Los bienes se
+**pegan** desde la oferta económica adjudicada, que el supervisor ya tiene
+abierta, y quedan guardados con el contrato. No los puede traer SICOT por lo del
+paso 4 (el expediente del SECOP II no es alcanzable desde un programa), y
+capturar 35 ítems con fichas técnicas de 900 caracteres no lo haría nadie dos
+veces. SICOT lee lo pegado tolerando lo que sale de una hoja de cálculo —«$»,
+separador de miles, el encabezado y el subtotal, la columna del total— y dice
+cuántas filas reconoció antes de guardar nada. El archivo se genera cada vez que
+se pide y no se guarda: uno almacenado quedaría viejo en cuanto se corrija una
+cantidad.
+
+**Pendiente.** Que SICOT lea las cantidades de la oferta económica en vez de que
+se peguen: depende del mismo puente del paso 4 (que lo cargado se pueda leer).
+Y el acta del Lote 4 no trae teléfono del contratista, aunque la lista de Alex
+dice que debería: SICOT no inventa uno.
 
 ## Lo que hay que preguntarle a Alex
 

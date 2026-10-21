@@ -21,6 +21,7 @@ Carpeta compartida «MATERIALES PARA LA FORMACION»
 | `1-GCCON-F-032Designaciondelsupervisor (Lote 4).pdf` | `17DqAfEoIMB6czuinmpPQT-Mwl6UHrXAN` | 14:53 | Acto administrativo de designación. Entrada del paso 1. |
 | `1. Acta de inicio (Lote 4)_signed.pdf` | `14N6O-lQl679m0m0HKSZvbUNWdNAdcG5_` | 14:56 | Acta firmada. Recurso del paso 2. |
 | `enlace SECOP.png` | `1kB-DEfrEQmhd0NX-H2Rsex7sId3n8Iad` | 15:04 | Captura del F-032 con recuadro rojo sobre la fila «Link». |
+| `Solicitud_Maybe.xlsx` | `1Ay3YMf8lj8JylnqyCnAni3S2FfExeDfL` | 20-10-2026 | **La solicitud de pedido del Lote 4**, el formato real que el supervisor le adjunta al contratista. Recurso del paso 5. |
 
 > **Trampa conocida.** El conector de Google Drive **no indexa** esta carpeta: sus
 > búsquedas solo devuelven la carpeta y la hoja. Los tres archivos restantes existen,
@@ -41,7 +42,15 @@ Zapata Monsalve; ordenador Carlos Mario Castañeda Monsalve.
 Enlace del proceso en SECOP II: `noticeUID=CO1.NTC.10815297` — **no es derivable**
 del número de contrato, son identificadores distintos.
 
-## La hoja, al 15-10-2026 16:16
+## Lo que cambió el 20-10-2026
+
+Alex completó el **paso 5**, que el 15-10 solo tenía la columna «PROCESO»: le
+agregó el recurso (`Solicitud_Maybe.xlsx`), el «PROCESO EN EL APLICATIVO» y los
+«REQUERIMIENTOS». El resto de la hoja quedó igual, celda por celda. Eso es lo
+que SICOT construyó el 21-10-2026 (ver [PROCESO_REAL_EN_SICOT.md](PROCESO_REAL_EN_SICOT.md),
+paso 5).
+
+## La hoja, al 20-10-2026 13:15
 
 Columnas: PASO · ACTIVIDAD · PROCESO · RECURSO · PROCESO EN EL APLICATIVO ·
 REQUERIMIENTOS · ESTADO. Las tres últimas no existían cuando Alex tomó la captura
@@ -109,7 +118,22 @@ y se establecen las fechas de entrega de común acuerdo respetando el inicio y f
 contrato. Si es suministro o compras, en la preforma del correo se deben especificar
 las cantidades exactas de los bienes a adquirir.
 
-Sin recurso, sin proceso en el aplicativo, sin requerimientos.
+**Recurso** (agregado el 20-10-2026). `Solicitud_Maybe.xlsx`: la solicitud de pedido
+del Lote 4. Encabezado con el contratista y el Centro, el objeto del contrato, el
+proponente con el valor de su propuesta, y la tabla de 35 ítems —ITEMS · DESCRIPCIÓN ·
+CANTIDAD · VALOR UNITARIO CON IVA · VALOR TOTAL CON IVA— con las fichas técnicas
+completas de cada bien. A la derecha, el control de presupuesto: ASIGNADO
+$45.900.300, COMPROMETIDO, QUEDA $863,58. Abajo, el subtotal ($45.899.436,42) y la
+firma «ALEX FERNANDO ZAPATA — SUPERVISOR». Varios ítems van en cantidad 0: estaban en
+la oferta y no se piden.
+
+**En el aplicativo** (agregado el 20-10-2026). «Se debe generar una preforma de
+correo, lo debe hacer el asistente, dónde se relaciona un formato con el listado de
+partes y suministros a recibir, este será un documento de excel adjunto en el correo.»
+
+**Requerimientos** (agregados el 20-10-2026). «1 - Crear preforma de correo.
+2 - Generar y adjuntar el documento excel con la lista de materiales solicitado
+(definir cómo será este proceso y dónde se encontrará esta documentación).»
 
 > El acta de inicio **no trae teléfono del contratista**, solo el correo. Este paso
 > asume un dato que el documento real no tiene.
