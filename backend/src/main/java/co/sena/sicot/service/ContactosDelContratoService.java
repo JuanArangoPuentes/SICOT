@@ -96,8 +96,13 @@ public class ContactosDelContratoService {
      * Los correos del estudio previo que carga el supervisor, con el rol que
      * sugiere el texto que los rodea. No guarda nada: ni el archivo ni los
      * contactos, que el supervisor elige después.
+     *
+     * <p>Sin {@code @Transactional}, a propósito: leer un PDF de varios MB toma
+     * segundos y no necesita la base. El acceso lo verifica
+     * {@code ContratoService.buscar} en su propia transacción, que se cierra
+     * antes de abrir el archivo; con una transacción aquí, cada carga retenía
+     * una de las 10 conexiones del pool mientras PDFBox trabajaba.
      */
-    @Transactional(readOnly = true)
     public LecturaDeContactosResponse leerDelDocumento(Long contratoId, MultipartFile archivo) {
         contratoService.buscar(contratoId);
         if (archivo == null || archivo.isEmpty()) {

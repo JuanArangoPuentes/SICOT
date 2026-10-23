@@ -566,8 +566,7 @@ class ExtraccionContratoServiceTest {
         given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
         given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
         given(datosAbiertos.proveedor("800154801")).willReturn(Optional.of(new VerificacionSecopResponse.Proveedor(
-                "SUMINISTROS MAYBE SAS", "800154801", "4489948", "maybesuministros@gmail.com",
-                "CALLE 78 52D-51, CENTRO COMERCIAL LA TORRE", "ITAGUI", "ANTIOQUIA")));
+                "SUMINISTROS MAYBE SAS", "800154801", "4489948", "maybesuministros@gmail.com")));
 
         ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
 

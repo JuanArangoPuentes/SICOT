@@ -222,15 +222,15 @@ describe('GestionPanel', () => {
           enlaceSecop: null,
           apoyoSupervision: null,
           fechaDesignacion: null,
-          correoContratista: null,
-          // Vacío y no null: sin el campo, el backend conserva el teléfono que
-          // había; con el campo vacío, entiende que Gestión lo dejó en blanco.
-          telefonoContratista: '',
+          // Correo y teléfono no viajan si Gestión no los tocó: los llena también
+          // el supervisor, y el backend conserva el que había.
+          correoContratista: undefined,
+          telefonoContratista: undefined,
         }),
       )
     })
 
-    it('al corregir conserva el enlace del SECOP, el apoyo, la fecha de designación, el correo y el teléfono del contratista', async () => {
+    it('al corregir conserva el enlace del SECOP, el apoyo y la fecha de designación, y no reenvía correo ni teléfono sin tocar', async () => {
       const { getContratos, actualizarContrato } = await import('@/services/contratoService')
       vi.mocked(getContratos).mockResolvedValue([
         contrato({
@@ -255,9 +255,34 @@ describe('GestionPanel', () => {
             enlaceSecop: 'https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.1',
             apoyoSupervision: 'Yeison Zapata',
             fechaDesignacion: '2026-10-10',
-            correoContratista: 'ventas@maderasdelnorte.com',
-            telefonoContratista: '604 448 9948',
           }),
+        ),
+      )
+      // El supervisor pudo traerlos del SECOP después de que se abrió esta
+      // lista: reenviar los de la lista los borraría o los pisaría.
+      const cuerpo = vi.mocked(actualizarContrato).mock.calls[0][1]
+      expect(cuerpo.correoContratista).toBeUndefined()
+      expect(cuerpo.telefonoContratista).toBeUndefined()
+    })
+
+    it('si Gestión cambia o borra el teléfono, sí viaja: el nuevo, o vacío para borrarlo', async () => {
+      const { getContratos, actualizarContrato } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([
+        contrato({ correoContratista: 'ventas@maderasdelnorte.com', telefonoContratista: '604 448 9948' }),
+      ])
+      vi.mocked(actualizarContrato).mockResolvedValue(contrato())
+
+      montar()
+
+      fireEvent.click(await screen.findByTitle('Corregir los datos generales de CTMA-2026-0184'))
+      fireEvent.change(screen.getByDisplayValue('604 448 9948'), { target: { value: '3001234567' } })
+      fireEvent.change(screen.getByDisplayValue('ventas@maderasdelnorte.com'), { target: { value: '' } })
+      fireEvent.click(screen.getByText('Guardar los cambios'))
+
+      await waitFor(() =>
+        expect(actualizarContrato).toHaveBeenCalledWith(
+          1,
+          expect.objectContaining({ telefonoContratista: '3001234567', correoContratista: '' }),
         ),
       )
     })

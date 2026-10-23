@@ -384,6 +384,12 @@ export default function SupervisorPanel({
   const tab = vista
   const setTab = onCambiarVista
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set([1]))
+  // Sube cada vez que el 2.2 guarda contactos o el 2.4 guarda fechas. Los dos
+  // están montados a la vez y cada uno usa lo del otro en sus correos (el del
+  // 2.4 va a los contactos del 2.2; el del 2.2 lista las fechas del 2.4): con
+  // esto cada uno vuelve a pedir lo que guardó el otro, en vez de quedarse con
+  // lo que leyó al abrirse.
+  const [versionDelArranque, setVersionDelArranque] = useState(0)
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
   const [procesandoFirma, setProcesandoFirma] = useState<string | null>(null)
@@ -1871,29 +1877,50 @@ export default function SupervisorPanel({
                                 <VerificacionSecop contratoId={contrato.id} />
                               )}
                               {/* Paso 2.2: los profesionales de SST y ambiental, y el correo
-                                  que ya sale dirigido a ellos. */}
-                              {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' && (
+                                  que ya sale dirigido a ellos. A diferencia de las otras
+                                  herramientas, sigue con el sub-paso cerrado: el correo de
+                                  las fechas del 2.4 sale dirigido a estos contactos. */}
+                              {contrato && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' && (
                                 <ContactosSstAmbiental
                                   contrato={contrato}
-                                  onGuardado={() => void onRefreshRegistros()}
+                                  version={versionDelArranque}
+                                  onGuardado={() => {
+                                    setVersionDelArranque((v) => v + 1)
+                                    void onRefreshRegistros()
+                                  }}
                                 />
                               )}
                               {/* Paso 2.4, en el orden en que lo hace el supervisor según el
                                   paso 5 de la hoja de Alex: cómo contactar al contratista, el
                                   correo, el Excel de bienes y cantidades que va adjunto (al de
-                                  SST no se le manda el pedido) y las fechas que acuerden. */}
-                              {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
+                                  SST no se le manda el pedido) y las fechas que acuerden.
+                                  Las fechas siguen con el 2.4 cerrado: los recordatorios
+                                  llegan después y una fecha se puede mover. Van en la misma
+                                  posición abierto o cerrado, para que cerrar el paso no las
+                                  desmonte y se pierda una edición a medias. */}
+                              {contrato && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
                                 <>
-                                  <ContactoDelContratista
+                                  {!ss.completed && (
+                                    <>
+                                      <ContactoDelContratista
+                                        contrato={contrato}
+                                        onActualizado={(c) => {
+                                          onContratoActualizado?.(c)
+                                          void onRefreshRegistros()
+                                        }}
+                                      />
+                                      <BorradorDeCorreo tipo="CORREO_CONTRATISTA" contrato={contrato} />
+                                      <SolicitudDePedido contrato={contrato} />
+                                    </>
+                                  )}
+                                  <AcuerdoDeEntregas
                                     contrato={contrato}
-                                    onActualizado={(c) => {
-                                      onContratoActualizado?.(c)
+                                    version={versionDelArranque}
+                                    onGuardado={() => {
+                                      setVersionDelArranque((v) => v + 1)
                                       void onRefreshRegistros()
                                     }}
                                   />
-                                  <BorradorDeCorreo tipo="CORREO_CONTRATISTA" contrato={contrato} />
-                                  <SolicitudDePedido contrato={contrato} />
-                                  <AcuerdoDeEntregas contrato={contrato} onGuardado={() => void onRefreshRegistros()} />
                                 </>
                               )}
                             </div>

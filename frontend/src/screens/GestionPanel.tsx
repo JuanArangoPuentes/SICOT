@@ -242,6 +242,16 @@ const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
   telefonoContratista: c.telefonoContratista ?? '',
 })
 
+/**
+ * Lo que va en el PUT para un campo que se manda solo si cambió: sin cambios,
+ * undefined (no viaja, y el backend conserva lo que hay); borrado, cadena
+ * vacía (el backend lo borra); si no, el valor nuevo.
+ */
+function cambio(nuevo: string, antes: string | null | undefined): string | undefined {
+  const limpio = nuevo.trim()
+  return limpio === (antes ?? '').trim() ? undefined : limpio
+}
+
 // El valor guardado puede no estar en la lista de opciones: lo escribió otro
 // contrato, otra versión de la lista o la extracción con IA. Se añade como
 // opción en vez de descartarlo, porque un <select> que no contiene su propio
@@ -646,10 +656,13 @@ export default function GestionPanel({
         enlaceSecop: edicion.enlaceSecop.trim() || null,
         apoyoSupervision: edicion.apoyoSupervision.trim() || null,
         fechaDesignacion: edicion.fechaDesignacion || null,
-        correoContratista: edicion.correoContratista.trim() || null,
-        // Vacío y no null: para el backend, sin el campo significa «conservar el
-        // que había» (por las instalaciones viejas), y aquí Gestión lo borró.
-        telefonoContratista: edicion.telefonoContratista.trim(),
+        // Correo y teléfono, solo si Gestión los cambió. Los llena también el
+        // supervisor (desde el registro de proveedores del SECOP II), y el
+        // formulario sale de la lista cargada al abrir la pantalla: reenviarlos
+        // sin tocar borraría lo que él trajo después. Sin el campo, el backend
+        // conserva el que había; vacío, lo borra.
+        correoContratista: cambio(edicion.correoContratista, contratoEnEdicion.correoContratista),
+        telefonoContratista: cambio(edicion.telefonoContratista, contratoEnEdicion.telefonoContratista),
       })
       await recargarContratos()
       cerrarEdicion()

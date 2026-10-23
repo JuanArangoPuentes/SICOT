@@ -12,6 +12,10 @@
 // al supervisor tres días antes y el mismo día. Con las fechas guardadas salen
 // los dos correos que siguen: la confirmación al contratista y el aviso a SST y
 // ambiental.
+//
+// Sigue a la vista con el 2.4 cerrado: los recordatorios llegan después de
+// cerrarlo y los correos prometen avisar si una fecha cambia, así que el
+// acuerdo tiene que poder consultarse y corregirse (revisión del 23-10-2026).
 
 import { useCallback, useEffect, useState } from 'react'
 import {
@@ -80,28 +84,34 @@ export function problemasDeLasFilas(filas: Fila[], inicio: string | null, fin: s
 
 export default function AcuerdoDeEntregas({
   contrato,
+  version = 0,
   onGuardado,
 }: {
   contrato: ContratoResponse
-  /** Para que el panel refresque lo que depende del acuerdo (la auditoría). */
+  /**
+   * Sube cuando otro sub-paso guarda algo que este usa (los contactos de SST y
+   * ambiental del 2.2): entonces se vuelve a pedir. Los dos están montados a
+   * la vez y cada uno leía lo del otro una sola vez, al abrirse.
+   */
+  version?: number
+  /** Para que el panel refresque lo que depende del acuerdo (la auditoría, el 2.2). */
   onGuardado?: () => void
 }) {
+  // null mientras no se haya podido consultar: es distinto de «no hay fechas».
+  // Con la consulta fallida, guardar reemplazaría el acuerdo que sí existe.
   const [acuerdo, setAcuerdo] = useState<AcuerdoDeEntregasResponse | null>(null)
   const [contactos, setContactos] = useState<ContactoDelContrato[]>([])
-  const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filas, setFilas] = useState<Fila[] | null>(null)
   const [guardando, setGuardando] = useState(false)
 
   const cargar = useCallback(() => {
-    setCargando(true)
     obtenerEntregasAcordadas(contrato.id)
       .then((a) => {
         setAcuerdo(a)
         setError(null)
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudo consultar el acuerdo de entregas.'))
-      .finally(() => setCargando(false))
     // Los contactos solo hacen falta para el correo a SST y ambiental: si no
     // llegan, el borrador lo dice, y el acuerdo de entregas sigue funcionando.
     obtenerContactosSstAmbiental(contrato.id)
@@ -111,7 +121,7 @@ export default function AcuerdoDeEntregas({
 
   useEffect(() => {
     cargar()
-  }, [cargar])
+  }, [cargar, version])
 
   const inicio = acuerdo?.inicioDelContrato ?? contrato.fechaInicio ?? null
   const fin = acuerdo?.finDelContrato ?? contrato.fechaFin ?? null
@@ -146,10 +156,19 @@ export default function AcuerdoDeEntregas({
   const cambiarFila = (i: number, cambio: Partial<Fila>) =>
     setFilas((actual) => (actual ? actual.map((f, j) => (j === i ? { ...f, ...cambio } : f)) : actual))
 
-  if (cargando) {
+  if (!acuerdo) {
     return (
       <div style={CAJA}>
-        <span style={NOTA}>Consultando las fechas de entrega acordadas…</span>
+        {error ? (
+          <>
+            <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>{error}</span>
+            <button type="button" style={{ ...BOTON, ...BOTON_SECUNDARIO, alignSelf: 'flex-start' }} onClick={cargar}>
+              Volver a consultar
+            </button>
+          </>
+        ) : (
+          <span style={NOTA}>Consultando las fechas de entrega acordadas…</span>
+        )}
       </div>
     )
   }
@@ -163,6 +182,13 @@ export default function AcuerdoDeEntregas({
           {inicio && fin ? ` (del ${formatFecha(inicio)} al ${formatFecha(fin)})` : ''}. SICOT se las recuerda tres días
           antes y el mismo día, y el paso no se cierra sin al menos una.
         </span>
+        {/* Los recordatorios solo corren sobre contratos activos: prometerlos
+            con el contrato en borrador sería decir algo que no va a pasar. */}
+        {contrato.estado !== 'ACTIVO' && (
+          <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>
+            El contrato no está activo: SICOT empieza a recordar las entregas cuando Gestión lo active.
+          </span>
+        )}
 
         {error && <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>{error}</span>}
 

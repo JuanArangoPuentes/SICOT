@@ -67,6 +67,20 @@ class ContactosEnUnDocumentoTest {
         assertThat(ContactosEnUnDocumento.leer(null)).isEmpty();
     }
 
+    /**
+     * Sin tope en la parte local, 40.000 letras sin arroba tardaban 26 s
+     * (revisión del 23-10-2026). Con tope, un millón cabe en un segundo.
+     */
+    @Test
+    @org.junit.jupiter.api.Timeout(5)
+    void unaTiraLargaSinArrobaNoCuelgaLaBusqueda() {
+        String trampa = "a".repeat(1_000_000);
+
+        assertThat(ContactosEnUnDocumento.leer(trampa + " SST: sst.ana@sena.edu.co"))
+                .extracting(ContactosEnUnDocumento.Encontrado::correo)
+                .containsExactly("sst.ana@sena.edu.co");
+    }
+
     /** «sst» dentro de otra palabra no es una mención de SST. */
     @Test
     void sstDebeSerUnaPalabraCompleta() {

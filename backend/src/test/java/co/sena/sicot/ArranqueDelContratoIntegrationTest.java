@@ -313,7 +313,7 @@ class ArranqueDelContratoIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(post("/api/contratos/{id}/contacto-contratista/desde-secop", contratoId)
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("no aparece en el registro de proveedores")));
+                .andExpect(jsonPath("$.message", containsString("No se encontró en el registro de proveedores")));
 
         given(datosAbiertos.proveedor(anyString()))
                 .willThrow(new DatosAbiertosSecop.NoDisponible("sin red", new RuntimeException()));
@@ -357,11 +357,84 @@ class ArranqueDelContratoIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void unElementoVacioEnLaListaEsUn400YNoUn500() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.911200", supervisorId(), null, null);
+        String supervisor = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        mockMvc.perform(put("/api/contratos/{id}/entregas-acordadas", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"entregas\":[null]}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put("/api/contratos/{id}/contactos-sst-ambiental", contratoId)
+                        .header("Authorization", "Bearer " + supervisor)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"contactos\":[null]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void sinUnTelefonoUtilizableEnElRegistroSeDiceYNoSeGuardaNada() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.911300", supervisorId(),
+                "maybesuministros@gmail.com", null);
+        // Lo que devuelve proveedor() cuando el registro publica «0» o «xxxxxx»:
+        // ya normalizado a null (DatosAbiertosSecop.telefonoUtilizable).
+        given(datosAbiertos.proveedor(anyString())).willReturn(Optional.of(
+                new VerificacionSecopResponse.Proveedor("SUMINISTROS MAYBE SAS", "800154801", null, null)));
+        String supervisor = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+
+        mockMvc.perform(post("/api/contratos/{id}/contacto-contratista/desde-secop", contratoId)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("no publica un teléfono utilizable")));
+    }
+
+    /**
+     * Gestión tiene la lista abierta desde antes de que el supervisor trajera el
+     * teléfono y el correo, y corrige otro dato: la pantalla no los manda
+     * porque no los tocó, y no se pueden borrar por eso.
+     */
+    @Test
+    void unaCorreccionDeGestionSinLosCamposNoBorraLoQueTrajoElSupervisor() throws Exception {
+        String gestion = login("gestion@soy.sena.edu.co", "Gestion123*");
+        long contratoId = crearContrato(gestion, "CO1.PCCNTR.911400", supervisorId(), null, null);
+        given(datosAbiertos.proveedor(anyString())).willReturn(Optional.of(maybe("maybesuministros@gmail.com")));
+        String supervisor = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+        mockMvc.perform(post("/api/contratos/{id}/contacto-contratista/desde-secop", contratoId)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(put("/api/contratos/{id}", contratoId)
+                        .header("Authorization", "Bearer " + gestion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.911400","objeto":"Objeto corregido por Gestión",
+                                 "valor":45900300,"fechaInicio":"2026-10-14","fechaFin":"2026-12-15"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correoContratista").value("maybesuministros@gmail.com"))
+                .andExpect(jsonPath("$.telefonoContratista").value("4489948"));
+
+        // Y vacío sí lo borra: es Gestión dejándolo en blanco a propósito.
+        mockMvc.perform(put("/api/contratos/{id}", contratoId)
+                        .header("Authorization", "Bearer " + gestion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.911400","objeto":"Objeto corregido por Gestión",
+                                 "valor":45900300,"correoContratista":"","telefonoContratista":""}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correoContratista").doesNotExist())
+                .andExpect(jsonPath("$.telefonoContratista").doesNotExist());
+    }
+
     // ─────────────────────────────── Apoyo ───────────────────────────────
 
     private static VerificacionSecopResponse.Proveedor maybe(String correo) {
-        return new VerificacionSecopResponse.Proveedor("SUMINISTROS MAYBE SAS", "800154801", "4489948", correo,
-                "CALLE 78 52D-51, CENTRO COMERCIAL LA TORRE", "ITAGUI", "ANTIOQUIA");
+        return new VerificacionSecopResponse.Proveedor("SUMINISTROS MAYBE SAS", "800154801", "4489948", correo);
     }
 
     private long crearContrato(String token, String numero, long supervisorId, String correo, String telefono)

@@ -161,12 +161,12 @@ export interface ActualizarContratoRequest {
   enlaceSecop?: string | null
   apoyoSupervision?: string | null
   fechaDesignacion?: string | null
-  correoContratista?: string | null
   /**
-   * La excepción a «se guarda vacío»: sin el campo, el backend conserva el
-   * teléfono que había (las instalaciones anteriores al 22-10-2026 no lo
-   * envían). Una cadena vacía sí lo borra.
+   * Correo y teléfono son la excepción a «se guarda vacío»: sin el campo, el
+   * backend conserva el que había, porque también los llena el supervisor
+   * desde el registro de proveedores del SECOP II. Una cadena vacía los borra.
    */
+  correoContratista?: string | null
   telefonoContratista?: string | null
 }
 
@@ -367,14 +367,17 @@ export interface VerificacionSecopResponse {
   contactoProveedor?: ProveedorSecop | null
 }
 
+/**
+ * Solo teléfono y correo, lo que pide el paso 5. Ni la dirección ni los datos
+ * del representante: con un contratista persona natural son su domicilio y sus
+ * datos personales. Los dos vienen ya normalizados, o null si el registro no
+ * publica uno utilizable.
+ */
 export interface ProveedorSecop {
   nombre: string | null
   nit: string | null
   telefono: string | null
   correo: string | null
-  direccion: string | null
-  municipio: string | null
-  departamento: string | null
 }
 
 export interface GenerarDocumentoRequest {

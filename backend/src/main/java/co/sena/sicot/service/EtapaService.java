@@ -163,7 +163,8 @@ public class EtapaService {
         if (entregaRepository.countByContratoId(contratoId) == 0) {
             throw new BusinessException("Para cerrar este paso registre las fechas de entrega que acordó con el "
                     + "contratista (en «Fechas de entrega acordadas», debajo del correo). Deben quedar dentro del "
-                    + "plazo del contrato.");
+                    + "plazo del contrato. Si su SICOT no muestra esa sección, es una versión anterior al "
+                    + "22-10-2026: actualícelo.");
         }
     }
 

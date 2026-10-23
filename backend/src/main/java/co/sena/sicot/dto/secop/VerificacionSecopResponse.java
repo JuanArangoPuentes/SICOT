@@ -93,11 +93,14 @@ public record VerificacionSecopResponse(
 
     /**
      * El contratista como está inscrito en el registro de proveedores del SECOP
-     * II. Solo los datos de la empresa: el registro publica también el correo
-     * y el teléfono personales del representante legal, y esos no se leen.
+     * II: solo el teléfono y el correo, que es lo que pide el paso 5 de la hoja
+     * de Alex. Ni la dirección ni los datos del representante legal: con un
+     * contratista persona natural, son su domicilio y sus datos personales.
+     *
+     * @param telefono {@code null} si el registro no publica uno utilizable
+     * @param correo   {@code null} si el registro no publica uno con forma de correo
      */
-    public record Proveedor(String nombre, String nit, String telefono, String correo, String direccion,
-                            String municipio, String departamento) {
+    public record Proveedor(String nombre, String nit, String telefono, String correo) {
     }
 
     public static VerificacionSecopResponse noDisponible(String motivo, Instant consultadoEn, String enlaceProceso) {

@@ -196,6 +196,53 @@ describe('2.4 — fechas de entrega acordadas', () => {
   })
 })
 
+describe('si la consulta falla no se puede reemplazar lo que hay', () => {
+  it('sin el acuerdo consultado no se ofrece registrar fechas, sino volver a consultar', async () => {
+    vi.mocked(servicio.obtenerEntregasAcordadas)
+      .mockRejectedValueOnce(new ApiError(0, 'No hay conexión con el servidor de SICOT.'))
+      .mockResolvedValueOnce({ ...SIN_ACUERDO, entregas: ENTREGAS })
+    render(<AcuerdoDeEntregas contrato={LOTE_4} />)
+
+    expect(await screen.findByText('No hay conexión con el servidor de SICOT.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Registrar las fechas acordadas' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Volver a consultar' }))
+    expect(await screen.findByText('30/10/2026')).toBeTruthy()
+    expect(servicio.guardarEntregasAcordadas).not.toHaveBeenCalled()
+  })
+
+  it('sin los contactos consultados no se ofrece agregar ni buscar en el estudio previo', async () => {
+    vi.mocked(servicio.obtenerContactosSstAmbiental).mockRejectedValue(new ApiError(0, 'Sin conexión.'))
+    render(<ContactosSstAmbiental contrato={LOTE_4} />)
+
+    expect(await screen.findByText('Sin conexión.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Agregar' })).toBeNull()
+    expect(screen.queryByText('Buscar los correos en el estudio previo')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Volver a consultar' })).toBeTruthy()
+  })
+
+  it('con el contrato en borrador avisa que los recordatorios empiezan al activarlo', async () => {
+    render(<AcuerdoDeEntregas contrato={{ ...LOTE_4, estado: 'BORRADOR' }} />)
+
+    expect(await screen.findByText(/SICOT empieza a recordar las entregas cuando Gestión lo active/)).toBeTruthy()
+  })
+})
+
+describe('el 2.2 y el 2.4 se enteran de lo que guarda el otro', () => {
+  it('al subir la versión, el 2.4 vuelve a pedir los contactos para su correo', async () => {
+    vi.mocked(servicio.obtenerEntregasAcordadas).mockResolvedValue({ ...SIN_ACUERDO, entregas: ENTREGAS })
+    vi.mocked(servicio.obtenerContactosSstAmbiental)
+      .mockResolvedValueOnce({ contactos: [] })
+      .mockResolvedValueOnce({ contactos: CONTACTOS })
+    const { rerender } = render(<AcuerdoDeEntregas contrato={LOTE_4} version={0} />)
+    await screen.findByText('30/10/2026')
+
+    rerender(<AcuerdoDeEntregas contrato={LOTE_4} version={1} />)
+    await waitFor(() => expect(servicio.obtenerContactosSstAmbiental).toHaveBeenCalledTimes(2))
+    fireEvent.click(screen.getByRole('button', { name: 'Avisar las fechas a SST y ambiental' }))
+    expect(await screen.findByText(/Para: amgomez@sena.edu.co, cperez@sena.edu.co/)).toBeTruthy()
+  })
+})
+
 describe('2.2 — profesionales de SST y ambiental', () => {
   it('el supervisor agrega un contacto a mano y el correo sale dirigido a él', async () => {
     vi.mocked(servicio.guardarContactosSstAmbiental).mockResolvedValue({ contactos: [CONTACTOS[0]] })
@@ -267,12 +314,26 @@ describe('2.4 — teléfono del contratista', () => {
     const onActualizado = vi.fn()
     render(<ContactoDelContratista contrato={LOTE_4} onActualizado={onActualizado} />)
 
-    expect(screen.getByText(/El acta de inicio no trae el teléfono/)).toBeTruthy()
+    expect(screen.getByText(/Si el acta de inicio no trae el teléfono/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Traer el teléfono del SECOP II' }))
 
     expect(await screen.findByText('4489948')).toBeTruthy()
     expect(onActualizado).toHaveBeenCalledWith(expect.objectContaining({ telefonoContratista: '4489948' }))
     expect(screen.getByRole('button', { name: 'Copiar el teléfono' })).toBeTruthy()
+    // De dónde salió, para contrastarlo con el acta, que según la hoja es la fuente.
+    expect(screen.getByText(/compárelo con el acta de inicio/)).toBeTruthy()
+  })
+
+  it('si vuelve sin teléfono (solo completó el correo), lo dice en vez de quedarse callado', async () => {
+    vi.mocked(servicio.completarContactoDelContratista).mockResolvedValue({
+      ...LOTE_4,
+      correoContratista: 'maybesuministros@gmail.com',
+      telefonoContratista: null,
+    })
+    render(<ContactoDelContratista contrato={{ ...LOTE_4, correoContratista: null }} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Traer el teléfono del SECOP II' }))
+    expect(await screen.findByText(/no publica un teléfono utilizable/)).toBeTruthy()
   })
 
   it('si el registro no lo publica, lo dice y no inventa uno', async () => {

@@ -83,9 +83,9 @@ export function guiaDelSubPaso(step: Step, sub: SubStep): string {
       'Qué hacer en SICOT: si es un suministro, cargue abajo la solicitud de pedido —se pega de la oferta ' +
         'económica— y descargue el Excel; después abra el borrador del correo al contratista, adjúntelo y envíelo ' +
         'desde su correo. Cuando acuerden las fechas de entrega, regístrelas en «Fechas de entrega acordadas»: ' +
-        'deben caer dentro del plazo del contrato, SICOT le recuerda cada una antes de que llegue y le arma los ' +
-        'correos para confirmarlas al contratista y compartirlas con SST y ambiental. El paso no se cierra sin al ' +
-        'menos una fecha registrada.',
+        'deben caer dentro del plazo del contrato, SICOT le recuerda cada una antes de que llegue (con el contrato ' +
+        'activo) y le arma los correos para confirmarlas al contratista y compartirlas con SST y ambiental. El paso ' +
+        'no se cierra sin al menos una fecha registrada.',
     )
   } else if (SUBETAPAS_CON_EVIDENCIA_FOTOGRAFICA.has(sub.id)) {
     // La vista previa no es la carga: hasta pulsar «Cargar evidencia» la foto

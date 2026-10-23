@@ -44,8 +44,16 @@ final class ContactosEnUnDocumento {
     private static final int VENTANA_ANTES = 160;
     private static final int VENTANA_DESPUES = 60;
 
+    /**
+     * Cada parte con tope, como en el RFC: 64 caracteres antes de la arroba y
+     * 63 por etiqueta. Sin tope, una tira larga de letras sin arroba (un
+     * párrafo «aaaa…», un base64 pegado en el PDF) hacía que cada posición
+     * recorriera la tira hasta el final: 40.000 caracteres tardaban 26 s, con
+     * la conexión de la base tomada. Con tope, un millón tarda menos de un
+     * segundo.
+     */
     private static final Pattern CORREO = Pattern.compile(
-            "[A-Za-z0-9][A-Za-z0-9._%+-]*@[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}");
+            "[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){0,8}\\.[A-Za-z]{2,24}");
 
     /**
      * Cómo se nombra cada rol en los documentos de contratación. Se busca sobre

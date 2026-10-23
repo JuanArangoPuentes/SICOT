@@ -145,8 +145,7 @@ export default function VerificacionSecop({ contratoId }: { contratoId: number }
               </>
             )}
             {/* El registro de proveedores: de ahí sale el teléfono que el acta
-                no trae (paso 5 de la hoja de Alex). Solo los datos de la
-                empresa; los personales del representante no se leen. */}
+                no trae (paso 5 de la hoja de Alex). Solo teléfono y correo. */}
             {datos.contactoProveedor && (
               <>
                 <span style={ETIQUETA}>Contratista en el registro de proveedores</span>
@@ -154,11 +153,9 @@ export default function VerificacionSecop({ contratoId }: { contratoId: number }
                   {[
                     datos.contactoProveedor.telefono ? `tel. ${datos.contactoProveedor.telefono}` : null,
                     datos.contactoProveedor.correo,
-                    [datos.contactoProveedor.direccion, datos.contactoProveedor.municipio].filter(Boolean).join(', ') ||
-                      null,
                   ]
                     .filter(Boolean)
-                    .join(' · ') || 'sin datos de contacto publicados'}
+                    .join(' · ') || 'sin teléfono ni correo utilizables publicados'}
                 </span>
               </>
             )}

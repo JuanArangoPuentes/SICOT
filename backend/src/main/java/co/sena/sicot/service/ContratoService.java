@@ -164,10 +164,15 @@ public class ContratoService {
         contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
-        contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
-        // Sin el campo (null) se conserva el que había: las instalaciones de
-        // escritorio anteriores al 22-10-2026 no lo envían, y editar un contrato
-        // desde una de ellas no debe borrar el teléfono. Vacío sí lo borra.
+        // Correo y teléfono: sin el campo (null) se conserva el que había; vacío
+        // lo borra. Desde el 22-10-2026 el supervisor también los llena (desde
+        // el registro de proveedores del SECOP II), y una corrección de Gestión
+        // hecha con la lista cargada antes no debe borrarlos: la pantalla los
+        // manda solo cuando Gestión los cambió. Las instalaciones de escritorio
+        // anteriores no envían el teléfono.
+        if (request.correoContratista() != null) {
+            contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        }
         if (request.telefonoContratista() != null) {
             contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
         }

@@ -10,6 +10,9 @@
 // estudio previo y SICOT propone los correos que encuentra en él, con el rol
 // que sugiere el texto de alrededor; el supervisor elige. El archivo no se
 // guarda: el estudio previo ya está publicado en el SECOP.
+//
+// Sigue a la vista con el 2.2 cerrado: el correo de las fechas del 2.4 sale
+// dirigido a estos contactos, y si faltan, aquí es donde se registran.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -56,14 +59,18 @@ function yaEsta(contactos: ContactoDelContrato[], rol: RolDeContacto, correo: st
 
 export default function ContactosSstAmbiental({
   contrato,
+  version = 0,
   onGuardado,
 }: {
   contrato: ContratoResponse
+  /** Sube cuando el 2.4 guarda fechas: el correo de este paso las lleva. Ver AcuerdoDeEntregas. */
+  version?: number
   onGuardado?: () => void
 }) {
-  const [contactos, setContactos] = useState<ContactoDelContrato[]>([])
+  // null mientras no se haya podido consultar: con la consulta fallida,
+  // «Agregar» haría un reemplazo completo y borraría los que sí existen.
+  const [contactos, setContactos] = useState<ContactoDelContrato[] | null>(null)
   const [entregas, setEntregas] = useState<EntregaAcordada[]>([])
-  const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
   const [rol, setRol] = useState<RolDeContacto>('SST')
@@ -74,14 +81,12 @@ export default function ContactosSstAmbiental({
   const archivoRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(() => {
-    setCargando(true)
     obtenerContactosSstAmbiental(contrato.id)
       .then((r) => {
         setContactos(r.contactos)
         setError(null)
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron consultar los contactos.'))
-      .finally(() => setCargando(false))
     // Las fechas acordadas solo enriquecen el correo: sin ellas, el borrador
     // promete compartirlas cuando estén.
     obtenerEntregasAcordadas(contrato.id)
@@ -91,7 +96,7 @@ export default function ContactosSstAmbiental({
 
   useEffect(() => {
     cargar()
-  }, [cargar])
+  }, [cargar, version])
 
   const guardar = (lista: ContactoDelContrato[], alTerminar?: () => void) => {
     setGuardando(true)
@@ -107,6 +112,7 @@ export default function ContactosSstAmbiental({
   }
 
   const agregar = (nuevo: ContactoDelContrato, alTerminar?: () => void) => {
+    if (!contactos) return
     if (yaEsta(contactos, nuevo.rol, nuevo.correo)) {
       setError(`${nuevo.correo} ya está registrado como ${NOMBRE_DEL_ROL[nuevo.rol]}.`)
       return
@@ -127,10 +133,19 @@ export default function ContactosSstAmbiental({
       })
   }
 
-  if (cargando) {
+  if (!contactos) {
     return (
       <div style={CAJA}>
-        <span style={NOTA}>Consultando los contactos de SST y ambiental…</span>
+        {error ? (
+          <>
+            <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>{error}</span>
+            <button type="button" style={{ ...BOTON, ...BOTON_SECUNDARIO, alignSelf: 'flex-start' }} onClick={cargar}>
+              Volver a consultar
+            </button>
+          </>
+        ) : (
+          <span style={NOTA}>Consultando los contactos de SST y ambiental…</span>
+        )}
       </div>
     )
   }

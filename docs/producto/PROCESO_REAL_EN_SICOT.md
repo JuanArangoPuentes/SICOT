@@ -149,9 +149,12 @@ cantidades de suministros, especificaciones y valores.
   pagado y lo pendiente, y **las pólizas**. Del Lote 4 vienen la ficha y dos
   pólizas.
 - Desde el 22-10-2026 muestra también **cómo está inscrito el contratista en el
-  registro de proveedores** del SECOP II: teléfono, correo y dirección. Solo los
-  datos de la empresa; el registro publica además el correo y el teléfono
-  personales del representante legal, y esos no se leen.
+  registro de proveedores** del SECOP II: teléfono y correo, que es lo que pide
+  la hoja. El registro publica además la dirección y el correo y el teléfono
+  personales del representante legal, y nada de eso se lee: cuando el
+  contratista es una persona natural, son su domicilio y sus datos personales.
+  El registro es texto libre («604.440.9977», «2120777 ext 1», «0»): SICOT
+  normaliza lo que se puede usar y descarta lo que no es un teléfono.
 - Compara con lo registrado en SICOT y **señala lo que no coincide**. En el Lote
   4, todo coincide.
 - La verificación sigue siendo del supervisor: SICOT no decide si una diferencia
@@ -303,4 +306,14 @@ acordada se recibió: esa etapa sigue el manual hasta que Alex la documente.
 - Los contratos creados antes del 15-10-2026 conservan sus 27 sub-pasos.
 - La **V22** (22-10-2026) crea las fechas de entrega acordadas, los contactos de
   SST y ambiental y el teléfono del contratista, y le pone al 2.4 la marca
-  `ENTREGAS_ACORDADAS`. Ninguna otra rama usa la V21 ni la V22.
+  `ENTREGAS_ACORDADAS`; la **V23** se la pone también a los 2.4 que se cerraron
+  antes, por si se reabren. Ninguna otra rama usa la V21, la V22 ni la V23.
+- **Orden de despliegue.** El 2.4 de los contratos abiertos pasa a exigir fechas
+  registradas, y la aplicación de escritorio o Android instalada no se
+  actualiza sola: con la 0.5.0 el supervisor no ve «Fechas de entrega
+  acordadas» y el paso le queda trabado (el mensaje le dice que actualice).
+  Publicar la versión nueva del cliente antes o junto con este backend, para
+  que el enlace del aviso (`releases/latest`) la traiga.
+- La edición de un contrato desde Gestión (`PUT /api/contratos/{id}`) ya no
+  reemplaza el correo ni el teléfono del contratista si no vienen: también los
+  llena el supervisor, y una lista abierta antes no debe borrarlos.

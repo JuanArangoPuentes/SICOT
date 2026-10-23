@@ -22,7 +22,7 @@ public record GuardarAcuerdoDeEntregasRequest(
         @NotNull(message = "El acuerdo de entregas es obligatorio (puede ir vacío para borrarlo).")
         @Size(max = 60, message = "El acuerdo admite máximo 60 entregas.")
         @Valid
-        List<Entrega> entregas) {
+        List<@NotNull(message = "Cada entrega debe traer su fecha y su descripción.") Entrega> entregas) {
 
     /**
      * @param fecha       el día acordado; tiene que caer dentro del plazo del

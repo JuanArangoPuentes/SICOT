@@ -705,7 +705,8 @@ public class GuiaDelPasoActual {
                     + "económica— y descargue el Excel; después abra el borrador del correo al contratista, "
                     + "adjúntelo y envíelo desde su correo. Cuando acuerden las fechas de entrega, regístrelas en "
                     + "«Fechas de entrega acordadas»: deben caer dentro del plazo del contrato, SICOT le recuerda "
-                    + "cada una antes de que llegue y le arma los correos para confirmarlas al contratista y "
+                    + "cada una antes de que llegue (con el contrato activo) y le arma los correos para "
+                    + "confirmarlas al contratista y "
                     + "compartirlas con SST y ambiental. El paso no se cierra sin al menos una fecha registrada.";
         }
         if (SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA.contains(sub.codigo())) {

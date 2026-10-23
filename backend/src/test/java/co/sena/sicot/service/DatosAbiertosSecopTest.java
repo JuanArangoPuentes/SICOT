@@ -204,6 +204,35 @@ class DatosAbiertosSecopTest {
     }
 
     /**
+     * El registro es texto libre. Valores reales del 23-10-2026: lo que se puede
+     * usar se normaliza a la forma que exige el formulario de Gestión; lo que no
+     * es un teléfono no se guarda como teléfono.
+     */
+    @Test
+    @DisplayName("el teléfono del registro se normaliza o se descarta, nunca se guarda «0»")
+    void elTelefonoDelRegistroSeNormaliza() {
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("4489948")).isEqualTo("4489948");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("604.440.9977")).isEqualTo("604 440 9977");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("2120777 ext 1")).isEqualTo("2120777");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("3330333536 Ext. 1000")).isEqualTo("3330333536");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("3747265/6")).isEqualTo("3747265");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("8353513 / 3183309330")).isEqualTo("8353513");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("3102286173.")).isEqualTo("3102286173");
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("0")).isNull();
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("0000000")).isNull();
+        assertThat(DatosAbiertosSecop.telefonoUtilizable("xxxxxx")).isNull();
+        assertThat(DatosAbiertosSecop.telefonoUtilizable(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("un correo sin forma de correo no llega al contrato")
+    void elCorreoDelRegistroSeValida() {
+        assertThat(DatosAbiertosSecop.correoUtilizable("MAYBESUMINISTROS@GMAIL.COM")).isEqualTo("maybesuministros@gmail.com");
+        assertThat(DatosAbiertosSecop.correoUtilizable("jeffergomez2018gmail.com")).isNull();
+        assertThat(DatosAbiertosSecop.correoUtilizable("dos palabras@x.co")).isNull();
+    }
+
+    /**
      * El registro de proveedores, que es de donde sale el teléfono que el acta
      * no trae (paso 5 de la hoja de Alex). La fila es la que devolvió
      * datos.gov.co el 22-10-2026 para el NIT de Suministros Maybe, recortada.
@@ -229,7 +258,7 @@ class DatosAbiertosSecopTest {
             servidor.createContext("/" + DatosAbiertosSecop.PROVEEDORES + ".json", intercambio -> {
                 String consulta = intercambio.getRequestURI().getQuery();
                 consultas.add(consulta);
-                String cuerpo = consulta != null && consulta.contains("nit=800154801") ? "[" + MAYBE + "]" : "[]";
+                String cuerpo = consulta != null && consulta.contains("'800154801'") ? "[" + MAYBE + "]" : "[]";
                 byte[] bytes = cuerpo.getBytes(StandardCharsets.UTF_8);
                 intercambio.getResponseHeaders().add("Content-Type", "application/json");
                 intercambio.sendResponseHeaders(200, bytes.length);
@@ -246,15 +275,15 @@ class DatosAbiertosSecopTest {
         }
 
         @Test
-        @DisplayName("trae el teléfono, el correo en minúsculas y la dirección de la empresa")
+        @DisplayName("trae el teléfono y el correo en minúsculas, y nada de la dirección ni del representante")
         void traeElContactoDeLaEmpresa() {
             var proveedor = cliente.proveedor("800154801-6").orElseThrow();
 
-            assertThat(consultas).singleElement().satisfies(c -> assertThat(c).contains("nit=800154801"));
+            // Con el NIT a secas y con el dígito pegado: unas 7.500 filas lo guardan así.
+            assertThat(consultas).singleElement().satisfies(c -> assertThat(c)
+                    .contains("nit='800154801' OR starts_with(nit,'800154801-')"));
             assertThat(proveedor.telefono()).isEqualTo("4489948");
             assertThat(proveedor.correo()).isEqualTo("maybesuministros@gmail.com");
-            assertThat(proveedor.direccion()).isEqualTo("CALLE 78 52D-51, CENTRO COMERCIAL LA TORRE");
-            assertThat(proveedor.municipio()).isEqualTo("ITAGUI");
         }
 
         @Test

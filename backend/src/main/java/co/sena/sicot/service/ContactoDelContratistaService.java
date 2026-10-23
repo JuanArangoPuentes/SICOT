@@ -61,7 +61,8 @@ public class ContactoDelContratistaService {
         Proveedor proveedor;
         try {
             proveedor = datosAbiertos.proveedor(nit).orElseThrow(() -> new BusinessException(
-                    "El NIT " + nit + " no aparece en el registro de proveedores del SECOP II."));
+                    "No se encontró en el registro de proveedores del SECOP II un proveedor con el NIT " + nit
+                            + ". Pídale el teléfono al contratista en el primer correo."));
         } catch (DatosAbiertosSecop.NoDisponible e) {
             log.warn("Registro de proveedores no consultado para el contrato {}: {}", contratoId, e.getMessage());
             throw new BusinessException("No hay conexión con datos.gov.co en este momento. Intente más tarde, o "
@@ -69,9 +70,9 @@ public class ContactoDelContratistaService {
         }
 
         List<String> completados = new ArrayList<>();
-        // 40 es el ancho de la columna: un teléfono más largo no es un teléfono.
-        if (vacio(contrato.getTelefonoContratista()) && proveedor.telefono() != null
-                && proveedor.telefono().length() <= 40) {
+        // El teléfono ya viene normalizado o en null (DatosAbiertosSecop.telefonoUtilizable):
+        // cumple lo mismo que el formulario de Gestión, que si no lo rechazaría después.
+        if (vacio(contrato.getTelefonoContratista()) && proveedor.telefono() != null) {
             contrato.setTelefonoContratista(proveedor.telefono());
             completados.add("el teléfono (" + proveedor.telefono() + ")");
         }
@@ -81,8 +82,8 @@ public class ContactoDelContratistaService {
         }
         if (completados.isEmpty()) {
             if (proveedor.telefono() == null && vacio(contrato.getTelefonoContratista())) {
-                throw new BusinessException("El registro de proveedores del SECOP II no publica el teléfono de "
-                        + "este contratista. Pídaselo en el primer correo.");
+                throw new BusinessException("El registro de proveedores del SECOP II no publica un teléfono "
+                        + "utilizable para este contratista. Pídaselo en el primer correo.");
             }
             return ContratoMapper.toResponse(contrato);
         }

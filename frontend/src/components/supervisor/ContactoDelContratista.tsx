@@ -26,6 +26,7 @@ export default function ContactoDelContratista({
   const [telefono, setTelefono] = useState<string | null>(contrato.telefonoContratista ?? null)
   const [trayendo, setTrayendo] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [traido, setTraido] = useState(false)
 
   const traer = () => {
     setTrayendo(true)
@@ -34,6 +35,16 @@ export default function ContactoDelContratista({
       .then((c) => {
         setTelefono(c.telefonoContratista ?? null)
         onActualizado?.(c)
+        // Puede volver sin teléfono: el contrato no tenía correo y el registro
+        // solo trae ese. Se dice, en vez de dejar el botón como si no hiciera nada.
+        if (c.telefonoContratista) {
+          setTraido(true)
+        } else {
+          setError(
+            'El registro de proveedores del SECOP II no publica un teléfono utilizable para este contratista. ' +
+              'Pídaselo en el primer correo.',
+          )
+        }
       })
       .catch((e) =>
         setError(e instanceof ApiError ? e.message : 'No se pudo consultar el registro de proveedores del SECOP II.'),
@@ -55,11 +66,16 @@ export default function ContactoDelContratista({
           </button>
         )}
       </div>
+      {/* «Si»: que el acta del Lote 4 no lo traiga fue un hallazgo, no una regla.
+          La hoja de Alex dice que el acta debe traerlo. */}
       {!telefono && !error && (
         <span style={NOTA}>
-          El acta de inicio no trae el teléfono; el registro de proveedores del SECOP II lo publica con el NIT del
+          Si el acta de inicio no trae el teléfono, el registro de proveedores del SECOP II lo publica con el NIT del
           contratista.
         </span>
+      )}
+      {traido && (
+        <span style={NOTA}>Traído del registro de proveedores del SECOP II: compárelo con el acta de inicio.</span>
       )}
       {error && <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>{error}</span>}
     </div>

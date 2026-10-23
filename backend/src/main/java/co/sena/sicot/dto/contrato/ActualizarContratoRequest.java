@@ -16,6 +16,12 @@ import java.time.LocalDate;
  * Mismos límites que {@link CrearContratoRequest}, campo por campo: un campo no
  * puede aceptar más caracteres al actualizar que al crear. Los máximos replican
  * las columnas de la tabla {@code contratos}.
+ *
+ * <p>Es un reemplazo completo, con dos excepciones desde el 22-10-2026:
+ * {@code correoContratista} y {@code telefonoContratista}. Sin el campo
+ * ({@code null}) se conserva el que había y vacío lo borra, porque esos dos los
+ * llena también el supervisor desde el registro de proveedores del SECOP II, y
+ * una corrección de Gestión hecha con la lista cargada antes no debe borrarlos.
  */
 public record ActualizarContratoRequest(
         @NotBlank(message = "El número de contrato es obligatorio.")
