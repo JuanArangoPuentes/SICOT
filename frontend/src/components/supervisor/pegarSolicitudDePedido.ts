@@ -40,10 +40,7 @@ export interface ResultadoDelPegado {
  * porque ninguna hoja escribe tres decimales en pesos).
  */
 export function leerNumero(texto: string): number | null {
-  const limpio = texto
-    .replace(/\$/g, '')
-    .replace(/\s| /g, '')
-    .trim()
+  const limpio = texto.replace(/\$/g, '').replace(/\s| /g, '').trim()
   if (limpio === '' || limpio === '-') return null
   const negativo = /^\(.*\)$/.test(limpio) || limpio.startsWith('-')
   const soloCifras = limpio.replace(/[()\-+]/g, '')

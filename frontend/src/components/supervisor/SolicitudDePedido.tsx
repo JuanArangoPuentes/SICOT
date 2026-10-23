@@ -116,8 +116,8 @@ export default function SolicitudDePedido({ contrato }: { contrato: ContratoResp
 
       {items.length === 0 && !pegando && (
         <span style={NOTA}>
-          Todavía no ha cargado los bienes. Abra la oferta económica del proceso en el SECOP II (el enlace está
-          en el paso 2.3), copie las columnas de ítem, descripción, cantidad y valor unitario, y péguelas aquí.
+          Todavía no ha cargado los bienes. Abra la oferta económica del proceso en el SECOP II (el enlace está en el
+          paso 2.3), copie las columnas de ítem, descripción, cantidad y valor unitario, y péguelas aquí.
         </span>
       )}
 
@@ -164,10 +164,12 @@ export default function SolicitudDePedido({ contrato }: { contrato: ContratoResp
               cuando llega la factura. */}
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 11.5 }}>
             <span style={NOTA}>
-              Asignado: <strong style={{ color: 'var(--text-primary)' }}>{formatCOP(solicitud!.presupuestoAsignado)}</strong>
+              Asignado:{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>{formatCOP(solicitud!.presupuestoAsignado)}</strong>
             </span>
             <span style={NOTA}>
-              Comprometido: <strong style={{ color: 'var(--text-primary)' }}>{formatCOP(solicitud!.comprometido)}</strong>
+              Comprometido:{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>{formatCOP(solicitud!.comprometido)}</strong>
             </span>
             <span style={NOTA}>
               Queda:{' '}
@@ -178,8 +180,8 @@ export default function SolicitudDePedido({ contrato }: { contrato: ContratoResp
           </div>
           {solicitud!.excedeElContrato && (
             <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>
-              La solicitud excede el valor del contrato. Revise las cantidades, o el valor registrado del contrato si
-              es ese el que no cuadra.
+              La solicitud excede el valor del contrato. Revise las cantidades, o el valor registrado del contrato si es
+              ese el que no cuadra.
             </span>
           )}
         </>
@@ -204,9 +206,9 @@ export default function SolicitudDePedido({ contrato }: { contrato: ContratoResp
             }}
           />
           <span style={NOTA}>
-            Una fila por bien, con las columnas separadas por tabulación: número de ítem, descripción, cantidad y
-            valor unitario. La columna del total, si la pega, se ignora: la calcula SICOT. El encabezado y el
-            subtotal de la hoja se descartan solos.
+            Una fila por bien, con las columnas separadas por tabulación: número de ítem, descripción, cantidad y valor
+            unitario. La columna del total, si la pega, se ignora: la calcula SICOT. El encabezado y el subtotal de la
+            hoja se descartan solos.
           </span>
           {leido && (
             <span style={NOTA}>

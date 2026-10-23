@@ -17,9 +17,8 @@ vi.mock('@/services/contratoService', () => ({
   descargarSolicitudDePedido: vi.fn(),
 }))
 
-const { obtenerSolicitudDePedido, guardarSolicitudDePedido, descargarSolicitudDePedido } = await import(
-  '@/services/contratoService'
-)
+const { obtenerSolicitudDePedido, guardarSolicitudDePedido, descargarSolicitudDePedido } =
+  await import('@/services/contratoService')
 
 const LOTE_4 = contrato({
   id: 9,
