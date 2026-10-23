@@ -2,6 +2,9 @@ package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ChatResponse;
 import co.sena.sicot.entity.Contrato;
+import co.sena.sicot.entity.EntregaAcordada;
+import co.sena.sicot.repository.EntregaAcordadaRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -14,6 +17,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -50,7 +54,7 @@ public class FichaDelContrato {
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    enum Tema { RESUMEN, VALOR, FECHAS, PLAZO, ATRASO, ALERTAS, CONTRATISTA, OBJETO, SUPERVISOR, NUMERO }
+    enum Tema { RESUMEN, VALOR, FECHAS, PLAZO, ATRASO, ALERTAS, CONTRATISTA, OBJETO, SUPERVISOR, NUMERO, ENTREGAS }
 
     private static final Set<String> RESUMEN = PreguntaNormalizada.normalizarTodas(
             "resume el contrato", "resume este contrato", "resúmeme el contrato", "resumen del contrato",
@@ -79,7 +83,22 @@ public class FichaDelContrato {
             "alertas", "alerta");
     private static final Set<String> CONTRATISTA = PreguntaNormalizada.normalizarTodas(
             "quién es el contratista", "cuál es el contratista", "nombre del contratista", "datos del contratista",
-            "nit del contratista", "cuál es el nit", "el nit", "representante legal", "quién es el representante");
+            "nit del contratista", "cuál es el nit", "el nit", "representante legal", "quién es el representante",
+            // El paso 5 de la hoja de Alex pide «correo de contacto + número de
+            // teléfono»: desde el 22-10-2026 el contrato los tiene.
+            "teléfono del contratista", "celular del contratista", "correo del contratista",
+            "email del contratista", "contacto del contratista", "datos de contacto del contratista");
+    /**
+     * Las fechas de entrega que el supervisor acordó con el contratista en el
+     * 2.4. Son frases de dato («¿cuándo es la próxima entrega?»), no de cómo se
+     * hace el paso: «¿cómo acuerdo las fechas de entrega?» sigue siendo de la
+     * guía del paso.
+     */
+    private static final Set<String> ENTREGAS = PreguntaNormalizada.normalizarTodas(
+            "próxima entrega", "siguiente entrega", "entregas acordadas", "fechas acordadas",
+            "fechas de entrega acordadas", "cuándo es la entrega", "cuándo son las entregas",
+            "cuándo entrega el contratista", "cuándo llega la entrega", "cuáles son las fechas de entrega",
+            "qué fechas de entrega", "fechas de las entregas");
     private static final Set<String> OBJETO = PreguntaNormalizada.normalizarTodas(
             "objeto del contrato", "cuál es el objeto", "de qué es el contrato", "qué se contrató");
     private static final Set<String> SUPERVISOR = PreguntaNormalizada.normalizarTodas(
@@ -98,8 +117,31 @@ public class FichaDelContrato {
 
     private final Clock reloj;
 
+    /** Las entregas acordadas de un contrato, por su id. Solo se consulta si la pregunta las pide. */
+    private final Function<Long, List<EntregaAcordada>> entregasDelContrato;
+
+    /** Sin acceso a las entregas acordadas: para las pruebas que no hablan de ellas. */
     public FichaDelContrato(Clock reloj) {
+        this(reloj, id -> List.of());
+    }
+
+    @Autowired
+    public FichaDelContrato(Clock reloj, EntregaAcordadaRepository entregas) {
+        this(reloj, entregas::findByContratoIdOrderByNumeroAsc);
+    }
+
+    FichaDelContrato(Clock reloj, Function<Long, List<EntregaAcordada>> entregasDelContrato) {
         this.reloj = reloj;
+        this.entregasDelContrato = entregasDelContrato;
+    }
+
+    /**
+     * ¿Pregunta por las fechas de entrega acordadas? El Copiloto lo mira antes
+     * que la guía del paso: la guía reconoce «fechas de entrega» como el nombre
+     * del 2.4 y contestaría cómo se acuerdan, cuando lo que se pide es cuáles son.
+     */
+    public boolean preguntaPorEntregas(String pregunta) {
+        return reconocer(pregunta).contains(Tema.ENTREGAS);
     }
 
     /** Los temas del contrato que pregunta el mensaje; vacío si no es para esta clase. */
@@ -139,6 +181,9 @@ public class FichaDelContrato {
         }
         if (p.contieneAlgunaFrase(NUMERO)) {
             temas.add(Tema.NUMERO);
+        }
+        if (p.contieneAlgunaFrase(ENTREGAS)) {
+            temas.add(Tema.ENTREGAS);
         }
         return temas;
     }
@@ -187,10 +232,19 @@ public class FichaDelContrato {
                     sinPuntoFinal(oNoRegistrado(contrato.getContratista())),
                     oNoRegistrado(contrato.getContratistaNit()),
                     sinPuntoFinal(oNoRegistrado(contrato.getRepresentanteLegal()))));
+            lineas.add("Correo del contratista: %s. Teléfono: %s.".formatted(
+                    oNoRegistrado(contrato.getCorreoContratista()),
+                    contrato.getTelefonoContratista() == null || contrato.getTelefonoContratista().isBlank()
+                            ? "no registrado (en el sub-paso 2.4 se trae del registro de proveedores del SECOP II)"
+                            : contrato.getTelefonoContratista().strip()));
         }
         if (temas.contains(Tema.SUPERVISOR)) {
             lineas.add("Supervisor: %s.".formatted(contrato.getSupervisor() == null
                     ? "sin asignar" : oNoRegistrado(contrato.getSupervisor().getNombre())));
+        }
+        if (temas.contains(Tema.ENTREGAS)) {
+            lineas.add(entregas(contrato.getId() == null ? List.of() : entregasDelContrato.apply(contrato.getId()),
+                    hoy));
         }
         boolean conCronograma = temas.contains(Tema.PLAZO) || temas.contains(Tema.ATRASO)
                 || temas.contains(Tema.ALERTAS);
@@ -222,6 +276,35 @@ public class FichaDelContrato {
 
     static String fecha(LocalDate fecha) {
         return fecha == null ? "no registrada" : fecha.format(FECHA);
+    }
+
+    /**
+     * Las fechas acordadas con el contratista y cuál es la próxima. Lo que no
+     * está registrado se dice: no se calcula una fecha de entrega a partir del
+     * plazo, que es justo lo que inventaría el modelo.
+     */
+    static String entregas(List<EntregaAcordada> entregas, LocalDate hoy) {
+        if (entregas.isEmpty()) {
+            return "Todavía no hay fechas de entrega acordadas registradas. Se registran en el sub-paso 2.4, en "
+                    + "«Fechas de entrega acordadas», cuando el contratista confirme las fechas.";
+        }
+        StringBuilder sb = new StringBuilder("Fechas de entrega acordadas con el contratista:");
+        for (EntregaAcordada e : entregas) {
+            sb.append("\n%d) %s — %s".formatted(e.getNumero(), fecha(e.getFecha()), e.getDescripcion()));
+        }
+        Optional<EntregaAcordada> proxima = entregas.stream()
+                .filter(e -> !e.getFecha().isBefore(hoy))
+                .findFirst();
+        if (proxima.isEmpty()) {
+            sb.append("\nTodas ya pasaron: la última fue el %s.".formatted(fecha(entregas.getLast().getFecha())));
+        } else {
+            long faltan = ChronoUnit.DAYS.between(hoy, proxima.get().getFecha());
+            sb.append(faltan == 0
+                    ? "\nHoy es la entrega n.º %d.".formatted(proxima.get().getNumero())
+                    : "\nLa próxima es la n.º %d, el %s (en %s).".formatted(proxima.get().getNumero(),
+                            fecha(proxima.get().getFecha()), dias(faltan)));
+        }
+        return sb.toString();
     }
 
     /** Días calendario hasta la terminación, contados desde «hoy» en la zona del Centro. */

@@ -686,6 +686,23 @@ class CopilotoChatServiceTest {
         verifyNoMoreInteractions(documentoService);
     }
 
+    /**
+     * La guía del paso reconoce «fechas de entrega» como el nombre del 2.4 y
+     * contestaba cómo se acuerdan. Desde el 22-10-2026 las fechas acordadas son
+     * un dato del contrato, y la pregunta pide ese dato.
+     */
+    @Test
+    @DisplayName("«¿cuáles son las fechas de entrega?» contesta el dato del contrato, no cómo se acuerdan")
+    void lasFechasDeEntregaSonUnDatoNoLaGuia() {
+        given(etapaService.listarPorContrato(1L)).willReturn(contratoEnElPaso2());
+
+        ChatResponse r = servicio.responder(1L, "¿cuáles son las fechas de entrega?", null);
+
+        assertThat(r.fuente()).isEqualTo(ChatResponse.Fuente.SISTEMA);
+        assertThat(r.respuesta()).startsWith("Todavía no hay fechas de entrega acordadas registradas.");
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+    }
+
     @Test
     @DisplayName("«¿voy atrasado?» repite el cálculo del cronograma, sin modelo, con el botón de Alertas")
     void voyAtrasadoRepiteElCronograma() {

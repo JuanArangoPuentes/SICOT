@@ -2,6 +2,7 @@ package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ChatResponse;
 import co.sena.sicot.entity.Contrato;
+import co.sena.sicot.entity.EntregaAcordada;
 import co.sena.sicot.entity.Usuario;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
@@ -114,7 +116,9 @@ class FichaDelContratoTest {
                 .contains("Fecha de terminación: no registrada.")
                 .contains("sin fecha de terminación registrada no puedo calcular cuántos días quedan");
         assertThat(responder("quien es el contratista").respuesta())
-                .isEqualTo("Contratista: EVENTOS SUPERNOVA S.A.S. NIT: 900123456-7. Representante legal: no registrado.");
+                .isEqualTo("Contratista: EVENTOS SUPERNOVA S.A.S. NIT: 900123456-7. Representante legal: no registrado.\n"
+                        + "Correo del contratista: no registrado. Teléfono: no registrado (en el sub-paso 2.4 se trae "
+                        + "del registro de proveedores del SECOP II).");
     }
 
     @Test
@@ -146,5 +150,52 @@ class FichaDelContratoTest {
         assertThat(responder("cuanto vale y cuando vence el contrato").respuesta())
                 .startsWith("Valor del contrato: $450.000.000,00")
                 .contains("Fecha de terminación: 15/12/2026.");
+    }
+
+    // ── 22-10-2026: el contacto del contratista y las entregas acordadas ──
+
+    @Test
+    @DisplayName("el teléfono y el correo del contratista salen del contrato (paso 5 de la hoja de Alex)")
+    void elContactoDelContratista() {
+        contrato.setCorreoContratista("maybesuministros@gmail.com");
+        contrato.setTelefonoContratista("4489948");
+
+        assertThat(responder("¿cuál es el teléfono del contratista?").respuesta())
+                .contains("Correo del contratista: maybesuministros@gmail.com. Teléfono: 4489948.");
+    }
+
+    @Test
+    @DisplayName("las fechas de entrega acordadas y cuál es la próxima, contada desde hoy en el Centro")
+    void lasEntregasAcordadasYLaProxima() {
+        contrato.setId(7L);
+        FichaDelContrato conEntregas = new FichaDelContrato(reloj, id -> List.of(
+                new EntregaAcordada(contrato, 1, LocalDate.of(2026, 9, 20), "Ítems 1 a 20"),
+                new EntregaAcordada(contrato, 2, LocalDate.of(2026, 10, 9), "Ítems 21 a 35")));
+
+        assertThat(conEntregas.preguntaPorEntregas("¿cuándo es la próxima entrega?")).isTrue();
+        String r = conEntregas.responder("¿cuándo es la próxima entrega?", contrato, cronograma)
+                .orElseThrow().respuesta();
+
+        assertThat(r).isEqualTo("""
+                Fechas de entrega acordadas con el contratista:
+                1) 20/09/2026 — Ítems 1 a 20
+                2) 09/10/2026 — Ítems 21 a 35
+                La próxima es la n.º 2, el 09/10/2026 (en 8 días).""");
+        assertThat(calculosDelCronograma.get()).as("las entregas no necesitan el cronograma").isZero();
+    }
+
+    @Test
+    @DisplayName("sin entregas registradas lo dice y dónde se registran, en vez de calcular una")
+    void sinEntregasLoDice() {
+        assertThat(responder("¿cuáles son las fechas de entrega?").respuesta())
+                .startsWith("Todavía no hay fechas de entrega acordadas registradas.")
+                .contains("sub-paso 2.4");
+    }
+
+    @Test
+    @DisplayName("cómo se acuerdan las entregas no es un dato: no lo toma la ficha")
+    void comoSeAcuerdanNoEsUnDato() {
+        assertThat(ficha.preguntaPorEntregas("¿cómo acuerdo las fechas con el contratista?")).isFalse();
+        assertThat(ficha.preguntaPorEntregas("¿cuándo vence el contrato?")).isFalse();
     }
 }

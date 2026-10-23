@@ -105,9 +105,11 @@ public class CopilotoChatService {
             Paso 2, Acta de Inicio y arranque: 2.1 el Acta de Inicio (GCCON-F-018) la elabora Contratación \
             y se la envía por correo; el supervisor la firma, la devuelve respondiendo ese correo y carga en \
             SICOT el acta firmada (PDF) y la evidencia del envío; 2.2 avisar a los profesionales SST y \
-            ambiental (SICOT trae el borrador del correo); 2.3 verificar el contrato en SECOP II (SICOT \
-            muestra lo que publica el SECOP); 2.4 contactar al contratista y acordar las entregas (SICOT \
-            trae el borrador del correo).
+            ambiental (se registran en el sub-paso; SICOT los busca en el estudio previo cargado y trae el \
+            borrador del correo); 2.3 verificar el contrato en SECOP II (SICOT muestra lo que publica el \
+            SECOP); 2.4 contactar al contratista y acordar las entregas (SICOT trae el borrador del correo y \
+            el Excel del pedido; las fechas acordadas se registran ahí, dentro del plazo, y el paso no se \
+            cierra sin al menos una).
             Paso 3, Inspección: 3.1 verificación física de la entrega en bodega; 3.2 evidencia fotográfica; \
             3.3 comparar cantidad y calidad con la ficha técnica; 3.4 firmar el Informe de Supervisión \
             (GCCON-F-031).
@@ -632,6 +634,14 @@ public class CopilotoChatService {
             ChatResponse.Accion accion = documentos.size() == 1 ? abrirElDocumento(documentos.get(0), etapas) : null;
             return Optional.of(new Atajo(Ruta.FICHA_DEL_DOCUMENTO,
                     ChatResponse.delSistema(fichaDeDocumentoFormal.componer(documentos, etapas), accion)));
+        }
+        // «¿Cuáles son las fechas de entrega?» pide el dato, no cómo se acuerdan:
+        // va antes que la guía, que reconoce «fechas de entrega» como el 2.4.
+        if (fichaDelContrato.preguntaPorEntregas(pregunta)) {
+            Optional<ChatResponse> entregas = fichaDelContrato.responder(pregunta, contrato, cronograma);
+            if (entregas.isPresent()) {
+                return Optional.of(new Atajo(Ruta.FICHA_DEL_CONTRATO, entregas.get()));
+            }
         }
         if (guiaDelPasoActual.puedeResponder(pregunta)) {
             Optional<ChatResponse> guia = guiaDelPasoActual.responder(pregunta, etapas);
