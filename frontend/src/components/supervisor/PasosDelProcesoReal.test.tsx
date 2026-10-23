@@ -188,13 +188,13 @@ describe('2.3 — verificación contra el SECOP II', () => {
       ...respuesta,
       documentos: [],
       avisoDocumentos:
-        'Los datos abiertos del SECOP no traen la lista de archivos de este contrato: ese conjunto de datos no ' +
-        'se actualiza desde 2021. El expediente se abre con el enlace del proceso, y ahí están la oferta ' +
+        'Los datos abiertos del SECOP todavía no traen la lista de archivos de este contrato: suelen publicarla ' +
+        'días después que la ficha. El expediente se abre con el enlace del proceso, y ahí están la oferta ' +
         'económica, con las cantidades exactas, y el estudio previo, con los contactos de SST y ambiental.',
     })
     render(<VerificacionSecop contratoId={9} />)
 
-    expect(await screen.findByText(/no se actualiza desde 2021/)).toBeTruthy()
+    expect(await screen.findByText(/todavía no traen la lista de archivos/)).toBeTruthy()
     expect(screen.getByText(/la oferta económica, con las cantidades exactas/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Abrir el proceso en el SECOP II' })).toBeTruthy()
     expect(screen.queryByText(/Documentos del expediente/)).toBeNull()

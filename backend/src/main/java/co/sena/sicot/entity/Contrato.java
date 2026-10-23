@@ -88,6 +88,14 @@ public class Contrato {
     @Column(name = "correo_contratista", length = 255)
     private String correoContratista;
 
+    /**
+     * Teléfono del contratista. El paso 5 de la lista de chequeo de Alex lo pide
+     * junto al correo; el acta no lo trae, y sale del registro de proveedores
+     * del SECOP II (ver {@code V22__acuerdo_de_entregas_y_contactos.sql}).
+     */
+    @Column(name = "telefono_contratista", length = 40)
+    private String telefonoContratista;
+
     @CreationTimestamp
     @Column(name = "fecha_creacion", nullable = false, updatable = false)
     private Instant fechaCreacion;
@@ -155,6 +163,9 @@ public class Contrato {
 
     public String getCorreoContratista() { return correoContratista; }
     public void setCorreoContratista(String correoContratista) { this.correoContratista = correoContratista; }
+
+    public String getTelefonoContratista() { return telefonoContratista; }
+    public void setTelefonoContratista(String telefonoContratista) { this.telefonoContratista = telefonoContratista; }
 
     public Instant getFechaCreacion() { return fechaCreacion; }
     public Instant getFechaActualizacion() { return fechaActualizacion; }

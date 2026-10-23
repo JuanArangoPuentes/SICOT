@@ -81,7 +81,15 @@ public record ActualizarContratoRequest(
 
         @Size(max = 255, message = "El correo del contratista no puede superar 255 caracteres.")
         @Email(message = "El correo del contratista no es válido.")
-        String correoContratista
+        String correoContratista,
+
+        // Del registro de proveedores del SECOP II: el acta no lo trae. Se
+        // admiten dígitos, espacios, «+», guiones y paréntesis, que es como se
+        // escriben los teléfonos fijos y celulares en Colombia.
+        @Size(max = 40, message = "El teléfono del contratista no puede superar 40 caracteres.")
+        @Pattern(regexp = "|[0-9+() -]{7,40}",
+                message = "El teléfono del contratista solo admite dígitos, espacios, «+», guiones y paréntesis.")
+        String telefonoContratista
 ) {
 
     /**

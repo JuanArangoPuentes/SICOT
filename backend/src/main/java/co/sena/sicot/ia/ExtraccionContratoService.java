@@ -200,6 +200,15 @@ public class ExtraccionContratoService {
         }
         VerificacionSecopResponse.Ficha f = encontrada.get();
         List<String> completados = new ArrayList<>(r.completadoDesdeSecop());
+        // El teléfono que pide el paso 5 de la hoja de Alex no está en ningún
+        // documento del contrato: está en el registro de proveedores. Una
+        // consulta aparte, que si falla no se lleva lo demás.
+        VerificacionSecopResponse.Proveedor contacto = null;
+        try {
+            contacto = datosAbiertos.proveedor(r.nit() != null ? r.nit() : f.documentoProveedor()).orElse(null);
+        } catch (DatosAbiertosSecop.NoDisponible e) {
+            log.info("No se consultó el registro de proveedores para '{}': {}", r.idContrato(), e.getMessage());
+        }
         // El tipo que publica el SECOP manda sobre el que se deduce del objeto:
         // «COMPRA DE TÓNER…» no trae ninguna palabra de la lista, y hasta el
         // 18-10-2026 se esperaba al modelo de 2 a 4 minutos para un dato que el
@@ -225,7 +234,10 @@ public class ExtraccionContratoService {
                 hueco(r.supervisorDesignado(), f.supervisor(), "supervisorDesignado", completados),
                 r.apoyoSupervision(),
                 r.fechaDesignacion(),
-                r.correoContratista(),
+                hueco(r.correoContratista(), contacto == null ? null : contacto.correo(), "correoContratista",
+                        completados),
+                hueco(r.telefonoContratista(), contacto == null ? null : contacto.telefono(),
+                        "telefonoContratista", completados),
                 completados);
         if (!completados.isEmpty()) {
             log.info("'{}': completados desde los datos abiertos del SECOP: {}", r.idContrato(), completados);
@@ -454,7 +466,7 @@ public class ExtraccionContratoService {
         return new ExtraccionContratoResponse(r.idContrato(), r.objeto(), r.proveedor(), r.nit(),
                 r.representanteLegal(), r.valor(), r.vigenciaInicio(), r.vigenciaFin(), r.lugarEjecucion(),
                 r.registroPresupuestal(), tipo, r.enlaceSecop(), r.supervisorDesignado(), r.apoyoSupervision(),
-                r.fechaDesignacion(), r.correoContratista(), r.completadoDesdeSecop());
+                r.fechaDesignacion(), r.correoContratista(), r.telefonoContratista(), r.completadoDesdeSecop());
     }
 
     private ExtraccionContratoResponse combinar(ExtraccionContratoResponse base, ExtraccionContratoResponse nuevo) {
@@ -475,6 +487,7 @@ public class ExtraccionContratoService {
                 primero(base.apoyoSupervision(), nuevo.apoyoSupervision()),
                 primero(base.fechaDesignacion(), nuevo.fechaDesignacion()),
                 primero(base.correoContratista(), nuevo.correoContratista()),
+                primero(base.telefonoContratista(), nuevo.telefonoContratista()),
                 base.completadoDesdeSecop());
     }
 

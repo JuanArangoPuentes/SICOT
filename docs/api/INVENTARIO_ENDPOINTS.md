@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-21 contra el código: 15 controladores, 52 endpoints.**
+**Revisado el 2026-10-22 contra el código: 16 controladores, 58 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -39,6 +39,12 @@
 | 49 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (lista vacía si el supervisor aún no la cargó) | `SolicitudDePedidoResponse` |
 | 50 | ContratoController | PUT | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 · 400 (ítem repetido o inválido) | `SolicitudDePedidoResponse` |
 | 51 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido/archivo | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (XLSX) · 400 (solicitud vacía) | binario |
+| 53 | ArranqueDelContratoController | GET | /api/contratos/{id}/entregas-acordadas | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que la solicitud de pedido) | 200 (lista vacía si no hay acuerdo; trae el plazo del contrato) | `AcuerdoDeEntregasResponse` |
+| 54 | ArranqueDelContratoController | PUT | /api/contratos/{id}/entregas-acordadas | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 · 400 (fecha fuera del plazo del contrato, entrega sin descripción) | `AcuerdoDeEntregasResponse` |
+| 55 | ArranqueDelContratoController | GET | /api/contratos/{id}/contactos-sst-ambiental | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 (lista vacía si no se registraron) | `ContactosDelContratoResponse` |
+| 56 | ArranqueDelContratoController | PUT | /api/contratos/{id}/contactos-sst-ambiental | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 · 400 (correo inválido o sin rol) | `ContactosDelContratoResponse` |
+| 57 | ArranqueDelContratoController | POST | /api/contratos/{id}/contactos-sst-ambiental/lectura (multipart `archivo`: el estudio previo en PDF o Word; no se guarda) | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato`; el archivo pasa por `ArchivoValidator` (tipo real, que abra, 20 MB) | 200 (también sin correos o escaneado: `aviso` dice por qué) · 400 (otro tipo de archivo) | `LecturaDeContactosResponse` |
+| 58 | ArranqueDelContratoController | POST | /api/contratos/{id}/contacto-contratista/desde-secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato`. Escribe en el contrato, pero solo llena teléfono y correo **vacíos** con el registro de proveedores del SECOP II; deja constancia `CONTACTO_CONTRATISTA_COMPLETADO` | 200 · 400 (sin NIT, NIT no registrado, sin teléfono publicado, sin conexión) | `ContratoResponse` |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 16 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 17 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
@@ -87,6 +93,7 @@ son del momento en que se escribió: tómelas como pista, no como dirección.
    - `EtapaController` — líneas 15-37: 2 endpoints, acceso verificado en `EtapaService.listarPorContrato`/`obtenerEtapaDeContrato`
    - `ListaChequeoController` — líneas 18-42: 2 endpoints, catálogo de solo lectura, sin control por contrato
    - `RegistroController` — `listarPorContrato` protegido en service, `listarTodas` tiene `@PreAuthorize`
+   - `ArranqueDelContratoController` (22-10-2026) — 6 endpoints, todos protegidos en service con `ContratoService.buscar`. Uno escribe en el contrato siendo SUPERVISOR (`contacto-contratista/desde-secop`), y a propósito: solo llena lo vacío desde una fuente oficial, nunca pisa lo que registró Gestión
 
 2. **AlertaController asimétrico**:
    - `listarPorContrato` (línea 25): **sin `@PreAuthorize`**, protegido en service

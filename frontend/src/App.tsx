@@ -156,6 +156,14 @@ function AppInner() {
     setRegistros(mapRegistros(lista))
   }
 
+  // Un contrato cambiado desde el panel (el teléfono del contratista traído del
+  // SECOP II en el paso 2.4) se pone al día aquí, en la lista y en el elegido,
+  // para que la ficha y los correos lo vean sin recargar.
+  const actualizarContratoDelPanel = (c: ContratoResponse) => {
+    setContratos((lista) => lista.map((x) => (x.id === c.id ? c : x)))
+    setContrato((actual) => (actual?.id === c.id ? c : actual))
+  }
+
   const seleccionarContrato = (id: number) => {
     const elegido = contratos.find((c) => c.id === id)
     if (!elegido || !session) return
@@ -363,6 +371,7 @@ function AppInner() {
                 registros={registros}
                 onRefreshRegistros={refreshRegistros}
                 pedidosCopiloto={pedidosCopiloto}
+                onContratoActualizado={actualizarContratoDelPanel}
               />
             ))}
           />

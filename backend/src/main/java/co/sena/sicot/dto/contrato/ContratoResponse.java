@@ -29,6 +29,7 @@ public record ContratoResponse(
         String apoyoSupervision,
         LocalDate fechaDesignacion,
         String correoContratista,
+        String telefonoContratista,
         Instant fechaCreacion
 ) {
 }

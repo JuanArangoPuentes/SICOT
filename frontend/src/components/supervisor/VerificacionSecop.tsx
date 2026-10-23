@@ -8,11 +8,11 @@
 // siendo del supervisor— no sea transcripción a ciegas.
 //
 // El índice de documentos del expediente se muestra cuando los datos abiertos
-// lo publican, que con los contratos nuevos no pasa: esa fuente se quedó en
-// 2021. Cuando no hay índice se dice por qué y se deja el enlace del proceso,
-// que es la vía real para abrir la oferta económica y el estudio previo. Antes
-// la sección desaparecía sin más, y el paso 2.4 pedía copiar las cantidades de
-// un documento que nunca se mostraba.
+// lo publican, que pasa días después de la ficha (el Lote 4: nada el 16-10,
+// 110 archivos el 23-10). Cuando todavía no hay índice se dice por qué y se deja
+// el enlace del proceso, que es la vía para abrir la oferta económica y el
+// estudio previo. Antes la sección desaparecía sin más, y el paso 2.4 pedía
+// copiar las cantidades de un documento que nunca se mostraba.
 
 import { useCallback, useEffect, useState } from 'react'
 import { verificarEnSecop } from '@/services/contratoService'
@@ -141,6 +141,24 @@ export default function VerificacionSecop({ contratoId }: { contratoId: number }
                 <span style={ETIQUETA}>Pagado / pendiente</span>
                 <span>
                   {formatCOP(f.valorPagado)} / {formatCOP(f.valorPendienteDePago)}
+                </span>
+              </>
+            )}
+            {/* El registro de proveedores: de ahí sale el teléfono que el acta
+                no trae (paso 5 de la hoja de Alex). Solo los datos de la
+                empresa; los personales del representante no se leen. */}
+            {datos.contactoProveedor && (
+              <>
+                <span style={ETIQUETA}>Contratista en el registro de proveedores</span>
+                <span>
+                  {[
+                    datos.contactoProveedor.telefono ? `tel. ${datos.contactoProveedor.telefono}` : null,
+                    datos.contactoProveedor.correo,
+                    [datos.contactoProveedor.direccion, datos.contactoProveedor.municipio].filter(Boolean).join(', ') ||
+                      null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'sin datos de contacto publicados'}
                 </span>
               </>
             )}

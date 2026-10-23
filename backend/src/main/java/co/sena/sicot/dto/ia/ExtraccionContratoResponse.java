@@ -12,6 +12,8 @@ import java.util.List;
  * de inicio, que son los documentos con que el contrato entra de verdad al
  * proceso del supervisor (ver docs/producto/LISTA_CHEQUEO_ALEX.md).
  *
+ * @param telefonoContratista no lo trae ningún documento del contrato: sale del
+ *                             registro de proveedores del SECOP II
  * @param completadoDesdeSecop los campos que el documento no traía y se
  *                             tomaron de los datos abiertos del SECOP II; el
  *                             formulario los señala para que Gestión sepa de
@@ -34,6 +36,7 @@ public record ExtraccionContratoResponse(
         String apoyoSupervision,
         String fechaDesignacion,
         String correoContratista,
+        String telefonoContratista,
         List<String> completadoDesdeSecop
 ) {
 
@@ -50,6 +53,6 @@ public record ExtraccionContratoResponse(
                                       String vigenciaFin, String lugarEjecucion, String registroPresupuestal,
                                       String tipoContrato) {
         this(idContrato, objeto, proveedor, nit, representanteLegal, valor, vigenciaInicio, vigenciaFin,
-                lugarEjecucion, registroPresupuestal, tipoContrato, null, null, null, null, null, List.of());
+                lugarEjecucion, registroPresupuestal, tipoContrato, null, null, null, null, null, null, List.of());
     }
 }

@@ -81,9 +81,9 @@ class VerificacionSecopIntegrationTest extends PruebaDeIntegracion {
     }
 
     /**
-     * El caso de todos los contratos de ahora: los datos abiertos publican la
-     * ficha del contrato pero no sus archivos —ese conjunto de datos no tiene
-     * nada cargado después de 2021—. Antes la respuesta traía una lista vacía
+     * El caso de un contrato recién firmado: los datos abiertos publican la
+     * ficha del contrato días antes que sus archivos (el Lote 4 no tenía ninguno
+     * el 16-10-2026 y tenía 110 el 23-10). Antes la respuesta traía una lista vacía
      * sin más, el panel escondía la sección, y el paso 2.4 le pedía al
      * supervisor copiar las cantidades de la oferta económica, un documento que
      * SICOT no le mostraba por ninguna parte.
@@ -102,7 +102,7 @@ class VerificacionSecopIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.disponible").value(true))
                 .andExpect(jsonPath("$.documentos").isEmpty())
-                .andExpect(jsonPath("$.avisoDocumentos", containsString("no se actualiza desde 2021")))
+                .andExpect(jsonPath("$.avisoDocumentos", containsString("todavía no traen la lista de archivos")))
                 .andExpect(jsonPath("$.avisoDocumentos", containsString("oferta económica")))
                 .andExpect(jsonPath("$.avisoDocumentos", containsString("estudio previo")))
                 .andExpect(jsonPath("$.enlaceProceso").value(ENLACE));

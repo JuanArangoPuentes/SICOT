@@ -583,6 +583,7 @@ public class ExtraccionDeterminista {
                 normalizarEspacios(primerGrupo(APOYO_EN_DESIGNACION, texto, 1)),
                 esDesignacion ? aIso(primerGrupo(CIUDAD_Y_FECHA, texto, 1)) : null,
                 correoDelContratista(texto),
+                null,
                 List.of()
         );
     }

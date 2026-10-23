@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -101,6 +102,24 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                 ArchivoDePrueba.pdfDeUnaPagina("acta firmada"));
         cargar(contratoId, pasoDelActaId, supervisorToken, "correo-enviado.png", "image/png",
                 ArchivoDePrueba.imagen("png"));
+
+        // 3b. El paso del contacto con el contratista es también el del acuerdo
+        //     de entregas (paso 5 de la hoja de Alex): sin una fecha acordada no
+        //     se cierra. Con una, sí.
+        JsonNode pasoDeEntregas = etapas.get(1).get("subEtapas").get(3);
+        assertThat(pasoDeEntregas.get("codigo").asText()).isEqualTo("2.4");
+        assertThat(pasoDeEntregas.get("documentosRequeridos").asText()).isEqualTo("ENTREGAS_ACORDADAS");
+        mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDeEntregas.get("id").asLong())
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"COMPLETADA\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("fechas de entrega")));
+        mockMvc.perform(put("/api/contratos/{id}/entregas-acordadas", contratoId)
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"entregas\":[{\"fecha\":\"2026-06-30\",\"descripcion\":\"Entrega total\"}]}"))
+                .andExpect(status().isOk());
 
         // 4. Recorrer cada subetapa de cada etapa, en orden, marcándola COMPLETADA.
         //    Igual que el panel del supervisor: la mayoría van PENDIENTE -> COMPLETADA

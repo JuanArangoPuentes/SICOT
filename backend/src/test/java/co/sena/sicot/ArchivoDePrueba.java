@@ -63,6 +63,44 @@ public final class ArchivoDePrueba {
         }
     }
 
+    /**
+     * Un PDF de una página con un renglón por cada texto, para las pruebas que
+     * leen lo que dice el documento (el estudio previo del paso 2.2). Admite
+     * tildes y eñes: la fuente base las cubre con su codificación latina.
+     */
+    public static byte[] pdfConRenglones(String... renglones) {
+        try (PDDocument documento = new PDDocument(); ByteArrayOutputStream salida = new ByteArrayOutputStream()) {
+            PDPage pagina = new PDPage(PDRectangle.LETTER);
+            documento.addPage(pagina);
+            try (PDPageContentStream lienzo = new PDPageContentStream(documento, pagina)) {
+                lienzo.beginText();
+                lienzo.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
+                lienzo.setLeading(14);
+                lienzo.newLineAtOffset(54, 740);
+                for (String renglon : renglones) {
+                    lienzo.showText(renglon.replaceAll("[^\\x20-\\x7E\\u00C0-\\u00FF]", "?"));
+                    lienzo.newLine();
+                }
+                lienzo.endText();
+            }
+            documento.save(salida);
+            return salida.toByteArray();
+        } catch (IOException e) {
+            throw new UncheckedIOException("No se pudo construir el PDF de prueba.", e);
+        }
+    }
+
+    /** Un PDF con una página en blanco: lo que llega de un documento escaneado, sin texto que leer. */
+    public static byte[] pdfSinTexto() {
+        try (PDDocument documento = new PDDocument(); ByteArrayOutputStream salida = new ByteArrayOutputStream()) {
+            documento.addPage(new PDPage(PDRectangle.LETTER));
+            documento.save(salida);
+            return salida.toByteArray();
+        } catch (IOException e) {
+            throw new UncheckedIOException("No se pudo construir el PDF de prueba.", e);
+        }
+    }
+
     /** Una imagen real de 64×48 px en el formato pedido ({@code "png"}, {@code "jpg"}). */
     public static byte[] imagen(String formato) {
         BufferedImage imagen = new BufferedImage(64, 48, BufferedImage.TYPE_INT_RGB);

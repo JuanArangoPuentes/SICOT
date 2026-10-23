@@ -48,7 +48,7 @@ class ContratoServiceTest {
 
         CrearContratoRequest request = new CrearContratoRequest(
                 "CO1.PCCNTR.DUP", "Objeto duplicado", new BigDecimal("100000"), null, null, null,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         assertThatThrownBy(() -> contratoService.crear(request))
                 .isInstanceOf(BusinessException.class)
@@ -79,7 +79,7 @@ class ContratoServiceTest {
         CrearContratoRequest request = new CrearContratoRequest(
                 "CO1.PCCNTR.NUEVO", "Objeto nuevo", new BigDecimal("250000"),
                 java.time.LocalDate.of(2026, 1, 1), java.time.LocalDate.of(2026, 6, 30), null,
-                null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         contratoService.crear(request);
 
@@ -101,7 +101,7 @@ class ContratoServiceTest {
 
         CrearContratoRequest request = new CrearContratoRequest(
                 "CO1.PCCNTR.CONSUP", "Objeto con supervisor", new BigDecimal("250000"),
-                null, null, 7L, null, null, null, null, null, null, null, null, null, null, null, null);
+                null, null, 7L, null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         contratoService.crear(request);
 

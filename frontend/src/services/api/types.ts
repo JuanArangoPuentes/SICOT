@@ -127,6 +127,8 @@ export interface CrearContratoRequest {
   apoyoSupervision?: string | null
   fechaDesignacion?: string | null
   correoContratista?: string | null
+  /** Del registro de proveedores del SECOP II: el acta no lo trae. */
+  telefonoContratista?: string | null
 }
 
 /**
@@ -160,6 +162,12 @@ export interface ActualizarContratoRequest {
   apoyoSupervision?: string | null
   fechaDesignacion?: string | null
   correoContratista?: string | null
+  /**
+   * La excepción a «se guarda vacío»: sin el campo, el backend conserva el
+   * teléfono que había (las instalaciones anteriores al 22-10-2026 no lo
+   * envían). Una cadena vacía sí lo borra.
+   */
+  telefonoContratista?: string | null
 }
 
 export interface CambiarEstadoContratoRequest {
@@ -189,6 +197,8 @@ export interface ContratoResponse {
   apoyoSupervision: string | null
   fechaDesignacion: string | null
   correoContratista: string | null
+  /** Teléfono del contratista: el paso 5 de la hoja de Alex lo pide junto al correo. */
+  telefonoContratista?: string | null
   fechaCreacion: string
 }
 
@@ -291,6 +301,8 @@ export interface ExtraccionContratoResponse {
   apoyoSupervision?: string | null
   fechaDesignacion?: string | null
   correoContratista?: string | null
+  /** Ningún documento del contrato lo trae: sale del registro de proveedores del SECOP II. */
+  telefonoContratista?: string | null
   /** Campos que el documento no traía y se tomaron de los datos abiertos del SECOP II. */
   completadoDesdeSecop?: string[]
 }
@@ -347,6 +359,22 @@ export interface VerificacionSecopResponse {
     vigenteHasta: string | null
     estado: string | null
   }[]
+  /**
+   * El contratista como está inscrito en el registro de proveedores del SECOP
+   * II: de ahí sale el teléfono que el acta no trae. Solo datos de la empresa.
+   * Ausente en servidores anteriores al 22-10-2026.
+   */
+  contactoProveedor?: ProveedorSecop | null
+}
+
+export interface ProveedorSecop {
+  nombre: string | null
+  nit: string | null
+  telefono: string | null
+  correo: string | null
+  direccion: string | null
+  municipio: string | null
+  departamento: string | null
 }
 
 export interface GenerarDocumentoRequest {
@@ -671,4 +699,54 @@ export interface SolicitudDePedidoResponse {
   /** Asignado − comprometido; negativo si el pedido se pasa del contrato. */
   queda: number
   excedeElContrato: boolean
+}
+
+// ─────────── Arranque del contrato: pasos 2.2 y 2.4 ───────────
+
+/** Una fecha de entrega acordada con el contratista; el número lo asigna SICOT por fecha. */
+export interface EntregaAcordada {
+  numero: number
+  /** AAAA-MM-DD */
+  fecha: string
+  descripcion: string
+}
+
+/**
+ * Las fechas de entrega acordadas (paso 5 de la hoja de Alex: «se establecen
+ * fechas de entrega … respetando los tiempos de inicio y fin del contrato»).
+ */
+export interface AcuerdoDeEntregasResponse {
+  entregas: EntregaAcordada[]
+  /** Los límites del plazo: la pantalla no ofrece días fuera de ellos. */
+  inicioDelContrato: string | null
+  finDelContrato: string | null
+}
+
+export type RolDeContacto = 'SST' | 'AMBIENTAL'
+
+/** Un profesional de SST o ambiental al que se le avisa del contrato (paso 2.2). */
+export interface ContactoDelContrato {
+  rol: RolDeContacto
+  nombre: string | null
+  correo: string
+}
+
+export interface ContactosDelContratoResponse {
+  /** Primero los de SST. */
+  contactos: ContactoDelContrato[]
+}
+
+/** Un correo que SICOT encontró en el estudio previo cargado: es una propuesta, no se guarda sola. */
+export interface ContactoEncontrado {
+  correo: string
+  /** La mención de SST o ambiental más cercana antes del correo; null si no hay. */
+  rolSugerido: RolDeContacto | null
+  /** El fragmento del documento donde aparece, para reconocer de quién es. */
+  contexto: string
+}
+
+export interface LecturaDeContactosResponse {
+  encontrados: ContactoEncontrado[]
+  /** Por qué no hay propuestas (documento escaneado, sin correos), o null. */
+  aviso: string | null
 }

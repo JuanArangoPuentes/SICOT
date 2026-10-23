@@ -56,8 +56,11 @@ import {
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
 import ActaFirmadaYEnvio from '@/components/supervisor/ActaFirmadaYEnvio'
 import VerificacionSecop from '@/components/supervisor/VerificacionSecop'
-import BorradorDeCorreo, { type TipoDeCorreo } from '@/components/supervisor/BorradorDeCorreo'
+import BorradorDeCorreo from '@/components/supervisor/BorradorDeCorreo'
 import SolicitudDePedido from '@/components/supervisor/SolicitudDePedido'
+import AcuerdoDeEntregas from '@/components/supervisor/AcuerdoDeEntregas'
+import ContactosSstAmbiental from '@/components/supervisor/ContactosSstAmbiental'
+import ContactoDelContratista from '@/components/supervisor/ContactoDelContratista'
 import DatosDelDocumento, {
   guardarTablasDelContrato,
   leerTablasDelContrato,
@@ -347,6 +350,7 @@ export default function SupervisorPanel({
   registros,
   onRefreshRegistros,
   pedidosCopiloto = 0,
+  onContratoActualizado,
 }: {
   vista: Tab
   onCambiarVista: (t: Tab) => void
@@ -366,6 +370,11 @@ export default function SupervisorPanel({
   onRefreshRegistros: () => Promise<void>
   /** Sube cada vez que el avatar flotante pide abrir el Copiloto. */
   pedidosCopiloto?: number
+  /**
+   * El contrato cambió desde el panel (hoy, el teléfono del contratista traído
+   * del SECOP II en el paso 2.4): quien tiene la lista de contratos la pone al día.
+   */
+  onContratoActualizado?: (c: ContratoResponse) => void
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -1861,23 +1870,32 @@ export default function SupervisorPanel({
                               {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'VERIFICACION_SECOP' && (
                                 <VerificacionSecop contratoId={contrato.id} />
                               )}
-                              {contrato &&
-                                !ss.completed &&
-                                (HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' ||
-                                  HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA') && (
-                                  <BorradorDeCorreo
-                                    tipo={HERRAMIENTA_POR_PASO[ss.label] as TipoDeCorreo}
+                              {/* Paso 2.2: los profesionales de SST y ambiental, y el correo
+                                  que ya sale dirigido a ellos. */}
+                              {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' && (
+                                <ContactosSstAmbiental
+                                  contrato={contrato}
+                                  onGuardado={() => void onRefreshRegistros()}
+                                />
+                              )}
+                              {/* Paso 2.4, en el orden en que lo hace el supervisor según el
+                                  paso 5 de la hoja de Alex: cómo contactar al contratista, el
+                                  correo, el Excel de bienes y cantidades que va adjunto (al de
+                                  SST no se le manda el pedido) y las fechas que acuerden. */}
+                              {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
+                                <>
+                                  <ContactoDelContratista
                                     contrato={contrato}
+                                    onActualizado={(c) => {
+                                      onContratoActualizado?.(c)
+                                      void onRefreshRegistros()
+                                    }}
                                   />
-                                )}
-                              {/* El Excel de bienes y cantidades que, según el paso 5 de la lista
-                                  de chequeo, va adjunto a ese mismo correo. Solo en el del
-                                  contratista: al de SST no se le manda el pedido. */}
-                              {contrato &&
-                                !ss.completed &&
-                                HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
+                                  <BorradorDeCorreo tipo="CORREO_CONTRATISTA" contrato={contrato} />
                                   <SolicitudDePedido contrato={contrato} />
-                                )}
+                                  <AcuerdoDeEntregas contrato={contrato} onGuardado={() => void onRefreshRegistros()} />
+                                </>
+                              )}
                             </div>
                           )
                         })}

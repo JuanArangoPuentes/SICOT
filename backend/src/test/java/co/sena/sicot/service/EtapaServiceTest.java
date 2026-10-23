@@ -42,6 +42,9 @@ class EtapaServiceTest {
     @Autowired
     private co.sena.sicot.repository.DocumentoRepository documentoRepository;
 
+    @Autowired
+    private co.sena.sicot.repository.EntregaAcordadaRepository entregaRepository;
+
     private EtapaService etapaService;
     private Contrato contrato;
     private Etapa etapa;
@@ -57,7 +60,7 @@ class EtapaServiceTest {
         ContratoService contratoService = new ContratoService(contratoRepository,
                 null, registroService, etapaRepository);
         etapaService = new EtapaService(etapaRepository, subetapaRepository,
-                contratoService, registroService, documentoRepository);
+                contratoService, registroService, documentoRepository, entregaRepository);
 
         contrato = new Contrato();
         contrato.setNumeroContrato("CO1.PCCNTR.ETAPA");

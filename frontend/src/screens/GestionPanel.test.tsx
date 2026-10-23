@@ -223,11 +223,14 @@ describe('GestionPanel', () => {
           apoyoSupervision: null,
           fechaDesignacion: null,
           correoContratista: null,
+          // Vacío y no null: sin el campo, el backend conserva el teléfono que
+          // había; con el campo vacío, entiende que Gestión lo dejó en blanco.
+          telefonoContratista: '',
         }),
       )
     })
 
-    it('al corregir conserva el enlace del SECOP, el apoyo, la fecha de designación y el correo del contratista', async () => {
+    it('al corregir conserva el enlace del SECOP, el apoyo, la fecha de designación, el correo y el teléfono del contratista', async () => {
       const { getContratos, actualizarContrato } = await import('@/services/contratoService')
       vi.mocked(getContratos).mockResolvedValue([
         contrato({
@@ -235,6 +238,7 @@ describe('GestionPanel', () => {
           apoyoSupervision: 'Yeison Zapata',
           fechaDesignacion: '2026-10-10',
           correoContratista: 'ventas@maderasdelnorte.com',
+          telefonoContratista: '604 448 9948',
         }),
       ])
       vi.mocked(actualizarContrato).mockResolvedValue(contrato())
@@ -252,6 +256,7 @@ describe('GestionPanel', () => {
             apoyoSupervision: 'Yeison Zapata',
             fechaDesignacion: '2026-10-10',
             correoContratista: 'ventas@maderasdelnorte.com',
+            telefonoContratista: '604 448 9948',
           }),
         ),
       )

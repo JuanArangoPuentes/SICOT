@@ -56,7 +56,10 @@ class GcconP010PlantillaTest {
                 "Aviso a los profesionales SST y ambiental",
                 "Verificación de especificaciones en SECOP II",
                 "Contacto con el contratista y acuerdo de entregas");
-        assertThat(etapa2.subList(1, 4)).allMatch(s -> s.getDocumentosRequeridos() == null);
+        assertThat(etapa2.subList(1, 3)).allMatch(s -> s.getDocumentosRequeridos() == null);
+        // El contacto con el contratista es también el acuerdo de entregas: no se
+        // cierra sin al menos una fecha acordada (paso 5 de la hoja de Alex).
+        assertThat(etapa2.get(3).getDocumentosRequeridos()).isEqualTo(GcconP010Plantilla.ENTREGAS_ACORDADAS);
     }
 
     @Test

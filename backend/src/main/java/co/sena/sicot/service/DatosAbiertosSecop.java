@@ -3,6 +3,7 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Documento;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Ficha;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Garantia;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse.Proveedor;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -50,20 +52,39 @@ public class DatosAbiertosSecop {
      * está armado, y además por el número de contrato, que solo trae poblado en
      * parte de sus filas.
      *
-     * <p><b>Lo que de verdad publica.</b> El 16-10-2026 tenía 1.000 filas y
-     * ninguna cargada después del 30-12-2021, pese a llamarse «desde 2025»:
-     * para el contrato del Lote 4 y para su proceso CO1.BDOS.10711126 devuelve
-     * cero, y los otros conjuntos de archivos (histórico, 2022, 2023, 2024)
-     * tampoco lo tienen. El enlace de descarga que publicaría
-     * ({@code RetrieveFile/Index?DocumentId=…}) responde 403, así que SICOT
-     * tampoco podría bajar el archivo. La consulta se queda por los contratos
-     * antiguos que sí están; cuando vuelve vacía hay que decir por qué, porque
-     * el expediente se abre con el enlace del proceso.
+     * <p><b>Lo que de verdad publica.</b> El 16-10-2026 no traía nada del Lote
+     * 4 (ninguna fila cargada después del 30-12-2021, pese a llamarse «desde
+     * 2025»). El 23-10-2026, para el mismo proceso CO1.BDOS.10711126, trae 110
+     * archivos —los de los 9 lotes, con «6. ESTUDIO PREVIO.pdf» y «8. ECONOMICA
+     * LOTE 4 AJUSTADA.pdf»—: la lista se publica, pero días después que la
+     * ficha. Cuando vuelve vacía hay que decir por qué, porque mientras tanto el
+     * expediente se abre con el enlace del proceso.
+     *
+     * <p>El enlace de descarga ({@code RetrieveFile/Index?DocumentId=…})
+     * responde 403 a un programa: el SECOP filtra lo que no es un navegador.
+     * Hacerse pasar por uno sería saltarse ese filtro, y SICOT no lo hace: el
+     * supervisor abre el documento en su navegador y, si SICOT tiene que
+     * leerlo (el estudio previo del paso 2.2), lo carga.
      */
     static final String DOCUMENTOS = "dmgg-8hin";
 
     /** «SECOP II - Garantías». */
     static final String GARANTIAS = "gjp9-cutm";
+
+    /**
+     * «SECOP II - Proveedores Registrados»: el teléfono, el correo y la
+     * dirección con que la empresa se inscribió en el SECOP II.
+     *
+     * <p>Es de donde sale el teléfono que pide el paso 5 de la lista de chequeo
+     * de Alex («en el acta de inicio debe reposar un correo de contacto +
+     * número de teléfono»): el acta del Lote 4 trae el correo y no el teléfono.
+     * Medido el 22-10-2026 con el NIT 800154801: una fila, teléfono 4489948.
+     *
+     * <p>Trae también el correo y el teléfono personales del representante
+     * legal. Esos no se leen: SICOT necesita cómo contactar a la empresa, y un
+     * dato personal que no se usa no tiene por qué viajar al panel.
+     */
+    static final String PROVEEDORES = "qmzu-gj57";
 
     /**
      * Solo se consulta con un número de contrato bien formado. Lo que llega
@@ -79,8 +100,11 @@ public class DatosAbiertosSecop {
      */
     private static final Pattern ID_PROCESO = Pattern.compile("CO1\\.BDOS\\.\\d{4,12}");
 
+    /** Un NIT sin dígito de verificación, como lo publica el SECOP: «800154801». */
+    private static final Pattern NIT = Pattern.compile("\\d{5,12}");
+
     private static final Set<String> SIN_DATO = Set.of(
-            "no definido", "sin descripcion", "sin descripción", "no aplica", "");
+            "no definido", "sin descripcion", "sin descripción", "no aplica", "no provisto", "");
 
     private final RestClient restClient;
 
@@ -99,6 +123,19 @@ public class DatosAbiertosSecop {
 
     public static boolean esNumeroDeProcesoValido(String idProceso) {
         return idProceso != null && ID_PROCESO.matcher(idProceso).matches();
+    }
+
+    /**
+     * El NIT como lo publica el SECOP: solo los dígitos de antes del de
+     * verificación. «800154801-6» y «800.154.801» dan «800154801».
+     *
+     * @return {@code null} si no queda un NIT con forma de NIT
+     */
+    public static String nitSinVerificacion(String nit) {
+        if (nit == null) return null;
+        String base = nit.contains("-") ? nit.substring(0, nit.indexOf('-')) : nit;
+        String digitos = base.replaceAll("[^0-9]", "");
+        return NIT.matcher(digitos).matches() ? digitos : null;
     }
 
     /** La ficha del contrato, o vacío si el SECOP todavía no lo publica. */
@@ -187,8 +224,43 @@ public class DatosAbiertosSecop {
         return new ArrayList<>(unicas.values());
     }
 
+    /**
+     * Cómo contactar a la empresa según su inscripción en el SECOP II, o vacío
+     * si el NIT no está registrado. Si el registro trae más de una fila con
+     * ese NIT, gana la de la cuenta activa.
+     */
+    public Optional<Proveedor> proveedor(String nit) {
+        String limpio = nitSinVerificacion(nit);
+        if (limpio == null) {
+            return Optional.empty();
+        }
+        JsonNode filas = consultar(PROVEEDORES, "nit", limpio);
+        if (filas == null || !filas.isArray() || filas.isEmpty()) {
+            return Optional.empty();
+        }
+        JsonNode elegida = filas.get(0);
+        for (JsonNode f : filas) {
+            if (Boolean.TRUE.equals(siNo(f, "esta_activa"))) {
+                elegida = f;
+                break;
+            }
+        }
+        String correo = texto(elegida, "correo");
+        return Optional.of(new Proveedor(
+                texto(elegida, "nombre"),
+                texto(elegida, "nit"),
+                texto(elegida, "telefono"),
+                // El registro escribe el correo en mayúsculas; un correo no
+                // distingue mayúsculas y así se ve como los demás.
+                correo == null ? null : correo.toLowerCase(Locale.ROOT),
+                texto(elegida, "direccion"),
+                texto(elegida, "municipio"),
+                texto(elegida, "departamento")));
+    }
+
     private JsonNode consultar(String dataset, String campo, String identificador) {
-        if (!esNumeroDeContratoValido(identificador) && !esNumeroDeProcesoValido(identificador)) {
+        if (!esNumeroDeContratoValido(identificador) && !esNumeroDeProcesoValido(identificador)
+                && !(PROVEEDORES.equals(dataset) && identificador != null && NIT.matcher(identificador).matches())) {
             throw new IllegalArgumentException(
                     "Identificador no válido para consultar el SECOP: " + identificador);
         }

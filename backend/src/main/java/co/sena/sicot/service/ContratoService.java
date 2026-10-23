@@ -115,6 +115,7 @@ public class ContratoService {
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
         contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
         Usuario supervisor = request.supervisorId() != null ? buscarSupervisor(request.supervisorId()) : null;
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
@@ -164,6 +165,12 @@ public class ContratoService {
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
         contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        // Sin el campo (null) se conserva el que había: las instalaciones de
+        // escritorio anteriores al 22-10-2026 no lo envían, y editar un contrato
+        // desde una de ellas no debe borrar el teléfono. Vacío sí lo borra.
+        if (request.telefonoContratista() != null) {
+            contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
+        }
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
                 "Se actualizó la información general del contrato " + numero + ".");

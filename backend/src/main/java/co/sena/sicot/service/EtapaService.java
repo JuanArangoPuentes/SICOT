@@ -12,6 +12,7 @@ import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.EtapaMapper;
 import co.sena.sicot.repository.DocumentoRepository;
+import co.sena.sicot.repository.EntregaAcordadaRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.security.SecurityUtils;
@@ -28,15 +29,17 @@ public class EtapaService {
     private final ContratoService contratoService;
     private final RegistroService registroService;
     private final DocumentoRepository documentoRepository;
+    private final EntregaAcordadaRepository entregaRepository;
 
     public EtapaService(EtapaRepository etapaRepository, SubetapaRepository subetapaRepository,
                         ContratoService contratoService, RegistroService registroService,
-                        DocumentoRepository documentoRepository) {
+                        DocumentoRepository documentoRepository, EntregaAcordadaRepository entregaRepository) {
         this.etapaRepository = etapaRepository;
         this.subetapaRepository = subetapaRepository;
         this.contratoService = contratoService;
         this.registroService = registroService;
         this.documentoRepository = documentoRepository;
+        this.entregaRepository = entregaRepository;
     }
 
     @Transactional
@@ -129,6 +132,10 @@ public class EtapaService {
     static final String NOMBRE_DE_LA_EVIDENCIA = "Evidencia del envío del acta";
 
     private void exigirDocumentos(Subetapa subetapa) {
+        if (GcconP010Plantilla.ENTREGAS_ACORDADAS.equals(subetapa.getDocumentosRequeridos())) {
+            exigirEntregasAcordadas(subetapa);
+            return;
+        }
         if (!GcconP010Plantilla.ACTA_FIRMADA_Y_ENVIO.equals(subetapa.getDocumentosRequeridos())) {
             return;
         }
@@ -142,6 +149,21 @@ public class EtapaService {
                     : "Falta uno: hay 1 documento cargado.";
             throw new BusinessException("Para cerrar este paso cargue el Acta de Inicio firmada (PDF) y la evidencia"
                     + " de que la devolvió por correo (pantallazo o PDF del correo). " + cuantos);
+        }
+    }
+
+    /**
+     * El paso del contacto con el contratista se llama «acuerdo de entregas», y
+     * la hoja de Alex dice que en él «se establecen fechas de entrega». Hasta el
+     * 22-10-2026 se cerraba con un clic y sin una sola fecha; ahora espera a que
+     * el supervisor registre al menos una, igual que el del acta espera el acta.
+     */
+    private void exigirEntregasAcordadas(Subetapa subetapa) {
+        Long contratoId = subetapa.getEtapa().getContrato().getId();
+        if (entregaRepository.countByContratoId(contratoId) == 0) {
+            throw new BusinessException("Para cerrar este paso registre las fechas de entrega que acordó con el "
+                    + "contratista (en «Fechas de entrega acordadas», debajo del correo). Deben quedar dentro del "
+                    + "plazo del contrato.");
         }
     }
 

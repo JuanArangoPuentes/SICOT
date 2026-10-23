@@ -189,6 +189,8 @@ const CAMPO_SECOP: Record<string, string> = {
   tipoContrato: 'tipo de contrato',
   enlaceSecop: 'enlace del proceso',
   supervisorDesignado: 'supervisor',
+  correoContratista: 'correo del contratista',
+  telefonoContratista: 'teléfono del contratista',
 }
 
 // Formulario de corrección de los datos generales. Todos los campos son texto
@@ -216,6 +218,7 @@ interface FormularioDeContrato {
   apoyoSupervision: string
   fechaDesignacion: string
   correoContratista: string
+  telefonoContratista: string
 }
 
 const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
@@ -236,6 +239,7 @@ const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
   apoyoSupervision: c.apoyoSupervision ?? '',
   fechaDesignacion: c.fechaDesignacion ?? '',
   correoContratista: c.correoContratista ?? '',
+  telefonoContratista: c.telefonoContratista ?? '',
 })
 
 // El valor guardado puede no estar en la lista de opciones: lo escribió otro
@@ -256,6 +260,7 @@ const CAMPOS_DE_TEXTO: { label: string; campo: keyof FormularioDeContrato; mono:
   { label: 'Enlace del proceso en SECOP II', campo: 'enlaceSecop', mono: true },
   { label: 'Apoyo a la supervisión', campo: 'apoyoSupervision', mono: false },
   { label: 'Correo del contratista', campo: 'correoContratista', mono: true },
+  { label: 'Teléfono del contratista', campo: 'telefonoContratista', mono: true },
 ]
 
 // Fechas con <input type="date"> y no con el campo de texto «dd/mm/aaaa –
@@ -341,6 +346,9 @@ export default function GestionPanel({
   const [apoyoSupervision, setApoyoSupervision] = useState('')
   const [fechaDesignacion, setFechaDesignacion] = useState('')
   const [correoContratista, setCorreoContratista] = useState('')
+  // Ningún documento del contrato lo trae: la extracción lo completa con el
+  // registro de proveedores del SECOP II (paso 5 de la hoja de Alex).
+  const [telefonoContratista, setTelefonoContratista] = useState('')
   const [completadoDesdeSecop, setCompletadoDesdeSecop] = useState<string[]>([])
 
   // Tabla de contratos reales (GET /api/contratos)
@@ -416,6 +424,7 @@ export default function GestionPanel({
     setApoyoSupervision('')
     setFechaDesignacion('')
     setCorreoContratista('')
+    setTelefonoContratista('')
     setCompletadoDesdeSecop([])
     setSupervisor('')
     setTipo('')
@@ -472,6 +481,7 @@ export default function GestionPanel({
       setApoyoSupervision(resultado.apoyoSupervision ?? '')
       setFechaDesignacion(isoADisplay(resultado.fechaDesignacion))
       setCorreoContratista(resultado.correoContratista ?? '')
+      setTelefonoContratista(resultado.telefonoContratista ?? '')
       setCompletadoDesdeSecop(resultado.completadoDesdeSecop ?? [])
       // La designación nombra al supervisor: si es un usuario de SICOT, queda
       // preseleccionado. Si no lo es, no se adivina: Gestión elige.
@@ -542,6 +552,7 @@ export default function GestionPanel({
           ? displayAIso(fechaDesignacion.trim())
           : null,
         correoContratista: correoContratista.trim() || null,
+        telefonoContratista: telefonoContratista.trim() || null,
       })
       // Se cuentan los adjuntos que realmente quedaron guardados. Antes se
       // tragaban todos los fallos y luego se informaba "N documentos adjuntos"
@@ -636,6 +647,9 @@ export default function GestionPanel({
         apoyoSupervision: edicion.apoyoSupervision.trim() || null,
         fechaDesignacion: edicion.fechaDesignacion || null,
         correoContratista: edicion.correoContratista.trim() || null,
+        // Vacío y no null: para el backend, sin el campo significa «conservar el
+        // que había» (por las instalaciones viejas), y aquí Gestión lo borró.
+        telefonoContratista: edicion.telefonoContratista.trim(),
       })
       await recargarContratos()
       cerrarEdicion()
@@ -1213,6 +1227,12 @@ export default function GestionPanel({
                     value: correoContratista,
                     onChange: setCorreoContratista,
                     mono: false,
+                  },
+                  {
+                    label: 'Teléfono del contratista',
+                    value: telefonoContratista,
+                    onChange: setTelefonoContratista,
+                    mono: true,
                   },
                   {
                     label: 'Apoyo a la supervisión',

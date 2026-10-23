@@ -695,15 +695,18 @@ public class GuiaDelPasoActual {
                     + "completado.";
         }
         if (nombre.equals("Aviso a los profesionales SST y ambiental")) {
-            return "En SICOT: abra el borrador del correo, agregue como destinatarios a los profesionales de SST y "
-                    + "ambiental —sus correos están en el estudio previo, que se abre entrando al proceso en el SECOP "
-                    + "II— y envíelo desde su correo. Después, márquelo como completado.";
+            return "En SICOT: registre debajo a los profesionales de SST y ambiental —sus correos están en el "
+                    + "estudio previo, que se abre entrando al proceso en el SECOP II; si lo carga, SICOT le propone "
+                    + "los correos que encuentre en él—. Después abra el borrador del correo, que ya sale dirigido a "
+                    + "ellos, y envíelo desde su correo. Cuando lo haya enviado, márquelo como completado.";
         }
         if (nombre.equals("Contacto con el contratista y acuerdo de entregas")) {
             return "En SICOT: si es un suministro, cargue abajo la solicitud de pedido —se pega de la oferta "
                     + "económica— y descargue el Excel; después abra el borrador del correo al contratista, "
-                    + "adjúntelo y envíelo desde su correo. Cuando hayan acordado las fechas de entrega, márquelo "
-                    + "como completado.";
+                    + "adjúntelo y envíelo desde su correo. Cuando acuerden las fechas de entrega, regístrelas en "
+                    + "«Fechas de entrega acordadas»: deben caer dentro del plazo del contrato, SICOT le recuerda "
+                    + "cada una antes de que llegue y le arma los correos para confirmarlas al contratista y "
+                    + "compartirlas con SST y ambiental. El paso no se cierra sin al menos una fecha registrada.";
         }
         if (SUBPASOS_CON_EVIDENCIA_FOTOGRAFICA.contains(sub.codigo())) {
             return "En SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», "
