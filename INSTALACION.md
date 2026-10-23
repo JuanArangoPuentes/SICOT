@@ -84,6 +84,14 @@ Los valores que no puede dejar como están:
 vacío a propósito, porque el proxy sirve la aplicación y la API desde la misma
 dirección. Lo que escriba en el `.env` para esa variable no se usa.
 
+El aviso que recibe un supervisor al ser designado (paso 1 del proceso real)
+lleva el enlace para descargar SICOT y la dirección que debe escribir en
+Configuración al abrirlo por primera vez. La dirección sale sola de
+`SICOT_DOMINIO` (`https://` y el dominio). El enlace apunta por defecto a la
+última versión publicada en GitHub; si el Centro distribuye el instalador desde
+otro sitio, defina `SICOT_ENLACE_DESCARGA_SUPERVISOR` en el `.env` con esa
+dirección.
+
 Lo de `COMPOSE_FILE` no es comodidad. Sin él, un comando escrito deprisa sin
 los `-f` —el de rotar un secreto en plena filtración, por ejemplo— recrea el
 backend con el archivo de desarrollo: o no arranca, o arranca en `dev` con el
