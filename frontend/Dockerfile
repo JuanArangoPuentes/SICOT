@@ -39,7 +39,11 @@ RUN npm run build
 # 1.30 es la rama estable mantenida. La 1.27 que había aquí se cerró en 2025 y
 # su imagen dejó de reconstruirse, con nginx y Alpine incluidos: esta imagen
 # sirve la SPA que guarda el JWT y seguía sin parches sin que nada lo señalara.
-FROM nginxinc/nginx-unprivileged:1.30.5-alpine
+# 1.30.6 desde el 23-10-2026: la 1.30.5 traía nginx con tres CVE altas
+# (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
+# expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
+# imágenes del CI marcó, y la 1.30.6 las corrige.
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
