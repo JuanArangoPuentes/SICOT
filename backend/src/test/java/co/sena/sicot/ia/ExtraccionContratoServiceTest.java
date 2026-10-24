@@ -1,8 +1,10 @@
 package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.service.ArchivoValidator;
+import co.sena.sicot.service.DatosAbiertosSecop;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,7 +18,10 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -62,6 +67,14 @@ class ExtraccionContratoServiceTest {
     @Mock
     private ArchivoValidator archivoValidator;
 
+    /**
+     * Sin respuesta configurada devuelve {@code Optional.empty()}: el SECOP «no
+     * publica» el contrato y la extracción queda como la leyó el documento.
+     * Ninguna de estas pruebas puede depender de que haya red.
+     */
+    @Mock
+    private DatosAbiertosSecop datosAbiertos;
+
     private ExtraccionContratoService servicio;
 
     @BeforeEach
@@ -70,11 +83,13 @@ class ExtraccionContratoServiceTest {
         // y es la que ahora resuelve los campos con forma fija.
         servicio = new ExtraccionContratoService(
                 pdfTextExtractor, ollamaClient, new ObjectMapper(), archivoValidator,
-                new ExtraccionDeterminista());
+                new ExtraccionDeterminista(), new DocxTextExtractor(), datosAbiertos);
         // El presupuesto es un @Value: en una prueba unitaria no hay contexto de
         // Spring que lo rellene y quedaría en 0, cortando tras el primer archivo.
         ReflectionTestUtils.setField(servicio, "presupuestoSegundos", 900L);
-        given(pdfTextExtractor.extraerTexto(any())).willReturn("texto legible del documento");
+        // El número de contrato sale del documento, no del modelo: desde el
+        // 24-09-2026 del modelo solo se aceptan el objeto y el tipo.
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("texto legible del documento CO1.PCCNTR.7986334");
     }
 
     private MultipartFile pdf(String nombre) {
@@ -151,16 +166,13 @@ class ExtraccionContratoServiceTest {
      */
     @Test
     void elPrimerValorNoNuloGanaYUnNuloPosteriorNoLoPisa() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Manual. Contrato CO1.PCCNTR.7986334 para el Suministro de materiales del lote.",
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n"
+                        + "CC o NIT 900123456-7\nVALOR DEL CONTRATO ($10.000.000 COP)");
         given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
-                """
-                {"idContrato":"CO1.PCCNTR.7986334","objeto":"Suministro de materiales","proveedor":null,
-                 "nit":null,"representanteLegal":null,"valor":null,"vigenciaInicio":null,
-                 "vigenciaFin":null,"lugarEjecucion":null,"registroPresupuestal":null,"tipoContrato":null}""",
-                """
-                {"idContrato":"OTRO-NUMERO-QUE-NO-DEBE-GANAR","objeto":null,
-                 "proveedor":"EVENTOS SUPERNOVA S.A.S.","nit":"900123456-7","representanteLegal":null,
-                 "valor":"10000000","vigenciaInicio":null,"vigenciaFin":null,"lugarEjecucion":null,
-                 "registroPresupuestal":null,"tipoContrato":null}""");
+                "{\"objeto\":\"Suministro de materiales\",\"tipoContrato\":null}",
+                NADA);
 
         ExtraccionContratoResponse resultado = servicio.extraer(List.of(pdf("manual.pdf"), pdf("acta.pdf")));
 
@@ -208,14 +220,82 @@ class ExtraccionContratoServiceTest {
         verify(ollamaClient).generar(anyString(), anyBoolean());
     }
 
+    /**
+     * Prueba integral del 24-09-2026: un PDF escaneado devolvía 200 con todos
+     * los campos vacíos, y Gestión veía un formulario en blanco sin saber por
+     * qué. Ahora se dice.
+     */
     @Test
-    void unPdfEscaneadoSinTextoLegibleSeOmiteEnVezDePreguntarleAlModeloPorNada() {
+    void unPdfEscaneadoSinTextoLegibleSeExplicaEnVezDeDevolverUnFormularioVacio() {
         given(pdfTextExtractor.extraerTexto(any())).willReturn("   ");
 
-        ExtraccionContratoResponse resultado = servicio.extraer(List.of(pdf("escaneado.pdf")));
-
-        assertThat(resultado.idContrato()).isNull();
+        assertThatThrownBy(() -> servicio.extraer(List.of(pdf("escaneado.pdf"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("escaneado.pdf")
+                .hasMessageContaining("escaneado es una imagen");
         verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+    }
+
+    @Test
+    void siUnoDeLosArchivosSeLeeLosIlegiblesNoTumbanLaExtraccion() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("   ", "texto legible CO1.PCCNTR.7986334");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(NADA);
+
+        assertThat(servicio.extraer(List.of(pdf("escaneado.pdf"), pdf("acta.pdf"))).idContrato())
+                .isEqualTo("CO1.PCCNTR.7986334");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Lo que propone el modelo se revisa
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void siElDocumentoRotulaElObjetoYElTipoNoSeLlamaAlModelo() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("""
+                CONTRATO NRO. CO1.PCCNTR.7986334
+                TIPO DE CONTRATO SUMINISTRO
+                OBJETO
+                5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS
+                VALOR DEL CONTRATO DIEZ MILLONES DE PESOS ($10.000.000 COP)""");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("acta.pdf")));
+
+        assertThat(r.objeto()).isEqualTo("5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS");
+        assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
+        verifyNoInteractions(ollamaClient);
+    }
+
+    /** El caso real: el modelo cambió «CONTRATAR» por «CONTRAER». */
+    @Test
+    void unObjetoQueElModeloReescribioSeDescarta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Acta CO1.PCCNTR.7986334 para contratar el servicio de alquiler de toldos y carpas");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":\"contraer el servicio de alquiler de toldos y carpas\",\"tipoContrato\":\"Servicios\"}");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("acta.pdf")));
+
+        assertThat(r.objeto()).isNull();
+        assertThat(r.tipoContrato()).isEqualTo("Servicios");
+    }
+
+    @Test
+    void unObjetoCopiadoConOtrasMayusculasYEspaciosSeAcepta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Acta CO1.PCCNTR.7986334 para contratar el servicio de\nalquiler de toldos y carpas");
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":\"CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS Y CARPAS\",\"tipoContrato\":null}");
+
+        assertThat(servicio.extraer(List.of(pdf("acta.pdf"))).objeto())
+                .isEqualTo("CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS Y CARPAS");
+    }
+
+    @Test
+    void unTipoFueraDeLasOpcionesDelFormularioSeDescarta() {
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(
+                "{\"objeto\":null,\"tipoContrato\":\"Consultoría especializada\"}");
+
+        assertThat(servicio.extraer(List.of(pdf("acta.pdf"))).tipoContrato()).isNull();
     }
 
     @Test
@@ -353,5 +433,200 @@ class ExtraccionContratoServiceTest {
 
         assertThat(servicio.extraer(List.of(pdf("uno.pdf"))).idContrato())
                 .isEqualTo("CO1.PCCNTR.7986334");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // La IA complementa: si falla, no se pierde lo leído del documento
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Prueba integral del 24-09-2026: la notificación real 8151794 devolvió 503
+     * a los 243 s porque el modelo se cortó por tiempo, y con él se perdieron
+     * el número, el valor y las fechas que el código ya había leído.
+     */
+    @Test
+    void siElModeloNoRespondeSeDevuelveLoLeidoDelDocumento() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Número de contrato CO1.PCCNTR.8151794\n• Valor: $ 39.552.042\n• Fecha de inicio: 11/08/2025");
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("La IA tardó más de 240 segundos."));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf")));
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.8151794");
+        assertThat(r.valor()).isEqualTo("39552042");
+        assertThat(r.vigenciaInicio()).isEqualTo("2025-08-11");
+    }
+
+    @Test
+    void conElObjetoEscritoElTipoSaleDeSusPalabrasSinLlamarAlModelo() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("""
+                Numero de contrato CO1.PCCNTR.8151794
+                • Objeto: 05-9-2025-007544 contratar el suministro de materiales para la formación
+                • Valor: $ 39.552.042""");
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf")));
+
+        assertThat(r.tipoContrato()).isEqualTo("Suministro de Bienes");
+        verifyNoInteractions(ollamaClient);
+    }
+
+    /** Revisión del 24-09-2026: la deducción de un archivo ganaba al rótulo de otro. */
+    @Test
+    void unTipoRotuladoEnOtroArchivoGanaAUnTipoDeducido() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "• Objeto: 5_9205_278 CONTRATAR EL SERVICIO DE ALQUILER DE TOLDOS\n",
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nTIPO DE CONTRATO COMPRAVENTA\n");
+
+        // El acta no rotula el objeto: a ella sí se le pregunta al modelo.
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn(NADA);
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("notificacion.pdf"), pdf("acta.pdf")));
+
+        assertThat(r.tipoContrato()).isEqualTo("Compraventa");
+    }
+
+    @Test
+    void siElLimitadorDeIaRechazaSeDevuelveLoLeidoDelDocumento() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn("Contrato CO1.PCCNTR.8151794 sin objeto rotulado");
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new co.sena.sicot.exception.DemasiadasSolicitudesException("ocupado", 30L));
+
+        assertThat(servicio.extraer(List.of(pdf("a.pdf"))).idContrato()).isEqualTo("CO1.PCCNTR.8151794");
+    }
+
+    // ── Completar desde los datos abiertos del SECOP ────────────────────────
+    //
+    // La designación (GCCON-F-032) trae número, contratista, objeto y enlace,
+    // pero no valor, plazo ni fechas. Esos datos se piden a datos.gov.co con el
+    // número. La ficha de abajo copia la del contrato real del Lote 4 tal como
+    // la publica el dataset jbjy-vk9h el 15-10-2026.
+
+    private static final VerificacionSecopResponse.Ficha FICHA_LOTE_4 = new VerificacionSecopResponse.Ficha(
+            "CO1.PCCNTR.10057820",
+            "5_9205_306 Contratar el suministro de materiales para la formación para los diferentes programas"
+                    + " de formación del Centro Tecnológico del Mobiliario",
+            "Aprobado", "SUMINISTROS MAYBE SAS", "800154801", "LUZ MARINA MEJIA PEREZ",
+            new BigDecimal("45900300"), "67 Dia(s)", LocalDate.of(2026, 10, 13), LocalDate.of(2026, 12, 15),
+            LocalDate.of(2026, 12, 16), LocalDate.of(2027, 6, 30), "CO1.BDOS.10711126",
+            "Alex Fernando Zapata Rios",
+            "Carlos Mario Castañeda Monsalve", "Selección abreviada subasta inversa", "Suministros", true,
+            BigDecimal.ZERO, BigDecimal.ZERO, new BigDecimal("45900300"),
+            "https://community.secop.gov.co/Public/Tendering/OpportunityDetail/Index?noticeUID=CO1.NTC.10815297"
+                    + "&isFromPublicArea=True&isModal=False");
+
+    /** Lo que la designación del Lote 4 deja leer: el número y el objeto, nada de cifras. */
+    private static final String DESIGNACION = """
+            FORMATO DE DESIGNACIÓN DE SUPERVISOR Y/O APOYO A LA SUPERVISIÓN
+            Itagüí, 9 de octubre de 2026
+            PARA  Alex Fernando Zapata Rios (Supervisor)
+            CONTRATO NRO. CO1.PCCNTR.10057820
+            OBJETO 5_9205_306 Contratar el suministro de materiales para la formación
+            """;
+
+    @Test
+    void loQueLaDesignacionNoTraeSeCompletaDesdeElSecopYSeDiceCual() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.valor()).isEqualTo("45900300");
+        assertThat(r.vigenciaFin()).isEqualTo("2026-12-15");
+        assertThat(r.proveedor()).isEqualTo("SUMINISTROS MAYBE SAS");
+        assertThat(r.nit()).isEqualTo("800154801");
+        assertThat(r.enlaceSecop()).startsWith("https://community.secop.gov.co/");
+        assertThat(r.completadoDesdeSecop())
+                .contains("valor", "vigenciaFin", "proveedor", "nit", "representanteLegal", "enlaceSecop")
+                .doesNotContain("objeto", "supervisorDesignado");
+        // La fecha de firma del SECOP (13-10) no es la de inicio del acta (14-10):
+        // no se usa para llenar el inicio.
+        assertThat(r.vigenciaInicio()).isNull();
+        verifyNoInteractions(ollamaClient);
+    }
+
+    @Test
+    void loLeidoDelDocumentoGanaALoQuePubliqueElSecop() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION + "VALOR 45.000.000\n");
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.valor()).isEqualTo("45000000");
+        assertThat(r.completadoDesdeSecop()).doesNotContain("valor");
+    }
+
+    /**
+     * El paso 5 de la hoja de Alex pide el correo y el teléfono del contratista;
+     * ningún documento del contrato trae el teléfono. El registro de
+     * proveedores del SECOP II sí: es la fila real de Suministros Maybe.
+     */
+    @Test
+    void elTelefonoQueNingunDocumentoTraeSaleDelRegistroDeProveedores() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+        given(datosAbiertos.proveedor("800154801")).willReturn(Optional.of(new VerificacionSecopResponse.Proveedor(
+                "SUMINISTROS MAYBE SAS", "800154801", "4489948", "maybesuministros@gmail.com")));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.telefonoContratista()).isEqualTo("4489948");
+        assertThat(r.correoContratista()).isEqualTo("maybesuministros@gmail.com");
+        assertThat(r.completadoDesdeSecop()).contains("telefonoContratista", "correoContratista");
+    }
+
+    @Test
+    void siElRegistroDeProveedoresFallaLoDemasDelSecopSeCompletaIgual() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+        given(datosAbiertos.proveedor(anyString()))
+                .willThrow(new DatosAbiertosSecop.NoDisponible("sin red", new RuntimeException()));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.valor()).isEqualTo("45900300");
+        assertThat(r.telefonoContratista()).isNull();
+        assertThat(r.completadoDesdeSecop()).contains("valor").doesNotContain("telefonoContratista");
+    }
+
+    @Test
+    void sinConexionConElSecopSeDevuelveLoLeidoSinFallar() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato(anyString()))
+                .willThrow(new DatosAbiertosSecop.NoDisponible("sin red", new RuntimeException()));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.idContrato()).isEqualTo("CO1.PCCNTR.10057820");
+        assertThat(r.supervisorDesignado()).isEqualTo("Alex Fernando Zapata Rios");
+        assertThat(r.valor()).isNull();
+        assertThat(r.completadoDesdeSecop()).isEmpty();
+    }
+
+    // ── 18-10-2026: un solo contrato por propuesta y el tipo del SECOP ─────
+
+    @Test
+    void documentosDeContratosDistintosNoSeMezclanEnUnaPropuesta() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(
+                "Numero de contrato CO1.PCCNTR.8151794\n",
+                "CONTRATO NRO. CO1.PCCNTR.7986334\nCONTRATISTA EVENTOS SUPERNOVA S.A.S.\n");
+
+        assertThatThrownBy(() -> servicio.extraer(List.of(pdf("notificacion.pdf"), pdf("acta.pdf"))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("contratos distintos")
+                .hasMessageContaining("CO1.PCCNTR.8151794")
+                .hasMessageContaining("CO1.PCCNTR.7986334");
+        verifyNoInteractions(ollamaClient);
+    }
+
+    @Test
+    void elTipoQuePublicaElSecopSeUsaConLosNombresDelFormulario() {
+        assertThat(ExtraccionContratoService.tipoDelSecop("Suministros")).isEqualTo("Suministro de Bienes");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Compraventa")).isEqualTo("Compraventa");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Prestación de servicios")).isEqualTo("Servicios");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Obra")).isEqualTo("Obras");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Arrendamiento de inmuebles")).isEqualTo("Arrendamiento");
+        assertThat(ExtraccionContratoService.tipoDelSecop("Otro")).isNull();
+        assertThat(ExtraccionContratoService.tipoDelSecop(null)).isNull();
     }
 }

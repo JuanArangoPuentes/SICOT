@@ -19,7 +19,8 @@ public final class EtapaMapper {
                 s.getNombre(),
                 s.getDescripcion(),
                 s.getEstado(),
-                s.getResponsable());
+                s.getResponsable(),
+                s.getDocumentosRequeridos());
     }
 
     public static EtapaResponse toResponse(Etapa e) {

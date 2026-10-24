@@ -1,5 +1,8 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM maven:3.9-eclipse-temurin-25 AS build
+# Imágenes base fijadas por versión exacta, no por rama: una actualización llega
+# como PR de Dependabot (ecosistema docker), se revisa y el CI escanea la imagen
+# resultante con Trivy. Con "25-jre-alpine" cambiaban por debajo sin revisión.
+FROM maven:3.9.16-eclipse-temurin-25 AS build
 WORKDIR /build
 
 # Cache dependencies separately from source so code edits don't re-download.
@@ -10,13 +13,26 @@ COPY src/ src/
 RUN mvn -B clean package -DskipTests
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM eclipse-temurin:25-jre-alpine
+FROM eclipse-temurin:25.0.4.1_1-jre-alpine
 WORKDIR /app
 
 # wget se usa en el HEALTHCHECK de abajo; en la imagen alpine viene por
 # BusyBox, pero se declara explícito para que un cambio de imagen base no
 # rompa la comprobación en silencio.
-RUN apk add --no-cache wget \
+#
+# La base trae libexpat 2.8.5-r0, con CVE-2026-77214 (HIGH): lectura fuera del
+# búfer al parsear XML. Alpine ya publicó 2.9.0-r0, así que el arreglo es
+# gratis, y esperar a que Temurin reconstruya su imagen dejaba cerrado el
+# escaneo de imágenes, que es un chequeo obligatorio (CI del 18-10-2026). Se
+# sube SOLO ese paquete, por lo mismo que el libtiff del frontend: el resto de
+# la imagen sigue siendo la que fija la etiqueta. Cuando la imagen de Temurin
+# traiga 2.9.0-r0 o posterior, la primera línea sobra y se quita.
+#
+# brotli-libs, por lo mismo (CI del 23-10-2026): la base trae 1.2.0-r1, con
+# CVE-2026-111497 (HIGH, escritura fuera de límites en el decodificador), y
+# Alpine ya publicó 1.2.1-r0.
+RUN apk add --no-cache "libexpat>=2.9.0-r0" "brotli-libs>=1.2.1-r0" \
+    && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 COPY --from=build /build/target/sicot-backend-*.jar app.jar
 RUN chown sicot:sicot app.jar

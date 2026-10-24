@@ -19,13 +19,13 @@ class FormatoDocumentalIntegrationTest extends PruebaDeIntegracion {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private static final byte[] PDF_FALSO = "%PDF-1.4 contenido de prueba".getBytes();
+    private static final byte[] PDF = ArchivoDePrueba.pdfDeUnaPagina("formato GCCON-F-031 de prueba");
 
     @Test
     void administradorPuedeCargarListarYDescargarUnFormato() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
 
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-031.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-031.pdf", "application/pdf", PDF);
 
         String creado = mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
@@ -46,10 +46,10 @@ class FormatoDocumentalIntegrationTest extends PruebaDeIntegracion {
 
         mockMvc.perform(get("/api/formatos/{id}/archivo", id).header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
-                .andExpect(content().bytes(PDF_FALSO));
+                .andExpect(content().bytes(PDF));
 
         // Recargar el mismo código sube la versión en vez de duplicar la fila.
-        MockMultipartFile archivoV2 = new MockMultipartFile("archivo", "GCCON-F-031-v2.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivoV2 = new MockMultipartFile("archivo", "GCCON-F-031-v2.pdf", "application/pdf", PDF);
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivoV2)
                         .param("codigo", "GCCON-F-031-TEST")
@@ -63,7 +63,7 @@ class FormatoDocumentalIntegrationTest extends PruebaDeIntegracion {
     @Test
     void rechazaArchivosConExtensionNoPermitida() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
-        MockMultipartFile ejecutable = new MockMultipartFile("archivo", "malicioso.exe", "application/octet-stream", PDF_FALSO);
+        MockMultipartFile ejecutable = new MockMultipartFile("archivo", "malicioso.exe", "application/octet-stream", PDF);
 
         mockMvc.perform(multipart("/api/formatos")
                         .file(ejecutable)
@@ -81,7 +81,7 @@ class FormatoDocumentalIntegrationTest extends PruebaDeIntegracion {
         mockMvc.perform(get("/api/formatos").header("Authorization", "Bearer " + gestionToken))
                 .andExpect(status().isOk());
 
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-031.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-031.pdf", "application/pdf", PDF);
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
                         .param("codigo", "NO-PERMITIDO")

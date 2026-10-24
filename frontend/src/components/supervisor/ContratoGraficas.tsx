@@ -160,7 +160,7 @@ export default function ContratoGraficas({
 
       <Panel
         title="Documentos formales del proceso"
-        desc="Estado real de los documentos que el Copiloto redacta y el supervisor firma."
+        desc="Estado real de los documentos que SICOT arma con los datos del contrato y el supervisor firma."
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={documentos} margin={{ top: 6, right: 10, left: -26, bottom: 0 }}>

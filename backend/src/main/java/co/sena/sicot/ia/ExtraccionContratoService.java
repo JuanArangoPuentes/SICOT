@@ -1,8 +1,10 @@
 package co.sena.sicot.ia;
 
 import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.service.ArchivoValidator;
+import co.sena.sicot.service.DatosAbiertosSecop;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,7 +15,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Lee los documentos reales (Acta de Inicio, notificación, formatos, etc.)
@@ -56,14 +60,26 @@ public class ExtraccionContratoService {
 
     private final ExtraccionDeterminista extraccionDeterminista;
 
+    private final DocxTextExtractor docxTextExtractor;
+
+    /** Tipos del formulario de Gestión. Lo que el modelo proponga fuera de ellos se descarta. */
+    static final List<String> TIPOS = List.of("Suministro de Bienes", "Compraventa", "Servicios", "Obras",
+            "Arrendamiento");
+
+    private final DatosAbiertosSecop datosAbiertos;
+
     public ExtraccionContratoService(PdfTextExtractor pdfTextExtractor, OllamaClient ollamaClient,
                                       ObjectMapper objectMapper, ArchivoValidator archivoValidator,
-                                      ExtraccionDeterminista extraccionDeterminista) {
+                                      ExtraccionDeterminista extraccionDeterminista,
+                                      DocxTextExtractor docxTextExtractor,
+                                      DatosAbiertosSecop datosAbiertos) {
         this.pdfTextExtractor = pdfTextExtractor;
         this.ollamaClient = ollamaClient;
         this.objectMapper = objectMapper;
         this.archivoValidator = archivoValidator;
         this.extraccionDeterminista = extraccionDeterminista;
+        this.docxTextExtractor = docxTextExtractor;
+        this.datosAbiertos = datosAbiertos;
     }
 
     public ExtraccionContratoResponse extraer(List<MultipartFile> archivos) {
@@ -90,33 +106,210 @@ public class ExtraccionContratoService {
 
         long limite = System.nanoTime() + Duration.ofSeconds(presupuestoSegundos).toNanos();
         int procesados = 0;
+        List<String> sinTexto = new java.util.ArrayList<>();
+
+        // PRIMERA FASE, sin modelo: el texto y lo que se lee con expresiones
+        // regulares de TODOS los archivos. Cuesta milisegundos, y permite
+        // decidir después si de verdad hace falta el modelo. Hasta el 18-10-2026
+        // se llamaba al modelo archivo por archivo: con el lote real del correo
+        // de asignación (designación, notificación, un GCCON-F-031 en blanco y
+        // el manual GCCON-M-002) eran dos llamadas de 2 a 4 minutos sobre el
+        // formato en blanco y el índice del manual, que no aportaban nada.
+        List<Leido> leidos = new ArrayList<>();
+        for (MultipartFile archivo : validos) {
+            Leido leido = leer(archivo);
+            if (leido == null) {
+                sinTexto.add(archivo.getOriginalFilename());
+            } else {
+                leidos.add(leido);
+            }
+        }
+        exigirUnSoloContrato(leidos);
+        // Los que traen número de contrato primero: son los documentos del
+        // contrato, y si alguno necesita el modelo, que sea uno de ellos.
+        leidos.sort(java.util.Comparator.comparing(l -> l.deterministica().idContrato() == null));
 
         ExtraccionContratoResponse resultado = new ExtraccionContratoResponse(
                 null, null, null, null, null, null, null, null, null, null, null);
-        for (MultipartFile archivo : validos) {
+        for (Leido leido : leidos) {
+            resultado = combinar(resultado, leido.deterministica());
+        }
+        procesados = sinTexto.size();
+        // SEGUNDA FASE: el modelo solo para el objeto y el tipo, y solo mientras
+        // falten. En cuanto un archivo los completa, los demás no se le mandan.
+        for (Leido leido : leidos) {
+            boolean faltaAlgo = resultado.objeto() == null
+                    || (resultado.tipoContrato() == null && ExtraccionDeterminista.tipoPorObjeto(resultado.objeto()) == null);
             // Se comprueba ANTES de cada archivo, no después: si ya se agotó el
             // presupuesto, no se empieza otra llamada que podría durar otros 15
             // minutos. Se devuelve lo extraído hasta aquí en vez de fallar — es
             // información real y útil — y se avisa en el log de cuántos archivos
             // quedaron sin analizar, para no dar a entender que se leyeron todos.
-            if (procesados > 0 && System.nanoTime() > limite) {
+            if (faltaAlgo && procesados > 0 && System.nanoTime() > limite) {
                 log.warn("Presupuesto de {} s agotado tras {} de {} archivos; los restantes no se analizaron.",
                         presupuestoSegundos, procesados, validos.size());
                 break;
             }
-            ExtraccionContratoResponse deEsteArchivo = extraerDeUnArchivo(archivo);
-            resultado = combinar(resultado, deEsteArchivo);
+            if (faltaAlgo) {
+                resultado = combinar(resultado, conElModelo(leido));
+            }
             procesados++;
         }
-        return resultado;
+        // Si no se pudo leer ningún archivo, un formulario vacío sin
+        // explicación era lo que veía Gestión (prueba del 24-09-2026 con un PDF
+        // escaneado: 200 con todos los campos en null). Se dice por qué.
+        if (resultado.tipoContrato() == null && resultado.objeto() != null) {
+            resultado = conTipo(resultado, ExtraccionDeterminista.tipoPorObjeto(resultado.objeto()));
+        }
+        if (!sinTexto.isEmpty() && sinTexto.size() == procesados) {
+            throw new BusinessException("No se pudo leer texto en " + String.join(", ", sinTexto)
+                    + ". SICOT lee PDF con texto y documentos de Word (.docx); un PDF escaneado es una imagen"
+                    + " y todavía no se reconoce su texto. Diligencie los datos a mano o cargue el documento"
+                    + " original.");
+        }
+        return completarDesdeSecop(resultado);
     }
 
-    private ExtraccionContratoResponse extraerDeUnArchivo(MultipartFile archivo) {
+    /**
+     * Lo que el documento no trajo y el SECOP II publica del mismo contrato.
+     *
+     * <p>El acto de designación —el documento con que entra un contrato según
+     * el proceso real— trae el número, el contratista, el objeto y el enlace,
+     * pero no el valor, el plazo ni las fechas. Con el número basta para
+     * pedirle el resto a los datos abiertos, sin modelo y en menos de un
+     * segundo. Lo leído del documento siempre gana; de aquí solo se llenan
+     * huecos, y se anota cuáles para que el formulario diga de dónde salió cada
+     * dato.
+     *
+     * <p>No se toma la fecha de inicio: el SECOP publica la de firma, que es
+     * otra (en el Lote 4, el 13 de octubre frente al 14 del acta).
+     */
+    ExtraccionContratoResponse completarDesdeSecop(ExtraccionContratoResponse r) {
+        if (!DatosAbiertosSecop.esNumeroDeContratoValido(r.idContrato())) {
+            return r;
+        }
+        Optional<VerificacionSecopResponse.Ficha> encontrada;
+        try {
+            encontrada = datosAbiertos.contrato(r.idContrato());
+        } catch (DatosAbiertosSecop.NoDisponible e) {
+            log.info("No se completó '{}' desde el SECOP: {}", r.idContrato(), e.getMessage());
+            return r;
+        }
+        if (encontrada.isEmpty()) {
+            return r;
+        }
+        VerificacionSecopResponse.Ficha f = encontrada.get();
+        List<String> completados = new ArrayList<>(r.completadoDesdeSecop());
+        // El teléfono que pide el paso 5 de la hoja de Alex no está en ningún
+        // documento del contrato: está en el registro de proveedores. Una
+        // consulta aparte, que si falla no se lleva lo demás.
+        VerificacionSecopResponse.Proveedor contacto = null;
+        try {
+            contacto = datosAbiertos.proveedor(r.nit() != null ? r.nit() : f.documentoProveedor()).orElse(null);
+        } catch (DatosAbiertosSecop.NoDisponible e) {
+            log.info("No se consultó el registro de proveedores para '{}': {}", r.idContrato(), e.getMessage());
+        }
+        // El tipo que publica el SECOP manda sobre el que se deduce del objeto:
+        // «COMPRA DE TÓNER…» no trae ninguna palabra de la lista, y hasta el
+        // 18-10-2026 se esperaba al modelo de 2 a 4 minutos para un dato que el
+        // SECOP ya daba.
+        String tipoSecop = tipoDelSecop(f.tipoContrato());
+        if (tipoSecop == null) {
+            tipoSecop = ExtraccionDeterminista.tipoPorObjeto(f.objeto());
+        }
+        ExtraccionContratoResponse completo = new ExtraccionContratoResponse(
+                r.idContrato(),
+                hueco(r.objeto(), f.objeto(), "objeto", completados),
+                hueco(r.proveedor(), f.proveedor(), "proveedor", completados),
+                hueco(r.nit(), f.documentoProveedor(), "nit", completados),
+                hueco(r.representanteLegal(), f.representanteLegal(), "representanteLegal", completados),
+                hueco(r.valor(), f.valor() == null ? null : f.valor().toPlainString(), "valor", completados),
+                r.vigenciaInicio(),
+                hueco(r.vigenciaFin(), f.fechaFin() == null ? null : f.fechaFin().toString(), "vigenciaFin",
+                        completados),
+                r.lugarEjecucion(),
+                r.registroPresupuestal(),
+                hueco(r.tipoContrato(), tipoSecop, "tipoContrato", completados),
+                hueco(r.enlaceSecop(), f.enlaceProceso(), "enlaceSecop", completados),
+                hueco(r.supervisorDesignado(), f.supervisor(), "supervisorDesignado", completados),
+                r.apoyoSupervision(),
+                r.fechaDesignacion(),
+                hueco(r.correoContratista(), contacto == null ? null : contacto.correo(), "correoContratista",
+                        completados),
+                hueco(r.telefonoContratista(), contacto == null ? null : contacto.telefono(),
+                        "telefonoContratista", completados),
+                completados);
+        if (!completados.isEmpty()) {
+            log.info("'{}': completados desde los datos abiertos del SECOP: {}", r.idContrato(), completados);
+        }
+        return completo;
+    }
+
+    /** El {@code tipo_de_contrato} del SECOP II con los nombres del formulario de Gestión ({@link #TIPOS}). */
+    static String tipoDelSecop(String tipo) {
+        if (tipo == null || tipo.isBlank()) {
+            return null;
+        }
+        String t = soloLetrasYDigitos(tipo);
+        if (t.startsWith("suministro")) {
+            return "Suministro de Bienes";
+        }
+        if (t.startsWith("compraventa")) {
+            return "Compraventa";
+        }
+        if (t.contains("prestacion de servicios") || t.equals("servicios")) {
+            return "Servicios";
+        }
+        if (t.startsWith("obra")) {
+            return "Obras";
+        }
+        if (t.startsWith("arrendamiento")) {
+            return "Arrendamiento";
+        }
+        return null;
+    }
+
+    private static String hueco(String delDocumento, String delSecop, String campo, List<String> completados) {
+        if (delDocumento != null && !delDocumento.isBlank()) {
+            return delDocumento;
+        }
+        if (delSecop == null || delSecop.isBlank()) {
+            return delDocumento;
+        }
+        completados.add(campo);
+        return delSecop;
+    }
+
+    /** Un archivo ya leído: su texto y lo que el código sacó de él sin modelo. */
+    private record Leido(String nombre, String texto, ExtraccionContratoResponse deterministica) {
+    }
+
+    /**
+     * Documentos de contratos distintos no se mezclan en una propuesta: con la
+     * notificación de un contrato y el acta de otro salía el número del primero
+     * con el contratista, el NIT y el supervisor del segundo, sin aviso.
+     */
+    private static void exigirUnSoloContrato(List<Leido> leidos) {
+        List<String> numeros = leidos.stream()
+                .map(l -> l.deterministica().idContrato())
+                .filter(n -> n != null && !n.isBlank())
+                .distinct()
+                .toList();
+        if (numeros.size() > 1) {
+            throw new BusinessException("Los documentos son de contratos distintos: " + String.join(" y ", numeros)
+                    + ". Cargue solo los documentos de un contrato.");
+        }
+    }
+
+    /** El texto del archivo y su extracción sin modelo, o {@code null} si no tiene texto legible. */
+    private Leido leer(MultipartFile archivo) {
         String nombreOriginal = archivo.getOriginalFilename();
         String nombreArchivo = nombreOriginal == null ? "" : nombreOriginal.toLowerCase();
-        if (!nombreArchivo.endsWith(".pdf")) {
-            log.info("Se omite '{}' del análisis: por ahora la lectura automática solo admite PDF.", nombreOriginal);
-            return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
+        boolean esPdf = nombreArchivo.endsWith(".pdf");
+        boolean esDocx = nombreArchivo.endsWith(".docx");
+        if (!esPdf && !esDocx) {
+            log.info("Se omite '{}' del análisis: la lectura automática admite PDF y DOCX.", nombreOriginal);
+            return null;
         }
 
         byte[] contenido;
@@ -126,16 +319,19 @@ public class ExtraccionContratoService {
             throw new UncheckedIOException("No se pudo leer el archivo cargado: " + archivo.getOriginalFilename(), e);
         }
 
-        String texto = pdfTextExtractor.extraerTexto(contenido);
+        String texto;
+        try {
+            texto = esPdf ? pdfTextExtractor.extraerTexto(contenido) : docxTextExtractor.extraerTexto(contenido);
+        } catch (BusinessException e) {
+            // Un PDF dañado o con contraseña de apertura: como uno escaneado, se
+            // omite y se dice, en vez de tumbar lo que sí se leyó de los demás.
+            log.info("'{}' no se pudo abrir ({}); se omite del análisis.", nombreOriginal, e.getMessage());
+            return null;
+        }
         if (texto == null || texto.isBlank()) {
             log.info("'{}' no tiene texto legible (¿imagen escaneada sin OCR?); se omite del análisis.", archivo.getOriginalFilename());
-            return new ExtraccionContratoResponse(null, null, null, null, null, null, null, null, null, null, null);
+            return null;
         }
-        // Los documentos reales con datos de contrato (Acta de Inicio, notificación) rara
-        // vez superan 3000 caracteres. Los manuales/formatos en blanco son mucho más largos
-        // pero no aportan datos — igual se recortan para no gastar minutos de CPU en ellos.
-        String textoRecortado = texto.length() > 6000 ? texto.substring(0, 6000) : texto;
-
         // PRIMERO lo que no necesita modelo. Número de contrato, NIT, valor,
         // fechas y registro presupuestal tienen forma fija en un contrato
         // estatal colombiano: sacarlos con expresiones regulares cuesta menos de
@@ -144,11 +340,41 @@ public class ExtraccionContratoService {
         // encontró el valor del contrato, el de 7B pegó la cédula al nombre del
         // representante— y que cada intento costaba más de dos minutos de CPU.
         // Ver ExtraccionDeterminista para las cifras completas.
-        ExtraccionContratoResponse deterministica = extraccionDeterminista.extraer(texto);
+        return new Leido(nombreOriginal, texto, extraccionDeterminista.extraer(texto));
+    }
 
-        // Al modelo solo le quedan el objeto (prosa) y el tipo (clasificación).
-        // El prompt encoge en consecuencia, que es lo que hace el trabajo
-        // abordable por un modelo pequeño — el objetivo de fondo del proyecto.
+    /**
+     * Lo que el modelo aporta de un archivo (el objeto y el tipo), combinado
+     * con lo que ya se leyó de él sin modelo.
+     */
+    private ExtraccionContratoResponse conElModelo(Leido leido) {
+        String nombreOriginal = leido.nombre();
+        String texto = leido.texto();
+        ExtraccionContratoResponse deterministica = leido.deterministica();
+        // Los documentos reales con datos de contrato (Acta de Inicio, notificación) rara
+        // vez superan 3000 caracteres. Los manuales/formatos en blanco son mucho más largos
+        // pero no aportan datos — igual se recortan para no gastar minutos de CPU en ellos.
+        String textoRecortado = texto.length() > 6000 ? texto.substring(0, 6000) : texto;
+
+        // Si el documento rotulaba el objeto y el tipo, ya no queda nada que
+        // preguntarle al modelo: la extracción termina en milisegundos en vez
+        // de minutos, que en un equipo sin GPU es la diferencia entre usarla o
+        // no (ver feedback de ADR-008: bastar con una IA pequeña).
+        // Si el objeto trae las palabras que dicen el tipo («…contratar el
+        // suministro de…»), tampoco hace falta el modelo: llamarlo solo para
+        // proponer un valor de una lista desplegable costaba de uno a cuatro
+        // minutos, y el 24-09-2026 una notificación real se cortó por tiempo
+        // esperando justo eso. El tipo deducido NO se fija aquí sino al final
+        // de extraer(), después de combinar: así un rótulo explícito en otro
+        // archivo gana siempre a una deducción de este.
+        boolean tipoDeducible = deterministica.objeto() != null
+                && ExtraccionDeterminista.tipoPorObjeto(deterministica.objeto()) != null;
+        if (extraccionDeterminista.estaCompleta(deterministica)
+                || (deterministica.objeto() != null && tipoDeducible)) {
+            log.info("'{}': todos los campos salieron del documento sin usar el modelo.", nombreOriginal);
+            return deterministica;
+        }
+
         String prompt = """
                 Eres un asistente que extrae datos de documentos de contratación pública colombiana (SENA).
                 Del siguiente texto, extrae ÚNICAMENTE los datos que aparezcan explícitamente. Si un dato no
@@ -157,9 +383,9 @@ public class ExtraccionContratoService {
                 es correcto, no inventes datos para llenarlos).
 
                 Responde solo con un objeto JSON con exactamente estas dos claves:
-                objeto (el objeto contractual: qué se contrata, en una o dos frases tomadas del documento),
-                tipoContrato (una de: "Suministro de Bienes", "Servicios", "Obras", "Arrendamiento" — la
-                que mejor describa el objeto; si no es clara, usa null).
+                objeto (el objeto contractual copiado LITERALMENTE del documento, sin cambiar ninguna palabra),
+                tipoContrato (una de: "Suministro de Bienes", "Compraventa", "Servicios", "Obras",
+                "Arrendamiento" — la que mejor describa el objeto; si no es clara, usa null).
 
                 No incluyas ninguna otra clave. Los demás datos del contrato —número, NIT, valor, fechas,
                 registro presupuestal— ya se extrajeron por otro medio y no se te están pidiendo.
@@ -170,30 +396,77 @@ public class ExtraccionContratoService {
                 """.formatted(EntradaNoConfiable.INSTRUCCION,
                         EntradaNoConfiable.bloque("TEXTO DEL DOCUMENTO", textoRecortado));
 
-        log.info("Extrayendo datos de '{}' ({} bytes, {} caracteres de texto) con Ollama...",
-                archivo.getOriginalFilename(), contenido.length, textoRecortado.length());
+        log.info("Extrayendo datos de '{}' ({} caracteres, {} enviados) con Ollama...",
+                nombreOriginal, texto.length(), textoRecortado.length());
         long inicio = System.currentTimeMillis();
-        String respuestaCruda = ollamaClient.generar(prompt, true);
-        log.info("Extracción de '{}' completada en {} ms", archivo.getOriginalFilename(), System.currentTimeMillis() - inicio);
+        String respuestaCruda;
         try {
-            // El determinista manda: si sacó un campo, ese valor gana. combinar()
-            // toma el primero no nulo, y va primero porque una cifra copiada por
-            // una expresión regular es más de fiar que la misma cifra redactada
-            // por el modelo — que es exactamente lo que la medición mostró.
-            return combinar(deterministica, objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class));
+            respuestaCruda = ollamaClient.generar(prompt, true);
+        } catch (IaNoDisponibleException | co.sena.sicot.exception.DemasiadasSolicitudesException e) {
+            // Lo que el código ya leyó del documento no depende del modelo: si
+            // el modelo no responde, se devuelve eso en vez de perderlo todo.
+            // Antes un corte por tiempo tiraba el número, el valor y las fechas
+            // que ya estaban leídos, y Gestión recibía un 503.
+            log.warn("El modelo no respondió para '{}'; se devuelve lo leído del documento: {}",
+                    nombreOriginal, e.getMessage());
+            return deterministica;
+        }
+        log.info("Extracción de '{}' completada en {} ms", nombreOriginal, System.currentTimeMillis() - inicio);
+        if (respuestaCruda == null || respuestaCruda.isBlank()) {
+            return deterministica;
+        }
+        ExtraccionContratoResponse delModelo;
+        try {
+            delModelo = objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
         } catch (IOException e) {
             // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
             // PDF (incluido un intento de inyección) y no tiene por qué quedar
             // completa en el log del servidor.
             String muestra = respuestaCruda.length() > 300 ? respuestaCruda.substring(0, 300) + "…" : respuestaCruda;
-            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", archivo.getOriginalFilename(), muestra);
-            // Un documento con formato inesperado no debe tumbar el análisis de los demás.
-            // Antes aquí se devolvía todo vacío; ahora se devuelve lo que sacó el
-            // extractor determinista, que no dependía del modelo y sigue siendo
-            // correcto. Que el modelo se atragante con el objeto no es motivo
-            // para tirar el número de contrato, el NIT y el valor.
+            log.warn("Respuesta de Ollama para '{}' no es el JSON esperado: {}", nombreOriginal, muestra);
+            // Un documento con formato inesperado no debe tumbar el análisis de
+            // los demás: se devuelve lo que sacó el extractor determinista.
             return deterministica;
         }
+        // Lo que devuelve el modelo se revisa antes de usarlo. El objeto tiene
+        // que estar escrito en el documento: si el modelo lo reescribió, se
+        // descarta y la persona lo copia. El tipo tiene que ser una de las
+        // opciones del formulario.
+        String objeto = delModelo.objeto();
+        if (objeto != null && !apareceEnElTexto(objeto, texto)) {
+            log.warn("El objeto que propuso el modelo para '{}' no está escrito en el documento; se descarta.",
+                    nombreOriginal);
+            objeto = null;
+        }
+        // List.of(...).contains(null) lanza NullPointerException: se comprueba antes.
+        String tipo = delModelo.tipoContrato() != null && TIPOS.contains(delModelo.tipoContrato())
+                ? delModelo.tipoContrato() : null;
+        // El determinista manda: si sacó un campo, ese valor gana.
+        return combinar(deterministica, new ExtraccionContratoResponse(null, objeto, null, null, null, null,
+                null, null, null, null, tipo));
+    }
+
+    /**
+     * ¿El texto propuesto está escrito en el documento? Se compara sin tildes,
+     * mayúsculas, puntuación ni saltos de línea, para no descartar una copia
+     * fiel por un espacio de más. Un cambio de palabra («CONTRAER» por
+     * «CONTRATAR») sí la descarta.
+     */
+    static boolean apareceEnElTexto(String propuesto, String texto) {
+        String p = soloLetrasYDigitos(propuesto);
+        return !p.isBlank() && soloLetrasYDigitos(texto).contains(p);
+    }
+
+    private static String soloLetrasYDigitos(String s) {
+        String sinTildes = java.text.Normalizer.normalize(s, java.text.Normalizer.Form.NFD).replaceAll("\\p{M}", "");
+        return sinTildes.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]+", " ").trim();
+    }
+
+    private static ExtraccionContratoResponse conTipo(ExtraccionContratoResponse r, String tipo) {
+        return new ExtraccionContratoResponse(r.idContrato(), r.objeto(), r.proveedor(), r.nit(),
+                r.representanteLegal(), r.valor(), r.vigenciaInicio(), r.vigenciaFin(), r.lugarEjecucion(),
+                r.registroPresupuestal(), tipo, r.enlaceSecop(), r.supervisorDesignado(), r.apoyoSupervision(),
+                r.fechaDesignacion(), r.correoContratista(), r.telefonoContratista(), r.completadoDesdeSecop());
     }
 
     private ExtraccionContratoResponse combinar(ExtraccionContratoResponse base, ExtraccionContratoResponse nuevo) {
@@ -208,7 +481,14 @@ public class ExtraccionContratoService {
                 primero(base.vigenciaFin(), nuevo.vigenciaFin()),
                 primero(base.lugarEjecucion(), nuevo.lugarEjecucion()),
                 primero(base.registroPresupuestal(), nuevo.registroPresupuestal()),
-                primero(base.tipoContrato(), nuevo.tipoContrato()));
+                primero(base.tipoContrato(), nuevo.tipoContrato()),
+                primero(base.enlaceSecop(), nuevo.enlaceSecop()),
+                primero(base.supervisorDesignado(), nuevo.supervisorDesignado()),
+                primero(base.apoyoSupervision(), nuevo.apoyoSupervision()),
+                primero(base.fechaDesignacion(), nuevo.fechaDesignacion()),
+                primero(base.correoContratista(), nuevo.correoContratista()),
+                primero(base.telefonoContratista(), nuevo.telefonoContratista()),
+                base.completadoDesdeSecop());
     }
 
     private String primero(String existente, String candidato) {

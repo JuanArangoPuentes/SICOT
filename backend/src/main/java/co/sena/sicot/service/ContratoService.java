@@ -6,6 +6,7 @@ import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
 import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
 import co.sena.sicot.entity.Contrato;
+import co.sena.sicot.entity.Etapa;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.exception.BusinessException;
@@ -110,13 +111,29 @@ public class ContratoService {
         contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
-        if (request.supervisorId() != null) {
-            contrato.setSupervisor(buscarSupervisor(request.supervisorId()));
-        }
+        contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
+        contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
+        contrato.setFechaDesignacion(request.fechaDesignacion());
+        contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
+        Usuario supervisor = request.supervisorId() != null ? buscarSupervisor(request.supervisorId()) : null;
+        contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
         etapaRepository.saveAll(GcconP010Plantilla.crearEtapas(guardado));
         registroService.registrar(guardado, "CONTRATO_CREADO",
                 "Contrato " + numero + " creado en estado BORRADOR.");
+        // Elegir al supervisor en el mismo formulario de creación es el camino
+        // habitual de Gestión, y antes no dejaba SUPERVISOR_ASIGNADO: el
+        // supervisor no recibía la alerta ni el correo (las dispara esa acción
+        // de la auditoría) y solo se avisaba si después se reasignaba con el
+        // PATCH. Ahora los dos caminos registran lo mismo, que es justo lo que
+        // el proceso real le pide al sistema en el paso 1.
+        if (supervisor != null) {
+            registrarAsignacion(guardado, supervisor);
+            registroService.registrar(guardado, "DESIGNACION_REGISTRADA",
+                    "Etapa 1 (designación de la supervisión) completada al registrar el contrato con su supervisor;"
+                            + " el proceso arranca en la firma del Acta de Inicio.");
+        }
         return ContratoMapper.toResponse(guardado);
     }
 
@@ -144,6 +161,21 @@ public class ContratoService {
         contrato.setNumeroRegistroPresupuestal(request.numeroRegistroPresupuestal());
         contrato.setFechaRegistroPresupuestal(request.fechaRegistroPresupuestal());
         contrato.setCentroCosto(request.centroCosto());
+        contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
+        contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
+        contrato.setFechaDesignacion(request.fechaDesignacion());
+        // Correo y teléfono: sin el campo (null) se conserva el que había; vacío
+        // lo borra. Desde el 22-10-2026 el supervisor también los llena (desde
+        // el registro de proveedores del SECOP II), y una corrección de Gestión
+        // hecha con la lista cargada antes no debe borrarlos: la pantalla los
+        // manda solo cuando Gestión los cambió. Las instalaciones de escritorio
+        // anteriores no envían el teléfono.
+        if (request.correoContratista() != null) {
+            contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        }
+        if (request.telefonoContratista() != null) {
+            contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
+        }
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
                 "Se actualizó la información general del contrato " + numero + ".");
@@ -154,11 +186,37 @@ public class ContratoService {
     public ContratoResponse asignarSupervisor(Long id, AsignarSupervisorRequest request) {
         Contrato contrato = buscar(id);
         Usuario supervisor = buscarSupervisor(request.supervisorId());
+        if (contrato.getSupervisor() != null && contrato.getSupervisor().getId().equals(supervisor.getId())) {
+            // Ya es su supervisor: no hay asignación nueva que auditar ni que
+            // avisar. Como cada asignación avisa por sí misma (ver
+            // NotificacionDeSupervisorAsignado), repetir la misma elección le
+            // mandaría otra vez la alerta y el correo de «se le asignó».
+            return ContratoMapper.toResponse(contrato);
+        }
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
-        registroService.registrar(guardado, "SUPERVISOR_ASIGNADO",
-                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
+        registrarAsignacion(guardado, supervisor);
+        // Si el contrato nació sin supervisor, asignárselo es la designación:
+        // la etapa 1 queda hecha y el supervisor arranca en el paso del acta.
+        List<Etapa> etapas = etapaRepository.findByContratoIdOrderByNumeroAsc(guardado.getId());
+        if (GcconP010Plantilla.completarDesignacion(etapas)) {
+            etapaRepository.saveAll(etapas);
+            registroService.registrar(guardado, "DESIGNACION_REGISTRADA",
+                    "Etapa 1 (designación de la supervisión) completada al asignar al supervisor; el proceso pasa"
+                            + " a la firma del Acta de Inicio.");
+        }
         return ContratoMapper.toResponse(guardado);
+    }
+
+    /**
+     * Deja la acción SUPERVISOR_ASIGNADO en la auditoría. Es lo que, al
+     * confirmarse la transacción, dispara la regla NotificacionDeSupervisorAsignado
+     * (alerta en el panel y correo al supervisor), así que todo camino que
+     * asigne un supervisor tiene que pasar por aquí.
+     */
+    private void registrarAsignacion(Contrato contrato, Usuario supervisor) {
+        registroService.registrar(contrato, "SUPERVISOR_ASIGNADO",
+                "Supervisor asignado: " + supervisor.getNombre() + " (" + supervisor.getEmail() + ").");
     }
 
     @Transactional
@@ -198,6 +256,23 @@ public class ContratoService {
         if (supervisor.getRol() != Rol.SUPERVISOR) {
             throw new BusinessException("El usuario seleccionado no tiene rol de SUPERVISOR.");
         }
+        // /api/usuarios lista también las cuentas desactivadas, así que Gestión
+        // podía elegir a alguien que ya no puede iniciar sesión: el contrato
+        // quedaba a cargo de una cuenta muerta, el aviso iba a nadie y ningún
+        // documento podía firmarlo su supervisor, sin que nada lo dijera.
+        if (!supervisor.isActivo()) {
+            throw new BusinessException("El supervisor seleccionado (" + supervisor.getNombre()
+                    + ") está desactivado. Elija un supervisor activo.");
+        }
         return supervisor;
+    }
+
+    /**
+     * El formulario de Gestión manda «» cuando el campo quedó vacío. Guardado
+     * así, un enlace en blanco chocaría con la restricción de la base, que solo
+     * admite enlaces del SECOP o nada.
+     */
+    private static String enBlancoComoNulo(String v) {
+        return v == null || v.isBlank() ? null : v.strip();
     }
 }

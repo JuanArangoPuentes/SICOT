@@ -137,7 +137,9 @@ que su rol permite (ej. un SUPERVISOR no puede consultar el Copiloto de un contr
   (`POST /api/contratos/{id}/copiloto/chat`), anclado a los datos reales del contrato y sus
   etapas, restringido al supervisor asignado o a ADMINISTRADOR.
 - **FR-008**: El Copiloto NUNCA DEBE sugerir una función de carga de archivos por sub-paso que no
-  existe — la única acción en sub-pasos de verificación es "Marcar completado".
+  existe — la única acción en sub-pasos de verificación es "Marcar completado", salvo en 3.1 y
+  3.2, donde el supervisor carga fotos de la entrega con "Cargar evidencia". Tampoco DEBE negar
+  esa carga donde sí existe.
 - **FR-009**: Antes de cerrar el último sub-paso de una etapa, el sistema DEBE pedir una revisión
   asesora de IA (no bloqueante) — la confirmación final siempre la da un humano.
 - **FR-010**: El sistema DEBE calcular una alerta de cronograma tipo semáforo (verde/amarillo/

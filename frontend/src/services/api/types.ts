@@ -122,6 +122,56 @@ export interface CrearContratoRequest {
   numeroRegistroPresupuestal?: string | null
   fechaRegistroPresupuestal?: string | null
   centroCosto?: string | null
+  // Del acto de designación (GCCON-F-032) y del acta de inicio — opcionales
+  enlaceSecop?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
+  /** Del registro de proveedores del SECOP II: el acta no lo trae. */
+  telefonoContratista?: string | null
+}
+
+/**
+ * Cuerpo de `PUT /api/contratos/{id}` — la corrección de los datos generales.
+ *
+ * Es un reemplazo completo, no un parche: el backend asigna todos estos campos
+ * con lo que llegue, así que un campo omitido se guarda como null. Quien lo use
+ * tiene que mandar siempre el contrato entero, no solo lo que cambió.
+ *
+ * No lleva `supervisorId`: el supervisor se cambia con
+ * `PATCH /api/contratos/{id}/supervisor`, que es lo único que avisa al
+ * supervisor nuevo.
+ */
+export interface ActualizarContratoRequest {
+  numeroContrato: string
+  objeto: string
+  valor: number
+  fechaInicio: string | null
+  fechaFin: string | null
+  tipoContrato?: string | null
+  contratista?: string | null
+  contratistaNit?: string | null
+  representanteLegal?: string | null
+  lugarEjecucion?: string | null
+  numeroRegistroPresupuestal?: string | null
+  fechaRegistroPresupuestal?: string | null
+  centroCosto?: string | null
+  // De la designación (GCCON-F-032) y del acta. El PUT reemplaza el contrato
+  // entero: si no viajan, se guardan vacíos.
+  enlaceSecop?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  /**
+   * Correo y teléfono son la excepción a «se guarda vacío»: sin el campo, el
+   * backend conserva el que había, porque también los llena el supervisor
+   * desde el registro de proveedores del SECOP II. Una cadena vacía los borra.
+   */
+  correoContratista?: string | null
+  telefonoContratista?: string | null
+}
+
+export interface CambiarEstadoContratoRequest {
+  estado: EstadoContrato
 }
 
 export interface ContratoResponse {
@@ -143,6 +193,12 @@ export interface ContratoResponse {
   numeroRegistroPresupuestal: string | null
   fechaRegistroPresupuestal: string | null
   centroCosto: string | null
+  enlaceSecop: string | null
+  apoyoSupervision: string | null
+  fechaDesignacion: string | null
+  correoContratista: string | null
+  /** Teléfono del contratista: el paso 5 de la hoja de Alex lo pide junto al correo. */
+  telefonoContratista?: string | null
   fechaCreacion: string
 }
 
@@ -159,6 +215,8 @@ export interface SubetapaResponse {
   descripcion: string
   estado: EstadoSubetapa
   responsable: string
+  /** Lo que hay que cargar antes de cerrar el paso; hoy solo 'ACTA_FIRMADA_Y_ENVIO'. */
+  documentosRequeridos?: string | null
 }
 
 export interface EtapaResponse {
@@ -184,7 +242,6 @@ export interface DocumentoResponse {
   formatoNombre: string | null
   nombre: string
   tipo: TipoDocumento
-  rutaArchivo: string
   estado: EstadoDocumento
   tamanioBytes: number | null
   generadoPorIa: boolean
@@ -239,15 +296,198 @@ export interface ExtraccionContratoResponse {
   lugarEjecucion: string | null
   registroPresupuestal: string | null
   tipoContrato: string | null
+  enlaceSecop?: string | null
+  supervisorDesignado?: string | null
+  apoyoSupervision?: string | null
+  fechaDesignacion?: string | null
+  correoContratista?: string | null
+  /** Ningún documento del contrato lo trae: sale del registro de proveedores del SECOP II. */
+  telefonoContratista?: string | null
+  /** Campos que el documento no traía y se tomaron de los datos abiertos del SECOP II. */
+  completadoDesdeSecop?: string[]
+}
+
+// ─── Verificación contra el SECOP II (datos abiertos) ────────────────────────
+
+export interface FichaSecop {
+  idContrato: string | null
+  objeto: string | null
+  estado: string | null
+  proveedor: string | null
+  documentoProveedor: string | null
+  representanteLegal: string | null
+  valor: number | null
+  duracion: string | null
+  fechaFirma: string | null
+  fechaFin: string | null
+  inicioLiquidacion: string | null
+  finLiquidacion: string | null
+  /** El expediente se archiva bajo este identificador, no bajo el del contrato. */
+  procesoDeCompra: string | null
+  supervisor: string | null
+  ordenadorDelGasto: string | null
+  modalidad: string | null
+  tipoContrato: string | null
+  obligacionAmbiental: boolean | null
+  valorFacturado: number | null
+  valorPagado: number | null
+  valorPendienteDePago: number | null
+  enlaceProceso: string | null
+}
+
+export interface VerificacionSecopResponse {
+  disponible: boolean
+  motivo: string | null
+  consultadoEn: string
+  enlaceProceso: string | null
+  ficha: FichaSecop | null
+  diferencias: { campo: string; enSicot: string; enSecop: string }[]
+  documentos: { nombre: string; tamanoBytes: number | null; fechaCarga: string | null; url: string | null }[]
+  /**
+   * Por qué no hay índice del expediente, cuando no hay. Los datos abiertos del
+   * SECOP no publican los archivos de los contratos nuevos, así que esto llega
+   * casi siempre y hay que mostrarlo: una lista vacía en silencio dejaba al
+   * supervisor sin saber si el contrato no tiene expediente o si la fuente no
+   * lo cubre.
+   */
+  avisoDocumentos: string | null
+  garantias: {
+    aseguradora: string | null
+    numero: string | null
+    tipo: string | null
+    valor: number | null
+    vigenteHasta: string | null
+    estado: string | null
+  }[]
+  /**
+   * El contratista como está inscrito en el registro de proveedores del SECOP
+   * II: de ahí sale el teléfono que el acta no trae. Solo datos de la empresa.
+   * Ausente en servidores anteriores al 22-10-2026.
+   */
+  contactoProveedor?: ProveedorSecop | null
+}
+
+/**
+ * Solo teléfono y correo, lo que pide el paso 5. Ni la dirección ni los datos
+ * del representante: con un contratista persona natural son su domicilio y sus
+ * datos personales. Los dos vienen ya normalizados, o null si el registro no
+ * publica uno utilizable.
+ */
+export interface ProveedorSecop {
+  nombre: string | null
+  nit: string | null
+  telefono: string | null
+  correo: string | null
 }
 
 export interface GenerarDocumentoRequest {
   tipo: string
   subetapaId: number | null
+  /**
+   * Lo que el supervisor escribió sobre lo que hizo en el paso. El backend lo
+   * usa para el apartado de observaciones del documento; sin notas, ese
+   * apartado queda marcado como pendiente en vez de inventarse.
+   */
+  notas?: string | null
+  /**
+   * Datos del documento que el contrato no tiene —factura, póliza, cédulas…—,
+   * por clave (ver `PlantillaDocumento.campos`). Los que falten salen en el PDF
+   * como «[dato pendiente…]», en rojo, en vez de inventarse.
+   */
+  datos?: Record<string, string>
+  /**
+   * false: las observaciones van tal como el supervisor las escribió, sin
+   * pasar por el Copiloto («Usar mis notas tal cual»). Sin valor, se redactan.
+   */
+  redactarConIa?: boolean
+  /**
+   * Filas de las tablas del formato (ver `PlantillaDocumento.tablas`). Una
+   * tabla sin filas sale en el PDF como «[dato pendiente…]».
+   */
+  tablas?: TablasDelDocumento
+}
+
+/**
+ * El documento recién generado y cómo quedaron sus observaciones. El panel
+ * muestra la redacción del Copiloto antes de firmar: ninguna comprobación
+ * automática ve que cambie el sujeto de una frase, y quien firma sí.
+ */
+export interface DocumentoGeneradoResponse extends DocumentoResponse {
+  /** El texto que quedó en el apartado de observaciones, o null si no hay. */
+  observaciones: string | null
+  /** Si ese texto lo redactó el Copiloto (false: son las notas tal cual). */
+  observacionesRedactadasConIa: boolean
+  /** Por qué van las notas tal cual cuando se pidió la redacción, o null. */
+  motivoNotasTalCual: string | null
+  /**
+   * SHA-256 del borrador tal como quedó. Se devuelve al firmar para que se
+   * firme exactamente lo que el supervisor leyó.
+   */
+  huellaDelBorrador: string
+}
+
+/** Un turno de la conversación previa que se le manda al Copiloto. */
+export interface ChatTurno {
+  rol: 'user' | 'ai'
+  texto: string
+}
+
+/** Pregunta al Copiloto (POST /api/contratos/{id}/copiloto/chat). */
+export interface ChatRequest {
+  /** Lo que escribió el supervisor; en una revisión del paso, solo su descripción. */
+  pregunta: string
+  historial?: ChatTurno[]
+  /**
+   * Uno por pregunta, generado aquí. El reintento automático al volver de
+   * segundo plano repite el mismo: el servidor reconoce la pregunta y devuelve
+   * la inferencia que sigue en curso o la ya calculada, en vez de lanzar otra.
+   */
+  idSolicitud?: string
+  /**
+   * Paso (1..6) que el supervisor quiere cerrar: la petición es la revisión
+   * consultiva de ese paso. Las instrucciones de la revisión las arma el
+   * servidor; el cliente no las escribe.
+   */
+  revisarPaso?: number
+}
+
+/** Quién escribió la respuesta: SICOT con datos fijos, sin modelo, o el modelo de IA. */
+export type FuenteRespuestaCopiloto = 'SISTEMA' | 'MODELO'
+
+export type TipoAccionCopiloto =
+  | 'IR_A_PASO'
+  | 'IR_A_SUBPASO'
+  | 'ABRIR_DOCUMENTO'
+  | 'ABRIR_EVIDENCIA'
+  | 'MOSTRAR_ALERTAS'
+  | 'MOSTRAR_DOCUMENTOS'
+  | 'DESCARGAR_DOCUMENTO'
+  | 'IR_A_CONFIGURACION'
+
+/**
+ * La pantalla que el Copiloto ofrece abrir junto a su respuesta. Ninguna
+ * acción firma, marca ni genera nada: solo lleva a donde el supervisor decide.
+ * La interfaz la pinta como un botón con `etiqueta` y la ejecuta solo cuando
+ * él lo pulsa, nunca al llegar la respuesta.
+ */
+export interface AccionCopiloto {
+  tipo: TipoAccionCopiloto
+  paso: number | null
+  /** Código de la subetapa, «N.M». */
+  subpaso: string | null
+  /** Clave del catálogo de documentos del backend (ACTA_INICIO…). */
+  documentoTipo: string | null
+  /** Solo en DESCARGAR_DOCUMENTO, y de un documento que existe. */
+  documentoId: number | null
+  etiqueta: string
 }
 
 export interface ChatResponse {
   respuesta: string
+  // Opcionales a propósito: el APK y el instalador de escritorio pueden hablar
+  // con un servidor anterior al 02-10-2026, que solo manda `respuesta`.
+  fuente?: FuenteRespuestaCopiloto
+  accion?: AccionCopiloto | null
 }
 
 // ─── Alertas ─────────────────────────────────────────────────────────────────
@@ -330,4 +570,186 @@ export interface ErrorResponse {
   message: string
   path: string
   fieldErrors: Record<string, string> | null
+}
+
+// ─── Seguimiento de supervisores (Administrador) ─────────────────────────────
+//
+// GET /api/seguimiento/supervisores. El backend lo resuelve en un puñado de
+// consultas agrupadas; armarlo aquí con los endpoints por contrato serían seis
+// peticiones por contrato abierto cada vez que se abre la pestaña.
+
+export interface DocumentoResumen {
+  id: number
+  contratoId: number
+  /** Código de la subetapa («2.7»), o null si el documento se cargó sin subetapa. */
+  subetapaCodigo: string | null
+  nombre: string
+  estado: EstadoDocumento
+  generadoPorIa: boolean
+  firmado: boolean
+  fechaSubida: string
+  fechaFirma: string | null
+}
+
+export interface UltimaActividad {
+  contratoId: number
+  fecha: string
+  accion: string
+  descripcion: string | null
+}
+
+export interface ContratoSeguimiento {
+  id: number
+  numeroContrato: string
+  objeto: string
+  contratista: string | null
+  estado: EstadoContrato
+  valor: number
+  fechaInicio: string | null
+  fechaFin: string | null
+  cronograma: CronogramaResponse | null
+  subetapasCompletadas: number
+  subetapasTotales: number
+  etapaActual: number | null
+  etapaActualNombre: string | null
+  subetapaEnCurso: SubetapaResponse | null
+  etapas: EtapaResponse[]
+  documentos: DocumentoResumen[]
+  alertasSinLeer: number
+  ultimaActividad: UltimaActividad | null
+}
+
+export interface SupervisorSeguimiento {
+  id: number
+  nombre: string
+  email: string
+  activo: boolean
+  firmaVigente: boolean
+  contratosFinalizados: number
+  contratos: ContratoSeguimiento[]
+}
+
+export interface SeguimientoResponse {
+  supervisores: SupervisorSeguimiento[]
+  contratosSinSupervisor: ContratoSeguimiento[]
+  generadoEn: string
+}
+
+/** Un documento formal que SICOT arma y los datos que pide que el contrato no tiene (GET /api/ia/plantillas). */
+export interface PlantillaDocumento {
+  tipo: string
+  codigo: string
+  nombre: string
+  /** Si el formato tiene un apartado donde van las notas del supervisor. */
+  llevaObservaciones: boolean
+  /**
+   * `opcional`: si falta no deja nada pendiente (se deduce de otros datos o no
+   * siempre aplica). `dependeDe`: el opcional pasa a obligatorio cuando ese
+   * otro dato dice que sí (con una adición, el valor actualizado). `porDocumento`:
+   * cambia en cada documento (número de informe, factura…), así que no se
+   * recuerda para el siguiente. `largo`: es un párrafo (el cumplimiento del
+   * SIGA), no un dato de una línea.
+   */
+  campos: Array<{
+    clave: string
+    etiqueta: string
+    ejemplo: string
+    opcional: boolean
+    dependeDe: string | null
+    porDocumento: boolean
+    largo?: boolean
+  }>
+  /**
+   * Tablas del formato que se llenan fila por fila (obligaciones, amparos,
+   * órdenes de pago). En cada columna, `delContrato` dice si lo escrito es del
+   * contrato (el texto de la obligación) y se ofrece en el siguiente documento,
+   * o de este (lo hecho en el periodo) y no se arrastra. Opcional para tolerar
+   * un backend anterior al 30-09-2026, que no las enviaba.
+   */
+  tablas?: Array<{
+    clave: string
+    etiqueta: string
+    ayuda: string
+    columnas: Array<{ etiqueta: string; ejemplo: string; delContrato: boolean }>
+  }>
+}
+
+/** Filas de las tablas de un documento, por clave de tabla; cada fila, sus celdas en el orden de las columnas. */
+export type TablasDelDocumento = Record<string, string[][]>
+
+// ─────────── Solicitud de pedido al contratista (paso 2.4) ───────────
+
+/** Una fila del pedido, como la verá el contratista en el Excel adjunto. */
+export interface ItemDeSolicitud {
+  numero: number
+  descripcion: string
+  /** 0 significa «estaba en la oferta y no se pide», como en el formato real. */
+  cantidad: number
+  valorUnitario: number
+  /** Cantidad × valor unitario, calculado por el backend. */
+  valorTotal: number
+}
+
+/**
+ * Los bienes que el supervisor le pide al contratista, con el control de
+ * presupuesto del formato real (ASIGNADO · COMPROMETIDO · QUEDA).
+ */
+export interface SolicitudDePedidoResponse {
+  items: ItemDeSolicitud[]
+  /** El valor del contrato: el tope de lo que se puede pedir. */
+  presupuestoAsignado: number
+  comprometido: number
+  /** Asignado − comprometido; negativo si el pedido se pasa del contrato. */
+  queda: number
+  excedeElContrato: boolean
+}
+
+// ─────────── Arranque del contrato: pasos 2.2 y 2.4 ───────────
+
+/** Una fecha de entrega acordada con el contratista; el número lo asigna SICOT por fecha. */
+export interface EntregaAcordada {
+  numero: number
+  /** AAAA-MM-DD */
+  fecha: string
+  descripcion: string
+}
+
+/**
+ * Las fechas de entrega acordadas (paso 5 de la hoja de Alex: «se establecen
+ * fechas de entrega … respetando los tiempos de inicio y fin del contrato»).
+ */
+export interface AcuerdoDeEntregasResponse {
+  entregas: EntregaAcordada[]
+  /** Los límites del plazo: la pantalla no ofrece días fuera de ellos. */
+  inicioDelContrato: string | null
+  finDelContrato: string | null
+}
+
+export type RolDeContacto = 'SST' | 'AMBIENTAL'
+
+/** Un profesional de SST o ambiental al que se le avisa del contrato (paso 2.2). */
+export interface ContactoDelContrato {
+  rol: RolDeContacto
+  nombre: string | null
+  correo: string
+}
+
+export interface ContactosDelContratoResponse {
+  /** Primero los de SST. */
+  contactos: ContactoDelContrato[]
+}
+
+/** Un correo que SICOT encontró en el estudio previo cargado: es una propuesta, no se guarda sola. */
+export interface ContactoEncontrado {
+  correo: string
+  /** La mención de SST o ambiental más cercana antes del correo; null si no hay. */
+  rolSugerido: RolDeContacto | null
+  /** El fragmento del documento donde aparece, para reconocer de quién es. */
+  contexto: string
+}
+
+export interface LecturaDeContactosResponse {
+  encontrados: ContactoEncontrado[]
+  /** Por qué no hay propuestas (documento escaneado, sin correos), o null. */
+  aviso: string | null
 }

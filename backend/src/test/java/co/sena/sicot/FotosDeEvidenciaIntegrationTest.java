@@ -102,7 +102,7 @@ class FotosDeEvidenciaIntegrationTest extends PruebaDeIntegracion {
 
         mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoId)
                         .file(new MockMultipartFile("archivo", "acta.pdf", "application/pdf",
-                                "%PDF-1.4 acta".getBytes(StandardCharsets.UTF_8)))
+                                ArchivoDePrueba.pdfDeUnaPagina("acta de inicio")))
                         .header("Authorization", "Bearer " + gestion))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.capturaFecha").doesNotExist());

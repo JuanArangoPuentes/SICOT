@@ -1,6 +1,6 @@
 [package]
 name = "sicot"
-version = "0.4.0"
+version = "0.6.0"
 description = "SICOT — Supervision de contratos del Centro Tecnologico del Mobiliario (SENA)"
 authors = ["MediaLab — Centro Tecnologico del Mobiliario, SENA"]
 license = "MIT"
@@ -25,3 +25,13 @@ tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+
+# La compilación de depuración es también el «APK de pruebas» que se publica
+# para probar contra un portátil en la red local (acepta http://). Con la
+# información de depuración de Rust su biblioteca pesaba 128 MB y el APK 135 MB,
+# demasiado para bajarlo en un teléfono; la lógica de SICOT vive en el frontend
+# y en el backend, y esa información no se usa. Sin ella, el código y su
+# comportamiento son los mismos.
+[profile.dev]
+debug = false
+strip = "debuginfo"

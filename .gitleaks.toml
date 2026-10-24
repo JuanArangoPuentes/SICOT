@@ -67,6 +67,19 @@ regexes = [
   '''valor-de-relleno-para-ci''',
   '''relleno-solo-para-ci-1234''',
 
+  # Contraseña de un supervisor de usar y tirar que la suite de integración
+  # crea y desecha dentro de una misma prueba
+  # (`DocumentoFormalDeExtremoAExtremoIntegrationTest.supervisorNuevoConFirma()`,
+  # para comprobar que al reasignar un contrato la firma estampada es la del
+  # supervisor nuevo). La cuenta solo existe en la base efímera de la prueba.
+  #
+  # La introdujo el commit 368ec73 del 02-10-2026, que vive en
+  # `integracion/auditoria-2-oct` (PR 119) y todavía no está en `develop`. Se
+  # permite aquí, y no allá, porque Gitleaks recorre TODAS las ramas del clon:
+  # desde ese día dejaba en rojo el análisis estático de cualquier rama que se
+  # empujara, no solo la suya.
+  '''Reasignado123''',
+
   # Números de contrato de SECOP inventados para la suite. No son un secreto de
   # ningún tipo: es el formato oficial de identificador de un contrato estatal
   # colombiano, y la regla genérica los confunde con una clave por su forma
@@ -77,6 +90,13 @@ regexes = [
   # dentro de la misma prueba y nunca salen de ella.
   '''Contrasena-Larga-2026''',
   '''Aislamiento123''',
+  # Del escenario de SeguimientoDeSupervisoresIntegrationTest (24-09-2026):
+  # crea dos supervisores de prueba con esta clave y entra con ellos.
+  '''Seguimiento123''',
+  # De DocumentoFormalDeExtremoAExtremoIntegrationTest (02-10-2026): el caso que
+  # comprueba que un administrador no puede firmar el documento de un contrato
+  # ajeno crea con esta clave la cuenta a la que se reasigna la supervisión.
+  '''Reasignado123''',
 
   # Contraseñas de las cuentas demo, documentadas en `backend/README.md` y
   # declaradas fuera de alcance en `SECURITY.md`. `DataInitializer` sólo las

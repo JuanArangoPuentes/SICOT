@@ -95,6 +95,29 @@ public class RegistroService {
         guardar(contrato, accion, descripcion, null, OrigenRegistro.SISTEMA);
     }
 
+    /**
+     * Lo mismo, para quien solo tiene el id del contrato.
+     *
+     * <p>Es la variante que usan las acciones del motor: quien llama es un hilo
+     * cuya transacción de lectura ya se cerró, así que una entidad que viniera
+     * de fuera sería un proxy de otra sesión. Se resuelve aquí dentro, igual que
+     * hace {@code AlertaService.crearDelSistema} por el mismo motivo.
+     *
+     * <p>Si el contrato ya no existe —se borró entre encolar la tarea y
+     * ejecutarla— no se registra nada: el expediente al que pertenecería la
+     * constancia desapareció con él, y hacerla global la dejaría flotando en la
+     * auditoría general sin nada a lo que referirse.
+     */
+    @Transactional
+    public void registrarDelSistema(Long contratoId, String accion, String descripcion) {
+        if (contratoId == null) {
+            guardar(null, accion, descripcion, null, OrigenRegistro.SISTEMA);
+            return;
+        }
+        contratoRepository.findById(contratoId)
+                .ifPresent(contrato -> guardar(contrato, accion, descripcion, null, OrigenRegistro.SISTEMA));
+    }
+
     private void guardar(Contrato contrato, String accion, String descripcion,
                          Usuario usuario, OrigenRegistro origen) {
         Registro registro = new Registro();

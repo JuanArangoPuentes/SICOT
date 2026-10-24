@@ -34,11 +34,6 @@ export interface FirmaRow {
   activa: boolean
 }
 
-// Actividad de los últimos 30 días — sin endpoint de estadísticas agregadas
-// todavía; se deja vacío a propósito (estado honesto) en vez de inventar
-// números. El panel ya maneja el caso vacío mostrando un mensaje, no un mock.
-export const ACTIVIDAD: { dia: string; creados: number; supervisados: number; cerrados: number }[] = []
-
 export const ROL_LABEL: Record<Rol, string> = {
   ADMINISTRADOR: 'Administrador',
   GESTION: 'Gestor de Contratación',

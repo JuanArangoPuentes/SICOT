@@ -27,7 +27,6 @@ public final class DocumentoMapper {
                 d.getFormato() != null ? d.getFormato().getNombre() : null,
                 d.getNombre(),
                 d.getTipo(),
-                d.getRutaArchivo(),
                 d.getEstado(),
                 d.getTamanioBytes(),
                 d.isGeneradoPorIa(),

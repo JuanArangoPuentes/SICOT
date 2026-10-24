@@ -39,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class DocumentosDeAsignacionIntegrationTest extends PruebaDeIntegracion {
 
-    private static final byte[] PDF = "%PDF-1.4 documento de asignación".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] PDF = ArchivoDePrueba.pdfDeUnaPagina("documento de asignacion");
 
     @Autowired
     private MockMvc mockMvc;

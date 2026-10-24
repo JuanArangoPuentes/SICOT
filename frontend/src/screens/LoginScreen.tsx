@@ -258,7 +258,9 @@ export default function LoginScreen({
         </div>
 
         {/* Bottom version */}
-        <div style={{ fontSize: 11, color: s.idTextMuted, position: 'relative' }}>SICOT v3.0 · GCCON-P-010</div>
+        <div style={{ fontSize: 11, color: s.idTextMuted, position: 'relative' }}>
+          SICOT v{__VERSION_DE_SICOT__} · GCCON-P-010
+        </div>
       </div>
 
       {/* ── Right: Form panel (40%) — fondo blanco ── */}
@@ -330,7 +332,7 @@ export default function LoginScreen({
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onKeyDown={handleKey}
-                placeholder="correo@soy.sena.edu.co"
+                placeholder="usuario@sena.edu.co"
                 style={{
                   width: '100%',
                   padding: '12px 12px 12px 36px',

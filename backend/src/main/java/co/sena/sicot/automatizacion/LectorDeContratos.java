@@ -4,6 +4,7 @@ import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.repository.ContratoRepository;
+import co.sena.sicot.repository.EntregaAcordadaRepository;
 import co.sena.sicot.repository.EtapaRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import org.springframework.stereotype.Service;
@@ -29,13 +30,16 @@ public class LectorDeContratos {
     private final ContratoRepository contratoRepository;
     private final SubetapaRepository subetapaRepository;
     private final EtapaRepository etapaRepository;
+    private final EntregaAcordadaRepository entregaRepository;
 
     public LectorDeContratos(ContratoRepository contratoRepository,
                              SubetapaRepository subetapaRepository,
-                             EtapaRepository etapaRepository) {
+                             EtapaRepository etapaRepository,
+                             EntregaAcordadaRepository entregaRepository) {
         this.contratoRepository = contratoRepository;
         this.subetapaRepository = subetapaRepository;
         this.etapaRepository = etapaRepository;
+        this.entregaRepository = entregaRepository;
     }
 
     /**
@@ -63,12 +67,34 @@ public class LectorDeContratos {
                 .map(contrato -> conConteos(List.of(contrato)).getFirst());
     }
 
+    /**
+     * Fotos de un conjunto de contratos ya cargado, con las mismas dos
+     * consultas agrupadas.
+     *
+     * <p>Es público para el seguimiento de supervisores del Administrador: ese
+     * panel pinta el semáforo de cada contrato y tiene que ser el mismo que ve
+     * el supervisor y el que evalúa el motor. Si armara su propia lectura,
+     * volvería a haber dos caminos hacia el mismo dato, que es justo lo que
+     * {@code CronogramaService} ya tuvo que corregir una vez.
+     */
+    @Transactional(readOnly = true)
+    public List<FotoDelContrato> de(List<Contrato> contratos) {
+        return contratos.isEmpty() ? List.of() : conConteos(contratos);
+    }
+
     private List<FotoDelContrato> conConteos(List<Contrato> contratos) {
         List<Long> ids = contratos.stream().map(Contrato::getId).toList();
         Map<Long, ConteoDeSubetapas> conteos = subetapaRepository.contarPorContrato(ids).stream()
                 .collect(java.util.stream.Collectors.toMap(ConteoDeSubetapas::contratoId, Function.identity()));
         Map<Long, EstadoDeEtapas> etapas = etapaRepository.estadoPorContrato(ids).stream()
                 .collect(java.util.stream.Collectors.toMap(EstadoDeEtapas::contratoId, Function.identity()));
+        // Las entregas acordadas de todos a la vez, ya ordenadas por contrato y
+        // número: una consulta más por lote, no una por contrato.
+        Map<Long, List<FotoDelContrato.Entrega>> entregas = entregaRepository.deLosContratos(ids).stream()
+                .collect(java.util.stream.Collectors.groupingBy(e -> e.getContrato().getId(),
+                        java.util.stream.Collectors.mapping(
+                                e -> new FotoDelContrato.Entrega(e.getNumero(), e.getFecha(), e.getDescripcion()),
+                                java.util.stream.Collectors.toList())));
 
         return contratos.stream().map(contrato -> {
             // Un contrato sin subetapas no aparece en el GROUP BY. No es un caso
@@ -93,7 +119,8 @@ public class LectorDeContratos {
                     conteo.totales(),
                     conteo.completadas(),
                     etapa.etapaActual(),
-                    (int) etapa.totalEtapas());
+                    (int) etapa.totalEtapas(),
+                    entregas.getOrDefault(contrato.getId(), List.of()));
         }).toList();
     }
 }

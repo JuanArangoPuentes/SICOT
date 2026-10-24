@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -87,6 +88,34 @@ class ValidacionEntradaContratoIntegrationTest extends PruebaDeIntegracion {
                                 """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.valor").exists());
+    }
+
+    /**
+     * Con 16 dígitos se registraba un valor que los documentos no pueden
+     * escribir en letras, y el Acta de Inicio respondía un 500 (auditoría del
+     * 02-10-2026). El tope es el de NumeroEnLetras.
+     */
+    @Test
+    void valorQueNoSePuedeEscribirEnLetrasEs400ConFieldError() throws Exception {
+        String token = login("gestion@soy.sena.edu.co", "Gestion123*");
+
+        mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.VAL-TOPE","objeto":"Prueba",
+                                 "valor":1000000000000}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.valor", containsString("12 dígitos")));
+        mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.VAL-TOPE","objeto":"Prueba",
+                                 "valor":999999999999.99}
+                                """))
+                .andExpect(status().isCreated());
     }
 
     @Test
