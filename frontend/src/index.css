@@ -245,6 +245,24 @@ h6 {
   transform: translateY(0) scale(0.98);
   box-shadow: var(--shadow-xs);
 }
+/* Deshabilitado tiene que verse deshabilitado. Hasta el 23-10-2026 un botón
+   verde sin poder pulsarse («Guardar las fechas» con una fecha fuera del plazo,
+   «Guardar la solicitud» sin filas reconocidas) se veía igual que uno activo,
+   con la mano y todo, y el supervisor no sabía por qué no respondía. Los que ya
+   bajaban su opacidad en línea la conservan: el estilo en línea gana. */
+button:disabled,
+.btn-green:disabled,
+.btn-green:disabled:hover {
+  cursor: not-allowed;
+}
+.btn-green:disabled {
+  opacity: 0.55;
+}
+.btn-green:disabled:hover,
+.btn-green:disabled:active {
+  transform: none;
+  box-shadow: none;
+}
 
 .btn-ghost {
   background: transparent;

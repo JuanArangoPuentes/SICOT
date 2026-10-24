@@ -39,7 +39,11 @@ RUN npm run build
 # 1.30 es la rama estable mantenida. La 1.27 que había aquí se cerró en 2025 y
 # su imagen dejó de reconstruirse, con nginx y Alpine incluidos: esta imagen
 # sirve la SPA que guarda el JWT y seguía sin parches sin que nada lo señalara.
-FROM nginxinc/nginx-unprivileged:1.30.5-alpine
+# 1.30.6 desde el 23-10-2026: la 1.30.5 traía nginx con tres CVE altas
+# (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
+# expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
+# imágenes del CI marcó, y la 1.30.6 las corrige.
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
@@ -64,8 +68,10 @@ USER root
 # CVE-2026-77214 (HIGH, lectura fuera del búfer al parsear XML), y Alpine ya
 # publicó 2.9.0-r0. El backend lleva la misma línea. Y libx11, del mismo día:
 # 1.8.13-r0 trae CVE-2026-88806 (HIGH, desbordamiento de montículo con un
-# servidor X malicioso) y 1.8.14-r0 la corrige.
-RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0"
+# servidor X malicioso) y 1.8.14-r0 la corrige. Y brotli-libs (CI del
+# 23-10-2026): 1.2.0-r1 trae CVE-2026-111497 (HIGH, escritura fuera de límites
+# en el decodificador) y 1.2.1-r0 la corrige; el backend lleva la misma línea.
+RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por

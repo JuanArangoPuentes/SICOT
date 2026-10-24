@@ -45,17 +45,30 @@ public class NotificacionDeSupervisorAsignado implements ReglaDeEvento {
     private final LectorDeContratos lectorDeContratos;
 
     /**
-     * Dónde descarga el supervisor la instalación local de SICOT. El proceso
-     * real pide que el aviso de designación lo lleve; mientras no haya un
-     * instalador publicado queda vacío y el correo no ofrece ningún enlace,
-     * en vez de uno que no lleve a ninguna parte.
+     * Dónde descarga el supervisor la instalación local de SICOT. El paso 1 de
+     * la lista de chequeo de Alex pide que el aviso de designación lo lleve
+     * («el sistema envía la notificación con el enlace para la descarga del
+     * sistema e iniciar el proceso de supervisión»). Desde la versión 0.5.0 hay
+     * instalador publicado y es el valor por defecto; vacío, el correo no
+     * ofrece ningún enlace, en vez de uno que no lleve a ninguna parte.
      */
     private final String enlaceDescarga;
 
+    /**
+     * La dirección del servidor de SICOT, que el supervisor escribe en
+     * Configuración la primera vez que abre la instalación de escritorio: el
+     * instalador es uno solo para todos los Centros y no la trae dentro (ver
+     * {@code apiBase} en el cliente). Sin ella, el enlace de descarga lleva a
+     * una aplicación que no sabe a qué servidor conectarse.
+     */
+    private final String direccionDelServidor;
+
     public NotificacionDeSupervisorAsignado(LectorDeContratos lectorDeContratos,
-                                            @Value("${sicot.supervisor.enlace-descarga:}") String enlaceDescarga) {
+                                            @Value("${sicot.supervisor.enlace-descarga:}") String enlaceDescarga,
+                                            @Value("${sicot.servidor.direccion-publica:}") String direccionDelServidor) {
         this.lectorDeContratos = lectorDeContratos;
         this.enlaceDescarga = enlaceDescarga == null ? "" : enlaceDescarga.strip();
+        this.direccionDelServidor = direccionDelServidor == null ? "" : direccionDelServidor.strip();
     }
 
     @Override
@@ -93,9 +106,7 @@ public class NotificacionDeSupervisorAsignado implements ReglaDeEvento {
         // El primer paso que se le anuncia es el del proceso real: el acta la
         // elabora Contratación y llega por correo; el supervisor la firma, la
         // devuelve y la carga en SICOT con la evidencia del envío.
-        String comoEntrar = enlaceDescarga.isEmpty()
-                ? "Ingrese a SICOT para ver las etapas del contrato y el paso en curso.\n\n"
-                : "Si todavía no tiene SICOT instalado, descárguelo aquí: " + enlaceDescarga + "\n\n";
+        String comoEntrar = comoEntrar(enlaceDescarga, direccionDelServidor);
         String cuerpo = ("Hola %s,\n\n"
                 + "Usted fue designado(a) supervisor(a) del contrato %s, y la designación ya quedó registrada en "
                 + "SICOT.\n\n"
@@ -111,6 +122,7 @@ public class NotificacionDeSupervisorAsignado implements ReglaDeEvento {
                         contrato.fechaFin() == null ? "sin definir" : FECHA.format(contrato.fechaFin()),
                         comoEntrar);
 
+        // La alerta no repite cómo instalar SICOT: quien la lee ya lo tiene abierto.
         List<TareaSolicitada> tareas = new java.util.ArrayList<>();
         tareas.add(TareaSolicitada.ahora(
                 CODIGO,
@@ -134,5 +146,29 @@ public class NotificacionDeSupervisorAsignado implements ReglaDeEvento {
                             cuerpo)));
         }
         return tareas;
+    }
+
+    /**
+     * Cómo llega el supervisor al contrato. Responde la pregunta que Alex dejó
+     * en el paso 1 de su hoja —«¿qué pasa si el supervisor tiene instalado el
+     * SISTEMA y realizará un nuevo contrato?»—: el contrato nuevo se suma a los
+     * que ya tiene, en el selector de contratos de su panel. Solo quien no lo
+     * tiene instalado necesita el enlace y la dirección del servidor.
+     */
+    public static String comoEntrar(String enlaceDescarga, String direccionDelServidor) {
+        String enElSelector = "este contrato aparece en el selector de contratos de su panel, junto a los que ya "
+                + "supervisa.";
+        if (enlaceDescarga.isEmpty()) {
+            return "Ingrese a SICOT para ver las etapas del contrato y el paso en curso: " + enElSelector + "\n\n";
+        }
+        String yaInstalado = "Si ya tiene SICOT instalado, ábralo: " + enElSelector;
+        // Cada dirección en su propio renglón y sin punto detrás: pegado a la
+        // dirección, el punto termina dentro del enlace en más de un lector de
+        // correo.
+        String servidor = direccionDelServidor.isEmpty() ? ""
+                : "Al abrirlo por primera vez, escriba en Configuración la dirección del servidor:\n"
+                        + direccionDelServidor + "\n";
+        return yaInstalado + "\n\nSi todavía no lo tiene, descárguelo aquí:\n" + enlaceDescarga + "\n" + servidor
+                + "\n";
     }
 }

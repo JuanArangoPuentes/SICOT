@@ -105,9 +105,11 @@ public class CopilotoChatService {
             Paso 2, Acta de Inicio y arranque: 2.1 el Acta de Inicio (GCCON-F-018) la elabora Contratación \
             y se la envía por correo; el supervisor la firma, la devuelve respondiendo ese correo y carga en \
             SICOT el acta firmada (PDF) y la evidencia del envío; 2.2 avisar a los profesionales SST y \
-            ambiental (SICOT trae el borrador del correo); 2.3 verificar el contrato en SECOP II (SICOT \
-            muestra lo que publica el SECOP); 2.4 contactar al contratista y acordar las entregas (SICOT \
-            trae el borrador del correo).
+            ambiental (se registran en el sub-paso; SICOT los busca en el estudio previo cargado y trae el \
+            borrador del correo); 2.3 verificar el contrato en SECOP II (SICOT muestra lo que publica el \
+            SECOP); 2.4 contactar al contratista y acordar las entregas (SICOT trae el borrador del correo y \
+            el Excel del pedido; las fechas acordadas se registran ahí, dentro del plazo, y el paso no se \
+            cierra sin al menos una).
             Paso 3, Inspección: 3.1 verificación física de la entrega en bodega; 3.2 evidencia fotográfica; \
             3.3 comparar cantidad y calidad con la ficha técnica; 3.4 firmar el Informe de Supervisión \
             (GCCON-F-031).
@@ -412,6 +414,13 @@ public class CopilotoChatService {
      * disponible, se anota en el log y ya. Un precalentado que falla no debe
      * romper la apertura de un contrato — el copiloto seguirá funcionando
      * (lento) igual.
+     *
+     * <p>Desde el 20-10-2026 el panel lo vuelve a pedir cada 10 minutos
+     * mientras está abierto, y al volver a la pestaña: si el prefijo de este
+     * contrato sigue en la caché, solo se renueva la carga del modelo, en menos
+     * de un segundo y sin inferencia ({@link OllamaClient#mantenerCargado}).
+     * Antes, a los 30 minutos sin preguntas Ollama descargaba el modelo y la
+     * siguiente pregunta volvía a costar más de tres minutos.
      */
     public void precalentar(Long contratoId) {
         contratoService.buscar(contratoId);
@@ -429,6 +438,15 @@ public class CopilotoChatService {
                 }
                 try {
                     long inicio = System.currentTimeMillis();
+                    if (sigueEnCache(id)) {
+                        // El panel lo vuelve a pedir cada pocos minutos mientras
+                        // está abierto: si el prefijo sigue en la caché, basta con
+                        // que Ollama no descargue el modelo (ver mantenerCargado).
+                        ollamaClient.mantenerCargado();
+                        log.info("Contexto del contrato {} sigue en caché: se renovó la carga del modelo en {} ms.",
+                                id, System.currentTimeMillis() - inicio);
+                        return;
+                    }
                     // Se manda un saludo a propósito: construye el MISMO prefijo de
                     // prompt (datos del contrato + estado de las etapas) que usará
                     // la pregunta real, que es lo que Ollama cachea, y genera una
@@ -452,6 +470,19 @@ public class CopilotoChatService {
             tarea.whenComplete((sinValor, fallo) -> precalentadosEnVuelo.remove(id, tarea));
             return tarea;
         });
+    }
+
+    /**
+     * ¿Ollama sigue teniendo cargado el modelo con el prefijo de este contrato
+     * en la caché? Si otra petición lo pisó (otro contrato, una revisión de
+     * paso, un documento) o el modelo se descargó, hay que precalentar de
+     * nuevo.
+     */
+    private boolean sigueEnCache(Long contratoId) {
+        Contrato contrato = contratoService.buscar(contratoId);
+        List<EtapaResponse> etapas = etapaService.listarPorContrato(contratoId);
+        return ollamaClient.tieneEnCache(
+                prefijoDelChat(contrato, etapas, unaVez(() -> mensajeDelCronograma(contratoId))));
     }
 
     /**
@@ -604,6 +635,14 @@ public class CopilotoChatService {
             return Optional.of(new Atajo(Ruta.FICHA_DEL_DOCUMENTO,
                     ChatResponse.delSistema(fichaDeDocumentoFormal.componer(documentos, etapas), accion)));
         }
+        // «¿Cuáles son las fechas de entrega?» pide el dato, no cómo se acuerdan:
+        // va antes que la guía, que reconoce «fechas de entrega» como el 2.4.
+        if (fichaDelContrato.preguntaPorEntregas(pregunta)) {
+            Optional<ChatResponse> entregas = fichaDelContrato.responder(pregunta, contrato, cronograma);
+            if (entregas.isPresent()) {
+                return Optional.of(new Atajo(Ruta.FICHA_DEL_CONTRATO, entregas.get()));
+            }
+        }
         if (guiaDelPasoActual.puedeResponder(pregunta)) {
             Optional<ChatResponse> guia = guiaDelPasoActual.responder(pregunta, etapas);
             if (guia.isPresent()) {
@@ -687,6 +726,26 @@ public class CopilotoChatService {
 
     private String promptDelChat(Contrato contrato, List<EtapaResponse> etapas, List<ChatTurno> historial,
                                  String pregunta, Supplier<Optional<String>> cronograma) {
+        return prefijoDelChat(contrato, etapas, cronograma)
+                + formatearHistorial(historial) + "\n"
+                + EntradaNoConfiable.bloque("PREGUNTA DEL SUPERVISOR", recortar(pregunta, MAX_CARACTERES_ENTRADA)) + "\n"
+                + """
+                Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Diga lo que hace el supervisor \
+                («envíe…», «llame…»), nunca lo que hará usted («verificaré», «contactaré»). Si nombra un \
+                botón: «Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3; en 2.1, 3.1 y 3.2 se carga lo que \
+                piden; en los demás no se carga nada en SICOT (ni factura, ni planilla, ni póliza): se \
+                verifica afuera y se pulsa «Marcar completado». Responda solo al supervisor, en texto plano.\
+                """;
+    }
+
+    /**
+     * Lo que el prompt de este contrato tiene igual en todas las preguntas: las
+     * instrucciones, los datos del contrato, su estado y la fecha. Es lo que el
+     * precalentado deja en la caché de Ollama, y con lo que
+     * {@link #precalentar} mira si sigue ahí.
+     */
+    private String prefijoDelChat(Contrato contrato, List<EtapaResponse> etapas,
+                                  Supplier<Optional<String>> cronograma) {
         // El valor va formateado como en los PDF: el BigDecimal crudo
         // («450000000.00») es fácil de leer mal para un modelo pequeño.
         String datosContrato = """
@@ -713,24 +772,10 @@ public class CopilotoChatService {
                 + cronograma.get().map(m -> " Cronograma (cálculo de SICOT, el de la pantalla Alertas): " + m)
                         .orElse("");
 
-        return """
-                %s
-
-                %s
-
-                %s
-                %s
-                %s
-                %s
-                Recuerde: usted no ejecuta nada en SICOT ni inventa datos. Diga lo que hace el supervisor \
-                («envíe…», «llame…»), nunca lo que hará usted («verificaré», «contactaré»). Si nombra un \
-                botón: «Firmar documento» es solo de 3.4, 4.3, 5.3 y 6.3; en 2.1, 3.1 y 3.2 se carga lo que \
-                piden; en los demás no se carga nada en SICOT (ni factura, ni planilla, ni póliza): se \
-                verifica afuera y se pulsa «Marcar completado». Responda solo al supervisor, en texto plano.\
-                """.formatted(INSTRUCCIONES,
-                        EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato.strip()),
-                        estadoEnPocasLineas(etapas), hoyYCronograma, formatearHistorial(historial),
-                        EntradaNoConfiable.bloque("PREGUNTA DEL SUPERVISOR", recortar(pregunta, MAX_CARACTERES_ENTRADA)));
+        return INSTRUCCIONES + "\n\n"
+                + EntradaNoConfiable.bloque("DATOS DEL CONTRATO", datosContrato.strip()) + "\n\n"
+                + estadoEnPocasLineas(etapas) + "\n"
+                + hoyYCronograma + "\n";
     }
 
     /**

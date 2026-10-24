@@ -16,6 +16,12 @@ import java.time.LocalDate;
  * Mismos límites que {@link CrearContratoRequest}, campo por campo: un campo no
  * puede aceptar más caracteres al actualizar que al crear. Los máximos replican
  * las columnas de la tabla {@code contratos}.
+ *
+ * <p>Es un reemplazo completo, con dos excepciones desde el 22-10-2026:
+ * {@code correoContratista} y {@code telefonoContratista}. Sin el campo
+ * ({@code null}) se conserva el que había y vacío lo borra, porque esos dos los
+ * llena también el supervisor desde el registro de proveedores del SECOP II, y
+ * una corrección de Gestión hecha con la lista cargada antes no debe borrarlos.
  */
 public record ActualizarContratoRequest(
         @NotBlank(message = "El número de contrato es obligatorio.")
@@ -81,7 +87,15 @@ public record ActualizarContratoRequest(
 
         @Size(max = 255, message = "El correo del contratista no puede superar 255 caracteres.")
         @Email(message = "El correo del contratista no es válido.")
-        String correoContratista
+        String correoContratista,
+
+        // Del registro de proveedores del SECOP II: el acta no lo trae. Se
+        // admiten dígitos, espacios, «+», guiones y paréntesis, que es como se
+        // escriben los teléfonos fijos y celulares en Colombia.
+        @Size(max = 40, message = "El teléfono del contratista no puede superar 40 caracteres.")
+        @Pattern(regexp = "|[0-9+() -]{7,40}",
+                message = "El teléfono del contratista solo admite dígitos, espacios, «+», guiones y paréntesis.")
+        String telefonoContratista
 ) {
 
     /**

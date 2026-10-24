@@ -56,7 +56,11 @@ import {
 import EvidenciaFotografica from '@/components/supervisor/EvidenciaFotografica'
 import ActaFirmadaYEnvio from '@/components/supervisor/ActaFirmadaYEnvio'
 import VerificacionSecop from '@/components/supervisor/VerificacionSecop'
-import BorradorDeCorreo, { type TipoDeCorreo } from '@/components/supervisor/BorradorDeCorreo'
+import BorradorDeCorreo from '@/components/supervisor/BorradorDeCorreo'
+import SolicitudDePedido from '@/components/supervisor/SolicitudDePedido'
+import AcuerdoDeEntregas from '@/components/supervisor/AcuerdoDeEntregas'
+import ContactosSstAmbiental from '@/components/supervisor/ContactosSstAmbiental'
+import ContactoDelContratista from '@/components/supervisor/ContactoDelContratista'
 import DatosDelDocumento, {
   guardarTablasDelContrato,
   leerTablasDelContrato,
@@ -148,6 +152,13 @@ const porQueNoRespondio = (e: unknown): string => {
     return 'No hubo respuesta del servidor de SICOT: revise la conexión del equipo y vuelva a intentarlo.'
   return 'No se pudo completar la consulta al Copiloto. Vuelva a intentarlo en un momento.'
 }
+
+/**
+ * Cada cuánto se le recuerda al backend que el panel sigue abierto. Un tercio
+ * del tiempo que Ollama mantiene el modelo cargado (30 minutos): aunque el
+ * navegador retrase un temporizador de una pestaña de fondo, llega antes.
+ */
+const RENOVAR_COPILOTO_MS = 10 * 60 * 1000
 
 const mensajeDelCopiloto = ({ respuesta, fuente, accion }: ChatResponse): ChatMsg => ({
   role: 'ai',
@@ -339,6 +350,7 @@ export default function SupervisorPanel({
   registros,
   onRefreshRegistros,
   pedidosCopiloto = 0,
+  onContratoActualizado,
 }: {
   vista: Tab
   onCambiarVista: (t: Tab) => void
@@ -358,6 +370,11 @@ export default function SupervisorPanel({
   onRefreshRegistros: () => Promise<void>
   /** Sube cada vez que el avatar flotante pide abrir el Copiloto. */
   pedidosCopiloto?: number
+  /**
+   * El contrato cambió desde el panel (hoy, el teléfono del contratista traído
+   * del SECOP II en el paso 2.4): quien tiene la lista de contratos la pone al día.
+   */
+  onContratoActualizado?: (c: ContratoResponse) => void
 }) {
   const { prefs } = usePrefs()
   const [dismissed, setDismissed] = useState<Set<string>>(new Set())
@@ -367,6 +384,12 @@ export default function SupervisorPanel({
   const tab = vista
   const setTab = onCambiarVista
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set([1]))
+  // Sube cada vez que el 2.2 guarda contactos o el 2.4 guarda fechas. Los dos
+  // están montados a la vez y cada uno usa lo del otro en sus correos (el del
+  // 2.4 va a los contactos del 2.2; el del 2.2 lista las fechas del 2.4): con
+  // esto cada uno vuelve a pedir lo que guardó el otro, en vez de quedarse con
+  // lo que leyó al abrirse.
+  const [versionDelArranque, setVersionDelArranque] = useState(0)
   const [activeSubStep, setActiveSubStep] = useState<string | null>(null)
   const [tutorialMode, setTutorialMode] = useState(false)
   const [procesandoFirma, setProcesandoFirma] = useState<string | null>(null)
@@ -529,9 +552,27 @@ export default function SupervisorPanel({
   // Va en su propio efecto, y no dentro del de las etapas, porque no tiene
   // nada que ver con ellas: si mañana cambia cómo se cargan las etapas, esto
   // no debería verse arrastrado.
+  //
+  // Y se repite mientras el panel está abierto. Ollama descarga el modelo a
+  // los 30 minutos sin uso (sicot.ia.keep-alive), y con él la caché: el
+  // 20-10-2026 una pregunta hecha 36 minutos después de abrir el contrato
+  // tardó 224 s. Cada 10 minutos —y al volver a la pestaña o a la aplicación,
+  // que en el teléfono detiene los temporizadores en segundo plano— el backend
+  // mira si el contexto sigue en caché: si sigue, solo renueva la carga del
+  // modelo, en menos de un segundo y sin usar la CPU; si no, lo precalienta.
   useEffect(() => {
     if (!contrato) return
-    precalentarCopiloto(contrato.id)
+    const id = contrato.id
+    precalentarCopiloto(id)
+    const cadaDiezMinutos = window.setInterval(() => precalentarCopiloto(id), RENOVAR_COPILOTO_MS)
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') precalentarCopiloto(id)
+    }
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      window.clearInterval(cadaDiezMinutos)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
   }, [contrato])
 
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)
@@ -1835,15 +1876,53 @@ export default function SupervisorPanel({
                               {contrato && !ss.completed && HERRAMIENTA_POR_PASO[ss.label] === 'VERIFICACION_SECOP' && (
                                 <VerificacionSecop contratoId={contrato.id} />
                               )}
-                              {contrato &&
-                                !ss.completed &&
-                                (HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' ||
-                                  HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA') && (
-                                  <BorradorDeCorreo
-                                    tipo={HERRAMIENTA_POR_PASO[ss.label] as TipoDeCorreo}
+                              {/* Paso 2.2: los profesionales de SST y ambiental, y el correo
+                                  que ya sale dirigido a ellos. A diferencia de las otras
+                                  herramientas, sigue con el sub-paso cerrado: el correo de
+                                  las fechas del 2.4 sale dirigido a estos contactos. */}
+                              {contrato && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_SST' && (
+                                <ContactosSstAmbiental
+                                  contrato={contrato}
+                                  version={versionDelArranque}
+                                  onGuardado={() => {
+                                    setVersionDelArranque((v) => v + 1)
+                                    void onRefreshRegistros()
+                                  }}
+                                />
+                              )}
+                              {/* Paso 2.4, en el orden en que lo hace el supervisor según el
+                                  paso 5 de la hoja de Alex: cómo contactar al contratista, el
+                                  correo, el Excel de bienes y cantidades que va adjunto (al de
+                                  SST no se le manda el pedido) y las fechas que acuerden.
+                                  Las fechas siguen con el 2.4 cerrado: los recordatorios
+                                  llegan después y una fecha se puede mover. Van en la misma
+                                  posición abierto o cerrado, para que cerrar el paso no las
+                                  desmonte y se pierda una edición a medias. */}
+                              {contrato && HERRAMIENTA_POR_PASO[ss.label] === 'CORREO_CONTRATISTA' && (
+                                <>
+                                  {!ss.completed && (
+                                    <>
+                                      <ContactoDelContratista
+                                        contrato={contrato}
+                                        onActualizado={(c) => {
+                                          onContratoActualizado?.(c)
+                                          void onRefreshRegistros()
+                                        }}
+                                      />
+                                      <BorradorDeCorreo tipo="CORREO_CONTRATISTA" contrato={contrato} />
+                                      <SolicitudDePedido contrato={contrato} />
+                                    </>
+                                  )}
+                                  <AcuerdoDeEntregas
                                     contrato={contrato}
+                                    version={versionDelArranque}
+                                    onGuardado={() => {
+                                      setVersionDelArranque((v) => v + 1)
+                                      void onRefreshRegistros()
+                                    }}
                                   />
-                                )}
+                                </>
+                              )}
                             </div>
                           )
                         })}

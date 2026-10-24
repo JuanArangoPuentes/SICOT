@@ -29,6 +29,9 @@ import java.util.List;
  *                    expediente, si falló la consulta, o si esa fuente no
  *                    cubre su contrato —que es lo que pasa siempre con los
  *                    contratos nuevos—
+ * @param contactoProveedor cómo contactar al contratista según su inscripción
+ *                    en el SECOP II (teléfono, correo, dirección), o
+ *                    {@code null} si no se encontró o no se pudo consultar
  */
 public record VerificacionSecopResponse(
         boolean disponible,
@@ -39,7 +42,8 @@ public record VerificacionSecopResponse(
         List<Diferencia> diferencias,
         List<Documento> documentos,
         String avisoDocumentos,
-        List<Garantia> garantias
+        List<Garantia> garantias,
+        Proveedor contactoProveedor
 ) {
 
     /** Los datos del contrato tal como los publica el SECOP II. */
@@ -87,8 +91,20 @@ public record VerificacionSecopResponse(
                            LocalDate vigenteHasta, String estado) {
     }
 
+    /**
+     * El contratista como está inscrito en el registro de proveedores del SECOP
+     * II: solo el teléfono y el correo, que es lo que pide el paso 5 de la hoja
+     * de Alex. Ni la dirección ni los datos del representante legal: con un
+     * contratista persona natural, son su domicilio y sus datos personales.
+     *
+     * @param telefono {@code null} si el registro no publica uno utilizable
+     * @param correo   {@code null} si el registro no publica uno con forma de correo
+     */
+    public record Proveedor(String nombre, String nit, String telefono, String correo) {
+    }
+
     public static VerificacionSecopResponse noDisponible(String motivo, Instant consultadoEn, String enlaceProceso) {
         return new VerificacionSecopResponse(false, motivo, consultadoEn, enlaceProceso, null,
-                List.of(), List.of(), null, List.of());
+                List.of(), List.of(), null, List.of(), null);
     }
 }

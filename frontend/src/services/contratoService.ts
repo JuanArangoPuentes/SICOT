@@ -1,13 +1,20 @@
 // Servicio de contratos — consulta, registro, corrección y cambio de estado
 // (autenticado; corregir y cambiar estado exigen rol GESTION o ADMINISTRADOR).
 
-import { apiFetch } from './api/client'
+import { apiFetch, apiFetchBlob } from './api/client'
+import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import type {
+  AcuerdoDeEntregasResponse,
   ActualizarContratoRequest,
   CambiarEstadoContratoRequest,
+  ContactoDelContrato,
+  ContactosDelContratoResponse,
   ContratoResponse,
   CrearContratoRequest,
   EstadoContrato,
+  ItemDeSolicitud,
+  LecturaDeContactosResponse,
+  SolicitudDePedidoResponse,
   VerificacionSecopResponse,
 } from './api/types'
 
@@ -68,4 +75,100 @@ export function asignarSupervisor(id: number, supervisorId: number): Promise<Con
 // y el motivo: no es un error que haya que mostrar como fallo.
 export function verificarEnSecop(contratoId: number): Promise<VerificacionSecopResponse> {
   return apiFetch<VerificacionSecopResponse>(`/api/contratos/${contratoId}/secop`)
+}
+
+// ─────────── Solicitud de pedido al contratista (paso 2.4) ───────────
+//
+// El paso 5 de la lista de chequeo de Alex pide que el correo al contratista
+// lleve adjunto un Excel con los bienes y cantidades. Los ítems los pega el
+// supervisor desde la oferta económica —el expediente del SECOP no es
+// alcanzable desde un programa— y quedan guardados con el contrato.
+
+export function obtenerSolicitudDePedido(contratoId: number): Promise<SolicitudDePedidoResponse> {
+  return apiFetch<SolicitudDePedidoResponse>(`/api/contratos/${contratoId}/solicitud-pedido`)
+}
+
+/** Reemplaza la solicitud; una lista vacía la borra. */
+export function guardarSolicitudDePedido(
+  contratoId: number,
+  items: Array<Omit<ItemDeSolicitud, 'valorTotal'>>,
+): Promise<SolicitudDePedidoResponse> {
+  return apiFetch<SolicitudDePedidoResponse>(`/api/contratos/${contratoId}/solicitud-pedido`, {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  })
+}
+
+/**
+ * Descarga el Excel que se adjunta al correo. Como en los formatos, el guardado
+ * lo hace `guardarArchivo`: en el APK de Android un enlace `download` no hace
+ * nada (MDL-184).
+ */
+export async function descargarSolicitudDePedido(
+  contratoId: number,
+  numeroContrato: string,
+): Promise<ResultadoGuardado> {
+  const blob = await apiFetchBlob(`/api/contratos/${contratoId}/solicitud-pedido/archivo`)
+  const nombre = `Solicitud de pedido ${numeroContrato.replace(/[^A-Za-z0-9._-]/g, '_')}.xlsx`
+  return guardarArchivo(blob, nombre)
+}
+
+// ─────────── Arranque del contrato: pasos 2.2 y 2.4 ───────────
+//
+// Lo que la hoja de Alex pide recordar y no tenía dónde quedar: las fechas de
+// entrega acordadas con el contratista, los profesionales de SST y ambiental,
+// y el teléfono del contratista.
+
+export function obtenerEntregasAcordadas(contratoId: number): Promise<AcuerdoDeEntregasResponse> {
+  return apiFetch<AcuerdoDeEntregasResponse>(`/api/contratos/${contratoId}/entregas-acordadas`)
+}
+
+/**
+ * Reemplaza el acuerdo; una lista vacía lo borra. Las fechas tienen que caer
+ * dentro del plazo del contrato (el backend lo exige) y el número lo pone SICOT
+ * por fecha.
+ */
+export function guardarEntregasAcordadas(
+  contratoId: number,
+  entregas: Array<{ fecha: string; descripcion: string }>,
+): Promise<AcuerdoDeEntregasResponse> {
+  return apiFetch<AcuerdoDeEntregasResponse>(`/api/contratos/${contratoId}/entregas-acordadas`, {
+    method: 'PUT',
+    body: JSON.stringify({ entregas }),
+  })
+}
+
+export function obtenerContactosSstAmbiental(contratoId: number): Promise<ContactosDelContratoResponse> {
+  return apiFetch<ContactosDelContratoResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental`)
+}
+
+/** Reemplaza los contactos; una lista vacía los borra. */
+export function guardarContactosSstAmbiental(
+  contratoId: number,
+  contactos: ContactoDelContrato[],
+): Promise<ContactosDelContratoResponse> {
+  return apiFetch<ContactosDelContratoResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental`, {
+    method: 'PUT',
+    body: JSON.stringify({ contactos }),
+  })
+}
+
+/** Los correos que trae el estudio previo cargado. No guarda nada: ni el archivo ni los contactos. */
+export function leerContactosDelEstudioPrevio(contratoId: number, archivo: File): Promise<LecturaDeContactosResponse> {
+  const form = new FormData()
+  form.append('archivo', archivo)
+  return apiFetch<LecturaDeContactosResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental/lectura`, {
+    method: 'POST',
+    body: form,
+  })
+}
+
+/**
+ * Llena el teléfono (y el correo, si falta) del contratista con su inscripción
+ * en el registro de proveedores del SECOP II. Nunca reemplaza lo que ya hay.
+ */
+export function completarContactoDelContratista(contratoId: number): Promise<ContratoResponse> {
+  return apiFetch<ContratoResponse>(`/api/contratos/${contratoId}/contacto-contratista/desde-secop`, {
+    method: 'POST',
+  })
 }

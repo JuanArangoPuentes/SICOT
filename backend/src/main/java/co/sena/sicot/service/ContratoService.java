@@ -115,6 +115,7 @@ public class ContratoService {
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
         contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
         Usuario supervisor = request.supervisorId() != null ? buscarSupervisor(request.supervisorId()) : null;
         contrato.setSupervisor(supervisor);
         Contrato guardado = contratoRepository.save(contrato);
@@ -163,7 +164,18 @@ public class ContratoService {
         contrato.setEnlaceSecop(enBlancoComoNulo(request.enlaceSecop()));
         contrato.setApoyoSupervision(enBlancoComoNulo(request.apoyoSupervision()));
         contrato.setFechaDesignacion(request.fechaDesignacion());
-        contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        // Correo y teléfono: sin el campo (null) se conserva el que había; vacío
+        // lo borra. Desde el 22-10-2026 el supervisor también los llena (desde
+        // el registro de proveedores del SECOP II), y una corrección de Gestión
+        // hecha con la lista cargada antes no debe borrarlos: la pantalla los
+        // manda solo cuando Gestión los cambió. Las instalaciones de escritorio
+        // anteriores no envían el teléfono.
+        if (request.correoContratista() != null) {
+            contrato.setCorreoContratista(enBlancoComoNulo(request.correoContratista()));
+        }
+        if (request.telefonoContratista() != null) {
+            contrato.setTelefonoContratista(enBlancoComoNulo(request.telefonoContratista()));
+        }
         Contrato guardado = contratoRepository.save(contrato);
         registroService.registrar(guardado, "CONTRATO_ACTUALIZADO",
                 "Se actualizó la información general del contrato " + numero + ".");

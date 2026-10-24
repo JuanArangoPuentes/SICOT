@@ -172,6 +172,8 @@ class EsquemaPostgreSqlIntegrationTest {
         assertThat(valoresPermitidosPor("ck_tareas_automatizadas_tipo")).containsExactlyInAnyOrderElementsOf(nombresDe(TipoTareaAutomatizada.values()));
         assertThat(valoresPermitidosPor("ck_tareas_automatizadas_estado")).containsExactlyInAnyOrderElementsOf(nombresDe(EstadoTareaAutomatizada.values()));
         assertThat(valoresPermitidosPor("ck_registros_origen")).containsExactlyInAnyOrderElementsOf(nombresDe(OrigenRegistro.values()));
+        assertThat(valoresPermitidosPor("ck_contactos_del_contrato_rol")).containsExactlyInAnyOrderElementsOf(
+                nombresDe(co.sena.sicot.entity.enums.RolDeContacto.values()));
     }
 
     /**
@@ -195,7 +197,11 @@ class EsquemaPostgreSqlIntegrationTest {
         assertThat(nombresDeIndices()).contains("uq_firma_activa_por_usuario");
     }
 
-    /** Las diez tablas del modelo, más el historial de Flyway. */
+    /**
+     * Las tablas del modelo, más el historial de Flyway. Las tres últimas son
+     * del proceso real del supervisor: la solicitud de pedido (V21) y las
+     * fechas de entrega y los contactos de SST y ambiental (V22).
+     */
     @Test
     void elEsquemaTieneLasTablasDelModeloDeDatos() {
         List<String> tablas = jdbc.queryForList(
@@ -206,6 +212,7 @@ class EsquemaPostgreSqlIntegrationTest {
                 "usuarios", "contratos", "etapas", "subetapas", "documentos",
                 "alertas", "registros", "formatos_documentales", "firmas_electronicas",
                 "tareas_automatizadas",
+                "items_solicitud_pedido", "entregas_acordadas", "contactos_del_contrato",
                 "flyway_schema_history");
     }
 

@@ -86,16 +86,18 @@ describe('2.1 — acta firmada y evidencia del envío', () => {
 })
 
 describe('2.2 y 2.4 — borradores de los correos de arranque', () => {
-  it('el correo al contratista va a su correo, con el contrato real y el hueco de las cantidades', () => {
+  it('el correo al contratista va a su correo, con el contrato real y anunciando el adjunto', () => {
     const b = armarBorrador('CORREO_CONTRATISTA', LOTE_4)
     expect(b.para).toBe('maybesuministros@gmail.com')
     expect(b.asunto).toContain('CO1.PCCNTR.10057820')
     expect(b.cuerpo).toContain('Señores SUMINISTROS MAYBE S.A.S')
     expect(b.cuerpo).toContain('Atn. LUZ MARINA MEJIA PEREZ')
     expect(b.cuerpo).toContain('del 14/10/2026 al 15/12/2026')
-    // Es un suministro: lleva las cantidades, que SICOT todavía no tiene y no inventa.
-    expect(b.cuerpo).toContain('[Relacione aquí cada bien con su cantidad exacta')
-    expect(b.avisos.join(' ')).toContain('cantidades exactas')
+    // Es un suministro: las cantidades ya no son un hueco entre corchetes, van
+    // en la solicitud de pedido que se adjunta (paso 5 de la lista de Alex).
+    expect(b.cuerpo).toContain('Adjunto la solicitud de pedido')
+    expect(b.cuerpo).not.toContain('[Relacione aquí')
+    expect(b.avisos.join(' ')).toContain('solicitud de pedido')
     expect(b.cuerpo).toContain('Alex Fernando Zapata Rios')
   })
 
@@ -186,13 +188,13 @@ describe('2.3 — verificación contra el SECOP II', () => {
       ...respuesta,
       documentos: [],
       avisoDocumentos:
-        'Los datos abiertos del SECOP no traen la lista de archivos de este contrato: ese conjunto de datos no ' +
-        'se actualiza desde 2021. El expediente se abre con el enlace del proceso, y ahí están la oferta ' +
+        'Los datos abiertos del SECOP todavía no traen la lista de archivos de este contrato: suelen publicarla ' +
+        'días después que la ficha. El expediente se abre con el enlace del proceso, y ahí están la oferta ' +
         'económica, con las cantidades exactas, y el estudio previo, con los contactos de SST y ambiental.',
     })
     render(<VerificacionSecop contratoId={9} />)
 
-    expect(await screen.findByText(/no se actualiza desde 2021/)).toBeTruthy()
+    expect(await screen.findByText(/todavía no traen la lista de archivos/)).toBeTruthy()
     expect(screen.getByText(/la oferta económica, con las cantidades exactas/)).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Abrir el proceso en el SECOP II' })).toBeTruthy()
     expect(screen.queryByText(/Documentos del expediente/)).toBeNull()

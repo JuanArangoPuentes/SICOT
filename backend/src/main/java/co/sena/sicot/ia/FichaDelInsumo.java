@@ -117,6 +117,15 @@ final class FichaDelInsumo {
         return reconocer(trozo).isPresent() || PreguntaNormalizada.de(trozo).contieneAlguna(EN_SICOT);
     }
 
+    /**
+     * ¿Es una pregunta de esta tabla? La guía la usa para no quedarse con
+     * «¿cómo verifico la factura del 4.2?»: aquí se contesta además dónde se
+     * consigue el insumo.
+     */
+    static boolean reconoce(String pregunta) {
+        return reconocer(pregunta).isPresent();
+    }
+
     private static Optional<Insumo> reconocer(String pregunta) {
         PreguntaNormalizada p = PreguntaNormalizada.de(pregunta);
         if (p.estaVacia() || p.largo() > 200 || !p.coincide(COMO_O_DONDE) || p.coincide(UN_CASO)) {

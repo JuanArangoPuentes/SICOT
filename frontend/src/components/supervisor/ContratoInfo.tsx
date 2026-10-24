@@ -164,6 +164,7 @@ export default function ContratoInfo({ contrato }: { contrato: ContratoResponse 
         <Dato label="NIT / Identificación" value={contrato.contratistaNit} mono />
         <Dato label="Representante legal" value={contrato.representanteLegal} />
         <Dato label="Correo del contratista" value={contrato.correoContratista} />
+        <Dato label="Teléfono del contratista" value={contrato.telefonoContratista ?? null} mono />
         <Dato label="Fecha de inicio" value={contrato.fechaInicio ? formatFecha(contrato.fechaInicio) : null} mono />
         <Dato label="Fecha de terminación" value={contrato.fechaFin ? formatFecha(contrato.fechaFin) : null} mono />
         <Dato label="Lugar de ejecución" value={contrato.lugarEjecucion} />

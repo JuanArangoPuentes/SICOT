@@ -139,6 +139,11 @@ public class CopilotoController {
                     cacheado. Llamando aquí al abrir la ficha, esa espera transcurre mientras el
                     supervisor lee la pantalla en vez de mientras espera una respuesta.
 
+                    El panel lo vuelve a llamar cada 10 minutos mientras está abierto y al volver a la
+                    pestaña: si el contexto del contrato sigue en la caché de Ollama, solo se renueva el
+                    tiempo que el modelo queda cargado (menos de un segundo, sin inferencia); si no, se
+                    precalienta de nuevo.
+
                     El acceso al contrato se comprueba antes de encolar: un contrato ajeno o inexistente
                     responde 404 y no encola nada.
 

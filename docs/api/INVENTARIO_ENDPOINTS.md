@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-18 contra el código: 15 controladores, 49 endpoints.**
+**Revisado el 2026-10-22 contra el código: 16 controladores, 58 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -36,6 +36,15 @@
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 14 | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
 | 48 | ContratoController | GET | /api/contratos/{id}/secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (también si datos.gov.co no responde: `disponible=false` y el motivo) | `VerificacionSecopResponse` |
+| 49 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (lista vacía si el supervisor aún no la cargó) | `SolicitudDePedidoResponse` |
+| 50 | ContratoController | PUT | /api/contratos/{id}/solicitud-pedido | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 · 400 (ítem repetido o inválido) | `SolicitudDePedidoResponse` |
+| 51 | ContratoController | GET | /api/contratos/{id}/solicitud-pedido/archivo | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (XLSX) · 400 (solicitud vacía) | binario |
+| 53 | ArranqueDelContratoController | GET | /api/contratos/{id}/entregas-acordadas | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que la solicitud de pedido) | 200 (lista vacía si no hay acuerdo; trae el plazo del contrato) | `AcuerdoDeEntregasResponse` |
+| 54 | ArranqueDelContratoController | PUT | /api/contratos/{id}/entregas-acordadas | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 · 400 (fecha fuera del plazo del contrato, entrega sin descripción) | `AcuerdoDeEntregasResponse` |
+| 55 | ArranqueDelContratoController | GET | /api/contratos/{id}/contactos-sst-ambiental | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 (lista vacía si no se registraron) | `ContactosDelContratoResponse` |
+| 56 | ArranqueDelContratoController | PUT | /api/contratos/{id}/contactos-sst-ambiental | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` | 200 · 400 (correo inválido o sin rol) | `ContactosDelContratoResponse` |
+| 57 | ArranqueDelContratoController | POST | /api/contratos/{id}/contactos-sst-ambiental/lectura (multipart `archivo`: el estudio previo en PDF o Word; no se guarda) | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato`; el archivo pasa por `ArchivoValidator` (tipo real, que abra, 20 MB) | 200 (también sin correos o escaneado: `aviso` dice por qué) · 400 (otro tipo de archivo) | `LecturaDeContactosResponse` |
+| 58 | ArranqueDelContratoController | POST | /api/contratos/{id}/contacto-contratista/desde-secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato`. Escribe en el contrato, pero solo llena teléfono y correo **vacíos** con el registro de proveedores del SECOP II; deja constancia `CONTACTO_CONTRATISTA_COMPLETADO` | 200 · 400 (sin NIT, NIT no registrado, sin teléfono publicado, sin conexión) | `ContratoResponse` |
 | 15 | EtapaController | GET | /api/contratos/{contratoId}/etapas | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `List<EtapaResponse>` |
 | 16 | EtapaController | GET | /api/contratos/{contratoId}/etapas/{etapaId} | (ninguno) | **Service: `verificarAccesoAlContrato`** | 200 | `EtapaResponse` |
 | 17 | SubetapaController | GET | /api/etapas/{etapaId}/subetapas | (ninguno) | **Service: `verificarAccesoAlContrato` vía etapa** | 200 | `List<SubetapaResponse>` |
@@ -48,7 +57,7 @@
 | 24 | DocumentoController | POST | /api/contratos/{contratoId}/documentos/{id}/firmar (`?huellaRevisada=` obligatorio para lo generado por SICOT: solo firma si el borrador sigue siendo el revisado; opcional en lo cargado) | SUPERVISOR | @PreAuthorize + Service verifica que sea el supervisor asignado del contrato, también en lo cargado | 200 | `DocumentoResponse` |
 | 25 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat (cuerpo: `pregunta`, `historial` y, desde el 2026-10-02, `idSolicitud` opcional —el reintento con el mismo id recibe la respuesta del primer intento en vez de otra inferencia— y `revisarPaso` opcional 1..6 —revisión consultiva antes de cerrar el paso, con las instrucciones armadas en el servidor—) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato | 200 | `ChatResponse`: `respuesta`, `fuente` (`SISTEMA` si la armó SICOT sin modelo, `MODELO` si la escribió Ollama) y `accion` (pantalla que el supervisor puede abrir con un botón, o `null`; ninguna firma, marca ni genera) |
 | 49 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/chat/en-vivo (desde el 2026-10-18; mismo cuerpo que `/chat`) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + `CopilotoChatService.exigirAcceso` **antes de abrir la respuesta**: un contrato ajeno da 404 con su código, no un error dentro de un 200 | 200 | NDJSON: eventos `inicio`, `espera` (cada 10 s), `texto` (`t`), y `fin` (con la `ChatResponse` completa) o `error` (`status`, `mensaje`) |
-| 26 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/precalentar | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato **antes de encolar** (desde el 2026-10-02; antes respondía 202 a cualquier id) | **202** | vacío |
+| 26 | CopilotoController | POST | /api/contratos/{contratoId}/copiloto/precalentar (desde el 2026-10-20 el panel lo repite cada 10 min y al volver a la pestaña; con el contexto aún en caché solo renueva la carga del modelo, sin inferencia) | SUPERVISOR, ADMINISTRADOR | @PreAuthorize + Service verifica supervisor del contrato **antes de encolar** (desde el 2026-10-02; antes respondía 202 a cualquier id) | **202** | vacío |
 | 27 | IAController | POST | /api/ia/extraer-contrato | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ExtraccionContratoResponse` |
 | 28 | FormatoDocumentalController | GET | /api/formatos | (autenticado) | @PreAuthorize en clase (ADMIN para POST/DELETE) | 200 | `List<FormatoDocumentalResponse>` |
 | 29 | FormatoDocumentalController | POST | /api/formatos | ADMINISTRADOR | @PreAuthorize en método | 200 | `FormatoDocumentalResponse` |
@@ -84,6 +93,7 @@ son del momento en que se escribió: tómelas como pista, no como dirección.
    - `EtapaController` — líneas 15-37: 2 endpoints, acceso verificado en `EtapaService.listarPorContrato`/`obtenerEtapaDeContrato`
    - `ListaChequeoController` — líneas 18-42: 2 endpoints, catálogo de solo lectura, sin control por contrato
    - `RegistroController` — `listarPorContrato` protegido en service, `listarTodas` tiene `@PreAuthorize`
+   - `ArranqueDelContratoController` (22-10-2026) — 6 endpoints, todos protegidos en service con `ContratoService.buscar`. Uno escribe en el contrato siendo SUPERVISOR (`contacto-contratista/desde-secop`), y a propósito: solo llena lo vacío desde una fuente oficial, nunca pisa lo que registró Gestión
 
 2. **AlertaController asimétrico**:
    - `listarPorContrato` (línea 25): **sin `@PreAuthorize`**, protegido en service

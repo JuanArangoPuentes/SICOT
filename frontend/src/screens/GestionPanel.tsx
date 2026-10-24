@@ -189,6 +189,8 @@ const CAMPO_SECOP: Record<string, string> = {
   tipoContrato: 'tipo de contrato',
   enlaceSecop: 'enlace del proceso',
   supervisorDesignado: 'supervisor',
+  correoContratista: 'correo del contratista',
+  telefonoContratista: 'teléfono del contratista',
 }
 
 // Formulario de corrección de los datos generales. Todos los campos son texto
@@ -216,6 +218,7 @@ interface FormularioDeContrato {
   apoyoSupervision: string
   fechaDesignacion: string
   correoContratista: string
+  telefonoContratista: string
 }
 
 const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
@@ -236,7 +239,18 @@ const formularioDe = (c: ContratoResponse): FormularioDeContrato => ({
   apoyoSupervision: c.apoyoSupervision ?? '',
   fechaDesignacion: c.fechaDesignacion ?? '',
   correoContratista: c.correoContratista ?? '',
+  telefonoContratista: c.telefonoContratista ?? '',
 })
+
+/**
+ * Lo que va en el PUT para un campo que se manda solo si cambió: sin cambios,
+ * undefined (no viaja, y el backend conserva lo que hay); borrado, cadena
+ * vacía (el backend lo borra); si no, el valor nuevo.
+ */
+function cambio(nuevo: string, antes: string | null | undefined): string | undefined {
+  const limpio = nuevo.trim()
+  return limpio === (antes ?? '').trim() ? undefined : limpio
+}
 
 // El valor guardado puede no estar en la lista de opciones: lo escribió otro
 // contrato, otra versión de la lista o la extracción con IA. Se añade como
@@ -256,6 +270,7 @@ const CAMPOS_DE_TEXTO: { label: string; campo: keyof FormularioDeContrato; mono:
   { label: 'Enlace del proceso en SECOP II', campo: 'enlaceSecop', mono: true },
   { label: 'Apoyo a la supervisión', campo: 'apoyoSupervision', mono: false },
   { label: 'Correo del contratista', campo: 'correoContratista', mono: true },
+  { label: 'Teléfono del contratista', campo: 'telefonoContratista', mono: true },
 ]
 
 // Fechas con <input type="date"> y no con el campo de texto «dd/mm/aaaa –
@@ -341,6 +356,9 @@ export default function GestionPanel({
   const [apoyoSupervision, setApoyoSupervision] = useState('')
   const [fechaDesignacion, setFechaDesignacion] = useState('')
   const [correoContratista, setCorreoContratista] = useState('')
+  // Ningún documento del contrato lo trae: la extracción lo completa con el
+  // registro de proveedores del SECOP II (paso 5 de la hoja de Alex).
+  const [telefonoContratista, setTelefonoContratista] = useState('')
   const [completadoDesdeSecop, setCompletadoDesdeSecop] = useState<string[]>([])
 
   // Tabla de contratos reales (GET /api/contratos)
@@ -416,6 +434,7 @@ export default function GestionPanel({
     setApoyoSupervision('')
     setFechaDesignacion('')
     setCorreoContratista('')
+    setTelefonoContratista('')
     setCompletadoDesdeSecop([])
     setSupervisor('')
     setTipo('')
@@ -472,6 +491,7 @@ export default function GestionPanel({
       setApoyoSupervision(resultado.apoyoSupervision ?? '')
       setFechaDesignacion(isoADisplay(resultado.fechaDesignacion))
       setCorreoContratista(resultado.correoContratista ?? '')
+      setTelefonoContratista(resultado.telefonoContratista ?? '')
       setCompletadoDesdeSecop(resultado.completadoDesdeSecop ?? [])
       // La designación nombra al supervisor: si es un usuario de SICOT, queda
       // preseleccionado. Si no lo es, no se adivina: Gestión elige.
@@ -542,6 +562,7 @@ export default function GestionPanel({
           ? displayAIso(fechaDesignacion.trim())
           : null,
         correoContratista: correoContratista.trim() || null,
+        telefonoContratista: telefonoContratista.trim() || null,
       })
       // Se cuentan los adjuntos que realmente quedaron guardados. Antes se
       // tragaban todos los fallos y luego se informaba "N documentos adjuntos"
@@ -635,7 +656,13 @@ export default function GestionPanel({
         enlaceSecop: edicion.enlaceSecop.trim() || null,
         apoyoSupervision: edicion.apoyoSupervision.trim() || null,
         fechaDesignacion: edicion.fechaDesignacion || null,
-        correoContratista: edicion.correoContratista.trim() || null,
+        // Correo y teléfono, solo si Gestión los cambió. Los llena también el
+        // supervisor (desde el registro de proveedores del SECOP II), y el
+        // formulario sale de la lista cargada al abrir la pantalla: reenviarlos
+        // sin tocar borraría lo que él trajo después. Sin el campo, el backend
+        // conserva el que había; vacío, lo borra.
+        correoContratista: cambio(edicion.correoContratista, contratoEnEdicion.correoContratista),
+        telefonoContratista: cambio(edicion.telefonoContratista, contratoEnEdicion.telefonoContratista),
       })
       await recargarContratos()
       cerrarEdicion()
@@ -1213,6 +1240,12 @@ export default function GestionPanel({
                     value: correoContratista,
                     onChange: setCorreoContratista,
                     mono: false,
+                  },
+                  {
+                    label: 'Teléfono del contratista',
+                    value: telefonoContratista,
+                    onChange: setTelefonoContratista,
+                    mono: true,
                   },
                   {
                     label: 'Apoyo a la supervisión',

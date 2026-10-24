@@ -3,6 +3,7 @@ package co.sena.sicot.service;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Documento;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Ficha;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Garantia;
+import co.sena.sicot.dto.secop.VerificacionSecopResponse.Proveedor;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -18,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -50,20 +52,47 @@ public class DatosAbiertosSecop {
      * está armado, y además por el número de contrato, que solo trae poblado en
      * parte de sus filas.
      *
-     * <p><b>Lo que de verdad publica.</b> El 16-10-2026 tenía 1.000 filas y
-     * ninguna cargada después del 30-12-2021, pese a llamarse «desde 2025»:
-     * para el contrato del Lote 4 y para su proceso CO1.BDOS.10711126 devuelve
-     * cero, y los otros conjuntos de archivos (histórico, 2022, 2023, 2024)
-     * tampoco lo tienen. El enlace de descarga que publicaría
-     * ({@code RetrieveFile/Index?DocumentId=…}) responde 403, así que SICOT
-     * tampoco podría bajar el archivo. La consulta se queda por los contratos
-     * antiguos que sí están; cuando vuelve vacía hay que decir por qué, porque
-     * el expediente se abre con el enlace del proceso.
+     * <p><b>Lo que de verdad publica.</b> El 16-10-2026 no traía nada del Lote
+     * 4 (ninguna fila cargada después del 30-12-2021, pese a llamarse «desde
+     * 2025»). El 23-10-2026, para el mismo proceso CO1.BDOS.10711126, trae 110
+     * archivos —los de los 9 lotes, con «6. ESTUDIO PREVIO.pdf» y «8. ECONOMICA
+     * LOTE 4 AJUSTADA.pdf»—: la lista se publica, pero días después que la
+     * ficha. Cuando vuelve vacía hay que decir por qué, porque mientras tanto el
+     * expediente se abre con el enlace del proceso.
+     *
+     * <p>El enlace de descarga ({@code RetrieveFile/Index?DocumentId=…})
+     * responde 403 a un programa: el SECOP filtra lo que no es un navegador.
+     * Hacerse pasar por uno sería saltarse ese filtro, y SICOT no lo hace: el
+     * supervisor abre el documento en su navegador y, si SICOT tiene que
+     * leerlo (el estudio previo del paso 2.2), lo carga.
      */
     static final String DOCUMENTOS = "dmgg-8hin";
 
     /** «SECOP II - Garantías». */
     static final String GARANTIAS = "gjp9-cutm";
+
+    /**
+     * «SECOP II - Proveedores Registrados»: el teléfono, el correo y la
+     * dirección con que la empresa se inscribió en el SECOP II.
+     *
+     * <p>Es de donde sale el teléfono que pide el paso 5 de la lista de chequeo
+     * de Alex («en el acta de inicio debe reposar un correo de contacto +
+     * número de teléfono»): el acta del Lote 4 trae el correo y no el teléfono.
+     * Medido el 22-10-2026 con el NIT 800154801: una fila, teléfono 4489948.
+     *
+     * <p>Trae también el correo y el teléfono personales del representante
+     * legal, y la dirección. Nada de eso se lee: la hoja pide correo y
+     * teléfono, y cuando el contratista es una persona natural (unas 585.000
+     * filas del registro tienen una cédula por NIT) la dirección es su
+     * domicilio. Un dato personal que ningún paso usa no tiene por qué viajar.
+     *
+     * <p>Es texto libre: hay teléfonos como «604.440.9977», «2120777 ext 1»,
+     * «3747265/6», «0» o «xxxxxx», y correos sin arroba. Se normalizan o se
+     * descartan aquí ({@link #telefonoUtilizable}, {@link #correoUtilizable}),
+     * para que lo que llegue al contrato cumpla lo mismo que exige el
+     * formulario de Gestión.
+     */
+    static final String PROVEEDORES = "qmzu-gj57";
 
     /**
      * Solo se consulta con un número de contrato bien formado. Lo que llega
@@ -79,8 +108,17 @@ public class DatosAbiertosSecop {
      */
     private static final Pattern ID_PROCESO = Pattern.compile("CO1\\.BDOS\\.\\d{4,12}");
 
+    /** Un NIT sin dígito de verificación, como lo publica el SECOP: «800154801». */
+    private static final Pattern NIT = Pattern.compile("\\d{5,12}");
+
+    /** La misma forma que exigen CrearContratoRequest y ActualizarContratoRequest. */
+    private static final Pattern TELEFONO = Pattern.compile("[0-9+() -]{7,40}");
+
+    /** Lo mínimo de un correo, el mismo criterio que la pantalla; @Email lo vuelve a mirar al guardar. */
+    private static final Pattern CORREO = Pattern.compile("[^\\s@]{1,64}@[^\\s@]+\\.[^\\s@]{2,}");
+
     private static final Set<String> SIN_DATO = Set.of(
-            "no definido", "sin descripcion", "sin descripción", "no aplica", "");
+            "no definido", "sin descripcion", "sin descripción", "no aplica", "no provisto", "");
 
     private final RestClient restClient;
 
@@ -99,6 +137,19 @@ public class DatosAbiertosSecop {
 
     public static boolean esNumeroDeProcesoValido(String idProceso) {
         return idProceso != null && ID_PROCESO.matcher(idProceso).matches();
+    }
+
+    /**
+     * El NIT como lo publica el SECOP: solo los dígitos de antes del de
+     * verificación. «800154801-6» y «800.154.801» dan «800154801».
+     *
+     * @return {@code null} si no queda un NIT con forma de NIT
+     */
+    public static String nitSinVerificacion(String nit) {
+        if (nit == null) return null;
+        String base = nit.contains("-") ? nit.substring(0, nit.indexOf('-')) : nit;
+        String digitos = base.replaceAll("[^0-9]", "");
+        return NIT.matcher(digitos).matches() ? digitos : null;
     }
 
     /** La ficha del contrato, o vacío si el SECOP todavía no lo publica. */
@@ -185,6 +236,91 @@ public class DatosAbiertosSecop {
             }
         }
         return new ArrayList<>(unicas.values());
+    }
+
+    /**
+     * Cómo contactar a la empresa según su inscripción en el SECOP II, o vacío
+     * si no se encuentra con ese NIT. Si el registro trae más de una fila,
+     * gana la de la cuenta activa.
+     *
+     * <p>Se busca el NIT a secas y también con el dígito de verificación
+     * pegado: unas 7.500 filas del registro lo guardan así («7838601-0»), y
+     * por igualdad exacta esos contratistas parecían no estar inscritos.
+     */
+    public Optional<Proveedor> proveedor(String nit) {
+        String limpio = nitSinVerificacion(nit);
+        if (limpio == null) {
+            return Optional.empty();
+        }
+        // El NIT ya es solo dígitos (nitSinVerificacion): no puede cerrar la
+        // comilla ni meter otra condición en la consulta.
+        JsonNode filas = consultarDonde(PROVEEDORES,
+                "nit='%s' OR starts_with(nit,'%s-')".formatted(limpio, limpio));
+        if (filas == null || !filas.isArray() || filas.isEmpty()) {
+            return Optional.empty();
+        }
+        JsonNode elegida = filas.get(0);
+        for (JsonNode f : filas) {
+            if (Boolean.TRUE.equals(siNo(f, "esta_activa"))) {
+                elegida = f;
+                break;
+            }
+        }
+        return Optional.of(new Proveedor(
+                texto(elegida, "nombre"),
+                texto(elegida, "nit"),
+                telefonoUtilizable(texto(elegida, "telefono")),
+                correoUtilizable(texto(elegida, "correo"))));
+    }
+
+    /**
+     * El teléfono del registro, si se puede usar tal cual en el contrato.
+     * Se cortan la extensión y lo que va después de una barra (el registro
+     * escribe «3747265/6» o «8353513 / 3183309330»: se toma el primero), los
+     * puntos de «604.440.9977» se vuelven espacios y se quita el punto final.
+     * Si no quedan al menos 7 dígitos, o son todos ceros («0», «0000000»), no
+     * es un teléfono: {@code null}, y quien pregunta dice que no lo hay.
+     */
+    static String telefonoUtilizable(String crudo) {
+        if (crudo == null) return null;
+        String t = crudo.strip();
+        int ext = t.toLowerCase(Locale.ROOT).indexOf("ext");
+        if (ext >= 0) t = t.substring(0, ext);
+        int barra = t.indexOf('/');
+        if (barra >= 0) t = t.substring(0, barra);
+        t = t.replace('.', ' ').replaceAll("\\s+", " ").strip();
+        String digitos = t.replaceAll("[^0-9]", "");
+        if (!TELEFONO.matcher(t).matches() || digitos.length() < 7 || digitos.matches("0+")) {
+            return null;
+        }
+        return t;
+    }
+
+    /** El correo del registro en minúsculas, o {@code null} si no tiene forma de correo («x2018gmail.com»). */
+    static String correoUtilizable(String crudo) {
+        if (crudo == null) return null;
+        String c = crudo.strip().toLowerCase(Locale.ROOT);
+        return c.length() <= 255 && CORREO.matcher(c).matches() ? c : null;
+    }
+
+    /**
+     * Una consulta con condición SoQL armada aquí, para lo que no es una
+     * igualdad. Quien llama arma la condición solo con valores ya validados
+     * (dígitos): nada que venga de un PDF entra sin pasar por un patrón.
+     */
+    private JsonNode consultarDonde(String dataset, String condicion) {
+        try {
+            return restClient.get()
+                    .uri(u -> u.path("/{dataset}.json")
+                            .queryParam("$where", "{condicion}")
+                            .queryParam("$limit", 10)
+                            .build(dataset, condicion))
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(JsonNode.class);
+        } catch (RestClientException e) {
+            throw new NoDisponible("No se pudo consultar datos.gov.co: " + e.getMessage(), e);
+        }
     }
 
     private JsonNode consultar(String dataset, String campo, String identificador) {

@@ -60,10 +60,10 @@ public class VerificacionSecopService {
             + "llegó; el expediente se abre con el enlace del proceso.";
 
     static final String SIN_INDICE_DE_DOCUMENTOS =
-            "Los datos abiertos del SECOP no traen la lista de archivos de este contrato: ese conjunto de "
-            + "datos no se actualiza desde 2021 y no cubre los contratos nuevos. El expediente se abre con "
-            + "el enlace del proceso, y ahí están los dos documentos que hacen falta: la oferta económica, "
-            + "con las cantidades exactas, y el estudio previo, con los contactos de SST y ambiental.";
+            "Los datos abiertos del SECOP todavía no traen la lista de archivos de este contrato: suelen "
+            + "publicarla días después que la ficha. El expediente se abre con el enlace del proceso, y ahí "
+            + "están los dos documentos que hacen falta: la oferta económica, con las cantidades exactas, y "
+            + "el estudio previo, con los contactos de SST y ambiental.";
 
     private final ContratoService contratoService;
     private final DatosAbiertosSecop datosAbiertos;
@@ -126,9 +126,19 @@ public class VerificacionSecopService {
                 // proceso sí manda al supervisor.
                 log.warn("Pólizas del contrato {} no consultadas: {}", numero, e.getMessage());
             }
+            // El teléfono que el acta no trae (paso 5 de la hoja de Alex) está
+            // en el registro de proveedores. Se busca por el NIT que publica el
+            // SECOP para el contrato, y si no lo publica, por el de SICOT.
+            VerificacionSecopResponse.Proveedor proveedor = null;
+            try {
+                proveedor = datosAbiertos.proveedor(ficha.documentoProveedor() != null
+                        ? ficha.documentoProveedor() : contrato.getContratistaNit()).orElse(null);
+            } catch (DatosAbiertosSecop.NoDisponible e) {
+                log.warn("Registro de proveedores no consultado para el contrato {}: {}", numero, e.getMessage());
+            }
             return new VerificacionSecopResponse(true, null, ahora,
                     enlace != null ? enlace : ficha.enlaceProceso(),
-                    ficha, comparar(contrato, ficha), documentos, avisoDocumentos, garantias);
+                    ficha, comparar(contrato, ficha), documentos, avisoDocumentos, garantias, proveedor);
         } catch (DatosAbiertosSecop.NoDisponible e) {
             log.warn("Verificación del contrato {} contra el SECOP sin conexión: {}", numero, e.getMessage());
             return VerificacionSecopResponse.noDisponible("No hay conexión con datos.gov.co en este momento. "

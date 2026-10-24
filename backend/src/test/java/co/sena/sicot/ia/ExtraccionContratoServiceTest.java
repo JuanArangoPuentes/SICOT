@@ -556,6 +556,39 @@ class ExtraccionContratoServiceTest {
         assertThat(r.completadoDesdeSecop()).doesNotContain("valor");
     }
 
+    /**
+     * El paso 5 de la hoja de Alex pide el correo y el teléfono del contratista;
+     * ningún documento del contrato trae el teléfono. El registro de
+     * proveedores del SECOP II sí: es la fila real de Suministros Maybe.
+     */
+    @Test
+    void elTelefonoQueNingunDocumentoTraeSaleDelRegistroDeProveedores() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+        given(datosAbiertos.proveedor("800154801")).willReturn(Optional.of(new VerificacionSecopResponse.Proveedor(
+                "SUMINISTROS MAYBE SAS", "800154801", "4489948", "maybesuministros@gmail.com")));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.telefonoContratista()).isEqualTo("4489948");
+        assertThat(r.correoContratista()).isEqualTo("maybesuministros@gmail.com");
+        assertThat(r.completadoDesdeSecop()).contains("telefonoContratista", "correoContratista");
+    }
+
+    @Test
+    void siElRegistroDeProveedoresFallaLoDemasDelSecopSeCompletaIgual() {
+        given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);
+        given(datosAbiertos.contrato("CO1.PCCNTR.10057820")).willReturn(Optional.of(FICHA_LOTE_4));
+        given(datosAbiertos.proveedor(anyString()))
+                .willThrow(new DatosAbiertosSecop.NoDisponible("sin red", new RuntimeException()));
+
+        ExtraccionContratoResponse r = servicio.extraer(List.of(pdf("designacion.pdf")));
+
+        assertThat(r.valor()).isEqualTo("45900300");
+        assertThat(r.telefonoContratista()).isNull();
+        assertThat(r.completadoDesdeSecop()).contains("valor").doesNotContain("telefonoContratista");
+    }
+
     @Test
     void sinConexionConElSecopSeDevuelveLoLeidoSinFallar() {
         given(pdfTextExtractor.extraerTexto(any())).willReturn(DESIGNACION);

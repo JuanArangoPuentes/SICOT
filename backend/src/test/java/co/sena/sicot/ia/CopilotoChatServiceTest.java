@@ -51,6 +51,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.atMost;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -568,6 +569,33 @@ class CopilotoChatServiceTest {
                 .isEqualTo(1);
     }
 
+    /**
+     * 20-10-2026: el panel pide el precalentado cada 10 minutos mientras está
+     * abierto. Si cada vez se precalentara entero, serían ~190 s de CPU cada
+     * diez minutos; con el prefijo aún en caché basta con que Ollama no
+     * descargue el modelo.
+     */
+    @Test
+    @DisplayName("con el contexto aún en caché, el precalentado solo renueva la carga del modelo")
+    void conElContextoEnCacheSoloRenuevaLaCarga() {
+        ArgumentCaptor<String> prefijo = ArgumentCaptor.forClass(String.class);
+        given(ollamaClient.tieneEnCache(prefijo.capture())).willReturn(true);
+
+        servicio.precalentar(1L);
+
+        verify(ollamaClient, timeout(2_000)).mantenerCargado();
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
+
+        // Lo que se mira es el comienzo exacto del prompt de una pregunta: si
+        // no lo fuera, nunca coincidiría y se precalentaría siempre entero.
+        given(ollamaClient.generar(anyString(), anyBoolean())).willReturn("respuesta");
+        servicio.responder(1L, "¿qué riesgos ve?", null);
+        ArgumentCaptor<String> prompt = ArgumentCaptor.forClass(String.class);
+        verify(ollamaClient).generar(prompt.capture(), anyBoolean());
+        assertThat(prefijo.getValue()).contains("DATOS DEL CONTRATO").doesNotContain("PREGUNTA DEL SUPERVISOR");
+        assertThat(prompt.getValue()).startsWith(prefijo.getValue());
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // 2-10-2026: lo que el Copiloto no puede hacer, dicho al modelo
     // ─────────────────────────────────────────────────────────────────────────
@@ -656,6 +684,23 @@ class CopilotoChatServiceTest {
         verifyNoMoreInteractions(etapaService);
         verify(documentoService, atMost(1)).listarPorContrato(1L);
         verifyNoMoreInteractions(documentoService);
+    }
+
+    /**
+     * La guía del paso reconoce «fechas de entrega» como el nombre del 2.4 y
+     * contestaba cómo se acuerdan. Desde el 22-10-2026 las fechas acordadas son
+     * un dato del contrato, y la pregunta pide ese dato.
+     */
+    @Test
+    @DisplayName("«¿cuáles son las fechas de entrega?» contesta el dato del contrato, no cómo se acuerdan")
+    void lasFechasDeEntregaSonUnDatoNoLaGuia() {
+        given(etapaService.listarPorContrato(1L)).willReturn(contratoEnElPaso2());
+
+        ChatResponse r = servicio.responder(1L, "¿cuáles son las fechas de entrega?", null);
+
+        assertThat(r.fuente()).isEqualTo(ChatResponse.Fuente.SISTEMA);
+        assertThat(r.respuesta()).startsWith("Todavía no hay fechas de entrega acordadas registradas.");
+        verify(ollamaClient, never()).generar(anyString(), anyBoolean());
     }
 
     @Test

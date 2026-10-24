@@ -34,6 +34,7 @@ public final class ContratoMapper {
                 c.getApoyoSupervision(),
                 c.getFechaDesignacion(),
                 c.getCorreoContratista(),
+                c.getTelefonoContratista(),
                 c.getFechaCreacion());
     }
 }

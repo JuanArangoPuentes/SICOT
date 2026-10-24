@@ -109,6 +109,11 @@ services:
       # el modelo descargado. Se puede apuntar a otro Ollama (por ejemplo, un
       # equipo con GPU de la red) definiendo OLLAMA_URL en el .env.
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      # El aviso de designación (paso 1 del proceso real) le da al supervisor
+      # el enlace del instalador y la dirección que debe escribir en
+      # Configuración al abrirlo: la de este servidor, que es la de Caddy.
+      SICOT_DIRECCION_PUBLICA: https://${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — el nombre (o la IP) con el que se abrirá SICOT}
+      SICOT_ENLACE_DESCARGA_SUPERVISOR: ${SICOT_ENLACE_DESCARGA_SUPERVISOR:-https://github.com/JuanArangoPuentes/SICOT/releases/latest}
     volumes:
       # La carpeta donde escribe scripts/respaldo-sicot.sh, en solo lectura: el
       # backend solo mira la fecha del respaldo más reciente, nunca escribe ni

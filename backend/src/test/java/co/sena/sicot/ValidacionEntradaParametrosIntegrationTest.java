@@ -22,7 +22,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
 
-    private static final byte[] PDF_FALSO = "%PDF-1.4 contenido de prueba".getBytes();
+    private static final byte[] PDF = ArchivoDePrueba.pdfDeUnaPagina("documento de prueba");
 
     @Autowired
     private MockMvc mockMvc;
@@ -33,7 +33,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
     @Test
     void formatoConCodigoDemasiadoLargoEs400NoConflicto() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
@@ -48,7 +48,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
     @Test
     void formatoConNombreDemasiadoLargoEs400() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
@@ -61,7 +61,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
     @Test
     void formatoConCodigoEnBlancoEs400() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
@@ -74,7 +74,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
     @Test
     void formatoValidoSeSigueCargando() throws Exception {
         String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-VAL.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "GCCON-F-VAL.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/formatos")
                         .file(archivo)
@@ -90,7 +90,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
         String gestionToken = login("gestion@soy.sena.edu.co", "Gestion123*");
         long contratoId = crearContrato(gestionToken, "CO1.PCCNTR.VAL-DOC");
 
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "evidencia.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "evidencia.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/contratos/{contratoId}/documentos", contratoId)
                         .file(archivo)
@@ -105,7 +105,7 @@ class ValidacionEntradaParametrosIntegrationTest extends PruebaDeIntegracion {
         String gestionToken = login("gestion@soy.sena.edu.co", "Gestion123*");
         long contratoId = crearContrato(gestionToken, "CO1.PCCNTR.VAL-DOC2");
 
-        MockMultipartFile archivo = new MockMultipartFile("archivo", "evidencia.pdf", "application/pdf", PDF_FALSO);
+        MockMultipartFile archivo = new MockMultipartFile("archivo", "evidencia.pdf", "application/pdf", PDF);
 
         mockMvc.perform(multipart("/api/contratos/{contratoId}/documentos", contratoId)
                         .file(archivo)

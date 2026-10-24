@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class IntegridadYContentTypeIntegrationTest extends PruebaDeIntegracion {
 
-    private static final byte[] PDF = "%PDF-1.4 acta de inicio del contrato".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] PDF = ArchivoDePrueba.pdfDeUnaPagina("acta de inicio del contrato");
 
     /** Cada prueba usa su propio número de contrato: la base es compartida dentro de la clase. */
     private static final AtomicInteger SECUENCIA = new AtomicInteger(1);

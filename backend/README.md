@@ -280,6 +280,7 @@ tarea es idempotente por clave.
 | `cronograma-atrasado` | calendario | Brecha ≥ 30 puntos entre plazo consumido y avance |
 | `supervisor-asignado` | evento | Alerta + correo al supervisor recién asignado |
 | `integridad-comprometida` | evento | Documento firmado cuyo contenido ya no coincide con su huella |
+| `entrega-acordada` | calendario | Una entrega acordada con el contratista (paso 2.4) llega en 3 días o menos, o es hoy |
 | `resumen-semanal` | calendario | Resumen del periodo, compuesto con los datos registrados |
 
 > **El motor no usa el modelo de IA.** La regla `resumen-semanal` se llamó

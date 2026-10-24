@@ -36,6 +36,12 @@ final class GcconP010Plantilla {
     static final String ACTA_FIRMADA_Y_ENVIO = "ACTA_FIRMADA_Y_ENVIO";
 
     /**
+     * Lo que exige el paso del contacto con el contratista: al menos una fecha
+     * de entrega acordada. Ver {@code V22__acuerdo_de_entregas_y_contactos.sql}.
+     */
+    static final String ENTREGAS_ACORDADAS = "ENTREGAS_ACORDADAS";
+
+    /**
      * Nombre de la etapa de designación. Sirve para reconocer los contratos
      * sembrados con esta plantilla: a los anteriores no se les completa la
      * etapa 1 al asignarles supervisor, porque su etapa 1 era otra cosa.
@@ -88,8 +94,9 @@ final class GcconP010Plantilla {
                     new SubetapaDef("2.4", "Contacto con el contratista y acuerdo de entregas",
                             "Escriba al contratista para presentarse y acordar las fechas de entrega dentro del"
                                     + " plazo del contrato. Si es un suministro o una compra, el correo debe llevar"
-                                    + " las cantidades exactas de los bienes.",
-                            "Supervisor")
+                                    + " las cantidades exactas de los bienes. Registre aquí las fechas que"
+                                    + " acuerden: el paso no se cierra sin al menos una.",
+                            "Supervisor", ENTREGAS_ACORDADAS)
             )),
             new EtapaDef("INSPECCIÓN — Monitoreo y Ejecución", List.of(
                     new SubetapaDef("3.1", "Verificación física de la entrega en bodega", "Verificación física de la entrega de materiales en bodega.", "Supervisor"),
