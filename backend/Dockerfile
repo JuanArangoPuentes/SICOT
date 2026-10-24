@@ -27,7 +27,11 @@ WORKDIR /app
 # sube SOLO ese paquete, por lo mismo que el libtiff del frontend: el resto de
 # la imagen sigue siendo la que fija la etiqueta. Cuando la imagen de Temurin
 # traiga 2.9.0-r0 o posterior, la primera línea sobra y se quita.
-RUN apk add --no-cache "libexpat>=2.9.0-r0" \
+#
+# brotli-libs, por lo mismo (CI del 23-10-2026): la base trae 1.2.0-r1, con
+# CVE-2026-111497 (HIGH, escritura fuera de límites en el decodificador), y
+# Alpine ya publicó 1.2.1-r0.
+RUN apk add --no-cache "libexpat>=2.9.0-r0" "brotli-libs>=1.2.1-r0" \
     && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 COPY --from=build /build/target/sicot-backend-*.jar app.jar
