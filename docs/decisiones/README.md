@@ -48,7 +48,7 @@ parte del valor.
 
 | ADR | Título | Estado |
 | --- | --- | --- |
-| [001](./ADR-001-bifurcamiento-de-despliegue.md) | Qué significa "instalación local" para el Supervisor | Aceptada |
+| [001](./ADR-001-bifurcamiento-de-despliegue.md) | Qué significa "instalación local" para el Supervisor | Aceptada · su decisión la sustituye la [015](./ADR-015-trabajo-sin-conexion-del-supervisor.md) |
 | [002](./ADR-002-continuidad-y-perdida-aceptable.md) | Pérdida de datos aceptable y tiempo de recuperación | Aceptada |
 | [003](./ADR-003-umbral-de-migracion-de-documentos.md) | Cuándo dejar de guardar los archivos dentro de PostgreSQL | Aceptada |
 | [004](./ADR-004-un-solo-sistema-de-estilos.md) | Un solo sistema de estilos en el frontend | Aceptada |
@@ -62,3 +62,4 @@ parte del valor.
 | [012](./ADR-012-aplicacion-movil.md) | Qué es "la aplicación móvil" de SICOT | Aceptada |
 | [013](./ADR-013-firma-y-distribucion-del-apk.md) | Cómo se firma y se reparte la aplicación de Android | Aceptada |
 | [014](./ADR-014-salir-de-spring-boot-3-5.md) | Cuándo y cómo salir de Spring Boot 3.5 | Propuesta |
+| [015](./ADR-015-trabajo-sin-conexion-del-supervisor.md) | Trabajo sin conexión del supervisor (sustituye la decisión de la 001) | Propuesta |
