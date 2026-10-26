@@ -19,6 +19,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -183,6 +184,13 @@ public class ArchivoValidator {
      * firma, se le calcula la huella y se publica: no puede ser un archivo
      * ilegible.
      *
+     * <p>Esto cierra la puerta de entrada, pero no arregla lo que ya está
+     * dentro: las filas guardadas antes de esta validación siguen en el
+     * expediente, y la descarga las servía tal cual —el supervisor bajaba el
+     * archivo y su lector lo daba por dañado, sin que nada le dijera por qué
+     * (auditoría del 26-10-2026)—. Por eso la comprobación es pública y la
+     * descarga la repite: ver {@link #porQueNoSeAbre}.
+     *
      * <h2>Cómo se comprueba</h2>
      * Con el mismo lector que usará quien lo descargue: PDFBox para los PDF
      * —que además tienen que tener alguna página— e ImageIO para las fotos.
@@ -190,14 +198,75 @@ public class ArchivoValidator {
      * abrió el ZIP y leyó dentro su declaración de tipo.
      */
     private void validarQueSeAbre(byte[] contenido, TipoDocumento tipo, String nombreArchivo) {
-        if (tipo == TipoDocumento.PDF) {
-            validarQueElPdfSeAbre(contenido, nombreArchivo);
-        } else if (tipo == TipoDocumento.IMAGEN) {
-            validarQueLaImagenSeAbre(contenido, nombreArchivo);
-        }
+        porQueNoSeAbre(contenido, tipo, nombreArchivo).ifPresent(motivo -> {
+            throw new BusinessException(switch (motivo) {
+                case ILEGIBLE -> tipo == TipoDocumento.PDF
+                        ? "El archivo empieza como un PDF pero ningún lector puede abrirlo: "
+                        + "está dañado o la subida se cortó a mitad. Vuelva a exportarlo y cárguelo de nuevo."
+                        : "La foto cargada no se puede mostrar: está dañada o la subida se "
+                        + "cortó a mitad. Vuelva a tomarla o a exportarla y cárguela de nuevo.";
+                case SIN_CONTENIDO_DENTRO -> tipo == TipoDocumento.PDF
+                        ? "El PDF cargado no tiene ninguna página. Vuelva a exportarlo y cárguelo de nuevo."
+                        : "La foto cargada no se puede mostrar: está dañada o la subida se "
+                        + "cortó a mitad. Vuelva a tomarla o a exportarla y cárguela de nuevo.";
+            });
+        });
     }
 
-    private void validarQueElPdfSeAbre(byte[] contenido, String nombreArchivo) {
+    /** Por qué un archivo no se abre, cuando no se abre. */
+    public enum NoSeAbre {
+        /** El lector no pudo con él: está dañado, o la carga se cortó a mitad. */
+        ILEGIBLE,
+        /** Se abre, pero por dentro no hay nada: un PDF de cero páginas, una foto de cero píxeles. */
+        SIN_CONTENIDO_DENTRO
+    }
+
+    /**
+     * Abre el contenido con el mismo lector que usará quien lo descargue y
+     * dice qué le pasa, o {@link Optional#empty()} si se abre bien. No lanza:
+     * quien pregunta decide qué hacer con la respuesta.
+     *
+     * <p>Lo usan los dos extremos del archivo, y por eso vive aquí y no en
+     * ninguno de ellos: la carga para rechazarlo antes de guardarlo (ver
+     * {@link #validarQueSeAbre}) y la descarga para no entregar un archivo que
+     * el lector del supervisor va a dar por dañado (ver
+     * {@code DocumentoController.descargar}). Un DOCX o un XLSX no pasan por
+     * aquí: para reconocerlos, Tika ya abrió el ZIP y leyó dentro su
+     * declaración de tipo.
+     */
+    public static Optional<NoSeAbre> porQueNoSeAbre(byte[] contenido, TipoDocumento tipo, String nombreArchivo) {
+        if (tipo == TipoDocumento.PDF) {
+            return porQueNoSeAbreElPdf(contenido, nombreArchivo);
+        }
+        if (tipo == TipoDocumento.IMAGEN) {
+            return porQueNoSeAbreLaImagen(contenido, nombreArchivo);
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Lo mismo que {@link #porQueNoSeAbre}, pero para un archivo que ya está
+     * guardado y se va a entregar: <b>solo comprueba los PDF</b>.
+     *
+     * <h2>Por qué no las fotos</h2>
+     * El coste es muy distinto a cada lado. Abrir un PDF con PDFBox lee la
+     * tabla de objetos, no las páginas: medido el 26-10-2026, entre 7 y 10 ms
+     * para un documento de SICOT. Abrir una foto con ImageIO la descodifica
+     * entera: 300 ms para una de 12 Mpx, que es lo que manda cualquier
+     * teléfono. Pagar eso en <b>cada</b> descarga de una evidencia
+     * fotográfica —lo que más se baja en el flujo del supervisor, y desde el
+     * teléfono— no compensa cazar una foto antigua ilegible, que es un caso
+     * raro y que la validación de carga ya cerró para las nuevas.
+     *
+     * <p>Al cargar sí se descodifica entera, y ahí sí compensa: es la única
+     * oportunidad de rechazarla, y una subida cortada a mitad es un caso real.
+     */
+    public static Optional<NoSeAbre> porQueNoSeAbreAlEntregarlo(byte[] contenido, TipoDocumento tipo,
+                                                               String nombreArchivo) {
+        return tipo == TipoDocumento.PDF ? porQueNoSeAbre(contenido, tipo, nombreArchivo) : Optional.empty();
+    }
+
+    private static Optional<NoSeAbre> porQueNoSeAbreElPdf(byte[] contenido, String nombreArchivo) {
         int paginas;
         try (PDDocument documento = Loader.loadPDF(contenido)) {
             paginas = documento.getNumberOfPages();
@@ -205,33 +274,31 @@ public class ArchivoValidator {
             // Un PDF con contraseña SÍ es un PDF: PDFBox leyó su estructura y
             // por eso sabe que está cifrado. Quien lo descargue lo abrirá con
             // la contraseña que tenga, y eso no es asunto de SICOT.
-            return;
+            return Optional.empty();
         } catch (IOException | RuntimeException e) {
             // RuntimeException además de IOException porque un PDF roto no
             // falla siempre igual: según por dónde esté cortado, PDFBox lanza
             // al leer la tabla de objetos y no una IOException.
-            log.warn("PDF rechazado: no se pudo abrir «{}» ({}).", nombreArchivo, e.toString());
-            throw new BusinessException("El archivo empieza como un PDF pero ningún lector puede abrirlo: "
-                    + "está dañado o la subida se cortó a mitad. Vuelva a exportarlo y cárguelo de nuevo.");
+            log.warn("PDF ilegible «{}» ({}).", nombreArchivo, e.toString());
+            return Optional.of(NoSeAbre.ILEGIBLE);
         }
-        if (paginas < 1) {
-            throw new BusinessException("El PDF cargado no tiene ninguna página. "
-                    + "Vuelva a exportarlo y cárguelo de nuevo.");
-        }
+        return paginas < 1 ? Optional.of(NoSeAbre.SIN_CONTENIDO_DENTRO) : Optional.empty();
     }
 
-    private void validarQueLaImagenSeAbre(byte[] contenido, String nombreArchivo) {
+    private static Optional<NoSeAbre> porQueNoSeAbreLaImagen(byte[] contenido, String nombreArchivo) {
         BufferedImage imagen;
         try {
             imagen = ImageIO.read(new ByteArrayInputStream(contenido));
         } catch (IOException | RuntimeException e) {
-            log.warn("Foto rechazada: no se pudo abrir «{}» ({}).", nombreArchivo, e.toString());
+            log.warn("Foto ilegible «{}» ({}).", nombreArchivo, e.toString());
             imagen = null;
         }
-        if (imagen == null || imagen.getWidth() < 1 || imagen.getHeight() < 1) {
-            throw new BusinessException("La foto cargada no se puede mostrar: está dañada o la subida se "
-                    + "cortó a mitad. Vuelva a tomarla o a exportarla y cárguela de nuevo.");
+        if (imagen == null) {
+            return Optional.of(NoSeAbre.ILEGIBLE);
         }
+        return imagen.getWidth() < 1 || imagen.getHeight() < 1
+                ? Optional.of(NoSeAbre.SIN_CONTENIDO_DENTRO)
+                : Optional.empty();
     }
 
     /**

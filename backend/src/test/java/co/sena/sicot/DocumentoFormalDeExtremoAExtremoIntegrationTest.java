@@ -259,6 +259,90 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(jsonPath("$.message", containsString("no tiene archivo guardado")));
     }
 
+    /**
+     * El acta que entró al expediente del contrato de prueba el 15-10-2026:
+     * 44 bytes de texto que empiezan por «%PDF-1.4». Desde el 20-10-2026 un
+     * archivo así ya no entra (ArchivoValidator), pero las filas anteriores
+     * siguen ahí y la descarga las servía como un PDF: el supervisor bajaba el
+     * archivo, su lector lo daba por dañado y nada le decía por qué.
+     */
+    @Test
+    void unDocumentoGuardadoQueNingunLectorAbreRespondeNoEncontradoConElMotivo() throws Exception {
+        Documento roto = new Documento();
+        roto.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        roto.setNombre("Acta de Inicio firmada");
+        roto.setTipo(TipoDocumento.PDF);
+        roto.setContentType("application/pdf");
+        byte[] soloLaCabecera = "%PDF-1.4\n% acta firmada de prueba E2E\n%%EOF\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        roto.setContenido(soloLaCabecera);
+        roto.setTamanioBytes((long) soloLaCabecera.length);
+        roto.setEstado(EstadoDocumento.PENDIENTE);
+        long id = documentoRepository.save(roto).getId();
+
+        mockMvc.perform(get("/api/contratos/{c}/documentos/{id}/archivo", contratoId, id)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message", containsString("no se puede abrir")))
+                .andExpect(jsonPath("$.message", containsString("Cárguelo de nuevo")));
+    }
+
+    /**
+     * Una foto de evidencia sí se entrega aunque no se abra, y es deliberado.
+     *
+     * <p>Descodificar cada foto al descargarla cuesta unos 300 ms para una de
+     * 12 Mpx —las que manda cualquier teléfono—, frente a los 7-10 ms de
+     * abrir un PDF, que solo lee la tabla de objetos (medido el 26-10-2026).
+     * La evidencia fotográfica es lo que más se baja en el flujo del
+     * supervisor y se baja desde el teléfono: pagar eso en cada descarga para
+     * cazar una foto antigua ilegible —caso raro, y cerrado para las nuevas
+     * en la carga— no compensa. Ver {@code ArchivoValidator.porQueNoSeAbreAlEntregarlo}.
+     */
+    @Test
+    void unaFotoGuardadaQueNoSeAbreSeEntregaIgual() throws Exception {
+        Documento foto = new Documento();
+        foto.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        foto.setNombre("Evidencia del envío del acta");
+        foto.setTipo(TipoDocumento.IMAGEN);
+        foto.setContentType("image/png");
+        // La firma PNG y la cabecera IHDR, sin un solo bloque de píxeles: Tika
+        // la sigue viendo como image/png y ningún visor la muestra.
+        byte[] aMedias = java.util.Arrays.copyOf(ArchivoDePrueba.imagen("png"), 40);
+        foto.setContenido(aMedias);
+        foto.setTamanioBytes((long) aMedias.length);
+        foto.setEstado(EstadoDocumento.PENDIENTE);
+        long id = documentoRepository.save(foto).getId();
+
+        byte[] bajada = mockMvc.perform(get("/api/contratos/{c}/documentos/{id}/archivo", contratoId, id)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(bajada).isEqualTo(aMedias);
+    }
+
+    /** Un PDF real sigue bajando entero: la comprobación no estorba a lo que sí se abre. */
+    @Test
+    void unDocumentoGuardadoQueSiSeAbreBajaIntacto() throws Exception {
+        Documento bueno = new Documento();
+        bueno.setContrato(contratoRepository.findById(contratoId).orElseThrow());
+        bueno.setNombre("Acta de Inicio firmada");
+        bueno.setTipo(TipoDocumento.PDF);
+        bueno.setContentType("application/pdf");
+        byte[] pdf = ArchivoDePrueba.pdfDeUnaPagina("acta de inicio firmada en papel");
+        bueno.setContenido(pdf);
+        bueno.setTamanioBytes((long) pdf.length);
+        bueno.setEstado(EstadoDocumento.PENDIENTE);
+        long id = documentoRepository.save(bueno).getId();
+
+        byte[] bajado = mockMvc.perform(get("/api/contratos/{c}/documentos/{id}/archivo", contratoId, id)
+                        .header("Authorization", "Bearer " + supervisor))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+
+        assertThat(bajado).isEqualTo(pdf);
+    }
+
     // ── Hallazgos de la revisión adversarial del 28-09-2026 ─────────────────
 
     private long pasoDelInforme() throws Exception {

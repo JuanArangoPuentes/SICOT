@@ -2,6 +2,7 @@ package co.sena.sicot.controller;
 
 import co.sena.sicot.dto.formato.FormatoDocumentalResponse;
 import co.sena.sicot.entity.FormatoDocumental;
+import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.FormatoDocumentalService;
 import co.sena.sicot.service.NombreDeDescarga;
@@ -86,7 +87,7 @@ public class FormatoDocumentalController {
                     content = @Content(schema = @Schema(type = "string", format = "binary"))),
             @ApiResponse(responseCode = "401", description = "No autenticado",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Formato no encontrado",
+            @ApiResponse(responseCode = "404", description = "Formato no encontrado, sin archivo guardado, o con un archivo que ningún lector abre",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
@@ -94,6 +95,22 @@ public class FormatoDocumentalController {
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long id) {
         FormatoDocumental formato = formatoService.buscarConContenido(id);
+        // Las mismas dos redes que la descarga de un documento del expediente
+        // (ver DocumentoController.descargar): el catálogo se llenó antes de
+        // que SICOT comprobara que un archivo se abre, y entregar bytes que el
+        // lector va a rechazar deja al Administrador sin saber qué pasó.
+        if (formato.getContenido() == null || formato.getContenido().length == 0) {
+            throw new ResourceNotFoundException("El formato «" + formato.getCodigo()
+                    + "» no tiene archivo guardado: se registró sin contenido y no hay nada que descargar.");
+        }
+        ArchivoValidator.porQueNoSeAbreAlEntregarlo(formato.getContenido(), formato.getTipoArchivo(),
+                formato.getNombreArchivo())
+                .ifPresent(motivo -> {
+                    throw new ResourceNotFoundException("El archivo guardado del formato «" + formato.getCodigo()
+                            + "» no se puede abrir" + (motivo == ArchivoValidator.NoSeAbre.SIN_CONTENIDO_DENTRO
+                            ? ": no tiene ninguna página." : ": está dañado o su carga se cortó a mitad.")
+                            + " Vuelva a cargarlo en el catálogo.");
+                });
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         NombreDeDescarga.cabecera(formato.getNombreArchivo(), formato.getContentType()))
