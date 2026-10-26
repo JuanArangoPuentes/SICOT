@@ -5,8 +5,10 @@
 // mismo sobre si un contrato iba atrasado. Ver docs/REVISION_ARQUITECTURA.
 
 import { apiFetch } from './api/client'
+import { conCopiaLocal } from './copiaLocal'
 import type { CronogramaResponse } from './api/types'
 
 export function getCronograma(contratoId: number): Promise<CronogramaResponse> {
-  return apiFetch<CronogramaResponse>(`/api/contratos/${contratoId}/cronograma`)
+  const ruta = `/api/contratos/${contratoId}/cronograma`
+  return conCopiaLocal(ruta, () => apiFetch<CronogramaResponse>(ruta))
 }

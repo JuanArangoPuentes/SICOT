@@ -87,10 +87,24 @@ trabajo.
 
 Por partes, de la más barata a la más cara.
 
-**1. Copia local de lectura.** Guardar en el portátil los contratos del
-supervisor, sus etapas, sub-pasos, documentos y alertas, y servir las pantallas
-desde ahí cuando no hay red. Es la interpretación C de ADR-001, que ya estaba
-pre-aprobada, y es requisito de todo lo demás.
+**1. Copia local de lectura. ✅ Hecha el 26-10-2026.** Guardar en el portátil
+los contratos del supervisor, sus etapas, sub-pasos, documentos y alertas, y
+servir las pantallas desde ahí cuando no hay red. Es la interpretación C de
+ADR-001, que ya estaba pre-aprobada, y es requisito de todo lo demás.
+
+Está en `frontend/src/services/copiaLocal.ts`, sobre IndexedDB —el único
+almacén que existe igual en el navegador, en el instalador de escritorio y en
+el APK—, con una franja en pantalla que dice de cuándo es lo que se está
+viendo. Se guarda la ficha de los documentos, no sus bytes; no se guardan ni la
+verificación del SECOP ni el Copiloto. La copia es de cada cuenta: al entrar
+otra, se vacía.
+
+**Lo que esto todavía NO da, y conviene no confundirlo.** La sesión dura 8
+horas (`JWT_EXPIRATION_MS`), así que esta copia alcanza para terminar la
+jornada sin red, no para pasar tres días en campo: cuando el token vence,
+`getSession` devuelve `null` y la aplicación pide entrar de nuevo, cosa que sin
+servidor no se puede. Lo que convierte esto en «trabajar sin red» de verdad es
+el punto 4, y después el 3.
 
 **2. Identidad de lo creado sin conexión.** El cliente **no** inventa
 identificadores del servidor: usa identificadores locales propios y mantiene una

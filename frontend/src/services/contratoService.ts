@@ -2,6 +2,7 @@
 // (autenticado; corregir y cambiar estado exigen rol GESTION o ADMINISTRADOR).
 
 import { apiFetch, apiFetchBlob } from './api/client'
+import { conCopiaLocal } from './copiaLocal'
 import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import type {
   AcuerdoDeEntregasResponse,
@@ -23,7 +24,10 @@ export function getContratos(supervisorId?: number, estado?: string): Promise<Co
   if (supervisorId != null) params.set('supervisorId', String(supervisorId))
   if (estado) params.set('estado', estado)
   const qs = params.toString()
-  return apiFetch<ContratoResponse[]>(`/api/contratos${qs ? `?${qs}` : ''}`)
+  const ruta = `/api/contratos${qs ? `?${qs}` : ''}`
+  // Con copia local: es la primera pantalla del supervisor. Sin ella, quedarse
+  // sin red deja la bandeja vacía y parece que no tiene contratos.
+  return conCopiaLocal(ruta, () => apiFetch<ContratoResponse[]>(ruta))
 }
 
 export function crearContrato(body: CrearContratoRequest): Promise<ContratoResponse> {
@@ -120,7 +124,8 @@ export async function descargarSolicitudDePedido(
 // y el teléfono del contratista.
 
 export function obtenerEntregasAcordadas(contratoId: number): Promise<AcuerdoDeEntregasResponse> {
-  return apiFetch<AcuerdoDeEntregasResponse>(`/api/contratos/${contratoId}/entregas-acordadas`)
+  const ruta = `/api/contratos/${contratoId}/entregas-acordadas`
+  return conCopiaLocal(ruta, () => apiFetch<AcuerdoDeEntregasResponse>(ruta))
 }
 
 /**
@@ -139,7 +144,8 @@ export function guardarEntregasAcordadas(
 }
 
 export function obtenerContactosSstAmbiental(contratoId: number): Promise<ContactosDelContratoResponse> {
-  return apiFetch<ContactosDelContratoResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental`)
+  const ruta = `/api/contratos/${contratoId}/contactos-sst-ambiental`
+  return conCopiaLocal(ruta, () => apiFetch<ContactosDelContratoResponse>(ruta))
 }
 
 /** Reemplaza los contactos; una lista vacía los borra. */
