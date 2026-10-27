@@ -2,6 +2,8 @@ package co.sena.sicot.service;
 
 import co.sena.sicot.dto.contrato.ActualizarContratoRequest;
 import co.sena.sicot.dto.contrato.AsignarSupervisorRequest;
+import co.sena.sicot.dto.contrato.InvitacionDeSupervisorResponse;
+import co.sena.sicot.dto.contrato.InvitarSupervisorRequest;
 import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
 import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
@@ -44,15 +46,18 @@ public class ContratoService {
     private final UsuarioRepository usuarioRepository;
     private final RegistroService registroService;
     private final EtapaRepository etapaRepository;
+    private final UsuarioService usuarioService;
 
     public ContratoService(ContratoRepository contratoRepository,
                            UsuarioRepository usuarioRepository,
                            RegistroService registroService,
-                           EtapaRepository etapaRepository) {
+                           EtapaRepository etapaRepository,
+                           UsuarioService usuarioService) {
         this.contratoRepository = contratoRepository;
         this.usuarioRepository = usuarioRepository;
         this.registroService = registroService;
         this.etapaRepository = etapaRepository;
+        this.usuarioService = usuarioService;
     }
 
     @Transactional(readOnly = true)
@@ -206,6 +211,49 @@ public class ContratoService {
                             + " a la firma del Acta de Inicio.");
         }
         return ContratoMapper.toResponse(guardado);
+    }
+
+    /**
+     * Pone un supervisor en el contrato <b>por su correo</b>, creándole la
+     * cuenta y mandándole con qué entrar si todavía no la tenía.
+     *
+     * <h2>Por qué un camino propio y no el de siempre</h2>
+     * {@link #asignarSupervisor} recibe el id de alguien que ya está en SICOT,
+     * y eso obligaba a que antes el Administrador creara la cuenta y le
+     * mandara la clave: tres pasos repartidos entre dos personas para lo que
+     * en el Centro es uno solo. Un supervisor nuevo se quedaba sin recibir
+     * nada y nadie se enteraba de que faltaba un paso.
+     *
+     * <p>El aviso de designación sale igual que siempre, porque esto termina
+     * pasando por {@link #asignarSupervisor}: quien lo recibe ya tiene cuenta
+     * —la acaba de recibir por correo— y el aviso le dice dónde descargar
+     * SICOT y qué hacer primero.
+     */
+    @Transactional
+    public InvitacionDeSupervisorResponse invitarYAsignarSupervisor(Long id, InvitarSupervisorRequest request) {
+        // Que el contrato exista se comprueba ANTES de crear a nadie: si no,
+        // un id equivocado dejaría una cuenta de supervisor huérfana.
+        buscar(id);
+        UsuarioService.SupervisorInvitado invitado =
+                usuarioService.invitarSupervisor(request.nombre(), request.email(), request.telefono());
+        ContratoResponse contrato =
+                asignarSupervisor(id, new AsignarSupervisorRequest(invitado.usuario().getId()));
+
+        String detalle;
+        if (!invitado.cuentaCreada()) {
+            detalle = invitado.usuario().getNombre() + " ya tenía cuenta en SICOT; conserva su clave de siempre."
+                    + " Le llega el aviso de la designación a su bandeja.";
+        } else if (invitado.credencialesEnviadas()) {
+            detalle = "Se le creó la cuenta y se enviaron sus datos de acceso a " + invitado.usuario().getEmail()
+                    + ". Con ellos entra después de instalar SICOT.";
+        } else {
+            detalle = "Se le creó la cuenta, pero el correo no pudo salir (el servidor de correo no está"
+                    + " configurado o lo rechazó). Entréguele usted el usuario «" + invitado.usuario().getEmail()
+                    + "» y la clave que aparece aquí: no se vuelve a mostrar.";
+        }
+        return new InvitacionDeSupervisorResponse(contrato, invitado.cuentaCreada(),
+                invitado.credencialesEnviadas(),
+                invitado.credencialesEnviadas() ? null : invitado.claveNueva(), detalle);
     }
 
     /**

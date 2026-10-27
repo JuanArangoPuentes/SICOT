@@ -2,6 +2,8 @@ package co.sena.sicot.controller;
 
 import co.sena.sicot.dto.contrato.ActualizarContratoRequest;
 import co.sena.sicot.dto.contrato.AsignarSupervisorRequest;
+import co.sena.sicot.dto.contrato.InvitacionDeSupervisorResponse;
+import co.sena.sicot.dto.contrato.InvitarSupervisorRequest;
 import co.sena.sicot.dto.contrato.CambiarEstadoContratoRequest;
 import co.sena.sicot.dto.contrato.ContratoResponse;
 import co.sena.sicot.dto.contrato.CrearContratoRequest;
@@ -148,6 +150,38 @@ public class ContratoController {
     public ResponseEntity<ContratoResponse> asignarSupervisor(@PathVariable Long id,
                                                               @Valid @RequestBody AsignarSupervisorRequest request) {
         return ResponseEntity.ok(contratoService.asignarSupervisor(id, request));
+    }
+
+    @Operation(summary = "Poner un supervisor en el contrato por su correo, creándole la cuenta si no la tiene",
+            description = "Para cuando el supervisor todavía no está en SICOT. Si el correo no existe, se le crea "
+                    + "la cuenta —siempre con rol SUPERVISOR, nunca otro— y se le envían por correo el usuario y "
+                    + "la clave con los que entra después de instalar SICOT. Si el correo ya es de un supervisor, "
+                    + "solo se le asigna el contrato y conserva su clave. La respuesta dice si el correo salió; "
+                    + "cuando no sale, trae la clave una sola vez para que Gestión se la entregue.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Supervisor asignado, con qué pasó con su cuenta",
+                    content = @Content(schema = @Schema(implementation = InvitacionDeSupervisorResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Datos inválidos, o el correo es de una cuenta que no "
+                    + "es de supervisor o está inactiva",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "No autenticado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "Sin rol GESTION/ADMINISTRADOR",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "Contrato no encontrado",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
+            @ApiResponse(responseCode = "500", description = "Error interno del servidor",
+                    content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
+    })
+    @PostMapping("/{id}/supervisor/invitacion")
+    // Mismo permiso que asignar: no se le abre a Gestión la administración de
+    // usuarios, se le da una sola capacidad acotada —crear al supervisor que
+    // está poniendo en un contrato—. El rol lo fija el servicio, no quien
+    // llama, así que por aquí no sale un administrador nuevo.
+    @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
+    public ResponseEntity<InvitacionDeSupervisorResponse> invitarSupervisor(
+            @PathVariable Long id, @Valid @RequestBody InvitarSupervisorRequest request) {
+        return ResponseEntity.ok(contratoService.invitarYAsignarSupervisor(id, request));
     }
 
     @Operation(summary = "Cambiar estado del contrato")

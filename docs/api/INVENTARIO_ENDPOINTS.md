@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-22 contra el código: 16 controladores, 58 endpoints.**
+**Revisado el 2026-10-26 contra el código: 16 controladores, 59 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -33,6 +33,7 @@
 | 10 | ContratoController | POST | /api/contratos | GESTION, ADMINISTRADOR | @PreAuthorize | **201** | `ContratoResponse` |
 | 11 | ContratoController | PUT | /api/contratos/{id} | GESTION, ADMINISTRADOR | @PreAuthorize + Service verifica acceso | 200 | `ContratoResponse` |
 | 12 | ContratoController | PATCH | /api/contratos/{id}/supervisor | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
+| 59 | ContratoController | POST | /api/contratos/{id}/supervisor/invitacion (cuerpo: `nombre`, `email`, `telefono` del supervisor) — pone el supervisor en el contrato por su correo; si ese correo no tiene cuenta, se la crea **siempre con rol SUPERVISOR** y le envía por correo el usuario y una clave generada. Un correo que ya es de supervisor conserva su clave; uno de otro rol o inactivo → 400 | GESTION, ADMINISTRADOR | @PreAuthorize; el rol del creado lo fija el servicio, no quien llama | 200 | `InvitacionDeSupervisorResponse`: `contrato`, `cuentaCreada`, `credencialesEnviadas`, `claveParaEntregar` (solo si se creó la cuenta y el correo NO salió) y `detalle` |
 | 13 | ContratoController | PATCH | /api/contratos/{id}/estado | GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `ContratoResponse` |
 | 14 | ContratoController | GET | /api/contratos/{id}/cronograma | (autenticado) | Service: `verificarAccesoAlContrato` | 200 | `CronogramaResponse` |
 | 48 | ContratoController | GET | /api/contratos/{id}/secop | (autenticado) | Service: `ContratoService.buscar` → `verificarAccesoAlContrato` (igual que el cronograma) | 200 (también si datos.gov.co no responde: `disponible=false` y el motivo) | `VerificacionSecopResponse` |

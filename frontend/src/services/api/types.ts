@@ -202,6 +202,32 @@ export interface ContratoResponse {
   fechaCreacion: string
 }
 
+/**
+ * Poner un supervisor en un contrato escribiendo su correo, aunque todavía no
+ * tenga cuenta en SICOT. El teléfono se pide porque el usuario lo lleva como
+ * dato obligatorio; por ahí no se le manda nada.
+ */
+export interface InvitarSupervisorRequest {
+  nombre: string
+  email: string
+  telefono: string
+}
+
+export interface InvitacionDeSupervisorResponse {
+  contrato: ContratoResponse
+  /** La cuenta nació con esta asignación. Falso si el supervisor ya estaba en SICOT. */
+  cuentaCreada: boolean
+  /** El correo con el usuario y la clave salió de verdad. */
+  credencialesEnviadas: boolean
+  /**
+   * La clave recién generada, solo cuando se creó la cuenta y el correo NO
+   * pudo salir. Es la única vez que viaja: si la pantalla no la muestra, la
+   * cuenta queda creada y nadie sabe con qué entrar.
+   */
+  claveParaEntregar: string | null
+  detalle: string
+}
+
 // ─── Etapas / Subetapas ──────────────────────────────────────────────────────
 
 export interface ActualizarEstadoSubetapaRequest {

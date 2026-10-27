@@ -13,6 +13,8 @@ import type {
   ContratoResponse,
   CrearContratoRequest,
   EstadoContrato,
+  InvitacionDeSupervisorResponse,
+  InvitarSupervisorRequest,
   ItemDeSolicitud,
   LecturaDeContactosResponse,
   SolicitudDePedidoResponse,
@@ -71,6 +73,22 @@ export function asignarSupervisor(id: number, supervisorId: number): Promise<Con
   return apiFetch<ContratoResponse>(`/api/contratos/${id}/supervisor`, {
     method: 'PATCH',
     body: JSON.stringify({ supervisorId }),
+  })
+}
+
+/**
+ * Pone un supervisor en el contrato por su correo, creándole la cuenta si no
+ * la tiene y mandándole a ese correo el usuario y la clave con los que entrará
+ * después de instalar SICOT.
+ *
+ * Lo que devuelve hay que MIRARLO, no darlo por bueno: si el correo no salió,
+ * `claveParaEntregar` trae la única copia de la clave y la pantalla tiene que
+ * enseñarla. Un supervisor que ya existía conserva la suya y no recibe nada.
+ */
+export function invitarSupervisor(id: number, body: InvitarSupervisorRequest): Promise<InvitacionDeSupervisorResponse> {
+  return apiFetch<InvitacionDeSupervisorResponse>(`/api/contratos/${id}/supervisor/invitacion`, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 

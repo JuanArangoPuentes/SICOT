@@ -15,14 +15,22 @@ import {
   IconUpload,
 } from '@/components/icons'
 import type { UploadState } from '@/types/domain'
-import type { AuthResponse, ContratoResponse, EstadoContrato, ExtraccionContratoResponse } from '@/services/api/types'
+import type {
+  AuthResponse,
+  ContratoResponse,
+  EstadoContrato,
+  ExtraccionContratoResponse,
+  InvitacionDeSupervisorResponse,
+} from '@/services/api/types'
 import {
   getContratos,
   crearContrato,
   actualizarContrato,
   asignarSupervisor,
   cambiarEstadoContrato,
+  invitarSupervisor,
 } from '@/services/contratoService'
+import { BotonCopiar } from '@/components/supervisor/enlacesExternos'
 import { getUsuarios } from '@/services/usuarioService'
 import { extraerDatosContrato, subirDocumento } from '@/services/documentoService'
 import { ApiError } from '@/services/api/client'
@@ -329,6 +337,13 @@ export default function GestionPanel({
   const [busyAsignar, setBusyAsignar] = useState(false)
   const [errorAsignar, setErrorAsignar] = useState('')
   const [supervisores, setSupervisores] = useState<SupervisorOption[]>([])
+  // Las dos formas de poner supervisor. Hasta el 26-10-2026 solo existía la
+  // primera: uno que no estuviera ya en SICOT no se podía asignar desde aquí,
+  // había que pedirle al Administrador que le creara la cuenta y le mandara la
+  // clave, y mientras tanto el contrato se quedaba sin supervisor.
+  const [formaDeAsignar, setFormaDeAsignar] = useState<'DE_LA_LISTA' | 'POR_CORREO'>('DE_LA_LISTA')
+  const [invitado, setInvitado] = useState({ nombre: '', email: '', telefono: '' })
+  const [invitacion, setInvitacion] = useState<InvitacionDeSupervisorResponse | null>(null)
   const [busyCrear, setBusyCrear] = useState(false)
   const [errorCrear, setErrorCrear] = useState('')
 
@@ -381,23 +396,18 @@ export default function GestionPanel({
     }
   }, [])
 
-  // Supervisores para asignación (solo ADMINISTRADOR tiene acceso)
+  // Supervisores para asignación. No se preselecciona el primero de la lista:
+  // ese supervisor recibía el aviso de una designación que nadie hizo
+  // (auditoría del 17-10-2026).
+  const recargarSupervisores = async () => {
+    const lista = await getUsuarios()
+    setSupervisores(
+      lista.filter((u) => u.rol === 'SUPERVISOR' && u.activo).map((u) => ({ id: u.id, nombre: u.nombre })),
+    )
+  }
+
   useEffect(() => {
-    let cancelado = false
-    getUsuarios()
-      .then((lista) => {
-        if (cancelado) return
-        const sups = lista
-          .filter((u) => u.rol === 'SUPERVISOR' && u.activo)
-          .map((u) => ({ id: u.id, nombre: u.nombre }))
-        setSupervisores(sups)
-        // No se preselecciona el primero de la lista: ese supervisor recibía
-        // el aviso de una designación que nadie hizo (auditoría del 17-10-2026).
-      })
-      .catch((err) => console.error('No se pudieron cargar los supervisores:', err))
-    return () => {
-      cancelado = true
-    }
+    recargarSupervisores().catch((err) => console.error('No se pudieron cargar los supervisores:', err))
   }, [])
 
   const recargarContratos = async () => {
@@ -677,9 +687,19 @@ export default function GestionPanel({
     setContratoParaAsignar(c)
     setSupervisorElegido(c.supervisorId ? String(c.supervisorId) : '')
     setErrorAsignar('')
+    // Con la lista vacía —un SICOT recién instalado— elegir de ella no lleva a
+    // ninguna parte: se abre directo en el correo.
+    setFormaDeAsignar(supervisores.length > 0 ? 'DE_LA_LISTA' : 'POR_CORREO')
+    setInvitado({ nombre: '', email: '', telefono: '' })
+    setInvitacion(null)
   }
 
-  const guardarAsignacion = async () => {
+  const cerrarAsignacion = () => {
+    setContratoParaAsignar(null)
+    setInvitacion(null)
+  }
+
+  const asignarDeLaLista = async () => {
     if (!contratoParaAsignar || busyAsignar) return
     if (!supervisorElegido) {
       setErrorAsignar('Elija el supervisor.')
@@ -697,6 +717,44 @@ export default function GestionPanel({
       setBusyAsignar(false)
     }
   }
+
+  /**
+   * Le crea la cuenta al supervisor si no la tiene, le manda sus datos de
+   * acceso y le asigna el contrato, de una vez.
+   *
+   * No cierra el diálogo al terminar: lo que responde el servidor es
+   * justamente lo que Gestión tiene que leer. Si el correo no pudo salir, la
+   * clave viaja SOLO en esa respuesta, y cerrar aquí la perdería y dejaría una
+   * cuenta creada con la que nadie puede entrar.
+   */
+  const invitarYAsignar = async () => {
+    if (!contratoParaAsignar || busyAsignar) return
+    const datos = {
+      nombre: invitado.nombre.trim(),
+      email: invitado.email.trim(),
+      telefono: invitado.telefono.trim(),
+    }
+    if (!datos.nombre || !datos.email || !datos.telefono) {
+      setErrorAsignar('Escriba el nombre, el correo y el teléfono del supervisor.')
+      return
+    }
+    setBusyAsignar(true)
+    setErrorAsignar('')
+    try {
+      const hecho = await invitarSupervisor(contratoParaAsignar.id, datos)
+      await recargarContratos()
+      // La cuenta nueva tiene que aparecer en la lista para la próxima
+      // asignación; si falla, no es motivo para dar por mala la invitación.
+      await recargarSupervisores().catch(() => {})
+      setInvitacion(hecho)
+    } catch (e) {
+      setErrorAsignar(motivoDelServidor(e, 'No se pudo invitar al supervisor.'))
+    } finally {
+      setBusyAsignar(false)
+    }
+  }
+
+  const guardarAsignacion = () => (formaDeAsignar === 'POR_CORREO' ? invitarYAsignar() : asignarDeLaLista())
 
   const activarContrato = async () => {
     if (!contratoParaActivar || busyActivar) return
@@ -952,16 +1010,19 @@ export default function GestionPanel({
                 >
                   Editar
                 </button>
-                {supervisores.length > 0 && (
-                  <button
-                    className="btn-ghost"
-                    onClick={() => abrirAsignacion(c.contrato)}
-                    style={{ padding: '5px 10px', fontSize: 11.5 }}
-                    title={`Asignar o cambiar el supervisor de ${c.id}`}
-                  >
-                    {c.contrato.supervisorId ? 'Cambiar supervisor' : 'Asignar supervisor'}
-                  </button>
-                )}
+                {/* El botón ya no depende de que haya supervisores en SICOT.
+                    Esa condición escondía la asignación justo cuando más falta
+                    hacía —un SICOT recién instalado, sin ningún supervisor
+                    todavía— y dejaba los contratos sin a quién asignárselos:
+                    ahora desde aquí se invita a uno por su correo. */}
+                <button
+                  className="btn-ghost"
+                  onClick={() => abrirAsignacion(c.contrato)}
+                  style={{ padding: '5px 10px', fontSize: 11.5 }}
+                  title={`Asignar o cambiar el supervisor de ${c.id}`}
+                >
+                  {c.contrato.supervisorId ? 'Cambiar supervisor' : 'Asignar supervisor'}
+                </button>
                 {/* Solo desde BORRADOR: es la única transición de contrato que el
                     backend tiene confirmada (TransicionesDeEstado.validarContrato
                     cierra «volver a BORRADOR» y deja el resto sin definir). Lo que
@@ -1512,68 +1573,166 @@ export default function GestionPanel({
       {contratoParaAsignar && (
         <Modal
           title={contratoParaAsignar.supervisorId ? 'Cambiar el supervisor' : 'Asignar el supervisor'}
-          onClose={() => setContratoParaAsignar(null)}
+          onClose={cerrarAsignacion}
           width={460}
         >
-          <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>
-            Contrato <strong>{contratoParaAsignar.numeroContrato}</strong>
-            {contratoParaAsignar.supervisorNombre
-              ? `, hoy a cargo de ${contratoParaAsignar.supervisorNombre}.`
-              : ', todavía sin supervisor.'}
-          </p>
-          <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
-            SICOT le avisa al supervisor que elija y, si el contrato no tenía, da por hecha la designación (paso 1).
-          </p>
-          <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-            Supervisor
-            <select
-              value={supervisorElegido}
-              onChange={(e) => setSupervisorElegido(e.target.value)}
-              style={{ display: 'block', width: '100%', marginTop: 4 }}
-            >
-              <option value="">— Elija el supervisor —</option>
-              {supervisores.map((s) => (
-                <option key={s.id} value={String(s.id)}>
-                  {s.nombre}
-                </option>
-              ))}
-            </select>
-          </label>
+          {invitacion ? (
+            <ResultadoDeLaInvitacion
+              invitacion={invitacion}
+              correo={invitado.email.trim()}
+              onCerrar={cerrarAsignacion}
+            />
+          ) : (
+            <>
+              <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+                Contrato <strong>{contratoParaAsignar.numeroContrato}</strong>
+                {contratoParaAsignar.supervisorNombre
+                  ? `, hoy a cargo de ${contratoParaAsignar.supervisorNombre}.`
+                  : ', todavía sin supervisor.'}
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
+                SICOT le avisa al supervisor y, si el contrato no tenía, da por hecha la designación (paso 1).
+              </p>
 
-          {errorAsignar && (
-            <div
-              role="alert"
-              style={{
-                marginTop: 12,
-                padding: '8px 12px',
-                border: '1px solid var(--chip-red)',
-                background: 'var(--chip-red-bg)',
-                borderRadius: 8,
-                fontSize: 12.5,
-                color: 'var(--text-primary)',
-              }}
-            >
-              {errorAsignar}
-            </div>
+              <div
+                role="radiogroup"
+                aria-label="Cómo poner el supervisor"
+                style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}
+              >
+                {(
+                  [
+                    ['DE_LA_LISTA', 'Uno que ya trabaja en SICOT'],
+                    ['POR_CORREO', 'Invitar a uno nuevo por su correo'],
+                  ] as const
+                ).map(([valor, etiqueta]) => (
+                  <label
+                    key={valor}
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'center',
+                      fontSize: 12.5,
+                      color: 'var(--text-primary)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="forma-de-asignar"
+                      checked={formaDeAsignar === valor}
+                      onChange={() => {
+                        setFormaDeAsignar(valor)
+                        setErrorAsignar('')
+                      }}
+                    />
+                    {etiqueta}
+                  </label>
+                ))}
+              </div>
+
+              {formaDeAsignar === 'DE_LA_LISTA' ? (
+                <label style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                  Supervisor
+                  <select
+                    value={supervisorElegido}
+                    onChange={(e) => setSupervisorElegido(e.target.value)}
+                    style={{ display: 'block', width: '100%', marginTop: 4 }}
+                  >
+                    <option value="">— Elija el supervisor —</option>
+                    {supervisores.map((s) => (
+                      <option key={s.id} value={String(s.id)}>
+                        {s.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  {supervisores.length === 0 && (
+                    <span style={{ display: 'block', marginTop: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
+                      No hay ningún supervisor activo en SICOT todavía. Invite a uno por su correo.
+                    </span>
+                  )}
+                </label>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '0 0 12px', lineHeight: 1.6 }}>
+                    A ese correo le llegan el usuario y la clave con los que entrará después de instalar SICOT. Si ya
+                    tiene cuenta, conserva su clave y solo se le asigna el contrato.
+                  </p>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {(
+                      [
+                        // El ejemplo del nombre es genérico a propósito: un
+                        // nombre real de alguien del Centro en un campo vacío
+                        // se lee como si ya estuviera escrito.
+                        ['nombre', 'Nombre completo', 'text', 'Nombre y apellidos'],
+                        ['email', 'Correo', 'email', 'nombre@sena.edu.co'],
+                        ['telefono', 'Teléfono', 'tel', '3001234567'],
+                      ] as const
+                    ).map(([campo, etiqueta, tipo, ejemplo]) => (
+                      <label key={campo} style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>
+                        {etiqueta}
+                        <input
+                          type={tipo}
+                          value={invitado[campo]}
+                          placeholder={ejemplo}
+                          onChange={(e) => setInvitado({ ...invitado, [campo]: e.target.value })}
+                          style={{ display: 'block', width: '100%', marginTop: 4, padding: '8px 12px', fontSize: 13 }}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  {/* Se dice aquí y no después: el teléfono se guarda con la
+                      cuenta porque es dato obligatorio del usuario, pero SICOT
+                      no manda mensajes de texto y no los va a mandar mientras
+                      eso exija una pasarela de pago. */}
+                  <p style={{ fontSize: 11.5, color: 'var(--text-muted)', margin: '10px 0 0', lineHeight: 1.6 }}>
+                    El teléfono queda guardado con la cuenta. Los datos de acceso salen solo por correo: SICOT no envía
+                    mensajes de texto.
+                  </p>
+                </>
+              )}
+
+              {errorAsignar && (
+                <div
+                  role="alert"
+                  style={{
+                    marginTop: 12,
+                    padding: '8px 12px',
+                    border: '1px solid var(--chip-red)',
+                    background: 'var(--chip-red-bg)',
+                    borderRadius: 8,
+                    fontSize: 12.5,
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  {errorAsignar}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
+                <button
+                  className="btn-ghost"
+                  onClick={cerrarAsignacion}
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn-green"
+                  onClick={guardarAsignacion}
+                  disabled={busyAsignar}
+                  style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
+                >
+                  {busyAsignar
+                    ? formaDeAsignar === 'POR_CORREO'
+                      ? 'Invitando…'
+                      : 'Asignando…'
+                    : formaDeAsignar === 'POR_CORREO'
+                      ? 'Invitar y asignar'
+                      : 'Guardar'}
+                </button>
+              </div>
+            </>
           )}
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 20, flexWrap: 'wrap' }}>
-            <button
-              className="btn-ghost"
-              onClick={() => setContratoParaAsignar(null)}
-              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
-            >
-              Cancelar
-            </button>
-            <button
-              className="btn-green"
-              onClick={guardarAsignacion}
-              disabled={busyAsignar}
-              style={{ flex: 1, padding: '10px 0', fontSize: 13, minWidth: 110 }}
-            >
-              {busyAsignar ? 'Asignando…' : 'Guardar'}
-            </button>
-          </div>
         </Modal>
       )}
 
@@ -1639,5 +1798,109 @@ export default function GestionPanel({
         </Modal>
       )}
     </AppShell>
+  )
+}
+
+/**
+ * Qué pasó con la invitación, dicho sin adornos.
+ *
+ * <p>Lo importante no es celebrar: es que Gestión sepa si el supervisor ya
+ * puede entrar o si todavía falta algo. Cuando el correo no sale —el servidor
+ * no está configurado, o lo rechazó—, la clave recién creada solo existe en
+ * esta respuesta: o se muestra aquí y alguien la entrega, o la cuenta queda
+ * creada y nadie puede usarla.
+ */
+function ResultadoDeLaInvitacion({
+  invitacion,
+  correo,
+  onCerrar,
+}: {
+  invitacion: InvitacionDeSupervisorResponse
+  correo: string
+  onCerrar: () => void
+}) {
+  const salioElCorreo = invitacion.credencialesEnviadas
+  const clave = invitacion.claveParaEntregar
+  return (
+    <div>
+      {/* Verde solo si el correo salió de verdad. Cuando no salió no es un
+          fallo —la cuenta existe y el contrato quedó asignado— pero tampoco es
+          un «listo»: queda algo por hacer, y se pinta con el azul de
+          «atención» que ya usa el resto de la aplicación. La paleta no tiene
+          ámbar y no se inventa uno por una pantalla. */}
+      <div
+        role="status"
+        style={{
+          padding: '10px 12px',
+          border: `1px solid var(${salioElCorreo ? '--chip-green' : '--chip-blue'})`,
+          background: `var(${salioElCorreo ? '--chip-green-bg' : '--chip-blue-bg'})`,
+          borderRadius: 8,
+          fontSize: 12.5,
+          color: 'var(--text-primary)',
+          lineHeight: 1.6,
+        }}
+      >
+        {invitacion.detalle}
+      </div>
+
+      <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', margin: '12px 0 0', lineHeight: 1.6 }}>
+        El contrato <strong>{invitacion.contrato.numeroContrato}</strong> queda a cargo de{' '}
+        <strong>{invitacion.contrato.supervisorNombre}</strong>.
+      </p>
+
+      {clave && (
+        <div
+          style={{
+            marginTop: 14,
+            padding: 12,
+            border: '1px solid var(--border)',
+            borderRadius: 8,
+            background: 'var(--bg-elevated, transparent)',
+          }}
+        >
+          <p style={{ fontSize: 12, color: 'var(--text-primary)', margin: '0 0 10px', lineHeight: 1.6 }}>
+            <strong>Entréguele usted estos datos.</strong> La clave no se vuelve a mostrar: si cierra esta ventana sin
+            copiarla, habrá que restablecerla desde Administración.
+          </p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {/* El correo que guardó el servidor, no el que se tecleó: la
+                cuenta se crea con el correo en minúsculas, y entregar otra
+                forma de escribirlo invita a un intento de entrada fallido. */}
+            <DatoDeAcceso etiqueta="Usuario" valor={invitacion.contrato.supervisorEmail ?? correo} />
+            <DatoDeAcceso etiqueta="Clave" valor={clave} />
+          </div>
+        </div>
+      )}
+
+      <div style={{ display: 'flex', marginTop: 20 }}>
+        <button className="btn-green" onClick={onCerrar} style={{ flex: 1, padding: '10px 0', fontSize: 13 }}>
+          {clave ? 'Ya la copié, cerrar' : 'Listo'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function DatoDeAcceso({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', minWidth: 52 }}>{etiqueta}</span>
+      <code
+        style={{
+          flex: 1,
+          minWidth: 160,
+          padding: '6px 10px',
+          border: '1px solid var(--border)',
+          borderRadius: 6,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 13,
+          color: 'var(--text-primary)',
+          wordBreak: 'break-all',
+        }}
+      >
+        {valor}
+      </code>
+      <BotonCopiar texto={valor} etiqueta={`Copiar ${etiqueta.toLowerCase()}`} />
+    </div>
   )
 }
