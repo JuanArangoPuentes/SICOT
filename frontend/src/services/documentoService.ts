@@ -3,6 +3,7 @@
 // backend; el frontend nunca habla con Ollama directamente.
 
 import { abrirArchivo, guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
+import { conCopiaLocal } from './copiaLocal'
 import { ApiError, apiFetch, apiFetchBlob, apiFetchRespuesta } from './api/client'
 import { historialParaElCopiloto } from './historialCopiloto'
 import type {
@@ -17,8 +18,12 @@ import type {
 } from './api/types'
 import type { ChatMsg } from '@/types/domain'
 
+// Con copia local, pero solo la ficha de cada documento: sin red se ve qué hay
+// en el expediente y en qué estado está. Los bytes NO se guardan — hasta 20 MB
+// por documento —, así que descargar uno sigue exigiendo red (ADR-015).
 export function getDocumentosContrato(contratoId: number): Promise<DocumentoResponse[]> {
-  return apiFetch<DocumentoResponse[]>(`/api/contratos/${contratoId}/documentos`)
+  const ruta = `/api/contratos/${contratoId}/documentos`
+  return conCopiaLocal(ruta, () => apiFetch<DocumentoResponse[]>(ruta))
 }
 
 // `formatoId` indica de qué formato institucional es instancia el archivo — el

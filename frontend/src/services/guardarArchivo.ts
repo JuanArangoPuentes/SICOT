@@ -119,5 +119,11 @@ function descargarComoNavegador(contenido: Blob, nombreArchivo: string) {
   document.body.appendChild(enlace)
   enlace.click()
   enlace.remove()
-  URL.revokeObjectURL(url)
+  // La dirección NO se libera en el acto. El clic solo le pide al navegador
+  // que empiece la descarga; leer los bytes viene después, y liberar la
+  // dirección en el mismo tic se los quita de debajo: el archivo sale vacío o
+  // a medias, y el lector lo da por dañado. Es la misma carrera que dejaba la
+  // pestaña en blanco en `abrirArchivo`, que se corrigió allí y aquí no.
+  // Un minuto basta de sobra para un archivo que ya está entero en memoria.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }

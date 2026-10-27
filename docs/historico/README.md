@@ -11,6 +11,7 @@ documentación vigente, un documento fechado se lee como si siguiera valiendo.
 | --- | --- |
 | [`AUDITORIA_2026-09-08.md`](./AUDITORIA_2026-09-08.md) | Auditoría técnica del repositorio justo después de integrar el motor de automatizaciones |
 | [`AUDITORIA_MOVIL_2026-09-16.md`](./AUDITORIA_MOVIL_2026-09-16.md) | Medición de la interfaz en pantalla de teléfono, entrada del trabajo de adaptación a móvil |
+| [`AUDITORIA_2026-10-26.md`](./AUDITORIA_2026-10-26.md) | Auditoría del repositorio a partir de los documentos que se descargaban y no abrían: por qué la generación no era la culpable y qué se corrigió en la descarga |
 | [`REVISION_ARQUITECTURA_2026-09-08.md`](./REVISION_ARQUITECTURA_2026-09-08.md) | Revisión crítica de arquitectura y qué se corrigió a partir de ella |
 | [`orca/`](./orca) | La flota de agentes que ejecutó seis tareas en agosto y septiembre de 2026, cerrada desde entonces. Los briefs de `orca/tareas/` cuentan qué cambió cada una |
 | [`FASE_0_INSPECCION.md`](./FASE_0_INSPECCION.md), [`FASE_2_AUDITORIA_BD.md`](./FASE_2_AUDITORIA_BD.md), [`SICOT_CHECKPOINT_FASE_3.md`](./SICOT_CHECKPOINT_FASE_3.md), [`AUDIT_QUERIES.sql`](./AUDIT_QUERIES.sql) | Reportes y consultas de las fases iniciales del proyecto |

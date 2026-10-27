@@ -91,6 +91,28 @@ describe('guardarArchivo', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
+  it('no libera la dirección del archivo mientras el navegador aún no lo ha leído', async () => {
+    // El clic solo pide la descarga; los bytes se leen después. Liberar la
+    // dirección en el mismo tic se los quita de debajo y el archivo baja
+    // vacío o a medias: así se abre «con error» un PDF que salió entero del
+    // servidor.
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:prueba')
+      const liberar = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+      vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+      await expect(guardarArchivo(new Blob(['x']), 'acta.pdf')).resolves.toBe('navegador')
+      expect(liberar).not.toHaveBeenCalled()
+
+      // Y se libera después, para no dejar los bytes retenidos en memoria.
+      vi.advanceTimersByTime(60_000)
+      expect(liberar).toHaveBeenCalledWith('blob:prueba')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('en el instalador de escritorio también conserva el patrón de navegador', async () => {
     // El WebView de escritorio sí descarga por sí mismo.
     ;(window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {}

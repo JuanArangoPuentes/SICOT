@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GestionPanel from './GestionPanel'
 import { PrefsProvider } from '@/prefs'
 import { contrato, sesionGestion } from '@/test/dobles'
+import type { InvitacionDeSupervisorResponse } from '@/services/api/types'
 
 /**
  * Pruebas del panel de Gestión Contractual.
@@ -20,6 +21,8 @@ vi.mock('@/services/contratoService', () => ({
   crearContrato: vi.fn(),
   actualizarContrato: vi.fn(),
   cambiarEstadoContrato: vi.fn(),
+  asignarSupervisor: vi.fn(),
+  invitarSupervisor: vi.fn(),
 }))
 vi.mock('@/services/usuarioService', () => ({
   getUsuarios: vi.fn(),
@@ -319,6 +322,204 @@ describe('GestionPanel', () => {
 
       expect(await screen.findByText(/La fecha de fin no puede ser anterior/)).toBeInTheDocument()
       expect(screen.getByText('Guardar los cambios')).toBeInTheDocument()
+    })
+  })
+
+  /**
+   * Poner supervisor en un contrato por su correo.
+   *
+   * POR QUÉ IMPORTA. Hasta el 26-10-2026 Gestión solo podía elegir de una
+   * lista de supervisores que ya existían: crear la cuenta y mandarle la clave
+   * eran dos acciones más, de otra persona (el Administrador). Un supervisor
+   * nuevo no recibía nada y el contrato se quedaba sin nadie a cargo. Lo que
+   * se fija aquí es que la pantalla NO dé por hecho que el correo salió: si no
+   * salió, la clave recién creada solo existe en esa respuesta y tiene que
+   * verse, o la cuenta queda creada y nadie puede entrar con ella.
+   */
+  describe('invitar a un supervisor por su correo', () => {
+    const invitacion = (parcial: Partial<InvitacionDeSupervisorResponse> = {}): InvitacionDeSupervisorResponse => ({
+      contrato: contrato({
+        supervisorId: 9,
+        supervisorNombre: 'Supervisora Nueva',
+        // El backend guarda el correo en minúsculas: por eso es el servidor
+        // quien dice con qué usuario se entra, no lo que se tecleó.
+        supervisorEmail: 'nueva@sena.edu.co',
+      }),
+      cuentaCreada: true,
+      credencialesEnviadas: true,
+      claveParaEntregar: null,
+      detalle: 'Cuenta creada. Sus datos de acceso salieron a nueva@sena.edu.co.',
+      ...parcial,
+    })
+
+    // `restoreAllMocks` deshace los espías, pero no borra las llamadas
+    // anotadas por los vi.fn() de la factoría de `vi.mock`: sin esto, la
+    // prueba que comprueba que NO se llamó al servidor ve la llamada de la
+    // prueba anterior.
+    beforeEach(async () => {
+      vi.mocked((await import('@/services/contratoService')).invitarSupervisor).mockClear()
+    })
+
+    async function abrirElDialogo() {
+      const { getContratos } = await import('@/services/contratoService')
+      vi.mocked(getContratos).mockResolvedValue([contrato({ supervisorId: null, supervisorNombre: null })])
+      montar()
+      fireEvent.click(await screen.findByTitle('Asignar o cambiar el supervisor de CTMA-2026-0184'))
+    }
+
+    function escribirAlInvitado() {
+      fireEvent.change(screen.getByPlaceholderText('Nombre y apellidos'), {
+        target: { value: 'Supervisora Nueva' },
+      })
+      // A propósito con mayúsculas: el backend crea la cuenta en minúsculas, y
+      // el usuario que se le entrega tiene que ser el que de verdad quedó
+      // guardado, no el que alguien escribió.
+      fireEvent.change(screen.getByPlaceholderText('nombre@sena.edu.co'), {
+        target: { value: 'Nueva@sena.edu.co' },
+      })
+      fireEvent.change(screen.getByPlaceholderText('3001234567'), { target: { value: '3009998877' } })
+    }
+
+    /**
+     * Sin supervisores en SICOT, la condición anterior escondía el botón de
+     * asignar: los contratos de un SICOT recién instalado no se podían asignar
+     * a nadie, que es justo cuando invitar hace falta.
+     */
+    it('sin ningún supervisor en SICOT el botón sigue estando y abre en «invitar por correo»', async () => {
+      await abrirElDialogo()
+
+      expect(screen.getByLabelText('Invitar a uno nuevo por su correo')).toBeChecked()
+      expect(screen.getByPlaceholderText('nombre@sena.edu.co')).toBeInTheDocument()
+    })
+
+    it('con supervisores en SICOT abre en la lista, y se puede cambiar al correo', async () => {
+      const { getUsuarios } = await import('@/services/usuarioService')
+      vi.mocked(getUsuarios).mockResolvedValue([
+        {
+          id: 3,
+          nombre: 'Alex Fernando Zapata',
+          email: 'supervisor@soy.sena.edu.co',
+          telefono: null,
+          rol: 'SUPERVISOR',
+          activo: true,
+          fechaCreacion: '2026-01-01T00:00:00Z',
+        },
+      ])
+
+      await abrirElDialogo()
+
+      await waitFor(() => expect(screen.getByLabelText('Uno que ya trabaja en SICOT')).toBeChecked())
+      expect(screen.queryByPlaceholderText('nombre@sena.edu.co')).not.toBeInTheDocument()
+
+      fireEvent.click(screen.getByLabelText('Invitar a uno nuevo por su correo'))
+
+      expect(screen.getByPlaceholderText('nombre@sena.edu.co')).toBeInTheDocument()
+    })
+
+    it('manda al servidor el nombre, el correo y el teléfono escritos', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+      vi.mocked(invitarSupervisor).mockResolvedValue(invitacion())
+
+      await abrirElDialogo()
+      escribirAlInvitado()
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      await waitFor(() =>
+        expect(invitarSupervisor).toHaveBeenCalledWith(1, {
+          nombre: 'Supervisora Nueva',
+          email: 'Nueva@sena.edu.co',
+          telefono: '3009998877',
+        }),
+      )
+    })
+
+    it('con un campo vacío no llama al servidor y dice qué falta', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+
+      await abrirElDialogo()
+      fireEvent.change(screen.getByPlaceholderText('nombre@sena.edu.co'), {
+        target: { value: 'nueva@sena.edu.co' },
+      })
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/nombre, el correo y el teléfono/)
+      expect(invitarSupervisor).not.toHaveBeenCalled()
+    })
+
+    /** Lo que esta pantalla existe para no perder. */
+    it('si el correo no salió enseña la clave, avisa de que no se repite y no cierra', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+      vi.mocked(invitarSupervisor).mockResolvedValue(
+        invitacion({
+          credencialesEnviadas: false,
+          claveParaEntregar: 'Hk7mRt2pQw9xZv4n',
+          detalle: 'La cuenta quedó creada, pero el correo no salió. Entréguele usted la clave.',
+        }),
+      )
+
+      await abrirElDialogo()
+      escribirAlInvitado()
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      expect(await screen.findByText('Hk7mRt2pQw9xZv4n')).toBeInTheDocument()
+      // El usuario que se entrega es el que guardó el servidor —en minúsculas—,
+      // no el «Nueva@sena.edu.co» que se tecleó: con el otro, el primer intento
+      // de entrar podría fallar.
+      expect(screen.getByText('nueva@sena.edu.co')).toBeInTheDocument()
+      expect(screen.queryByText('Nueva@sena.edu.co')).not.toBeInTheDocument()
+      expect(screen.getByText(/no se vuelve a mostrar/)).toBeInTheDocument()
+      expect(screen.getByText('Ya la copié, cerrar')).toBeInTheDocument()
+    })
+
+    it('si el correo salió no enseña ninguna clave', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+      vi.mocked(invitarSupervisor).mockResolvedValue(invitacion())
+
+      await abrirElDialogo()
+      escribirAlInvitado()
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      expect(await screen.findByText(/salieron a nueva@sena.edu.co/)).toBeInTheDocument()
+      expect(screen.queryByText(/no se vuelve a mostrar/)).not.toBeInTheDocument()
+      expect(screen.getByText('Listo')).toBeInTheDocument()
+    })
+
+    /**
+     * A un supervisor que ya trabaja en SICOT no se le manda clave nueva: la
+     * suya sigue sirviendo. Enseñar una aquí sería mentira, y además dejaría
+     * que cualquiera con acceso a Gestión le restableciera la clave.
+     */
+    it('a uno que ya tenía cuenta solo le asigna el contrato, sin clave', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+      vi.mocked(invitarSupervisor).mockResolvedValue(
+        invitacion({
+          cuentaCreada: false,
+          detalle: 'Ese supervisor ya tenía cuenta en SICOT: conserva su clave y se le asignó el contrato.',
+        }),
+      )
+
+      await abrirElDialogo()
+      escribirAlInvitado()
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      expect(await screen.findByText(/ya tenía cuenta en SICOT/)).toBeInTheDocument()
+      expect(screen.queryByText(/no se vuelve a mostrar/)).not.toBeInTheDocument()
+    })
+
+    it('si el servidor rechaza la invitación lo dice y deja corregir', async () => {
+      const { invitarSupervisor } = await import('@/services/contratoService')
+      const { ApiError } = await import('@/services/api/client')
+      vi.mocked(invitarSupervisor).mockRejectedValue(
+        new ApiError(400, 'Ese correo es de un administrador, no de un supervisor.'),
+      )
+
+      await abrirElDialogo()
+      escribirAlInvitado()
+      fireEvent.click(screen.getByText('Invitar y asignar'))
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/no de un supervisor/)
+      // El formulario sigue ahí con lo escrito: se corrige el correo y se reintenta.
+      expect(screen.getByDisplayValue('Nueva@sena.edu.co')).toBeInTheDocument()
     })
   })
 })

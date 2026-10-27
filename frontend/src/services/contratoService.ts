@@ -2,6 +2,7 @@
 // (autenticado; corregir y cambiar estado exigen rol GESTION o ADMINISTRADOR).
 
 import { apiFetch, apiFetchBlob } from './api/client'
+import { conCopiaLocal } from './copiaLocal'
 import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import type {
   AcuerdoDeEntregasResponse,
@@ -12,6 +13,8 @@ import type {
   ContratoResponse,
   CrearContratoRequest,
   EstadoContrato,
+  InvitacionDeSupervisorResponse,
+  InvitarSupervisorRequest,
   ItemDeSolicitud,
   LecturaDeContactosResponse,
   SolicitudDePedidoResponse,
@@ -23,7 +26,10 @@ export function getContratos(supervisorId?: number, estado?: string): Promise<Co
   if (supervisorId != null) params.set('supervisorId', String(supervisorId))
   if (estado) params.set('estado', estado)
   const qs = params.toString()
-  return apiFetch<ContratoResponse[]>(`/api/contratos${qs ? `?${qs}` : ''}`)
+  const ruta = `/api/contratos${qs ? `?${qs}` : ''}`
+  // Con copia local: es la primera pantalla del supervisor. Sin ella, quedarse
+  // sin red deja la bandeja vacía y parece que no tiene contratos.
+  return conCopiaLocal(ruta, () => apiFetch<ContratoResponse[]>(ruta))
 }
 
 export function crearContrato(body: CrearContratoRequest): Promise<ContratoResponse> {
@@ -67,6 +73,22 @@ export function asignarSupervisor(id: number, supervisorId: number): Promise<Con
   return apiFetch<ContratoResponse>(`/api/contratos/${id}/supervisor`, {
     method: 'PATCH',
     body: JSON.stringify({ supervisorId }),
+  })
+}
+
+/**
+ * Pone un supervisor en el contrato por su correo, creándole la cuenta si no
+ * la tiene y mandándole a ese correo el usuario y la clave con los que entrará
+ * después de instalar SICOT.
+ *
+ * Lo que devuelve hay que MIRARLO, no darlo por bueno: si el correo no salió,
+ * `claveParaEntregar` trae la única copia de la clave y la pantalla tiene que
+ * enseñarla. Un supervisor que ya existía conserva la suya y no recibe nada.
+ */
+export function invitarSupervisor(id: number, body: InvitarSupervisorRequest): Promise<InvitacionDeSupervisorResponse> {
+  return apiFetch<InvitacionDeSupervisorResponse>(`/api/contratos/${id}/supervisor/invitacion`, {
+    method: 'POST',
+    body: JSON.stringify(body),
   })
 }
 
@@ -120,7 +142,8 @@ export async function descargarSolicitudDePedido(
 // y el teléfono del contratista.
 
 export function obtenerEntregasAcordadas(contratoId: number): Promise<AcuerdoDeEntregasResponse> {
-  return apiFetch<AcuerdoDeEntregasResponse>(`/api/contratos/${contratoId}/entregas-acordadas`)
+  const ruta = `/api/contratos/${contratoId}/entregas-acordadas`
+  return conCopiaLocal(ruta, () => apiFetch<AcuerdoDeEntregasResponse>(ruta))
 }
 
 /**
@@ -139,7 +162,8 @@ export function guardarEntregasAcordadas(
 }
 
 export function obtenerContactosSstAmbiental(contratoId: number): Promise<ContactosDelContratoResponse> {
-  return apiFetch<ContactosDelContratoResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental`)
+  const ruta = `/api/contratos/${contratoId}/contactos-sst-ambiental`
+  return conCopiaLocal(ruta, () => apiFetch<ContactosDelContratoResponse>(ruta))
 }
 
 /** Reemplaza los contactos; una lista vacía los borra. */

@@ -57,6 +57,80 @@ public class UsuarioService {
         return UsuarioMapper.toResponse(buscar(id));
     }
 
+    /**
+     * El supervisor que Gestión acaba de poner en un contrato: quién es, y si
+     * la cuenta nació ahora, con qué clave y si el correo llegó a salir.
+     */
+    public record SupervisorInvitado(Usuario usuario, String claveNueva, boolean credencialesEnviadas) {
+        /** La cuenta no existía y se creó con esta asignación. */
+        public boolean cuentaCreada() {
+            return claveNueva != null;
+        }
+    }
+
+    /**
+     * Busca al supervisor por su correo y, si no está en SICOT, le crea la
+     * cuenta y le manda por correo con qué entrar.
+     *
+     * <h2>Qué puede y qué no puede hacer quien llama</h2>
+     * Esto lo usa Gestión, que <b>no</b> administra usuarios. Por eso aquí no
+     * se recibe ningún rol: lo que se crea es siempre un {@link Rol#SUPERVISOR}
+     * y nada más. Gestión no puede crear administradores ni gestores por este
+     * camino, ni cambiarle el rol a nadie; eso sigue siendo de ADMINISTRADOR.
+     *
+     * <h2>Si el correo ya existe</h2>
+     * No se toca la cuenta: ni la clave, ni el nombre, ni el rol. Se devuelve
+     * tal cual para asignarle el contrato. Mandarle una clave nueva a alguien
+     * que ya trabaja en SICOT le echaría abajo la que usa, y además dejaría
+     * que cualquiera con acceso a Gestión restableciera la clave de un
+     * supervisor escribiendo su correo.
+     *
+     * <p>Una cuenta que existe pero <b>no es de supervisor</b> se rechaza: poner
+     * al administrador del Centro como supervisor de un contrato por haber
+     * escrito mal un correo es un error que conviene que duela pronto.
+     */
+    @Transactional
+    public SupervisorInvitado invitarSupervisor(String nombre, String email, String telefono) {
+        String correo = email.trim().toLowerCase();
+        Usuario existente = usuarioRepository.findByEmail(correo).orElse(null);
+        if (existente != null) {
+            if (existente.getRol() != Rol.SUPERVISOR) {
+                throw new BusinessException("El correo " + correo + " ya es de una cuenta de "
+                        + existente.getRol() + " en SICOT, no de un supervisor. Revise el correo; si de verdad esa"
+                        + " persona va a supervisar, el cambio de rol lo hace el Administrador.");
+            }
+            if (!existente.isActivo()) {
+                throw new BusinessException("La cuenta de " + correo + " está inactiva. Pídale al Administrador"
+                        + " que la reactive antes de asignarle un contrato.");
+            }
+            return new SupervisorInvitado(existente, null, false);
+        }
+
+        String clave = ClaveGenerada.nueva();
+        Usuario usuario = new Usuario();
+        usuario.setNombre(nombre.trim());
+        usuario.setEmail(correo);
+        usuario.setPassword(passwordEncoder.encode(clave));
+        usuario.setTelefono(telefono.trim());
+        usuario.setRol(Rol.SUPERVISOR);
+        usuario.setActivo(true);
+        Usuario creado = usuarioRepository.save(usuario);
+
+        boolean enviadas = false;
+        try {
+            emailService.enviarCredenciales(creado.getEmail(), creado.getNombre(), clave);
+            enviadas = true;
+        } catch (Exception e) {
+            // La cuenta queda creada igual, y quien invita se entera por la
+            // respuesta: sin correo configurado, la clave se la entrega él. Si
+            // esto tumbara la transacción, un servidor de correo mal puesto
+            // impediría asignar contratos, que es lo único que no puede pasar.
+            log.warn("Supervisor {} creado, pero no se le pudieron enviar las credenciales: {}",
+                    creado.getEmail(), e.getMessage());
+        }
+        return new SupervisorInvitado(creado, clave, enviadas);
+    }
+
     @Transactional
     public UsuarioResponse crear(CrearUsuarioRequest request) {
         String email = request.email().trim().toLowerCase();

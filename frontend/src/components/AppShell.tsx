@@ -8,6 +8,7 @@
 // mismo software y no como tres pantallas distintas.
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
 import { SenaLogo, UserMenu } from './ui'
 import { IconChevron, IconSettings } from './icons'
 
@@ -274,6 +275,9 @@ export default function AppShell({
           />
         </header>
 
+        {/* Encima de todo lo demás y en los tres paneles: si lo que se ve no
+            vino del servidor, eso manda sobre cualquier otra cosa en pantalla. */}
+        <AvisoDeCopiaLocal />
         {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>

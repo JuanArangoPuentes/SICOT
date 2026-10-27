@@ -113,7 +113,7 @@ public class DocumentoController {
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "403", description = "Sin acceso a este contrato",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
-            @ApiResponse(responseCode = "404", description = "Documento no encontrado o sin archivo guardado",
+            @ApiResponse(responseCode = "404", description = "Documento no encontrado, sin archivo guardado, o con un archivo que ningún lector abre",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class))),
             @ApiResponse(responseCode = "500", description = "Error interno del servidor",
                     content = @Content(schema = @Schema(implementation = co.sena.sicot.exception.ErrorResponse.class)))
@@ -129,6 +129,35 @@ public class DocumentoController {
             throw new ResourceNotFoundException("El documento «" + documento.getNombre()
                     + "» no tiene archivo guardado: se registró sin contenido y no hay nada que descargar.");
         }
+        // El estado de integridad se calcula ANTES de mirar si el archivo se
+        // abre, porque manda sobre esa comprobación: ver más abajo.
+        VerificacionIntegridadResponse.Estado integridad = documentoService.estadoDeIntegridad(documento);
+        // Lo mismo que lo anterior, un paso más adentro. Desde el 20-10-2026 un
+        // archivo que no se abre no entra (ArchivoValidator.porQueNoSeAbre),
+        // pero las filas anteriores siguen en el expediente: el acta del
+        // contrato de prueba son 44 bytes de texto que empiezan por «%PDF-1.4»,
+        // y la descarga los servía como un PDF de verdad. El supervisor bajaba
+        // el archivo, su lector lo daba por dañado y nada le decía por qué ni
+        // qué hacer. Entregar esos bytes no sirve a nadie: lo que sirve es el
+        // motivo.
+        //
+        // Un documento ALTERADO queda fuera de esta regla a propósito. Que sus
+        // bytes ya no coincidan con lo que se firmó es un hallazgo más grave y
+        // más preciso que «no se abre», y tiene su propio aviso en el cliente;
+        // además, negar la descarga escondería la evidencia justo cuando hay
+        // que examinarla. Se entrega, con la cabecera diciendo qué pasó.
+        if (integridad != VerificacionIntegridadResponse.Estado.ALTERADO) {
+            ArchivoValidator.porQueNoSeAbreAlEntregarlo(documento.getContenido(), documento.getTipo(), documento.getNombre())
+                    .ifPresent(motivo -> {
+                        throw new ResourceNotFoundException("El archivo guardado de «" + documento.getNombre()
+                                + "» no se puede abrir" + (motivo == ArchivoValidator.NoSeAbre.SIN_CONTENIDO_DENTRO
+                                ? ": no tiene ninguna página."
+                                : ": está dañado o su carga se cortó a mitad.")
+                                + " Entró al expediente antes de que SICOT comprobara que los archivos se abren."
+                                + " Cárguelo de nuevo" + (documento.getFirmaId() != null
+                                ? "; al estar firmado, genere y firme otra vez el documento." : "."));
+                    });
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         NombreDeDescarga.cabecera(documento.getNombre(), documento.getContentType()))
@@ -136,7 +165,7 @@ public class DocumentoController {
                 // auditoría automatizada pueda comprobarlo sin una segunda
                 // petición. La verificación legible para una persona está en
                 // GET /{id}/verificacion.
-                .header(CABECERA_INTEGRIDAD, documentoService.estadoDeIntegridad(documento).name())
+                .header(CABECERA_INTEGRIDAD, integridad.name())
                 // mediaTypeSeguro y no parseMediaType: esta cadena viene de la
                 // base, y las filas anteriores a la corrección del Content-Type
                 // pueden contener un valor que parseMediaType rechaza — lo que

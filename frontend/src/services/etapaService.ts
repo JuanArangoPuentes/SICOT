@@ -2,10 +2,12 @@
 // de subetapa (el servidor recalcula porcentaje y estado de la etapa).
 
 import { apiFetch } from './api/client'
+import { conCopiaLocal } from './copiaLocal'
 import type { ActualizarEstadoSubetapaRequest, EstadoSubetapa, EtapaResponse, SubetapaResponse } from './api/types'
 
 export function getEtapasContrato(contratoId: number): Promise<EtapaResponse[]> {
-  return apiFetch<EtapaResponse[]>(`/api/contratos/${contratoId}/etapas`)
+  const ruta = `/api/contratos/${contratoId}/etapas`
+  return conCopiaLocal(ruta, () => apiFetch<EtapaResponse[]>(ruta))
 }
 
 export function cambiarEstadoSubetapa(subetapaId: number, estado: EstadoSubetapa): Promise<SubetapaResponse> {
