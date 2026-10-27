@@ -37,8 +37,14 @@
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />
 
+    <!-- Los dos iconos, no solo el cuadrado: un lanzador que recorta en círculo
+         (la mayoría de los Android de hoy) usa `roundIcon` cuando existe, y sin
+         él recortaba el cuadrado por su cuenta y se comía los bordes del
+         logotipo. El adaptativo de mipmap-anydpi-v26 manda en Android 8 o
+         superior; estos dos son para los anteriores. -->
     <application
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:theme="@style/Theme.sicot"
         android:usesCleartextTraffic="${usesCleartextTraffic}"
