@@ -37,7 +37,7 @@ un servidor sin Ollama instalado. Detalle en
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
 | [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
-| [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional del sistema | — |
+| [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional y el [informe de empalme](./docs/producto/INFORME_DE_EMPALME.md), que lo explica de cero a quien no lo ha visto | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
 | [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
 | [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
