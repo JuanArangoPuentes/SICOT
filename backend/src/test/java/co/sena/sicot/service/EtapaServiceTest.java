@@ -39,6 +39,12 @@ class EtapaServiceTest {
     @Autowired
     private RegistroRepository registroRepository;
 
+    @Autowired
+    private co.sena.sicot.repository.DocumentoRepository documentoRepository;
+
+    @Autowired
+    private co.sena.sicot.repository.EntregaAcordadaRepository entregaRepository;
+
     private EtapaService etapaService;
     private Contrato contrato;
     private Etapa etapa;
@@ -51,10 +57,13 @@ class EtapaServiceTest {
         // rompa una prueba que no habla de ellas.
         RegistroService registroService = new RegistroService(
                 registroRepository, contratoRepository, evento -> { });
+        // UsuarioService entra vacío por el mismo motivo que el publicador: solo
+        // lo usa invitar a un supervisor por su correo, que no es de lo que
+        // habla esta prueba.
         ContratoService contratoService = new ContratoService(contratoRepository,
-                null, registroService, etapaRepository);
+                null, registroService, etapaRepository, null);
         etapaService = new EtapaService(etapaRepository, subetapaRepository,
-                contratoService, registroService);
+                contratoService, registroService, documentoRepository, entregaRepository);
 
         contrato = new Contrato();
         contrato.setNumeroContrato("CO1.PCCNTR.ETAPA");

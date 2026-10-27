@@ -9,13 +9,18 @@ SICOT con permiso.
 ## Por qué está curado y no es 1:1 con las ~25 rutas del backend
 
 Exponer cada endpoint mecánicamente como herramienta funciona mal para un LLM: demasiadas
-opciones parecidas, sin contexto de cuáles tienen sentido combinar. Este servidor expone 11
-herramientas de alto valor (lectura de contratos/etapas/alertas/formatos/usuarios/registros, más
-las escrituras que no dependen de reglas de negocio aún sin definir: crear contrato, asignar
-supervisor, avanzar una subetapa, marcar alerta leída). Deliberadamente **no** incluye:
-administración de cuentas (crear/editar/activar usuarios), cambio de estado de contrato (una
-máquina de estados con reglas de negocio; ver `TransicionesDeEstado` en el backend), ni carga de formatos
-(archivo binario, se puede agregar después con el mismo patrón).
+opciones parecidas, sin contexto de cuáles tienen sentido combinar. Este servidor expone 14
+herramientas de alto valor (lectura de
+contratos/etapas/alertas/formatos/usuarios/registros/listas de chequeo, más las escrituras que no
+dependen de reglas de negocio aún sin definir: crear contrato, asignar supervisor, cambiar el
+estado del contrato, avanzar una subetapa, marcar alerta leída). Deliberadamente **no** incluye:
+administración de cuentas (crear/editar/activar usuarios) ni carga de formatos (archivo binario,
+se puede agregar después con el mismo patrón).
+
+`cambiar_estado_contrato` se añadió el 06-10-2026: se había dejado fuera por ser «una máquina de
+estados con reglas de negocio», pero esas reglas ya viven en `TransicionesDeEstado` (el backend
+rechaza lo que no vale) y sin esta herramienta un contrato creado desde aquí se quedaba en
+BORRADOR para siempre, fuera de las reglas de calendario del motor.
 
 ## Configuración
 
@@ -39,7 +44,7 @@ npm run build
 SICOT_EMAIL=administrador@soy.sena.edu.co SICOT_PASSWORD=... node dist/smoke-test.js
 ```
 
-Arranca el servidor como subproceso, lista las 11 herramientas y llama tres de ellas (usuarios,
+Arranca el servidor como subproceso, lista las 14 herramientas y llama tres de ellas (usuarios,
 contratos, formatos) contra el backend real para confirmar que la autenticación y el transporte
 funcionan de punta a punta.
 

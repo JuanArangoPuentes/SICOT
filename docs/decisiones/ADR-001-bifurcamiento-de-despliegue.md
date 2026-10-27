@@ -2,6 +2,13 @@
 
 **Estado:** Aceptada · **Fecha:** 1 de septiembre de 2026
 
+> **Su decisión ya no rige.** El 26-10-2026 Juan eligió la interpretación A, que
+> aquí quedaba fuera de alcance; lo que vale ahora es
+> [ADR-015](./ADR-015-trabajo-sin-conexion-del-supervisor.md). Lo que sigue se
+> conserva porque el análisis de las tres interpretaciones y el motivo de haber
+> adoptado la B son justamente lo que explica por qué el sistema está hecho como
+> está hoy.
+
 ## Contexto
 
 SICOT se planteó desde el principio con dos formas de despliegue: una aplicación

@@ -3,8 +3,10 @@ package co.sena.sicot.dto.contrato;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -14,6 +16,12 @@ import java.time.LocalDate;
  * Mismos límites que {@link CrearContratoRequest}, campo por campo: un campo no
  * puede aceptar más caracteres al actualizar que al crear. Los máximos replican
  * las columnas de la tabla {@code contratos}.
+ *
+ * <p>Es un reemplazo completo, con dos excepciones desde el 22-10-2026:
+ * {@code correoContratista} y {@code telefonoContratista}. Sin el campo
+ * ({@code null}) se conserva el que había y vacío lo borra, porque esos dos los
+ * llena también el supervisor desde el registro de proveedores del SECOP II, y
+ * una corrección de Gestión hecha con la lista cargada antes no debe borrarlos.
  */
 public record ActualizarContratoRequest(
         @NotBlank(message = "El número de contrato es obligatorio.")
@@ -26,8 +34,11 @@ public record ActualizarContratoRequest(
 
         @NotNull(message = "El valor del contrato es obligatorio.")
         @DecimalMin(value = "0.01", message = "El valor debe ser mayor a cero.")
-        @Digits(integer = 16, fraction = 2,
-                message = "El valor del contrato admite máximo 16 dígitos enteros y 2 decimales.")
+        // 12 dígitos: hasta donde los documentos escriben el valor en letras
+        // (NumeroEnLetras). Con 16 se registraba un valor con el que el Acta
+        // de Inicio no se podía generar (auditoría del 02-10-2026).
+        @Digits(integer = 12, fraction = 2,
+                message = "El valor del contrato admite máximo 12 dígitos enteros y 2 decimales.")
         BigDecimal valor,
 
         LocalDate fechaInicio,
@@ -59,7 +70,32 @@ public record ActualizarContratoRequest(
         LocalDate fechaRegistroPresupuestal,
 
         @Size(max = 100, message = "El centro de costo no puede superar 100 caracteres.")
-        String centroCosto
+        String centroCosto,
+
+        // Lo que trae el acto de designación (GCCON-F-032). El enlace se valida
+        // contra el dominio del SECOP porque el panel lo ofrece para abrir: un
+        // enlace cualquiera salido de un PDF no debe llegar ahí.
+        @Size(max = 500, message = "El enlace del SECOP no puede superar 500 caracteres.")
+        @Pattern(regexp = "|https://community\\.secop\\.gov\\.co/.*",
+                message = "El enlace debe ser del SECOP II (https://community.secop.gov.co/…).")
+        String enlaceSecop,
+
+        @Size(max = 255, message = "El apoyo a la supervisión no puede superar 255 caracteres.")
+        String apoyoSupervision,
+
+        LocalDate fechaDesignacion,
+
+        @Size(max = 255, message = "El correo del contratista no puede superar 255 caracteres.")
+        @Email(message = "El correo del contratista no es válido.")
+        String correoContratista,
+
+        // Del registro de proveedores del SECOP II: el acta no lo trae. Se
+        // admiten dígitos, espacios, «+», guiones y paréntesis, que es como se
+        // escriben los teléfonos fijos y celulares en Colombia.
+        @Size(max = 40, message = "El teléfono del contratista no puede superar 40 caracteres.")
+        @Pattern(regexp = "|[0-9+() -]{7,40}",
+                message = "El teléfono del contratista solo admite dígitos, espacios, «+», guiones y paréntesis.")
+        String telefonoContratista
 ) {
 
     /**

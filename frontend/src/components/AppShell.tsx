@@ -8,6 +8,7 @@
 // mismo software y no como tres pantallas distintas.
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
 import { SenaLogo, UserMenu } from './ui'
 import { IconChevron, IconSettings } from './icons'
 
@@ -83,6 +84,7 @@ export default function AppShell({
   title,
   subtitle,
   actions,
+  barra,
   children,
 }: {
   /** Etiqueta del módulo/rol — se muestra en la cabecera y bajo la marca. */
@@ -98,6 +100,13 @@ export default function AppShell({
   title: string
   subtitle?: string
   actions?: ReactNode
+  /**
+   * Franja de ancho completo entre la cabecera y el contenido, para lo que
+   * cambia el contexto de toda la pantalla (el contrato en supervisión). No va
+   * en `actions`: la cabecera tiene alto fijo y ahí no cabía sin tapar el menú
+   * del usuario a 800 px.
+   */
+  barra?: ReactNode
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(leerColapsada)
@@ -266,6 +275,10 @@ export default function AppShell({
           />
         </header>
 
+        {/* Encima de todo lo demás y en los tres paneles: si lo que se ve no
+            vino del servidor, eso manda sobre cualquier otra cosa en pantalla. */}
+        <AvisoDeCopiaLocal />
+        {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>
     </div>

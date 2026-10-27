@@ -30,6 +30,11 @@ public final class ContratoMapper {
                 c.getNumeroRegistroPresupuestal(),
                 c.getFechaRegistroPresupuestal(),
                 c.getCentroCosto(),
+                c.getEnlaceSecop(),
+                c.getApoyoSupervision(),
+                c.getFechaDesignacion(),
+                c.getCorreoContratista(),
+                c.getTelefonoContratista(),
                 c.getFechaCreacion());
     }
 }

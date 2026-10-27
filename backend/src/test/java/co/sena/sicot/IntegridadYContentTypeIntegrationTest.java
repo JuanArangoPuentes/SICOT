@@ -36,7 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 class IntegridadYContentTypeIntegrationTest extends PruebaDeIntegracion {
 
-    private static final byte[] PDF = "%PDF-1.4 acta de inicio del contrato".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] PDF = ArchivoDePrueba.pdfDeUnaPagina("acta de inicio del contrato");
 
     /** Cada prueba usa su propio número de contrato: la base es compartida dentro de la clase. */
     private static final AtomicInteger SECUENCIA = new AtomicInteger(1);
@@ -140,6 +140,13 @@ class IntegridadYContentTypeIntegrationTest extends PruebaDeIntegracion {
      * La razón de existir de toda la columna: si alguien cambia los bytes
      * después de la firma, el sistema tiene que <b>decirlo</b>. Antes de esta
      * corrección el documento seguía apareciendo firmado y válido, sin rastro.
+     *
+     * <p>Fija además una precedencia: los bytes sustituidos de abajo tampoco
+     * se abren como PDF, y desde el 26-10-2026 la descarga rechaza los
+     * archivos que ningún lector abre. Un documento ALTERADO queda fuera de
+     * esa regla —se entrega, con la cabecera diciéndolo—, porque «cambió
+     * después de firmarse» es más grave y más preciso que «está dañado», y
+     * porque negar la descarga escondería la evidencia.
      */
     @Test
     void alterarElContenidoDespuesDeFirmarSeDetecta() throws Exception {

@@ -1,39 +1,24 @@
 import { useEffect, useState } from 'react'
-import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import AppShell, { type NavGroup } from '@/components/AppShell'
-import { Chip, Field, Modal, type ChipType } from '@/components/ui'
+import { Chip } from '@/components/ui'
 import {
-  IconAlertTriangle,
-  IconCheckCircle,
   IconClipboardList,
   IconDownload,
   IconFileText,
   IconGrid,
-  IconLock,
   IconSignature,
   IconTrash,
   IconUpload,
   IconUsers,
 } from '@/components/icons'
-import type {
-  AuthResponse,
-  EstadoFormato,
-  FirmaResponse,
-  FormatoDocumentalResponse,
-  Rol,
-  UsuarioResponse,
-} from '@/services/api/types'
+import SeguimientoSupervisores, { ResumenSeguimiento } from '@/components/admin/SeguimientoSupervisores'
+import { getSeguimiento } from '@/services/seguimientoService'
+import type { AuthResponse, FormatoDocumentalResponse, SeguimientoResponse } from '@/services/api/types'
 import type { AdminTab } from '@/types/domain'
-import {
-  getUsuarios,
-  crearUsuario,
-  actualizarUsuario,
-  cambiarEstadoUsuario,
-  enviarCredenciales,
-} from '@/services/usuarioService'
+import { getUsuarios, cambiarEstadoUsuario } from '@/services/usuarioService'
 import { getContratos } from '@/services/contratoService'
-import { getFormatos, subirFormato, eliminarFormato, descargarFormato } from '@/services/formatoService'
-import { getFirmas, crearFirma, cambiarEstadoFirma } from '@/services/firmaService'
+import { getFormatos, eliminarFormato, descargarFormato } from '@/services/formatoService'
+import { getFirmas, cambiarEstadoFirma } from '@/services/firmaService'
 import { ApiError } from '@/services/api/client'
 import { formatBytes, formatFecha } from '@/services/format'
 import { GridRow, MiniBtn, SectionHead, Widget } from '@/components/admin/piezas'
@@ -41,17 +26,9 @@ import { FormatoModal } from '@/components/admin/FormatoModal'
 import { ResetPasswordModal } from '@/components/admin/ResetPasswordModal'
 import { NewUserModal } from '@/components/admin/NewUserModal'
 import { NewFirmaModal } from '@/components/admin/NewFirmaModal'
-import {
-  ACTIVIDAD,
-  FORMATO_CHIP,
-  ROL_CARGO,
-  ROL_LABEL,
-  mapFirma,
-  mapUser,
-  randomPassword,
-  type FirmaRow,
-  type UserRow,
-} from '@/components/admin/tipos'
+import AvisoDeGuardado from '@/components/AvisoDeGuardado'
+import { useGuardadoDeArchivo } from '@/hooks/useGuardadoDeArchivo'
+import { FORMATO_CHIP, mapFirma, mapUser, type FirmaRow, type UserRow } from '@/components/admin/tipos'
 
 export default function AdminPanel({
   vista,
@@ -92,16 +69,30 @@ export default function AdminPanel({
   // eliminar formato). Antes se tragaban en silencio: se hacía clic y no pasaba
   // absolutamente nada, sin explicación.
   const [errorAccion, setErrorAccion] = useState('')
+  const descarga = useGuardadoDeArchivo()
+
+  const [seguimiento, setSeguimiento] = useState<SeguimientoResponse | null>(null)
+  const [errorSeguimiento, setErrorSeguimiento] = useState('')
+  const [cargandoSeguimiento, setCargandoSeguimiento] = useState(false)
+
+  const cargarSeguimiento = () => {
+    setCargandoSeguimiento(true)
+    setErrorSeguimiento('')
+    getSeguimiento()
+      .then(setSeguimiento)
+      .catch((e) =>
+        setErrorSeguimiento(
+          e instanceof ApiError
+            ? `No se pudo consultar el avance de los supervisores: ${e.message}`
+            : 'No se pudo consultar el avance de los supervisores. Revise la conexión y use «Actualizar».',
+        ),
+      )
+      .finally(() => setCargandoSeguimiento(false))
+  }
 
   const cargarFormatos = () => {
     getFormatos()
       .then(setFormatos)
-      .catch(() => setErrorDatos(true))
-  }
-
-  const cargarFirmas = () => {
-    getFirmas()
-      .then((lista) => setFirmas(lista.map(mapFirma)))
       .catch(() => setErrorDatos(true))
   }
 
@@ -133,6 +124,7 @@ export default function AdminPanel({
         if (!cancelado) setFirmas(lista.map(mapFirma))
       })
       .catch(fallo)
+    cargarSeguimiento()
     return () => {
       cancelado = true
     }
@@ -143,8 +135,10 @@ export default function AdminPanel({
     try {
       const actualizado = await cambiarEstadoUsuario(Number(u.id), { activo: !u.activo })
       setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, activo: actualizado.activo } : x)))
-    } catch {
-      setErrorAccion(`No se pudo cambiar el estado de ${u.nombre}.`)
+      cargarSeguimiento()
+    } catch (e) {
+      // El motivo del servidor dice qué hacer («tiene asignados 2 contratos en curso: reasígnelos…»).
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo cambiar el estado de ${u.nombre}.`)
     }
   }
 
@@ -153,8 +147,11 @@ export default function AdminPanel({
     try {
       const actualizada = await cambiarEstadoFirma(Number(f.id), { activa: !f.activa })
       setFirmas((fs) => fs.map((x) => (x.id === f.id ? { ...x, activa: actualizada.activa } : x)))
-    } catch {
-      setErrorAccion(`No se pudo cambiar el estado de la firma de ${f.usuario}.`)
+      // El seguimiento dice qué supervisores tienen firma: sin recargarlo,
+      // seguía diciendo «Sin firma electrónica» después de asignarla.
+      cargarSeguimiento()
+    } catch (e) {
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo cambiar el estado de la firma de ${f.usuario}.`)
     }
   }
 
@@ -164,18 +161,22 @@ export default function AdminPanel({
     try {
       await eliminarFormato(f.id)
       setFormatos((fs) => fs.filter((x) => x.id !== f.id))
-    } catch {
-      setErrorAccion(`No se pudo eliminar el formato ${f.codigo}.`)
+    } catch (e) {
+      setErrorAccion(e instanceof ApiError ? e.message : `No se pudo eliminar el formato ${f.codigo}.`)
     }
   }
-
-  const formatosObsoletos = formatos.filter((f) => f.estado === 'OBSOLETO').length
 
   const navGroups: NavGroup[] = [
     {
       label: 'Administración',
       items: [
         { id: 'dashboard', label: 'Panel de Control', icon: <IconGrid size={17} /> },
+        {
+          id: 'seguimiento',
+          label: 'Seguimiento de supervisores',
+          icon: <IconClipboardList size={17} />,
+          count: seguimiento?.supervisores.length,
+        },
         { id: 'documentos', label: 'Formatos documentales', icon: <IconFileText size={17} />, count: formatos.length },
       ],
     },
@@ -190,6 +191,10 @@ export default function AdminPanel({
 
   const TITULO: Record<AdminTab, { titulo: string; sub: string }> = {
     dashboard: { titulo: 'Panel de Control', sub: 'Cifras generales del sistema' },
+    seguimiento: {
+      titulo: 'Seguimiento de supervisores',
+      sub: 'En qué paso va cada supervisor y cómo va cada contrato',
+    },
     documentos: { titulo: 'Formatos documentales', sub: 'Catálogo oficial de formatos institucionales' },
     usuarios: { titulo: 'Usuarios', sub: 'Cuentas y roles del sistema' },
     firmas: { titulo: 'Firmas electrónicas', sub: 'Asignación y vigencia de firmas' },
@@ -276,73 +281,66 @@ export default function AdminPanel({
                 value={errorDatos ? '—' : String(users.filter((u) => u.activo).length)}
                 hint={errorDatos ? 'Dato no disponible' : `${users.length} registrados en total`}
               />
+              {/* Antes aquí había dos indicadores de formatos: «Formatos
+                  vigentes N/N» y «Formatos obsoletos 0», este último en verde
+                  con la pista «Requieren reemplazo por una versión vigente».
+                  Ninguno podía valer otra cosa: FormatoDocumentalService fija
+                  siempre VIGENTE al cargar un formato y no existe ninguna forma
+                  —ni endpoint, ni pantalla— de marcar uno como obsoleto. Así
+                  que el panel afirmaba, en verde, haber comprobado algo que no
+                  comprueba nadie: si CompromISO publica una versión nueva de un
+                  formato, el administrador seguiría viendo «0 obsoletos»
+                  mientras los supervisores descargan la versión vieja. Queda el
+                  total, que sí es un dato real. El indicador vuelve el día que
+                  haya una manera de marcar la obsolescencia. */}
               <Widget
                 icon={<IconFileText size={17} />}
-                label="Formatos vigentes"
-                value={errorDatos ? '—' : `${formatos.filter((f) => f.estado === 'VIGENTE').length}/${formatos.length}`}
-                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados'}
-              />
-              <Widget
-                icon={<IconAlertTriangle size={17} />}
-                label="Formatos obsoletos"
-                value={errorDatos ? '—' : String(formatosObsoletos)}
-                hint={errorDatos ? 'Dato no disponible' : 'Requieren reemplazo por una versión vigente'}
-                tone={errorDatos ? undefined : formatosObsoletos ? 'warn' : 'ok'}
+                label="Formatos documentales"
+                value={errorDatos ? '—' : String(formatos.length)}
+                hint={errorDatos ? 'Dato no disponible' : 'Formatos oficiales cargados en el catálogo'}
               />
             </div>
 
+            {/* Antes aquí había una gráfica de «actividad de los últimos 30
+                días» que leía una constante vacía: decía que las estadísticas
+                aparecerían «cuando existan contratos activos» incluso con
+                contratos activos. Se sustituye por cifras reales del mismo
+                cálculo que usa el seguimiento. */}
             <div className="card" style={{ padding: '16px 18px' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Actividad de los últimos 30 días</div>
-              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-                Contratos creados, supervisados y cerrados
-              </div>
-              <div style={{ height: 260 }}>
-                {ACTIVIDAD.length === 0 ? (
-                  <div
-                    style={{
-                      height: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: 13,
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                      padding: '0 20px',
-                    }}
-                  >
-                    Las estadísticas se mostrarán en este panel cuando existan contratos activos.
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ flex: '1 1 220px' }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>Cómo van los contratos activos</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Semáforo del cronograma de cada contrato, el mismo que ve su supervisor
                   </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={ACTIVIDAD} margin={{ top: 4, right: 8, left: -18, bottom: 0 }}>
-                      <CartesianGrid stroke="var(--border)" vertical={false} />
-                      <XAxis
-                        dataKey="dia"
-                        tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-                        axisLine={{ stroke: 'var(--border)' }}
-                        tickLine={false}
-                      />
-                      <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                      <Tooltip
-                        cursor={{ fill: 'var(--accent-soft)' }}
-                        contentStyle={{
-                          background: 'var(--bg-surface)',
-                          border: '1px solid var(--accent-line)',
-                          borderRadius: 8,
-                          fontSize: 12,
-                        }}
-                        labelStyle={{ color: 'var(--text-primary)' }}
-                      />
-                      <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-secondary)' }} />
-                      <Bar dataKey="creados" name="Creados" fill="var(--accent)" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="supervisados" name="Supervisados" fill="var(--chip-blue)" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cerrados" name="Cerrados" fill="var(--chip-purple)" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
+                </div>
+                <button
+                  className="btn-green"
+                  onClick={() => setTab('seguimiento')}
+                  style={{ padding: '8px 14px', fontSize: 12, minHeight: 44 }}
+                >
+                  Ver seguimiento por supervisor
+                </button>
               </div>
+              {errorSeguimiento && (
+                <div style={{ fontSize: 12, color: 'var(--alert-critica)' }}>{errorSeguimiento}</div>
+              )}
+              {!seguimiento && !errorSeguimiento && (
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Consultando…</div>
+              )}
+              {seguimiento && <ResumenSeguimiento datos={seguimiento} />}
             </div>
           </>
+        )}
+
+        {/* ── Seguimiento de supervisores ── */}
+        {tab === 'seguimiento' && (
+          <SeguimientoSupervisores
+            datos={seguimiento}
+            error={errorSeguimiento}
+            cargando={cargandoSeguimiento}
+            onActualizar={cargarSeguimiento}
+          />
         )}
 
         {/* ── Documentos ── */}
@@ -365,6 +363,7 @@ export default function AdminPanel({
                 </button>
               }
             />
+            <AvisoDeGuardado aviso={descarga.aviso} error={descarga.error} />
             <div className="card" style={{ overflow: 'hidden' }}>
               <GridRow header cols="140px 1fr 80px 150px 150px 250px">
                 <span>CÓDIGO</span>
@@ -403,7 +402,11 @@ export default function AdminPanel({
                   </span>
                   <Chip text={FORMATO_CHIP[f.estado].label} type={FORMATO_CHIP[f.estado].type} />
                   <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <MiniBtn onClick={() => descargarFormato(f.id, f.nombreArchivo).catch(() => {})}>
+                    <MiniBtn
+                      onClick={() =>
+                        void descarga.guardar(f.nombreArchivo, () => descargarFormato(f.id, f.nombreArchivo))
+                      }
+                    >
                       <IconDownload size={11} /> Descargar
                     </MiniBtn>
                     <MiniBtn
@@ -566,6 +569,7 @@ export default function AdminPanel({
           onCreate={(u) => {
             setUsers((us) => [...us, u])
             setNewUser(false)
+            cargarSeguimiento()
           }}
         />
       )}
@@ -586,6 +590,7 @@ export default function AdminPanel({
           onCreate={(f) => {
             setFirmas((fs) => [...fs, f])
             setFirmaModalOpen(false)
+            cargarSeguimiento()
           }}
         />
       )}

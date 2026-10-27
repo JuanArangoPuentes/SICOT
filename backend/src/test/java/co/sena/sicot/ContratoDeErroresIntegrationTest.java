@@ -1,6 +1,7 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
+import co.sena.sicot.exception.GlobalExceptionHandler;
 import co.sena.sicot.ia.IaNoDisponibleException;
 import co.sena.sicot.ia.OllamaClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,10 +13,14 @@ import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.context.request.ServletWebRequest;
+import org.springframework.web.multipart.MultipartException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
@@ -77,6 +82,11 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
      * El caso que motivó toda esta corrección: {@code OllamaClient} falla de
      * forma explícita y con un mensaje accionable cuando Ollama no responde,
      * en vez de inventar un resultado. Ese mensaje debe llegar al usuario.
+     *
+     * <p>Se prueba con el chat del copiloto y una pregunta libre, que sí
+     * depende del modelo. Hasta el 24-09-2026 se probaba con la extracción,
+     * pero la extracción ya no falla cuando falla el modelo: devuelve lo que
+     * leyó del documento (ver la prueba siguiente).
      */
     @Test
     void ollamaCaidoDevuelve503ConMensajeHonesto() throws Exception {
@@ -86,12 +96,20 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
                 .willThrow(new IaNoDisponibleException(
                         "El servicio de IA no está disponible en este momento. "
                                 + "Intente de nuevo en unos minutos; si el problema persiste, avise al área de sistemas."));
+        String creado = mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.ERRORES-IA","objeto":"Contrato de la prueba de errores",
+                                 "valor":1000000,"fechaInicio":"2026-01-01","fechaFin":"2026-12-31"}"""))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long contratoId = objectMapper.readTree(creado).get("id").asLong();
 
-        MockMultipartFile pdf = new MockMultipartFile(
-                "archivos", "acta.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
-
-        mockMvc.perform(multipart("/api/ia/extraer-contrato").file(pdf)
-                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
+        mockMvc.perform(post("/api/contratos/{id}/copiloto/chat", contratoId)
+                        .header("Authorization", "Bearer " + login("administrador@soy.sena.edu.co", "Admin123*"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"pregunta\":\"¿Qué dice el manual de supervisión sobre la liquidación?\"}"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value(503))
                 // El mensaje real del backend debe propagarse, no el generico.
@@ -99,6 +117,65 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
                 // ...pero sin filtrar topologia interna al cliente.
                 .andExpect(jsonPath("$.message", not(containsString("localhost"))))
                 .andExpect(jsonPath("$.message", not(containsString("11434"))));
+    }
+
+    /**
+     * La extracción usa el modelo solo para completar: si el modelo no
+     * responde, Gestión recibe lo que se leyó del documento en vez de un 503
+     * que tira también los datos ya leídos (prueba integral del 24-09-2026).
+     */
+    @Test
+    void ollamaCaidoNoTumbaLaExtraccionDeLoQueElDocumentoTraeEscrito() throws Exception {
+        given(ollamaClient.generar(anyString(), anyBoolean()))
+                .willThrow(new IaNoDisponibleException("La IA tardó más de 240 segundos."));
+
+        MockMultipartFile pdf = new MockMultipartFile(
+                "archivos", "acta.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
+
+        mockMvc.perform(multipart("/api/ia/extraer-contrato").file(pdf)
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idContrato").value("CO1.PCCNTR.PRUEBA"));
+    }
+
+    /**
+     * Subir un formato sin el campo «codigo» es un error de quien envía: tiene
+     * que ser un 400 que diga qué falta, no un 500 «error interno» con traza.
+     */
+    @Test
+    void unParametroObligatorioQueNoVinoEs400YDiceCual() throws Exception {
+        MockMultipartFile archivo = new MockMultipartFile(
+                "archivo", "formato.pdf", MediaType.APPLICATION_PDF_VALUE, pdfConTextoExtraible());
+
+        mockMvc.perform(multipart("/api/formatos").file(archivo).param("nombre", "Formato sin código")
+                        .header("Authorization", "Bearer " + login("administrador@soy.sena.edu.co", "Admin123*")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message", containsString("codigo")));
+    }
+
+    /** Pedir en Accept un formato que la ruta no produce es un 406, no un fallo del servidor. */
+    @Test
+    void unAcceptQueLaRutaNoProduceEs406() throws Exception {
+        mockMvc.perform(get("/api/contratos")
+                        .header("Authorization", "Bearer " + login("gestion@soy.sena.edu.co", "Gestion123*"))
+                        .accept(MediaType.IMAGE_PNG))
+                .andExpect(status().isNotAcceptable());
+    }
+
+    /**
+     * Una carga multipart ilegible (sin boundary, cortada a mitad) la detecta el
+     * contenedor al leer el cuerpo, y MockMvc no lo reproduce: se prueba el
+     * manejador directamente.
+     */
+    @Test
+    void unaCargaMultipartIlegibleEs400() {
+        var respuesta = new GlobalExceptionHandler().cargaMalFormada(
+                new MultipartException("Failed to parse multipart servlet request"),
+                new ServletWebRequest(
+                        new MockHttpServletRequest("POST", "/api/contratos/1/documentos")));
+
+        assertThat(respuesta.getStatusCode().value()).isEqualTo(400);
+        assertThat(respuesta.getBody().message()).contains("incompleta o mal formada");
     }
 
     @Test
@@ -117,9 +194,8 @@ class ContratoDeErroresIntegrationTest extends PruebaDeIntegracion {
      *
      * Tiene que llevar texto de verdad: {@code ExtraccionContratoService} se
      * detiene antes de llamar a Ollama si el PDF no tiene texto legible (caso
-     * de un escaneo sin OCR) y devuelve una respuesta vacía. Con un PDF sin
-     * texto esta prueba pasaría por el camino equivocado y nunca ejercitaría
-     * el manejo del fallo de la IA.
+     * de un escaneo sin OCR). Con un PDF sin texto la prueba pasaría por el
+     * camino equivocado y nunca ejercitaría el fallo de la IA.
      */
     private byte[] pdfConTextoExtraible() throws Exception {
         try (PDDocument documento = new PDDocument();

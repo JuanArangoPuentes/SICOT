@@ -22,7 +22,7 @@ export type Rol = keyof typeof CUENTAS_DEV
 export async function loginComo(page: Page, rol: Rol) {
   const { email, password } = CUENTAS_DEV[rol]
   await page.goto('/')
-  await page.getByPlaceholder('correo@soy.sena.edu.co').fill(email)
+  await page.getByPlaceholder('usuario@sena.edu.co').fill(email)
   await page.getByPlaceholder('••••••••••').fill(password)
   await page.getByRole('button', { name: /Ingresar/ }).click()
 }

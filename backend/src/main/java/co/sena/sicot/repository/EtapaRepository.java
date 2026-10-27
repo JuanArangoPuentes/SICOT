@@ -18,6 +18,12 @@ public interface EtapaRepository extends JpaRepository<Etapa, Long> {
     @EntityGraph(attributePaths = "subEtapas")
     List<Etapa> findByContratoIdOrderByNumeroAsc(Long contratoId);
 
+    // Lo mismo para varios contratos a la vez: el seguimiento del
+    // Administrador muestra las etapas de todos los contratos abiertos, y una
+    // consulta por contrato serían decenas de viajes a la base por cada carga.
+    @EntityGraph(attributePaths = "subEtapas")
+    List<Etapa> findByContratoIdInOrderByNumeroAsc(Collection<Long> contratoIds);
+
     /**
      * Etapa en curso y total de etapas, por contrato, en una sola consulta.
      *

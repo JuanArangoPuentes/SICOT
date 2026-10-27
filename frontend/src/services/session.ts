@@ -2,6 +2,7 @@
 // a recargas de página. El token viaja en el cliente HTTP (api/client.ts).
 
 import { setAuthToken } from './api/client'
+import { copiaLocalDe } from './copiaLocal'
 import type { AuthResponse } from './api/types'
 
 const SESSION_KEY = 'sicot.session'
@@ -40,6 +41,10 @@ export function getSession(): AuthResponse | null {
     // sincroniza el token — sin esto, la primera petición tras recargar la
     // página siempre sale sin token, recibe 401 y cierra la sesión sola.
     setAuthToken(auth.token)
+    // La copia local es de esta cuenta y de ninguna otra: dos supervisores
+    // pueden compartir el portátil del Centro. Al cambiar de usuario,
+    // `copiaLocalDe` vacía lo guardado antes de que nadie lo vea.
+    void copiaLocalDe(String(auth.usuarioId))
     return auth
   } catch {
     return null
@@ -49,9 +54,14 @@ export function getSession(): AuthResponse | null {
 export function saveSession(auth: AuthResponse) {
   localStorage.setItem(SESSION_KEY, JSON.stringify(auth))
   setAuthToken(auth.token)
+  void copiaLocalDe(String(auth.usuarioId))
 }
 
 export function clearSession() {
   localStorage.removeItem(SESSION_KEY)
   setAuthToken(null)
+  // Cerrar sesión borra la copia: lo que el supervisor veía sin red era el
+  // expediente de un contrato, y no puede quedar en el equipo para el
+  // siguiente que entre.
+  void copiaLocalDe(null)
 }

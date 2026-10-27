@@ -45,7 +45,8 @@ Concretamente:
    proyecto.
 3. Para un despliegue **interno sin dominio público** —el caso más probable en el
    centro— Caddy emite un certificado local. Cifra igual; el navegador pide
-   confiar en él una vez.
+   confiar en él una vez. Desde el 02-10-2026 eso lo decide `SICOT_TLS`
+   (`internal` por defecto), no el nombre: ver la nota al final.
 4. La opción **C queda pre-aprobada**: si el SENA termina TLS en su propia
    infraestructura, se retira el proxy y se apunta el suyo al frontend. Nada más
    cambia.
@@ -64,9 +65,10 @@ deja de ser imprudente.
 **Lo que se pierde.** Un contenedor más que operar y actualizar. Es el mismo
 costo que el proyecto ya asumió por Adminer y por el propio PostgreSQL.
 
-**Lo que hay que hacer al desplegar.** Fijar `SICOT_DOMINIO` en el `.env`. Con un
-dominio público, Caddy resuelve el certificado solo; con un nombre interno, emite
-uno local.
+**Lo que hay que hacer al desplegar.** Fijar `SICOT_DOMINIO` en el `.env`. Con
+`SICOT_TLS=internal` (el valor por defecto) Caddy emite un certificado de su
+autoridad local; con un correo en `SICOT_TLS`, lo pide a Let's Encrypt, y eso
+solo sirve para un nombre público alcanzable desde Internet.
 
 **Lo que queda prohibido.** Publicar el puerto del backend o del frontend
 directamente al exterior una vez exista el proxy. Sería un camino paralelo sin
@@ -84,6 +86,18 @@ la conexión viene de una dirección interna, que es donde vive el proxy. Eso es
 seguro porque Caddy sustituye el `X-Forwarded-For` que traiga el cliente por su
 IP real. Por eso el Caddyfile advierte que en `trusted_proxies` no debe
 declararse nunca la red del Centro.
+
+**Lo que esta decisión tampoco previó (02-10-2026).** «Nombre interno → certificado
+local» no era cierto para cualquier nombre interno. Caddy solo usa su autoridad
+local con nombres que reconoce como no públicos: `localhost`, IPs, `*.local`,
+`*.internal` y similares. Un nombre del DNS interno del Centro bajo un dominio
+real (`sicot.<centro>.sena.edu.co`) le parece público: intentaba ACME, los
+desafíos fallaban porque desde Internet no se llega, y el sitio se quedaba sin
+certificado, con solo reintentos en el log. Ahora el Caddyfile declara `tls` con
+`SICOT_TLS`, y el valor por defecto es `internal`. Se eligió ese lado porque
+equivocarse hacia `internal` con un nombre público se ve al instante (el
+navegador avisa) y se corrige con una línea, mientras que equivocarse hacia ACME
+con un nombre interno dejaba el sitio caído sin decir por qué.
 
 ## Cuándo revisar
 

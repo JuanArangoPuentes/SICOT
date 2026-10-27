@@ -46,11 +46,20 @@ class OllamaClientTest {
 
     private volatile int codigoRespuesta = 200;
     private volatile String cuerpoRespuesta = "{\"response\":\"texto redactado por el modelo\"}";
+    private volatile String cuerpoPs = "{\"models\":[]}";
 
     @BeforeEach
     void levantarUnOllamaFalso() throws IOException {
         servidor = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
         servidor.createContext("/api/generate", this::responder);
+        servidor.createContext("/api/ps", intercambio -> {
+            byte[] cuerpo = cuerpoPs.getBytes(StandardCharsets.UTF_8);
+            intercambio.getResponseHeaders().add("Content-Type", "application/json");
+            intercambio.sendResponseHeaders(200, cuerpo.length);
+            try (OutputStream salida = intercambio.getResponseBody()) {
+                salida.write(cuerpo);
+            }
+        });
         servidor.start();
     }
 
@@ -127,8 +136,113 @@ class OllamaClientTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Opciones de generación (auditoría del 02-10-2026: no se mandaba ninguna)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void sinOpcionesPropiasSeMandanLasPorDefectoYNoElContexto() throws Exception {
+        new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100), 0.2, 1024, 0)
+                .generar("hola", false);
+
+        JsonNode opciones = json.readTree(peticionesRecibidas.get(0)).get("options");
+        assertThat(opciones.get("temperature").asDouble()).isEqualTo(0.2);
+        assertThat(opciones.get("num_predict").asInt()).isEqualTo(1024);
+        // Un num_ctx distinto entre llamadas recarga el modelo y tira la caché
+        // del precalentado: sin configurarlo, no se manda.
+        assertThat(opciones.has("num_ctx")).isFalse();
+    }
+
+    @Test
+    void elContextoConfiguradoVaIgualEnTodasLasLlamadas() throws Exception {
+        OllamaClient cliente = new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100),
+                0.2, 1024, 4096);
+
+        cliente.generar("hola", false);
+        cliente.generar("redacta", false, new OllamaClient.Opciones(0.0, 300));
+
+        assertThat(json.readTree(peticionesRecibidas.get(0)).get("options").get("num_ctx").asInt()).isEqualTo(4096);
+        assertThat(json.readTree(peticionesRecibidas.get(1)).get("options").get("num_ctx").asInt()).isEqualTo(4096);
+    }
+
+    @Test
+    void laExtraccionEnJsonVaATemperaturaCero() throws Exception {
+        cliente().generar("extrae los campos", true);
+
+        assertThat(json.readTree(peticionesRecibidas.get(0)).get("options").get("temperature").asDouble())
+                .isEqualTo(0.0);
+    }
+
+    @Test
+    void lasOpcionesDeUnaLlamadaViajanEnElCuerpo() throws Exception {
+        cliente().generar("redacta las observaciones", false, new OllamaClient.Opciones(0.0, 250));
+
+        JsonNode opciones = json.readTree(peticionesRecibidas.get(0)).get("options");
+        assertThat(opciones.get("temperature").asDouble()).isEqualTo(0.0);
+        assertThat(opciones.get("num_predict").asInt()).isEqualTo(250);
+    }
+
+    @Test
+    void laRedaccionSinCompetirVaALaTemperaturaPorDefectoConSuPropioTope() throws Exception {
+        new OllamaClient(urlDelFalso(), MODELO, 5, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100), 0.2, 1024, 0)
+                .generarSinCompetir("redacta las observaciones", 240, java.time.Duration.ofSeconds(1));
+
+        JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
+        assertThat(peticion.get("format").isNull()).isTrue();
+        assertThat(peticion.get("options").get("temperature").asDouble()).isEqualTo(0.2);
+        assertThat(peticion.get("options").get("num_predict").asInt()).isEqualTo(240);
+    }
+
+    @Test
+    void unaRespuestaCortadaPorElTopeDeTokensEsUnFalloConSuCausa() {
+        cuerpoRespuesta = "{\"response\":\"Se recibieron 40 sillas. Se recibieron 40 sillas. Se recib\","
+                + "\"done_reason\":\"length\"}";
+
+        assertThatThrownBy(() -> cliente().generar("redacta", false, new OllamaClient.Opciones(0.0, 20)))
+                .isInstanceOf(IaNoDisponibleException.class)
+                .satisfies(e -> assertThat(((IaNoDisponibleException) e).getCausa())
+                        .isEqualTo(IaNoDisponibleException.Causa.RESPUESTA_CORTADA));
+    }
+
+    @Test
+    void unaRespuestaTerminadaNormalmenteSeDevuelve() {
+        cuerpoRespuesta = "{\"response\":\"Se recibieron 40 sillas.\",\"done_reason\":\"stop\"}";
+
+        assertThat(cliente().generar("redacta", false)).isEqualTo("Se recibieron 40 sillas.");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Fallo honesto: nunca se fabrica una respuesta para disimular
     // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void elTiempoAgotadoSeDistingueDeUnOllamaCaido() throws IOException {
+        servidor.removeContext("/api/generate");
+        servidor.createContext("/api/generate", intercambio -> {
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            responder(intercambio);
+        });
+
+        assertThatThrownBy(() -> new OllamaClient(urlDelFalso(), MODELO, 1, KEEP_ALIVE, new LimitadorDeUsoIa(2, 100))
+                .generar("hola", false))
+                .isInstanceOf(IaNoDisponibleException.class)
+                .satisfies(e -> assertThat(((IaNoDisponibleException) e).getCausa())
+                        .isEqualTo(IaNoDisponibleException.Causa.TIEMPO_AGOTADO));
+    }
+
+    @Test
+    void unOllamaQueRespondeConErrorNoEsTiempoAgotado() {
+        codigoRespuesta = 404;
+        cuerpoRespuesta = "{\"error\":\"model 'qwen2.5:7b' not found\"}";
+
+        assertThatThrownBy(() -> cliente().generar("hola", false))
+                .isInstanceOf(IaNoDisponibleException.class)
+                .satisfies(e -> assertThat(((IaNoDisponibleException) e).getCausa())
+                        .isEqualTo(IaNoDisponibleException.Causa.NO_DISPONIBLE));
+    }
 
     @Test
     void unaRespuestaVaciaDeOllamaEsUnFalloYNoUnaCadenaVacia() {
@@ -218,6 +332,62 @@ class OllamaClientTest {
         // reinicio, sin ningún motivo visible.
         assertThat(respuestas).hasSize(5)
                 .allMatch(r -> r.equals("texto redactado por el modelo"));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 20-10-2026: mantener el modelo cargado mientras el panel está abierto
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("renovar la carga manda una petición sin prompt, con el keep_alive y las opciones de siempre")
+    void mantenerCargadoNoPideInferencia() throws Exception {
+        cuerpoRespuesta = "{\"done\":true,\"done_reason\":\"load\"}";
+
+        cliente().mantenerCargado();
+
+        JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
+        assertThat(peticion.get("model").asText()).isEqualTo(MODELO);
+        // Sin prompt Ollama solo carga el modelo y renueva su expiración: no
+        // lee nada ni toca la caché del prefijo.
+        assertThat(peticion.get("prompt").isNull()).isTrue();
+        assertThat(peticion.get("keep_alive").asText()).isEqualTo(KEEP_ALIVE);
+        assertThat(peticion.get("options").has("num_predict")).isTrue();
+    }
+
+    @Test
+    @DisplayName("si Ollama falla al renovar la carga, no sale ningún error")
+    void mantenerCargadoNoRompeNada() {
+        codigoRespuesta = 503;
+        cliente().mantenerCargado();
+        assertThat(peticionesRecibidas).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("sabe si el último prompt sigue en caché: modelo cargado y mismo comienzo")
+    void sabeSiElUltimoPromptSigueEnCache() {
+        OllamaClient cliente = cliente();
+        cuerpoPs = "{\"models\":[{\"name\":\"" + MODELO + "\",\"model\":\"" + MODELO + "\"}]}";
+
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).as("nada mandado aún").isFalse();
+
+        cliente.generar("INSTRUCCIONES + datos del contrato + pregunta", false);
+
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES + datos del contrato")).isTrue();
+        assertThat(cliente.tieneEnCache("OTRAS INSTRUCCIONES")).isFalse();
+    }
+
+    @Test
+    @DisplayName("si Ollama descargó el modelo, la caché se perdió con él aunque lo vuelva a cargar otro")
+    void unModeloDescargadoNoTieneCache() {
+        OllamaClient cliente = cliente();
+        cliente.generar("INSTRUCCIONES + pregunta", false);
+
+        cuerpoPs = "{\"models\":[]}";
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).isFalse();
+
+        // Recargado (por ejemplo con mantenerCargado): el modelo está, la caché no.
+        cuerpoPs = "{\"models\":[{\"name\":\"" + MODELO + "\",\"model\":\"" + MODELO + "\"}]}";
+        assertThat(cliente.tieneEnCache("INSTRUCCIONES")).isFalse();
     }
 
     private void autenticarComo(long id) {

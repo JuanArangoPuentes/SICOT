@@ -1,11 +1,14 @@
 package co.sena.sicot.repository;
 
 import co.sena.sicot.dto.documento.DocumentoResponse;
+import co.sena.sicot.dto.seguimiento.DocumentoResumen;
 import co.sena.sicot.entity.Documento;
+import co.sena.sicot.entity.enums.TipoDocumento;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 
 public interface DocumentoRepository extends JpaRepository<Documento, Long> {
@@ -43,7 +46,6 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
                 fmt.nombre,
                 d.nombre,
                 d.tipo,
-                d.rutaArchivo,
                 d.estado,
                 d.tamanioBytes,
                 d.generadoPorIa,
@@ -66,4 +68,76 @@ public interface DocumentoRepository extends JpaRepository<Documento, Long> {
             ORDER BY d.fechaSubida DESC
             """)
     List<DocumentoResponse> listarPorContrato(@Param("contratoId") Long contratoId);
+
+    /**
+     * ¿Hay ya un documento firmado de este formato en la subetapa? Lo usa la
+     * generación para no crear un segundo «Acta de Inicio» después de firmada
+     * la primera: el borrador sobrante quedaba como tarea pendiente en la
+     * bandeja del supervisor para siempre (prueba integral del 24-09-2026).
+     *
+     * <p>Solo cuenta lo que generó SICOT, con el mismo criterio que el panel:
+     * un PDF cargado a mano y firmado con nombre parecido («Acta de Inicio
+     * firmada por el contratista») bloqueaba la generación, el panel no lo
+     * reconocía como el acta del paso, y el sub-paso no se cerraba nunca
+     * (revisión del 29-09-2026).
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNotNull(
+            Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /**
+     * El borrador sin firmar más reciente de un formato en una subetapa, entre
+     * los que generó SICOT. Sin la condición de «generado», un PDF cargado a
+     * mano cuyo nombre empezara igual («Acta de Inicio firmada por el
+     * contratista») se tomaba por borrador y la regeneración lo sobrescribía
+     * (revisión adversarial del 28-09-2026).
+     */
+    java.util.Optional<Documento>
+            findFirstByContratoIdAndSubetapaIdAndNombreStartingWithAndGeneradoPorIaTrueAndFirmaIdIsNullOrderByFechaSubidaDesc(
+            Long contratoId, Long subetapaId, String prefijoNombre);
+
+    /**
+     * ¿Hay otro documento firmado con el mismo nombre en la subetapa? Lo usa
+     * la firma para no dejar dos actas firmadas del mismo paso.
+     */
+    boolean existsByContratoIdAndSubetapaIdAndNombreAndFirmaIdIsNotNullAndIdNot(
+            Long contratoId, Long subetapaId, String nombre, Long id);
+
+    /**
+     * Cuántos documentos se cargaron en un paso. Lo usa la compuerta del paso
+     * del acta de inicio, que no se cierra sin el acta firmada y la evidencia
+     * del envío. Es un conteo: no trae el contenido binario.
+     */
+    long countBySubetapaId(Long subetapaId);
+
+    boolean existsBySubetapaIdAndTipo(Long subetapaId, TipoDocumento tipo);
+
+    /** ¿Hay en el sub-paso un documento de este tipo cuyo nombre no encaja con el patrón? (EtapaService) */
+    boolean existsBySubetapaIdAndTipoAndNombreNotLike(Long subetapaId, TipoDocumento tipo, String patron);
+
+    /**
+     * Resumen de los documentos de varios contratos, sin contenido binario.
+     *
+     * <p>Mismo cuidado que {@link #listarPorContrato}: una proyección que no
+     * nombra {@code contenido}, y {@code LEFT JOIN} a la subetapa porque un
+     * documento cargado sin subetapa también es del expediente y tiene que
+     * contarse.
+     */
+    @Query("""
+            SELECT new co.sena.sicot.dto.seguimiento.DocumentoResumen(
+                d.id,
+                c.id,
+                s.codigo,
+                d.nombre,
+                d.estado,
+                d.generadoPorIa,
+                CASE WHEN d.firmaId IS NOT NULL THEN true ELSE false END,
+                d.fechaSubida,
+                d.fechaFirma)
+            FROM Documento d
+            JOIN d.contrato c
+            LEFT JOIN d.subetapa s
+            WHERE c.id IN :contratoIds
+            ORDER BY d.fechaSubida DESC
+            """)
+    List<DocumentoResumen> resumenPorContratos(@Param("contratoIds") Collection<Long> contratoIds);
 }
