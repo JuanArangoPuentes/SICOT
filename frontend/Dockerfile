@@ -71,7 +71,14 @@ USER root
 # servidor X malicioso) y 1.8.14-r0 la corrige. Y brotli-libs (CI del
 # 23-10-2026): 1.2.0-r1 trae CVE-2026-111497 (HIGH, escritura fuera de límites
 # en el decodificador) y 1.2.1-r0 la corrige; el backend lleva la misma línea.
-RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0"
+#
+# Y curl (CI del 27-10-2026): la base trae 8.22.0-r0, con CVE-2026-92392 (HIGH,
+# uso después de liberar al subir por HTTP/2), y Alpine ya publicó 8.23.0-r0.
+# `libcurl` viene del mismo origen que `curl`, así que subir el paquete arregla
+# los dos. Aquí sí y en el backend no: su base ya va por Alpine 3.24.3, que lo
+# trae corregido; la de nginx sigue en 3.24.2.
+RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
+    "curl>=8.23.0-r0"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
