@@ -71,13 +71,22 @@ public class ListaChequeoService {
      * pruebas puedan verificar los JSON reales sin levantar el contexto de la aplicación.
      */
     static Map<String, ListaChequeoDetalle> cargarCatalogo() {
+        return cargarCatalogo(PATRON_RECURSOS);
+    }
+
+    /**
+     * Igual que {@link #cargarCatalogo()} pero sobre otro patrón de recursos: existe para que una
+     * prueba pueda comprobar con un archivo roto que el error nombra el archivo, sin tocar el
+     * catálogo real.
+     */
+    static Map<String, ListaChequeoDetalle> cargarCatalogo(String patron) {
         ObjectMapper mapper = JsonMapper.builder()
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
 
         Resource[] recursos;
         try {
-            recursos = new PathMatchingResourcePatternResolver().getResources(PATRON_RECURSOS);
+            recursos = new PathMatchingResourcePatternResolver().getResources(patron);
         } catch (IOException e) {
             throw new IllegalStateException("No se pudo leer el catálogo de listas de chequeo.", e);
         }
