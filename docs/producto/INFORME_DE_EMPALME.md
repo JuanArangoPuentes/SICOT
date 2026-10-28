@@ -279,9 +279,12 @@ Faltan cinco piezas, documentadas en ADR-015:
 
 ### 9.2 Salir de Spring Boot 3.5 (ADR-014)
 
-La línea 3.5 ya no recibe parches gratuitos. Hay una vulnerabilidad crítica cuyo
-único arreglo es pasar a Boot 4. La decisión está escrita y medida; **la
-migración espera aprobación**.
+**Hecho el 28-10-2026.** La línea 3.5 ya no recibía parches gratuitos y había
+dos vulnerabilidades críticas cuyo único arreglo era pasar a Boot 4. El backend
+está ahora en Spring Boot 4.1.2 (soporte gratuito hasta el 31-07-2027), con
+Jackson 3, y la compuerta de seguridad pasa sin excepciones. Lo que se encontró y
+cómo se comprobó está al final de la ADR-014. El siguiente salto conviene
+planearlo antes del 30-04-2027.
 
 ### 9.3 La prueba manual del APK
 

@@ -4,7 +4,7 @@ import co.sena.sicot.dto.secop.VerificacionSecopResponse.Documento;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Ficha;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Garantia;
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Proveedor;
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -344,10 +344,10 @@ public class DatosAbiertosSecop {
 
     static String texto(JsonNode fila, String campo) {
         JsonNode v = fila.get(campo);
-        if (v == null || v.isNull() || v.isContainerNode()) {
+        if (v == null || v.isNull() || v.isContainer()) {
             return null;
         }
-        String t = v.asText().strip();
+        String t = v.asString().strip();
         return SIN_DATO.contains(t.toLowerCase()) ? null : t;
     }
 
@@ -395,8 +395,11 @@ public class DatosAbiertosSecop {
         JsonNode v = fila.get(campo);
         if (v == null || v.isNull()) return null;
         JsonNode u = v.isObject() ? v.get("url") : v;
-        if (u == null || u.isNull()) return null;
-        String enlace = u.asText().strip();
+        // Un arreglo o un objeto donde se esperaba el texto del enlace: en
+        // Jackson 3 asString() lanza sobre un contenedor (el asText() de
+        // Jackson 2 daba ""), y un cambio de esquema de datos.gov.co sería un 500.
+        if (u == null || u.isNull() || !u.isValueNode()) return null;
+        String enlace = u.asString().strip();
         return enlace.startsWith("https://community.secop.gov.co/") ? enlace : null;
     }
 

@@ -2,7 +2,7 @@ package co.sena.sicot;
 
 import co.sena.sicot.automatizacion.FotoDelContrato;
 import co.sena.sicot.automatizacion.LectorDeContratos;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -119,6 +119,6 @@ class ActivacionDelContratoIntegrationTest extends PruebaDeIntegracion {
                         .content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        return objectMapper.readTree(cuerpo).get("token").asText();
+        return objectMapper.readTree(cuerpo).get("token").asString();
     }
 }
