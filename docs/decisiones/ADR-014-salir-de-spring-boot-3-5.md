@@ -1,6 +1,6 @@
 # ADR-014 — Cuándo y cómo salir de Spring Boot 3.5
 
-**Estado:** Propuesta · **Fecha:** 2 de octubre de 2026
+**Estado:** Aceptada y ejecutada el 28 de octubre de 2026 (ver «Ejecución», al final) · **Fecha:** 2 de octubre de 2026
 
 ## Contexto
 
@@ -250,3 +250,79 @@ a ser alfabético: inofensivo, pero visible para quien compare respuestas a ojo.
   salir del classpath.
 - **Antes del 30 de abril de 2027:** planear el salto siguiente, con tres meses de
   margen antes de que termine el soporte de 4.1 (31 de julio de 2027).
+
+## Ejecución (28 de octubre de 2026)
+
+La migración se hizo en la rama `feat/spring-boot-4`, en un PR que no lleva
+trabajo funcional. Lo que cambió respecto de lo escrito arriba, y por qué:
+
+**El destino fue 4.1.2, no 4.1.1.** Es la última 4.1.x publicada, y ya gestiona
+todo lo que el plan preveía adelantar a mano: Jackson 3.1.7 y Jackson 2 2.21.7,
+Tomcat 11.0.27, PostgreSQL 42.7.14, commons-lang3 3.20.0 y log4j2 2.25.5. Por eso
+el `pom.xml` se quedó **sin ningún adelanto**, no con dos: el bloque «ADELANTOS
+AL PARENT» explica qué propiedad usar si vuelve a hacer falta. springdoc pasó a
+3.2.0, que está construido justo sobre Boot 4.1.2.
+
+**Lo que resolvió:** `spring-webmvc` 7.0.10, que corrige CVE-2026-47884 y
+CVE-2026-47890. Sus excepciones salieron de `.trivyignore`, que se quedó vacío, y
+Trivy pasa sin ellas.
+
+**El paso 0 se hizo primero, sobre 3.5.16**: las dos guardias de los puntos
+silenciosos (`SinUsuarioEnMemoriaIntegrationTest`, y dos pruebas en
+`ListaChequeoServiceTest` que cargan una lista con una coma de más y otra con un
+campo desconocido). Se comprobó que la del usuario en memoria falla si se quita
+la exclusión: imprime la «generated security password».
+
+**Lo que el inventario no tenía, porque el código creció después del 2-10:**
+
+| Qué | Cómo falló | Arreglo |
+| --- | --- | --- |
+| `JsonNode#isContainerNode()` en `DatosAbiertosSecop` | No compila: Jackson 3 lo llama `isContainer()` | Renombrado |
+| `HandlerMethodValidationException#getAllValidationResults()` en `GlobalExceptionHandler` | No compila: Framework 7 lo retiró | `getParameterValidationResults()`, que es lo mismo |
+| `JsonNode#elements()` en una prueba | No compila | `iterator()` |
+| `@Valid` sobre una lista en tres DTO (contactos, entregas, pedido) | Aviso HV000271 de Hibernate Validator 9: obsoleto | `List<@Valid …>`, que valida igual cada elemento; lo comprueban las pruebas que mandan un correo sin arroba y una fila con cantidad negativa |
+| **La respuesta en vivo del Copiloto** | **Silencioso.** Compila, todas las pruebas pasan, y en un servidor real llega entera al final | Ver abajo |
+
+**El que ninguna prueba veía.** Desde Spring Framework 7,
+`ServletServerHttpResponse.getBody()` envuelve el flujo con
+`StreamUtils.nonFlushing` salvo que se active `spring.http.response.flush.enabled`.
+El `flush()` que `RespuestaEnVivoDelCopiloto` hace tras cada evento se volvió una
+operación vacía y Tomcat retenía la respuesta entera: con el modelo real, 116
+eventos llegaron en un solo instante, a los 57 s, cuando con Boot 3.5 llegaban en
+111 instantes distintos con la primera palabra a los 20 s. Además del retraso, se
+perdía lo que el evento «inicio» garantiza —que las cabeceras salgan ya y un proxy
+no corte una primera pregunta que en CPU dura minutos—. MockMvc junta la
+respuesta en memoria, así que la suite no podía notarlo. El arreglo escribe en el
+flujo del servlet (`CopilotoController`) y no activa la bandera global, que
+devolvería el vaciado a todas las respuestas JSON. La guardia es
+`CopilotoEnVivoPorLaRedIntegrationTest`, con Tomcat real: el modelo simulado
+escribe un trozo y espera a que el cliente lo reciba. Se comprobó que falla sin el
+arreglo; con él, el modelo real volvió a dar 106 llegadas distintas y la primera
+palabra a los 21 s.
+
+**Cómo se verificó.**
+
+- `./mvnw verify` completo en verde, con la cobertura sobre el umbral.
+- Propiedades: las claves de los cinco `application*.properties` se cruzaron con
+  los metadatos de configuración de los JAR de 4.1.2 (lo mismo que hace
+  `spring-boot-properties-migrator`, pero para todos los perfiles a la vez): ni
+  una obsoleta ni una desconocida. El método se validó antes con una clave que sí
+  se retiró y con una inventada.
+- **Ensayo con datos reales.** La base de desarrollo (55 contratos, 382
+  documentos) se copió a un PostgreSQL aparte y el JAR nuevo arrancó contra ella:
+  Flyway 12 validó las 16 migraciones sin aplicar nada. Con el backend viejo
+  sirviendo la base original y el nuevo la copia, **600 peticiones de lectura**
+  con los tres roles sobre los 55 contratos dieron el mismo JSON (el orden de las
+  claves no cuenta), igual que las respuestas a siete entradas inválidas —JSON
+  roto, tipo equivocado, fecha imposible, enum desconocido…— y la verificación en
+  vivo contra datos.gov.co (111 documentos del expediente del Lote 4). Sobre la
+  copia: extracción de un acta de inicio, carga de un PDF institucional que se
+  baja byte a byte igual, foto con EXIF (fecha y lugar leídos), generar y firmar
+  la certificación de cumplimiento, el Copiloto con el modelo real,
+  `/actuator/prometheus` detrás del JWT y OpenAPI en desarrollo.
+- Perfil `prod`: sin `JWT_SECRET` se detiene; con los secretos arranca, Flyway
+  valida sin las tolerancias de desarrollo y el log no trae ninguna
+  «generated security password».
+- Las sondas nuevas de Actuator (`/actuator/health/liveness` y `/readiness`)
+  quedan detrás del JWT, como se previó. `/actuator/health` sigue abierto y ahora
+  incluye `"groups":["liveness","readiness"]` junto a `"status":"UP"`.
