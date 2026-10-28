@@ -10,7 +10,7 @@ import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.repository.AlertaRepository;
 import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.repository.TareaAutomatizadaRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;

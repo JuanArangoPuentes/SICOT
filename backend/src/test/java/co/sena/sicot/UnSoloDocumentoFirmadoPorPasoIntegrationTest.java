@@ -8,8 +8,8 @@ import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.service.HuellaDeDocumento;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -98,7 +98,7 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
         assertThat(reintento.get("id").asLong()).isEqualTo(primero);
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, primero)
-                        .param("huellaRevisada", reintento.get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", reintento.get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 
@@ -115,7 +115,7 @@ class UnSoloDocumentoFirmadoPorPasoIntegrationTest extends PruebaDeIntegracion {
         JsonNode generado = generar();
         long primero = generado.get("id").asLong();
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, primero)
-                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 

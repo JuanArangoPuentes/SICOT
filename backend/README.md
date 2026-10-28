@@ -2,7 +2,7 @@
 
 Backend del **Sistema Inteligente para la Gestión y Acompañamiento de Contratos** (SENA — Centro Tecnológico del Mobiliario).
 
-Spring Boot 3 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI. Las
+Spring Boot 4 · Java 25 · PostgreSQL · JWT · Flyway · Swagger/OpenAPI. Las
 versiones exactas están en [`pom.xml`](./pom.xml), que es donde no pueden
 quedarse viejas.
 

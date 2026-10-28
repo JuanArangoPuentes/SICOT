@@ -1,7 +1,7 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

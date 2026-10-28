@@ -14,8 +14,8 @@ import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
 import co.sena.sicot.service.FotoConExif;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -384,7 +384,7 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
                         .content("{\"usuarioId\":" + idSupA + "}"))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        String firmaIdDeA = objectMapper.readTree(firmaA).get("firmaId").asText();
+        String firmaIdDeA = objectMapper.readTree(firmaA).get("firmaId").asString();
 
         // El supervisor B consulta la suya: no tiene, y jamás ve la de A.
         String miFirmaB = mockMvc.perform(get("/api/firmas/mia")
@@ -588,7 +588,7 @@ class AislamientoEntreSupervisoresIntegrationTest extends PruebaDeIntegracion {
 
     private String mensajeDeError(String cuerpoJson) throws Exception {
         JsonNode nodo = objectMapper.readTree(cuerpoJson).get("message");
-        return nodo == null ? "" : nodo.asText();
+        return nodo == null ? "" : nodo.asString();
     }
 
     private void sinFugaDe(String cuerpo, String... prohibidos) {

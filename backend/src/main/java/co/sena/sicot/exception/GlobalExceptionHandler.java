@@ -149,7 +149,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> validacionDeParametros(HandlerMethodValidationException ex,
                                                                  WebRequest request) {
         Map<String, String> fieldErrors = new LinkedHashMap<>();
-        for (ParameterValidationResult resultado : ex.getAllValidationResults()) {
+        for (ParameterValidationResult resultado : ex.getParameterValidationResults()) {
             String nombre = resultado.getMethodParameter().getParameterName();
             for (MessageSourceResolvable error : resultado.getResolvableErrors()) {
                 fieldErrors.putIfAbsent(nombre != null ? nombre : "parametro", error.getDefaultMessage());

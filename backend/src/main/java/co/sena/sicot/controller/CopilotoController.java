@@ -3,7 +3,7 @@ package co.sena.sicot.controller;
 import co.sena.sicot.dto.ia.ChatRequest;
 import co.sena.sicot.dto.ia.ChatResponse;
 import co.sena.sicot.ia.CopilotoChatService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;

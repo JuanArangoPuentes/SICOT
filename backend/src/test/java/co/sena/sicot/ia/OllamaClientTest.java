@@ -3,8 +3,8 @@ package co.sena.sicot.ia;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.exception.DemasiadasSolicitudesException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
@@ -107,7 +107,7 @@ class OllamaClientTest {
         JsonNode conJson = json.readTree(peticionesRecibidas.get(0));
         JsonNode sinJson = json.readTree(peticionesRecibidas.get(1));
 
-        assertThat(conJson.get("format").asText()).isEqualTo("json");
+        assertThat(conJson.get("format").asString()).isEqualTo("json");
         assertThat(sinJson.get("format").isNull()).isTrue();
     }
 
@@ -116,9 +116,9 @@ class OllamaClientTest {
         cliente().generar("hola", false);
 
         JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
-        assertThat(peticion.get("model").asText()).isEqualTo(MODELO);
+        assertThat(peticion.get("model").asString()).isEqualTo(MODELO);
         assertThat(peticion.get("stream").asBoolean()).isFalse();
-        assertThat(peticion.get("prompt").asText()).isEqualTo("hola");
+        assertThat(peticion.get("prompt").asString()).isEqualTo("hola");
     }
 
     @Test
@@ -132,7 +132,7 @@ class OllamaClientTest {
 
         JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
         assertThat(peticion.has("keepAlive")).isFalse();
-        assertThat(peticion.get("keep_alive").asText()).isEqualTo(KEEP_ALIVE);
+        assertThat(peticion.get("keep_alive").asString()).isEqualTo(KEEP_ALIVE);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -346,11 +346,11 @@ class OllamaClientTest {
         cliente().mantenerCargado();
 
         JsonNode peticion = json.readTree(peticionesRecibidas.get(0));
-        assertThat(peticion.get("model").asText()).isEqualTo(MODELO);
+        assertThat(peticion.get("model").asString()).isEqualTo(MODELO);
         // Sin prompt Ollama solo carga el modelo y renueva su expiración: no
         // lee nada ni toca la caché del prefijo.
         assertThat(peticion.get("prompt").isNull()).isTrue();
-        assertThat(peticion.get("keep_alive").asText()).isEqualTo(KEEP_ALIVE);
+        assertThat(peticion.get("keep_alive").asString()).isEqualTo(KEEP_ALIVE);
         assertThat(peticion.get("options").has("num_predict")).isTrue();
     }
 

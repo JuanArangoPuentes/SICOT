@@ -11,8 +11,8 @@ import co.sena.sicot.repository.AlertaRepository;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
 import co.sena.sicot.repository.SubetapaRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -140,25 +140,25 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
         assertThat(ana.get("firmaVigente").asBoolean()).isTrue();
         assertThat(ana.get("contratos")).hasSize(1);
         JsonNode c = ana.get("contratos").get(0);
-        assertThat(c.get("numeroContrato").asText()).isEqualTo("CO1.PCCNTR.SEGUIM-1");
-        assertThat(c.get("estado").asText()).isEqualTo("ACTIVO");
+        assertThat(c.get("numeroContrato").asString()).isEqualTo("CO1.PCCNTR.SEGUIM-1");
+        assertThat(c.get("estado").asString()).isEqualTo("ACTIVO");
         // 3 de la designación + el acta.
         assertThat(c.get("subetapasCompletadas").asLong()).isEqualTo(4);
         assertThat(c.get("subetapasTotales").asLong()).isEqualTo(21);
         assertThat(c.get("etapaActual").asInt()).isEqualTo(2);
-        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("2.2");
+        assertThat(c.get("subetapaEnCurso").get("codigo").asString()).isEqualTo("2.2");
         assertThat(c.get("etapas")).hasSize(6);
-        assertThat(c.get("cronograma").get("semaforo").asText()).isNotBlank();
+        assertThat(c.get("cronograma").get("semaforo").asString()).isNotBlank();
         assertThat(c.get("alertasSinLeer").asLong()).isEqualTo(1);
         // El acta firmada que cargó el supervisor queda en el paso del acta. No
         // la generó SICOT: según el proceso real, la elabora Contratación.
         assertThat(c.get("documentos")).hasSize(2);
         JsonNode doc = null;
         for (JsonNode d : c.get("documentos")) {
-            if (d.get("nombre").asText().startsWith("Acta de Inicio firmada")) doc = d;
+            if (d.get("nombre").asString().startsWith("Acta de Inicio firmada")) doc = d;
         }
         assertThat(doc).isNotNull();
-        assertThat(doc.get("subetapaCodigo").asText()).isEqualTo("2.1");
+        assertThat(doc.get("subetapaCodigo").asString()).isEqualTo("2.1");
         assertThat(doc.get("firmado").asBoolean()).isTrue();
         assertThat(doc.get("generadoPorIa").asBoolean()).isFalse();
         // El avance de la subetapa dejó registro, y es lo último que pasó.
@@ -300,7 +300,7 @@ class SeguimientoDeSupervisoresIntegrationTest extends PruebaDeIntegracion {
         cambiarSubetapa(tokenSupervisor, subs.get(1).get("id").asLong(), "COMPLETADA");
 
         JsonNode c = supervisor(seguimiento(tokenAdmin), idConFirma).get("contratos").get(0);
-        assertThat(c.get("subetapaEnCurso").get("codigo").asText()).isEqualTo("2.3");
-        assertThat(c.get("subetapaEnCurso").get("estado").asText()).isEqualTo("PENDIENTE");
+        assertThat(c.get("subetapaEnCurso").get("codigo").asString()).isEqualTo("2.3");
+        assertThat(c.get("subetapaEnCurso").get("estado").asString()).isEqualTo("PENDIENTE");
     }
 }

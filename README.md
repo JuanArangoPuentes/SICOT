@@ -11,7 +11,7 @@ honesto.
 ```
 ┌───────────────────────┐        ┌───────────────────────┐        ┌────────────────┐
 │       frontend         │ ─────▶ │        backend         │ ─────▶ │   PostgreSQL   │
-│  React 19 + Vite + TS  │  HTTP  │  Spring Boot 3 + JWT   │  JDBC  │   BD: sicot    │
+│  React 19 + Vite + TS  │  HTTP  │  Spring Boot 4 + JWT   │  JDBC  │   BD: sicot    │
 │  :8443                 │ ◀───── │  :8080                 │ ◀───── │                │
 └───────────────────────┘  JSON  └───────────────────────┘        └────────────────┘
                                             ▲
@@ -35,7 +35,7 @@ un servidor sin Ollama instalado. Detalle en
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 4 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional y el [informe de empalme](./docs/producto/INFORME_DE_EMPALME.md), que lo explica de cero a quien no lo ha visto | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |

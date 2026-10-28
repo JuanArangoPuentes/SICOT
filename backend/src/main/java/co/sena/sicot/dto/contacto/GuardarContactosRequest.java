@@ -18,8 +18,7 @@ import java.util.List;
 public record GuardarContactosRequest(
         @NotNull(message = "La lista de contactos es obligatoria (puede ir vacía para borrarlos).")
         @Size(max = 20, message = "Se admiten máximo 20 contactos por contrato.")
-        @Valid
-        List<@NotNull(message = "Cada contacto debe traer su rol y su correo.") Contacto> contactos) {
+        List<@Valid @NotNull(message = "Cada contacto debe traer su rol y su correo.") Contacto> contactos) {
 
     public record Contacto(
             @NotNull(message = "Diga si el contacto es de SST o de ambiental.")
