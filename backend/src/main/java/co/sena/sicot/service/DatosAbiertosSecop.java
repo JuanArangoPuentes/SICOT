@@ -395,7 +395,10 @@ public class DatosAbiertosSecop {
         JsonNode v = fila.get(campo);
         if (v == null || v.isNull()) return null;
         JsonNode u = v.isObject() ? v.get("url") : v;
-        if (u == null || u.isNull()) return null;
+        // Un arreglo o un objeto donde se esperaba el texto del enlace: en
+        // Jackson 3 asString() lanza sobre un contenedor (el asText() de
+        // Jackson 2 daba ""), y un cambio de esquema de datos.gov.co sería un 500.
+        if (u == null || u.isNull() || !u.isValueNode()) return null;
         String enlace = u.asString().strip();
         return enlace.startsWith("https://community.secop.gov.co/") ? enlace : null;
     }

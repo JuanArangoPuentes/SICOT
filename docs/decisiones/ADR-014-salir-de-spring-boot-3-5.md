@@ -282,6 +282,13 @@ la exclusión: imprime la «generated security password».
 | `JsonNode#elements()` en una prueba | No compila | `iterator()` |
 | `@Valid` sobre una lista en tres DTO (contactos, entregas, pedido) | Aviso HV000271 de Hibernate Validator 9: obsoleto | `List<@Valid …>`, que valida igual cada elemento; lo comprueban las pruebas que mandan un correo sin arroba y una fila con cantidad negativa |
 | **La respuesta en vivo del Copiloto** | **Silencioso.** Compila, todas las pruebas pasan, y en un servidor real llega entera al final | Ver abajo |
+| `Fragmento.done` (`boolean`) en `OllamaClient` | **Silencioso.** En Jackson 3 un primitivo ausente ya no se lee como `false` (`FAIL_ON_NULL_FOR_PRIMITIVES` viene activo). La línea `{"error":…}` con que Ollama avisa un fallo a mitad de la respuesta reventaba, y el supervisor leía «avise al área de sistemas» en vez de «la IA se detuvo, intente de nuevo» | `Boolean`; dos pruebas nuevas de la respuesta en vivo en `OllamaClientTest` |
+| `DatosAbiertosSecop.url()` | **Silencioso.** `asString()` lanza sobre un arreglo o un objeto, donde el `asText()` de Jackson 2 daba `""`: un cambio de esquema de datos.gov.co sería un 500 | Se descarta lo que no sea un valor; prueba en `DatosAbiertosSecopTest` |
+
+Los dos últimos los encontró la revisión independiente que se hizo después del
+ensayo (dos revisores, uno sobre Jackson 3 y Spring 7 en el resto del código y
+otro sobre el arreglo de la respuesta en vivo). Los dos se reprodujeron con los
+JAR antes de corregirlos, y sus pruebas fallan sin el arreglo.
 
 **El que ninguna prueba veía.** Desde Spring Framework 7,
 `ServletServerHttpResponse.getBody()` envuelve el flujo con

@@ -390,6 +390,45 @@ class OllamaClientTest {
         assertThat(cliente.tieneEnCache("INSTRUCCIONES")).isFalse();
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // Respuesta en vivo (stream: true)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void enVivoLosTrozosLleganUnoAUnoYSeDevuelveElTextoEntero() {
+        cuerpoRespuesta = """
+                {"response":"La póliza ","done":false}
+                {"response":"se verifica.","done":false}
+                {"response":"","done":true,"done_reason":"stop"}
+                """;
+        List<String> trozos = new ArrayList<>();
+
+        assertThat(cliente().generarEnVivo("pregunta", trozos::add)).isEqualTo("La póliza se verifica.");
+        assertThat(trozos).containsExactly("La póliza ", "se verifica.");
+    }
+
+    /**
+     * Cuando el modelo se cae después de haber empezado a escribir, Ollama ya
+     * respondió 200 y lo avisa con una línea que solo trae {@code error}, sin
+     * {@code done}. Esa línea tiene que leerse como lo que es —la IA se detuvo,
+     * inténtelo de nuevo— y no como «el servicio no está disponible, avise a
+     * sistemas». Con Jackson 3 (ADR-014) un {@code boolean} ausente dejó de leerse
+     * como {@code false} y la línea reventaba antes de mirar el error.
+     */
+    @Test
+    void enVivoUnErrorAMitadDeLaRespuestaSeDiceComoTal() {
+        cuerpoRespuesta = """
+                {"response":"La póliza ","done":false}
+                {"error":"model runner has unexpectedly stopped"}
+                """;
+        List<String> trozos = new ArrayList<>();
+
+        assertThatThrownBy(() -> cliente().generarEnVivo("pregunta", trozos::add))
+                .isInstanceOf(IaNoDisponibleException.class)
+                .hasMessageContaining("se detuvo a mitad de la respuesta");
+        assertThat(trozos).containsExactly("La póliza ");
+    }
+
     private void autenticarComo(long id) {
         Usuario usuario = new Usuario();
         usuario.setId(id);

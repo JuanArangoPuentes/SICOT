@@ -229,7 +229,7 @@ public class OllamaClient {
                                     texto.append(f.response());
                                     alEscribir.accept(f.response());
                                 }
-                                if (f.done()) {
+                                if (Boolean.TRUE.equals(f.done())) {
                                     razon = f.doneReason();
                                     break;
                                 }
@@ -429,9 +429,17 @@ public class OllamaClient {
     private record ModeloCargado(String name, String model) {
     }
 
-    /** Una línea de la respuesta en vivo de Ollama ({@code stream: true}). */
+    /**
+     * Una línea de la respuesta en vivo de Ollama ({@code stream: true}).
+     *
+     * <p>{@code done} es {@code Boolean} y no {@code boolean}: la línea con que
+     * Ollama avisa un fallo a mitad de la respuesta trae solo {@code error}, y
+     * en Jackson 3 un primitivo ausente ya no se lee como {@code false}
+     * ({@code FAIL_ON_NULL_FOR_PRIMITIVES} viene activo). Con {@code boolean}
+     * esa línea reventaba antes de mirar el error (ADR-014).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
-    private record Fragmento(String response, boolean done, @JsonProperty("done_reason") String doneReason,
+    private record Fragmento(String response, Boolean done, @JsonProperty("done_reason") String doneReason,
                              String error) {
     }
 }
