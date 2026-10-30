@@ -106,6 +106,18 @@ Si algo de la tabla no pasa, la versión no se publica hasta saber por qué. Un
 punto «sin recorrer» tampoco es un punto que pase: la compuerta está cumplida
 cuando los 17 tienen resultado y fecha.
 
+### Trabajo sin red (ADR-015), desde el 30-10-2026
+
+Dos puntos más, que la primera versión con la cola de cambios tiene que pasar en
+un teléfono de verdad. En el navegador ya pasaron contra una copia de la base
+de desarrollo (30-10-2026), pero lo que vigilan —el modo avión de Android y el
+almacenamiento del WebView al cerrar la aplicación— solo existe en el teléfono.
+
+| # | Qué hacer | Qué tiene que pasar | Resultado |
+| --- | --- | --- | --- |
+| 18 | Con red, abrir el contrato. Activar el modo avión, agregar un contacto de SST en el 2.2 y cerrarlo. **Cerrar la aplicación del todo**, volver a abrirla, quitar el modo avión | Sin red: «Sin conexión con el servidor», «2 cambios guardados en este equipo» y el 2.2 con «Pendiente de enviar». Tras reabrir siguen ahí. Con red, en menos de 30 s la franja desaparece y en Registros cada cambio trae la hora del teléfono | Sin recorrer |
+| 19 | Con el token vencido (o tras más de 8 h sin entrar), en modo avión, entrar con la contraseña | Entra; el aviso dice «Entró sin conexión con la contraseña recordada» y hasta cuándo vale. Con otra contraseña no entra. Al quitar el modo avión avisa «Volvió la conexión» y, al entrar de nuevo, envía lo guardado | Sin recorrer |
+
 ## Fallos conocidos, abiertos
 
 Lo que el recorrido encontró y todavía no se puede dar por cerrado. Queda escrito
