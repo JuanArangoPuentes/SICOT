@@ -1,5 +1,6 @@
 package co.sena.sicot.security;
 
+import co.sena.sicot.config.HechoSinConexionInterceptor;
 import jakarta.servlet.DispatcherType;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -246,7 +247,11 @@ public class SecurityConfig {
                 .distinct()
                 .toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        // X-SICOT-Hecho-Sin-Conexion: la cola de cambios de ADR-015 la manda
+        // desde la app de escritorio y el APK, que siempre llaman entre
+        // orígenes; sin permitirla aquí, el navegador cortaba el reenvío en la
+        // comprobación previa y los cambios guardados sin red no salían nunca.
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type", HechoSinConexionInterceptor.CABECERA));
         // Retry-After también: la app de escritorio siempre llama entre orígenes
         // (tauri.localhost → servidor) y sin exponerla no podía decir cuántos
         // minutos esperar tras un 429 en el inicio de sesión.

@@ -1,6 +1,7 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.automatizacion.EventoDeNegocio;
+import co.sena.sicot.config.HechoSinConexionInterceptor;
 import co.sena.sicot.dto.registro.RegistroResponse;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Registro;
@@ -126,6 +127,11 @@ public class RegistroService {
         registro.setAccion(accion);
         registro.setDescripcion(descripcion);
         registro.setOrigen(origen);
+        // Solo lo que hace una persona puede haberse hecho sin red: lo del
+        // sistema lo hace el servidor, que no se desconecta de sí mismo.
+        if (origen == OrigenRegistro.USUARIO) {
+            HechoSinConexionInterceptor.enLaSolicitudActual().ifPresent(registro::setHechoSinConexionEn);
+        }
         registroRepository.save(registro);
 
         if (origen == OrigenRegistro.USUARIO) {
