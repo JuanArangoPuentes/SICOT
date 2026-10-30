@@ -22,8 +22,10 @@ import {
   obtenerEntregasAcordadas,
 } from '@/services/contratoService'
 import { ApiError } from '@/services/api/client'
+import type { ConPendiente } from '@/services/colaDeCambios'
 import type {
   ContactoDelContrato,
+  ContactosDelContratoResponse,
   ContratoResponse,
   EntregaAcordada,
   LecturaDeContactosResponse,
@@ -70,6 +72,8 @@ export default function ContactosSstAmbiental({
   // null mientras no se haya podido consultar: con la consulta fallida,
   // «Agregar» haría un reemplazo completo y borraría los que sí existen.
   const [contactos, setContactos] = useState<ContactoDelContrato[] | null>(null)
+  // Guardados sin red y todavía en la cola de este equipo (ADR-015).
+  const [pendienteDeEnviar, setPendienteDeEnviar] = useState(false)
   const [entregas, setEntregas] = useState<EntregaAcordada[]>([])
   const [error, setError] = useState<string | null>(null)
   const [guardando, setGuardando] = useState(false)
@@ -82,8 +86,9 @@ export default function ContactosSstAmbiental({
 
   const cargar = useCallback(() => {
     obtenerContactosSstAmbiental(contrato.id)
-      .then((r) => {
+      .then((r: ContactosDelContratoResponse & ConPendiente) => {
         setContactos(r.contactos)
+        setPendienteDeEnviar(r.pendienteDeEnviar === true)
         setError(null)
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron consultar los contactos.'))
@@ -104,6 +109,7 @@ export default function ContactosSstAmbiental({
     guardarContactosSstAmbiental(contrato.id, lista)
       .then((r) => {
         setContactos(r.contactos)
+        setPendienteDeEnviar(r.pendienteDeEnviar === true)
         alTerminar?.()
         onGuardado?.()
       })
@@ -163,6 +169,11 @@ export default function ContactosSstAmbiental({
         </span>
 
         {error && <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>{error}</span>}
+        {pendienteDeEnviar && (
+          <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>
+            Guardados en este equipo sin conexión: se envían al servidor cuando vuelva la red.
+          </span>
+        )}
 
         {contactos.length === 0 ? (
           <span style={NOTA}>Todavía no hay contactos registrados.</span>

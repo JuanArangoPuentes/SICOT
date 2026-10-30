@@ -545,6 +545,12 @@ export interface RegistroResponse {
   // es ON DELETE SET NULL. Sin este campo, el panel atribuía al "Sistema"
   // acciones de personas que ya no están en la organización.
   origen: OrigenRegistro
+  /**
+   * La hora que declaró el equipo si se hizo sin red y llegó por la cola de
+   * cambios (ADR-015, V24); null si se hizo con conexión. `fecha` es cuándo lo
+   * recibió el servidor.
+   */
+  hechoSinConexionEn?: string | null
 }
 
 // ─── Cronograma ──────────────────────────────────────────────────────────────

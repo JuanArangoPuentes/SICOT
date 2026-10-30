@@ -82,6 +82,33 @@ en `INSTALACION.md`, apartado *SICOT en el teléfono*, y en
   evidencia en el 2.1, y en el 3.4 «Firmar documento» para ver el Informe de
   Supervisión con el formato oficial y descargarlo.
 
+### Trabajar sin red (ADR-015)
+
+Todo lo de arriba ocurre en la red local, sin Internet: el servidor es el
+portátil. Lo que sigue prueba además que el supervisor trabaja **sin llegar a
+ese servidor**, como en bodega o en obra, y que su trabajo llega al volver.
+
+1. En el dispositivo del supervisor, entre **con** red y abra el contrato. El
+   equipo guarda una copia de lo que ve y, si la cuenta es de supervisor, una
+   huella de la contraseña para entrar sin red durante 72 horas. Desde una
+   dirección `http://` en un navegador no hay acceso sin red; en la app
+   instalada y en el APK, sí.
+2. Corte el camino al servidor: apague la wifi del dispositivo, o detenga el
+   backend en el portátil (`docker compose stop backend`).
+3. Sin red, en el 2.2 agregue un contacto de SST y cierre el sub-paso. Arriba
+   tiene que decir «Sin conexión con el servidor», debajo «2 cambios guardados
+   en este equipo, pendientes de enviar», y el 2.2 queda con el rótulo
+   «Pendiente de enviar».
+4. Vuelva a dar el camino. Antes de 30 segundos la franja desaparece y el
+   expediente queda al día. En **Registros**, cada cambio dice a qué hora lo
+   hizo el equipo y la fecha de la columna es cuándo llegó al servidor.
+5. Para el caso del token vencido (más de 8 horas sin entrar): con el camino
+   cortado, la pantalla de acceso deja entrar con la misma contraseña. Al volver
+   la red avisa «Volvió la conexión con el servidor» y, al entrar de nuevo, se
+   envía lo guardado.
+
+Firmar, generar y cargar documentos siguen necesitando red, y el aviso lo dice.
+
 ## Si no conecta
 
 | Lo que se ve | Qué revisar |

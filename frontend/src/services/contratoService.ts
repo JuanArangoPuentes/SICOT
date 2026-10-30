@@ -2,7 +2,8 @@
 // (autenticado; corregir y cambiar estado exigen rol GESTION o ADMINISTRADOR).
 
 import { apiFetch, apiFetchBlob } from './api/client'
-import { conCopiaLocal } from './copiaLocal'
+import { aplicarCambiosPendientes, enviarOEncolar, type ConPendiente } from './colaDeCambios'
+import { conCopiaLocal, leerDeLaCopia } from './copiaLocal'
 import { guardarArchivo, type ResultadoGuardado } from './guardarArchivo'
 import type {
   AcuerdoDeEntregasResponse,
@@ -150,15 +151,29 @@ export function obtenerEntregasAcordadas(contratoId: number): Promise<AcuerdoDeE
  * Reemplaza el acuerdo; una lista vacía lo borra. Las fechas tienen que caer
  * dentro del plazo del contrato (el backend lo exige) y el número lo pone SICOT
  * por fecha.
+ *
+ * Sin red se guarda en la cola de este equipo (ADR-015) y devuelve lo que se
+ * verá mientras tanto: la lista nueva, marcada con `pendienteDeEnviar`.
  */
-export function guardarEntregasAcordadas(
+export async function guardarEntregasAcordadas(
   contratoId: number,
   entregas: Array<{ fecha: string; descripcion: string }>,
-): Promise<AcuerdoDeEntregasResponse> {
-  return apiFetch<AcuerdoDeEntregasResponse>(`/api/contratos/${contratoId}/entregas-acordadas`, {
-    method: 'PUT',
-    body: JSON.stringify({ entregas }),
+): Promise<AcuerdoDeEntregasResponse & ConPendiente> {
+  const resultado = await enviarOEncolar<AcuerdoDeEntregasResponse>({
+    tipo: 'entregas-acordadas',
+    contratoId,
+    entregas,
   })
+  if (!resultado.enCola) return resultado.respuesta
+  // El plazo del contrato sale de la última lectura guardada: la pantalla lo
+  // usa para no ofrecer días fuera de él, y sin red no hay otra fuente.
+  const ruta = `/api/contratos/${contratoId}/entregas-acordadas`
+  const guardado = (await leerDeLaCopia(ruta)) as Partial<AcuerdoDeEntregasResponse> | null
+  return aplicarCambiosPendientes(ruta, {
+    entregas: [],
+    inicioDelContrato: guardado?.inicioDelContrato ?? null,
+    finDelContrato: guardado?.finDelContrato ?? null,
+  } as AcuerdoDeEntregasResponse)
 }
 
 export function obtenerContactosSstAmbiental(contratoId: number): Promise<ContactosDelContratoResponse> {
@@ -166,15 +181,20 @@ export function obtenerContactosSstAmbiental(contratoId: number): Promise<Contac
   return conCopiaLocal(ruta, () => apiFetch<ContactosDelContratoResponse>(ruta))
 }
 
-/** Reemplaza los contactos; una lista vacía los borra. */
-export function guardarContactosSstAmbiental(
+/** Reemplaza los contactos; una lista vacía los borra. Sin red, como las entregas: a la cola. */
+export async function guardarContactosSstAmbiental(
   contratoId: number,
   contactos: ContactoDelContrato[],
-): Promise<ContactosDelContratoResponse> {
-  return apiFetch<ContactosDelContratoResponse>(`/api/contratos/${contratoId}/contactos-sst-ambiental`, {
-    method: 'PUT',
-    body: JSON.stringify({ contactos }),
+): Promise<ContactosDelContratoResponse & ConPendiente> {
+  const resultado = await enviarOEncolar<ContactosDelContratoResponse>({
+    tipo: 'contactos-sst-ambiental',
+    contratoId,
+    contactos,
   })
+  if (!resultado.enCola) return resultado.respuesta
+  return aplicarCambiosPendientes(`/api/contratos/${contratoId}/contactos-sst-ambiental`, {
+    contactos: [],
+  } as ContactosDelContratoResponse)
 }
 
 /** Los correos que trae el estudio previo cargado. No guarda nada: ni el archivo ni los contactos. */

@@ -417,7 +417,7 @@ describe('SupervisorPanel', () => {
     await firmarActa()
 
     expect(documentos.generarDocumento).not.toHaveBeenCalled()
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(1, { id: 53, codigo: '5.3' }, 'COMPLETADA')
   })
 
   it('pide los datos antes de firmar y, si luego falla el registro, no dice que la firma falló', async () => {
@@ -441,7 +441,7 @@ describe('SupervisorPanel', () => {
     )
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Firmar' })))
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(1, { id: 53, codigo: '5.3' }, 'COMPLETADA')
     expect(screen.queryByText(/no pude completar la firma/i)).not.toBeInTheDocument()
   })
 
@@ -542,7 +542,7 @@ describe('SupervisorPanel', () => {
     // huella: si otra pestaña lo regeneró entre medias, el servidor no firma.
     expect(documentos.generarDocumento).toHaveBeenCalledTimes(1)
     expect(documentos.firmarDocumento).toHaveBeenCalledWith(1, 9, 'huella-del-borrador')
-    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(53, 'COMPLETADA')
+    expect(etapas.cambiarEstadoSubetapa).toHaveBeenCalledWith(1, { id: 53, codigo: '5.3' }, 'COMPLETADA')
   })
 
   it('«Usar mis notas tal cual» regenera sin el Copiloto y, tras revisarlo, firma ese borrador', async () => {

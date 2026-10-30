@@ -1,6 +1,6 @@
 # ADR-015 — Trabajo sin conexión del supervisor
 
-**Estado:** Propuesta · **Fecha:** 26 de octubre de 2026 · **Sustituye la decisión de** [ADR-001](./ADR-001-bifurcamiento-de-despliegue.md)
+**Estado:** Aceptada, en ejecución (puntos 1, 3, 4 y 5 hechos el 30-10-2026) · **Fecha:** 26 de octubre de 2026 · **Sustituye la decisión de** [ADR-001](./ADR-001-bifurcamiento-de-despliegue.md)
 
 ## Contexto
 
@@ -106,31 +106,90 @@ jornada sin red, no para pasar tres días en campo: cuando el token vence,
 servidor no se puede. Lo que convierte esto en «trabajar sin red» de verdad es
 el punto 4, y después el 3.
 
-**2. Identidad de lo creado sin conexión.** El cliente **no** inventa
+**2. Identidad de lo creado sin conexión. No hizo falta todavía (30-10-2026).**
+Ninguna de las cuatro operaciones que hoy entran en la cola (punto 3) crea una
+fila a la que otra operación posterior tenga que referirse: las fechas de
+entrega y los contactos se reemplazan como lista entera, y el sub-paso y la
+alerta ya tienen identificador del servidor. Hará falta cuando entre en la cola
+cargar un documento o una foto sin red. El cliente **no** inventa
 identificadores del servidor: usa identificadores locales propios y mantiene una
 tabla de equivalencias que se rellena cuando el servidor responde con el suyo.
 Toda referencia local (el documento que cierra un sub-paso, por ejemplo) se
 reescribe al sincronizar. La alternativa —pasar las trece tablas a UUID— toca
 el esquema entero y no hace falta.
 
-**3. La cola y su reenvío.** Persistente, ordenada, idempotente. Cada operación
-guarda qué se intentó, cuándo y sobre qué. El reenvío tiene que tolerar que la
-red se corte a mitad sin duplicar lo ya aplicado: hace falta una clave de
-idempotencia por operación, que hoy no existe salvo en el chat del Copiloto
-(`idSolicitud`).
+**3. La cola y su reenvío. ✅ Hecha el 30-10-2026, para cuatro operaciones.**
+Persistente, ordenada, idempotente. Cada operación guarda qué se intentó,
+cuándo y sobre qué. El reenvío tiene que tolerar que la red se corte a mitad sin
+duplicar lo ya aplicado.
 
-**4. Autenticación sin servidor.** El token de 8 horas no sirve. El cliente
-tiene que poder verificar la contraseña contra un hash guardado en el último
-acceso con red y abrir una sesión local, con una **ventana máxima sin
-reconectar** pasada la cual exija volver a la red. Esto debilita la seguridad de
-forma real: un portátil robado sigue siendo válido durante esa ventana. Elegir
-su duración es una decisión, no un detalle.
+Está en `frontend/src/services/colaDeCambios.ts`, en una base IndexedDB propia
+que **no** se vacía al cerrar sesión: es trabajo del supervisor que todavía no
+llegó al servidor. Entran cerrar o avanzar un sub-paso, las fechas de entrega
+acordadas, los contactos de SST y ambiental, y marcar una alerta como leída.
+Cargar, generar y firmar documentos siguen exigiendo red.
 
-**5. La pantalla de lo que no se pudo aplicar.** La parte que todo el mundo
-subestima. Un supervisor trabaja tres días sin red y al sincronizar el servidor
-rechaza el cierre del 2.1 porque Gestión reasignó el contrato. Hace falta una
-pantalla que diga qué no entró, por qué, y qué puede hacer; y que su trabajo
-siga ahí mientras lo resuelve.
+- **No hizo falta una clave de idempotencia.** Se pensó que sí; al medirlo, las
+  cuatro operaciones ya son idempotentes en el servidor. Pasar un sub-paso al
+  estado que ya tiene no hace nada ni deja una segunda constancia, los dos `PUT`
+  reemplazan la lista entera, y marcar leída una alerta leída la deja igual. Lo
+  comprueba `TrabajoSinConexionIntegrationTest`. La clave hará falta cuando
+  entren los `POST` (cargar un documento).
+- **El orden manda.** Con cambios esperando, uno nuevo va detrás aunque ya haya
+  red.
+- **Lo que se ve.** Cada lectura sale con los cambios pendientes encima y
+  rotulados («Pendiente de enviar»). La copia guardada sigue siendo lo que
+  contestó el servidor: el rótulo se pone al entregar la lectura, nunca al
+  guardarla.
+- **Las dos horas.** El reenvío manda la hora del equipo en la cabecera
+  `X-SICOT-Hecho-Sin-Conexion`. El servidor la guarda aparte en
+  `registros.hecho_sin_conexion_en` (`V24`) y conserva `fecha` como la hora en
+  que lo recibió. Es lo que pedía la sección «Lo que empeora».
+
+**4. Autenticación sin servidor. ✅ Hecha el 30-10-2026.** El token de 8 horas no
+sirve. El cliente tiene que poder verificar la contraseña contra un hash guardado
+en el último acceso con red y abrir una sesión local, con una **ventana máxima
+sin reconectar** pasada la cual exija volver a la red. Esto debilita la seguridad
+de forma real: un portátil robado sigue siendo válido durante esa ventana.
+Elegir su duración es una decisión, no un detalle.
+
+Está en `frontend/src/services/accesoSinRed.ts`:
+
+- **La huella.** PBKDF2-SHA-256 con sal aleatoria y 600 000 iteraciones, la cifra
+  de OWASP. La contraseña no se guarda.
+- **Solo el último supervisor que entró con red.** Es el dueño de la copia
+  local. Gestión y Administración no tienen copia que ver.
+- **La sesión sin conexión no lleva token.** Ve la copia y llena la cola; para
+  enviar hay que volver a entrar con red.
+- **Cerrar sesión olvida el acceso**, igual que vacía la copia.
+
+**La ventana es de 72 horas desde el último contacto con el servidor**, no desde
+el último inicio de sesión. Se decidió así a falta de la respuesta a la pregunta
+3: alcanza para una salida a campo de varios días y acota el caso del portátil
+robado. Si la respuesta es otra, es una constante (`VENTANA_SIN_RED_MS`).
+
+En una dirección `http://` de la red local el navegador no ofrece
+`crypto.subtle`. Ahí no hay acceso sin red, y la pantalla lo dice. La aplicación
+de escritorio, el APK y `https://` sí lo tienen.
+
+**5. La pantalla de lo que no se pudo aplicar. ✅ Hecha el 30-10-2026.** La
+parte que todo el mundo subestima. Un supervisor trabaja tres días sin red y al
+sincronizar el servidor rechaza el cierre del 2.1 porque Gestión reasignó el
+contrato. Hace falta una pantalla que diga qué no entró, por qué, y qué puede
+hacer; y que su trabajo siga ahí mientras lo resuelve.
+
+Es la franja `CambiosSinEnviar`, debajo del aviso de la copia en los tres
+paneles. Dice cuántos cambios esperan y deja enviarlos a mano. Lo rechazado se
+abre solo, con el motivo del servidor y los botones «Volver a intentar» y
+«Descartar el mío».
+
+**Conflictos: se muestran, no se resuelven solos.** Antes de reenviar una lista
+entera se compara lo que hay en el servidor con lo que el supervisor tenía
+delante al cambiarla. Si alguien la cambió mientras tanto, no se envía: quedan
+las dos versiones a la vista y decide el supervisor («Enviar la mía de todos
+modos» o «Descartar la mía»). Esto **no** es la política de conflictos de la
+pregunta 2, que sigue abierta: no prevalece nada por regla y nada se fusiona.
+Solo se evita que un reenvío pise sin que nadie lo vea lo que otro hizo.
 
 **6. El cronograma y las alertas.** O el cliente recalcula el cronograma en
 local —la lógica de `Cronograma` es determinista y se podría portar, a costa de
@@ -175,6 +234,8 @@ Las dos primeras bloquean; las demás se pueden resolver sobre la marcha.
    exija red**: el supervisor hace todo lo demás sin conexión y firma al
    volver. Si Alex dice que se firma en campo, hay que llevarle a contratación
    la pregunta de qué vale una firma con hora declarada por el equipo.
+   **Adoptado el 30-10-2026: firmar exige red.** Es lo que se puede deshacer:
+   si contratación acepta la firma en campo, se añade a la cola, y no al revés.
 2. **La política de conflictos que ADR-001 exige por escrito.** Qué prevalece
    cuando lo local y lo del servidor discrepan, y quién decide. Sin esto,
    cualquier regla que implantemos será una invención nuestra con consecuencias

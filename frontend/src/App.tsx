@@ -27,6 +27,8 @@ const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { clearSession, getSession } from '@/services/session'
+import { vigilarLaCola } from '@/services/colaDeCambios'
+import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
 import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
 import { onUnauthorized, setAuthToken } from '@/services/api/client'
 import { getContratos } from '@/services/contratoService'
@@ -271,6 +273,12 @@ function AppInner() {
 
   useEffect(() => {
     onUnauthorized(() => logout())
+    // Los reintentos de la cola de cambios: al volver la red y cada medio
+    // minuto mientras quede algo y haya sesión con el servidor (ADR-015).
+    vigilarLaCola()
+    // Y en una sesión abierta sin red, avisar cuando el servidor vuelva:
+    // sin token, nada más en ella se enteraría.
+    vigilarLaVueltaDelServidor()
   }, [])
 
   // Lleva la cuenta de las entradas de historial que apila la sesión, que es lo

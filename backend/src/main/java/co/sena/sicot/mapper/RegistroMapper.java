@@ -19,6 +19,7 @@ public final class RegistroMapper {
                 r.getAccion(),
                 r.getDescripcion(),
                 r.getFecha(),
-                r.getOrigen());
+                r.getOrigen(),
+                r.getHechoSinConexionEn());
     }
 }

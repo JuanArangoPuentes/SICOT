@@ -41,6 +41,15 @@ public class Registro {
     @Column(nullable = false, updatable = false)
     private Instant fecha;
 
+    /**
+     * La hora que declaró el equipo cuando el cambio se hizo sin red y llegó
+     * después por la cola de ADR-015; nula en todo lo que se hizo con conexión.
+     * {@code fecha} sigue siendo cuándo lo recibió el servidor. Ver
+     * {@code HechoSinConexionInterceptor} y {@code V24__hora_declarada_sin_conexion.sql}.
+     */
+    @Column(name = "hecho_sin_conexion_en", updatable = false)
+    private Instant hechoSinConexionEn;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -60,4 +69,7 @@ public class Registro {
     public void setOrigen(OrigenRegistro origen) { this.origen = origen; }
 
     public Instant getFecha() { return fecha; }
+
+    public Instant getHechoSinConexionEn() { return hechoSinConexionEn; }
+    public void setHechoSinConexionEn(Instant hechoSinConexionEn) { this.hechoSinConexionEn = hechoSinConexionEn; }
 }

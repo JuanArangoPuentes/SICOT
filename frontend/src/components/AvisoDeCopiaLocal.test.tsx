@@ -36,7 +36,7 @@ describe('AvisoDeCopiaLocal', () => {
     expect(screen.queryByRole('status')).toBeNull()
   })
 
-  it('al servir de la copia avisa, dice de cuándo es y que no se puede escribir', async () => {
+  it('al servir de la copia avisa, dice de cuándo es y qué se puede hacer sin red', async () => {
     await conCopiaLocal('/api/contratos', () => Promise.resolve(['x']))
     await conCopiaLocal('/api/contratos', () => Promise.reject(new TypeError('Failed to fetch')))
 
@@ -45,6 +45,23 @@ describe('AvisoDeCopiaLocal', () => {
     const aviso = screen.getByRole('status')
     expect(aviso).toHaveTextContent('Sin conexión con el servidor')
     expect(aviso).toHaveTextContent(/copia guardada en este equipo hoy a las \d/)
-    expect(aviso).toHaveTextContent('no se puede cargar, generar ni firmar nada')
+    // Desde la cola de cambios casi todo se puede hacer sin red; lo que no,
+    // se dice igual de claro que antes.
+    expect(aviso).toHaveTextContent('se guarda aquí y se envía cuando vuelva la red')
+    expect(aviso).toHaveTextContent('cargar, generar y firmar documentos necesitan conexión')
+  })
+
+  it('si la sesión se abrió sin red, lo dice', async () => {
+    localStorage.setItem(
+      'sicot.session',
+      JSON.stringify({ token: '', usuarioId: 42, nombre: 'S', email: 's@x', rol: 'SUPERVISOR', sinConexion: true }),
+    )
+    await conCopiaLocal('/api/contratos', () => Promise.resolve(['x']))
+    await conCopiaLocal('/api/contratos', () => Promise.reject(new TypeError('Failed to fetch')))
+
+    render(<AvisoDeCopiaLocal />)
+
+    expect(screen.getByRole('status')).toHaveTextContent('Entró sin conexión con la contraseña recordada')
+    localStorage.removeItem('sicot.session')
   })
 })

@@ -24,6 +24,7 @@ import {
   obtenerEntregasAcordadas,
 } from '@/services/contratoService'
 import { ApiError } from '@/services/api/client'
+import type { ConPendiente } from '@/services/colaDeCambios'
 import { formatFecha } from '@/services/format'
 import type { AcuerdoDeEntregasResponse, ContactoDelContrato, ContratoResponse } from '@/services/api/types'
 import BorradorDeCorreo from './BorradorDeCorreo'
@@ -99,7 +100,7 @@ export default function AcuerdoDeEntregas({
 }) {
   // null mientras no se haya podido consultar: es distinto de «no hay fechas».
   // Con la consulta fallida, guardar reemplazaría el acuerdo que sí existe.
-  const [acuerdo, setAcuerdo] = useState<AcuerdoDeEntregasResponse | null>(null)
+  const [acuerdo, setAcuerdo] = useState<(AcuerdoDeEntregasResponse & ConPendiente) | null>(null)
   const [contactos, setContactos] = useState<ContactoDelContrato[]>([])
   const [error, setError] = useState<string | null>(null)
   const [filas, setFilas] = useState<Fila[] | null>(null)
@@ -191,6 +192,11 @@ export default function AcuerdoDeEntregas({
         )}
 
         {error && <span style={{ fontSize: 11.5, color: 'var(--alert-critica)' }}>{error}</span>}
+        {acuerdo.pendienteDeEnviar && !filas && (
+          <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>
+            Guardadas en este equipo sin conexión: se envían al servidor cuando vuelva la red.
+          </span>
+        )}
 
         {entregas.length === 0 && !filas && (
           <span style={NOTA}>Todavía no hay fechas registradas. Regístrelas cuando el contratista le responda.</span>
