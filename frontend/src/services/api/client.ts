@@ -105,6 +105,27 @@ export function setAuthToken(token: string | null) {
   authToken = token
 }
 
+/**
+ * ¿Hay con qué presentarse al servidor? Una sesión abierta sin red
+ * (`accesoSinRed.ts`) no lleva token: sirve para ver la copia y guardar
+ * cambios en la cola, pero no para enviarlos.
+ */
+export function hayTokenDeSesion(): boolean {
+  return Boolean(authToken)
+}
+
+let oyenteDeContacto: (() => void) | null = null
+
+/**
+ * Avisa cada vez que el servidor acepta una petición con la sesión: es la
+ * prueba de que la cuenta sigue valiendo. El acceso sin red cuenta su ventana
+ * desde el último aviso, no desde el último inicio de sesión: quien trabaja con
+ * red todo el día no tiene por qué quedarse con menos margen al salir a campo.
+ */
+export function alResponderConSesion(oyente: (() => void) | null) {
+  oyenteDeContacto = oyente
+}
+
 export function onUnauthorized(handler: (() => void) | null) {
   unauthorizedHandler = handler
 }
@@ -182,6 +203,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!res.ok) {
     await lanzarError(res, path)
   }
+
+  if (authToken) oyenteDeContacto?.()
 
   if (res.status === 204) {
     return undefined as T

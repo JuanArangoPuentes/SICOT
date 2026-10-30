@@ -1,10 +1,12 @@
 // Pantalla de inicio de sesión — autenticación real contra el backend SICOT.
 // Extraído 1:1 desde el App.tsx original de Figma Make — sin cambios visuales.
 
-import { useState, type KeyboardEvent } from 'react'
+import { useEffect, useState, type KeyboardEvent } from 'react'
 import { SenaLogo } from '@/components/ui'
-import { login } from '@/services/authService'
-import { ApiError, apiBase } from '@/services/api/client'
+import { login, loginSinConexion } from '@/services/authService'
+import { hayAccesoSinRedRecordado } from '@/services/accesoSinRed'
+import { ApiError, apiBase, esCorteDelCamino } from '@/services/api/client'
+import { cambiosGuardadosEnEsteEquipo } from '@/services/colaDeCambios'
 import { avisoTraficoSinCifrar, mensajeSinConexion } from '@/services/entorno'
 import type { AuthResponse } from '@/services/api/types'
 
@@ -43,6 +45,19 @@ export default function LoginScreen({
   const [showPw, setShowPw] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // Lo que se hizo sin red y espera a que su dueño entre con conexión. Se dice
+  // aquí porque es justo donde se decide entrar, y porque tras volver la red
+  // es la pantalla a la que se llega (la sesión sin conexión no tiene token).
+  const [guardados, setGuardados] = useState(0)
+  useEffect(() => {
+    void cambiosGuardadosEnEsteEquipo().then(setGuardados)
+    // El panel del supervisor se descarga aparte (carga diferida en App.tsx).
+    // Si este equipo puede entrar sin red, se trae ahora, mientras todavía
+    // hay con qué: en la versión web, entrar sin red con el panel sin
+    // descargar dejaba la pantalla en blanco. La app de escritorio y el APK
+    // llevan sus archivos dentro y no lo necesitan, pero tampoco les estorba.
+    if (hayAccesoSinRedRecordado()) void import('@/screens/SupervisorPanel').catch(() => {})
+  }, [])
   const s = LOGIN_STYLE
 
   const attempt = async () => {
@@ -58,6 +73,18 @@ export default function LoginScreen({
       const auth = await login(correo, password)
       onLogin(auth)
     } catch (e) {
+      // Sin camino al servidor, el último supervisor que entró aquí con red
+      // puede abrir una sesión sin conexión (ADR-015, punto 4). Si no puede,
+      // se dice por qué, junto al aviso de siempre sobre la conexión.
+      if (esCorteDelCamino(e)) {
+        const sinRed = await loginSinConexion(correo, password)
+        if (sinRed.ok) {
+          onLogin({ ...sinRed.auth, sinConexion: true } as AuthResponse)
+          return
+        }
+        setError(`${mensajeSinConexion(apiBase())} ${sinRed.motivo}`)
+        return
+      }
       if (e instanceof ApiError && e.esDemasiadasSolicitudes) {
         // El backend responde 429 con Retry-After tras varios intentos
         // fallidos. Decir cuánto falta evita que la persona siga probando
@@ -471,6 +498,25 @@ export default function LoginScreen({
             >
               {error}
             </div>
+          )}
+
+          {guardados > 0 && (
+            <p
+              role="status"
+              style={{
+                fontSize: 12,
+                color: s.textSecondary,
+                margin: '10px 0 0',
+                padding: '8px 12px',
+                border: '1px solid var(--alert-leve)',
+                borderRadius: 6,
+                lineHeight: 1.5,
+              }}
+            >
+              {guardados === 1
+                ? 'Hay 1 cambio hecho sin conexión en este equipo. Se envía al servidor cuando entre con conexión la cuenta que lo hizo.'
+                : `Hay ${guardados} cambios hechos sin conexión en este equipo. Se envían al servidor cuando entre con conexión la cuenta que los hizo.`}
+            </p>
           )}
 
           {/* Submit */}

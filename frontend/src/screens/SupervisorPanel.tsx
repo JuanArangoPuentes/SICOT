@@ -84,6 +84,7 @@ import type {
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
+import { alEnviarCambios } from '@/services/colaDeCambios'
 import { getCronograma } from '@/services/cronogramaService'
 import { useRecursoDelContrato } from '@/hooks/useRecursoDelContrato'
 import {
@@ -575,6 +576,23 @@ export default function SupervisorPanel({
     }
   }, [contrato])
 
+  // Cuando la cola de cambios deja algo aplicado en el servidor, lo que se ve
+  // deja de ser la intención guardada y pasa a ser el estado de verdad: se
+  // vuelven a pedir las etapas para traer lo que el servidor calculó con ello
+  // (el porcentaje de la etapa, el paso siguiente activado).
+  const [vueltaDeLaCola, setVueltaDeLaCola] = useState(0)
+  useEffect(
+    () =>
+      alEnviarCambios(() => {
+        setVueltaDeLaCola((n) => n + 1)
+        // Los contactos y las fechas de entrega también: si salieron de la
+        // copia con la nota «guardados en este equipo», la nota seguiría ahí
+        // aunque el servidor ya los tenga.
+        setVersionDelArranque((v) => v + 1)
+      }),
+    [],
+  )
+
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)
   useEffect(() => {
     if (!contrato) return
@@ -587,7 +605,7 @@ export default function SupervisorPanel({
     return () => {
       cancelado = true
     }
-  }, [contrato, setSteps])
+  }, [contrato, setSteps, vueltaDeLaCola])
 
   // Alertas reales del contrato (no leídas).
   //
@@ -868,18 +886,36 @@ export default function SupervisorPanel({
     // tutorial se queda sin poder continuar al terminar un paso.
     if (sub?.apiId && contrato) {
       try {
-        await cambiarEstadoSubetapa(sub.apiId, 'COMPLETADA')
+        // `null` es «guardado en este equipo, sin red»: el cambio está en la
+        // cola y la lectura de abajo lo trae encima de la copia, rotulado
+        // como pendiente de enviar (ADR-015).
+        const enviado = await cambiarEstadoSubetapa(contrato.id, { id: sub.apiId, codigo: sub.id }, 'COMPLETADA')
         const pasoActualizado = updated.find((s) => s.id === stepId)
         const eraUltimaDelPaso = pasoActualizado?.subSteps.every((s) => s.completed)
         if (eraUltimaDelPaso) {
           const siguientePaso = steps.find((s) => s.id === stepId + 1)
           const primeraSubSiguiente = siguientePaso?.subSteps[0]
           if (primeraSubSiguiente?.apiId) {
-            await cambiarEstadoSubetapa(primeraSubSiguiente.apiId, 'EN_CURSO')
+            await cambiarEstadoSubetapa(
+              contrato.id,
+              { id: primeraSubSiguiente.apiId, codigo: primeraSubSiguiente.id },
+              'EN_CURSO',
+            )
           }
         }
         const etapas = await getEtapasContrato(contrato.id)
         setSteps(mapEtapas(etapas))
+        if (enviado === null) {
+          setChatMsgs((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              text:
+                `Sin conexión con el servidor: el cierre de «${sub.label}» quedó guardado en este equipo y se ` +
+                'enviará en cuanto vuelva la red. Si el servidor no lo acepta, se lo diré con el motivo.',
+            },
+          ])
+        }
       } catch (e) {
         // No se guardó de verdad en el servidor — revertir el avance optimista
         // en vez de dejar un porcentaje "completado" que un refresco borraría
@@ -1252,7 +1288,9 @@ export default function SupervisorPanel({
     setDismissed((prev) => new Set(prev).add(id))
     if (id.startsWith('api-')) {
       const apiId = Number(id.slice(4))
-      marcarAlertaLeida(apiId).catch((err) => console.error('No se pudo marcar la alerta como leída:', err))
+      marcarAlertaLeida(apiId, contrato?.id ?? null).catch((err) =>
+        console.error('No se pudo marcar la alerta como leída:', err),
+      )
       setAlertasApi((prev) => prev.filter((a) => a.id !== apiId))
     }
   }
@@ -1795,6 +1833,28 @@ export default function SupervisorPanel({
                                       SICOT genera
                                     </span>
                                   )}
+                                  {/* El «tercer estado» de ADR-015: hecho en este
+                                      equipo, todavía sin aceptar por el servidor.
+                                      Sin el rótulo, un cierre guardado sin red se
+                                      veía igual que uno que ya está en el
+                                      expediente. */}
+                                  {ss.pendienteDeEnviar && (
+                                    <span
+                                      title="Hecho sin conexión. Se envía al servidor cuando vuelva la red."
+                                      style={{
+                                        marginLeft: 6,
+                                        fontSize: 10,
+                                        color: 'var(--alert-leve)',
+                                        border: '1px solid var(--alert-leve)',
+                                        padding: '0 5px',
+                                        borderRadius: 3,
+                                        textDecoration: 'none',
+                                        display: 'inline-block',
+                                      }}
+                                    >
+                                      Pendiente de enviar
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                               {/* Responsable y documento van como texto, no como
@@ -1886,7 +1946,9 @@ export default function SupervisorPanel({
                                   version={versionDelArranque}
                                   onGuardado={() => {
                                     setVersionDelArranque((v) => v + 1)
-                                    void onRefreshRegistros()
+                                    // Sin red el guardado va a la cola y el registro no
+                                    // se puede refrescar: no es un error de nadie.
+                                    void onRefreshRegistros().catch(() => {})
                                   }}
                                 />
                               )}
@@ -1918,7 +1980,7 @@ export default function SupervisorPanel({
                                     version={versionDelArranque}
                                     onGuardado={() => {
                                       setVersionDelArranque((v) => v + 1)
-                                      void onRefreshRegistros()
+                                      void onRefreshRegistros().catch(() => {})
                                     }}
                                   />
                                 </>

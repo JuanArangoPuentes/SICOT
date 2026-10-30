@@ -2,18 +2,31 @@
 // de subetapa (el servidor recalcula porcentaje y estado de la etapa).
 
 import { apiFetch } from './api/client'
+import { enviarOEncolar } from './colaDeCambios'
 import { conCopiaLocal } from './copiaLocal'
-import type { ActualizarEstadoSubetapaRequest, EstadoSubetapa, EtapaResponse, SubetapaResponse } from './api/types'
+import type { EstadoSubetapa, EtapaResponse, SubetapaResponse } from './api/types'
 
 export function getEtapasContrato(contratoId: number): Promise<EtapaResponse[]> {
   const ruta = `/api/contratos/${contratoId}/etapas`
   return conCopiaLocal(ruta, () => apiFetch<EtapaResponse[]>(ruta))
 }
 
-export function cambiarEstadoSubetapa(subetapaId: number, estado: EstadoSubetapa): Promise<SubetapaResponse> {
-  const body: ActualizarEstadoSubetapaRequest = { estado }
-  return apiFetch<SubetapaResponse>(`/api/subetapas/${subetapaId}/estado`, {
-    method: 'PATCH',
-    body: JSON.stringify(body),
+/**
+ * Cambia el estado de un sub-paso. Sin red el cambio se guarda en la cola de
+ * este equipo y devuelve `null`: quien llama vuelve a pedir las etapas, que
+ * salen de la copia con el cambio encima y rotulado como pendiente de enviar.
+ */
+export async function cambiarEstadoSubetapa(
+  contratoId: number,
+  subetapa: { id: number; codigo: string },
+  estado: EstadoSubetapa,
+): Promise<SubetapaResponse | null> {
+  const resultado = await enviarOEncolar<SubetapaResponse>({
+    tipo: 'estado-subetapa',
+    contratoId,
+    subetapaId: subetapa.id,
+    codigo: subetapa.codigo,
+    estado,
   })
+  return resultado.enCola ? null : resultado.respuesta
 }

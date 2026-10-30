@@ -3,8 +3,10 @@
 // sin red.
 //
 // Es el punto 1 de ADR-015 y la interpretación C de ADR-001, que ya estaba
-// pre-aprobada. **Solo lectura**: aquí no se encola ninguna escritura todavía;
-// sin red se ve, no se cambia. La cola de intenciones es el punto 3 del ADR.
+// pre-aprobada. **Solo lectura**: aquí no se escribe nada. Lo que el supervisor
+// cambia sin red lo guarda la cola de cambios (`colaDeCambios.ts`, punto 3 del
+// ADR), que se engancha aquí para que cada lectura salga con esos cambios
+// encima y rotulados como pendientes.
 //
 // <h2>Por qué IndexedDB</h2>
 // La aplicación es la misma en tres sitios (ADR-012) y esto tiene que
@@ -222,6 +224,55 @@ export function alCambiarLaCopia(oyente: (e: EstadoDeLaCopia) => void): () => vo
   }
 }
 
+// ── Lo que se pone encima de cada lectura ───────────────────────────────────
+
+type Transformador = (clave: string, datos: unknown) => Promise<unknown>
+
+let transformador: Transformador | null = null
+
+/**
+ * Registra lo que se aplica a cada lectura antes de entregarla: hoy, los
+ * cambios que el supervisor hizo y el servidor todavía no recibió.
+ *
+ * Es un registro y no una importación de la cola a propósito: la cola ya
+ * depende de este módulo para leer la base de cada cambio, y la dependencia
+ * de vuelta haría un ciclo entre los dos.
+ *
+ * Se aplica a lo que se entrega, **nunca** a lo que se guarda: la copia tiene
+ * que seguir siendo lo que contestó el servidor, o un cambio rechazado
+ * quedaría pegado a ella como si hubiera entrado.
+ */
+export function alServirUnaLectura(fn: Transformador): void {
+  transformador = fn
+}
+
+async function servir<T>(clave: string, datos: T): Promise<T> {
+  if (!transformador) return datos
+  try {
+    return (await transformador(clave, datos)) as T
+  } catch {
+    // Que no se puedan poner encima los pendientes no puede dejar la pantalla
+    // sin datos: se entrega lo del servidor tal cual.
+    return datos
+  }
+}
+
+/**
+ * Lo último que contestó el servidor para esa lectura, de la cuenta que entró,
+ * o `null`. Lo usa la cola para recordar qué tenía delante el supervisor al
+ * hacer un cambio.
+ */
+export async function leerDeLaCopia(clave: string): Promise<unknown> {
+  const deQuien = usuarioActual
+  if (deQuien === null) return null
+  try {
+    const entrada = await elAlmacen().leer(clave)
+    return entrada !== null && entrada.usuario === deQuien ? entrada.datos : null
+  } catch {
+    return null
+  }
+}
+
 // ── La lectura ──────────────────────────────────────────────────────────────
 
 /**
@@ -255,7 +306,7 @@ export async function conCopiaLocal<T>(clave: string, pedirAlServidor: () => Pro
       /* Sin sitio donde guardar: se sigue, sin copia. */
     }
     anunciar({ sirviendoCopia: false, cuando: null })
-    return datos
+    return servir(clave, datos)
   } catch (e) {
     if (!esCorteDelCamino(e)) throw e
     let entrada: Entrada | null = null
@@ -267,7 +318,7 @@ export async function conCopiaLocal<T>(clave: string, pedirAlServidor: () => Pro
     // La copia de otra cuenta no se enseña, aunque esté ahí.
     if (entrada === null || deQuien === null || entrada.usuario !== deQuien) throw e
     anunciar({ sirviendoCopia: true, cuando: entrada.cuando })
-    return entrada.datos as T
+    return servir(clave, entrada.datos as T)
   }
 }
 
