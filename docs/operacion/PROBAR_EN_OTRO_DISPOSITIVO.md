@@ -128,7 +128,9 @@ otro equipo no llega, y no es el firewall»* al final.
    desconocido»: **Más información → Ejecutar de todas formas**.
 2. Abrir SICOT, pulsar la dirección que aparece junto a **Servidor:** (abajo, en
    la pantalla de acceso) y escribir `http://192.168.1.50:8443` con la IP del
-   paso 1.2 —el mismo puerto que el navegador—. Guardar.
+   paso 1.2 —el mismo puerto que el navegador—. **Guardar dirección**, y
+   cerrar la ventana de Configuración con la «×»: queda abierta encima del
+   formulario y, mientras esté, «Ingresar» no responde.
 3. Entrar con una cuenta de prueba (están en `backend/README.md`).
 
 Por este camino **no** hace falta reconstruir nada con la IP: la dirección del
@@ -182,8 +184,14 @@ igual cuáles, mientras hablen con el mismo servidor.
 
 1. En los dos, entre como `supervisor@…` y abra el **mismo contrato**. Deje las
    dos pantallas quietas: no toque nada en la que va a mirar.
-2. En el equipo **A**, cierre un sub-paso (el 2.2 no exige documentos), o
-   marque una alerta como leída.
+2. En el equipo **A**, cierre o avance un sub-paso (el 2.2 no exige
+   documentos), o guarde un contacto de SST o una fecha de entrega.
+
+   **No sirve marcar una alerta como leída.** Lo que avisa al otro equipo es
+   lo que queda en la auditoría del contrato (Registros), y leer una alerta
+   no queda ahí, a propósito: es una preferencia de pantalla, no un hecho del
+   expediente. El otro equipo la verá leída la próxima vez que relea, por
+   ejemplo tras cualquier cambio de los de arriba.
 3. Mire el equipo **B** sin tocarlo. En unos segundos —cinco con la ventana
    delante— el avance, el paso siguiente y las alertas se ponen al día solos.
 4. Pruebe también al revés: deje B en segundo plano (cambie de ventana), haga

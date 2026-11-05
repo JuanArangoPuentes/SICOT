@@ -365,6 +365,19 @@ function SeccionServidor({ sectionTitle }: { sectionTitle: (t: string) => React.
           // (ADR-009). El ejemplo anterior, http://IP:8080, era justo lo que
           // el APK bloquea y además se saltaba el proxy con TLS.
           placeholder="https://servidor-del-centro"
+          // Todo el ancho y con relleno. Sin esto quedaba con el ancho por
+          // omisión del navegador (179 px en la aplicación de escritorio,
+          // medido el 05-11-2026) y cortaba la dirección: con
+          // `http://192.168.137.185:8443` no se veía el puerto, que es justo lo
+          // que hay que comprobar antes de guardar. Monoespaciada, como la
+          // dirección de «Conectando ahora a…» de debajo.
+          style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '10px 12px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 14,
+          }}
           value={valor}
           onChange={(e) => {
             setValor(e.target.value)
