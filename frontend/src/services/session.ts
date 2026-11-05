@@ -79,6 +79,30 @@ export function saveSession(auth: Sesion) {
   adoptar(auth)
 }
 
+type OyenteDeSesion = (auth: Sesion) => void
+const oyentesDeSesion = new Set<OyenteDeSesion>()
+
+/**
+ * Avisa cuando la sesión abierta cambia de token sin cerrarse, como al cambiar
+ * la contraseña propia. Devuelve cómo dejar de escuchar.
+ *
+ * App guarda la sesión en su estado y vuelve a poner el token de ese estado
+ * cada vez que cambia: sin enterarse del token nuevo, un día lo pisaría con el
+ * viejo —que el servidor ya revocó— y la sesión se cerraría sola con un 401.
+ */
+export function alRenovarSesion(oyente: OyenteDeSesion): () => void {
+  oyentesDeSesion.add(oyente)
+  return () => {
+    oyentesDeSesion.delete(oyente)
+  }
+}
+
+/** Sustituye la sesión abierta por la que devolvió el servidor y se lo dice a quien escucha. */
+export function renovarSesion(auth: Sesion) {
+  saveSession(auth)
+  oyentesDeSesion.forEach((oyente) => oyente(auth))
+}
+
 /**
  * Lo guardado, sin retomarlo. `getSession` además adopta la sesión (recarga
  * la cola, intenta enviarla); esto es para quien solo pregunta, como el aviso

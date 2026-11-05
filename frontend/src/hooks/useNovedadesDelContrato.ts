@@ -46,14 +46,18 @@ import { getNovedades } from '../services/novedadesService'
  * @param alHaberNovedades qué hacer cuando el servidor dice que algo cambió
  */
 
-/** Con la ventana delante. Es el ritmo que decide qué tan «en vivo» se siente. */
-const CON_LA_VENTANA_DELANTE_MS = 5_000
+/**
+ * Con la ventana delante. Es el ritmo que decide qué tan «en vivo» se siente.
+ * Lo comparte {@link useRefrescoEnVivo}, para que el administrador vea los
+ * cambios al mismo ritmo que el supervisor.
+ */
+export const CON_LA_VENTANA_DELANTE_MS = 5_000
 
 /** Con la ventana detrás: nadie está mirando, y al volver se pregunta en el acto. */
-const EN_SEGUNDO_PLANO_MS = 30_000
+export const EN_SEGUNDO_PLANO_MS = 30_000
 
 /** Tras un fallo del camino al servidor. */
-const TRAS_UN_FALLO_MS = 30_000
+export const TRAS_UN_FALLO_MS = 30_000
 
 export function useNovedadesDelContrato(contratoId: number | null | undefined, alHaberNovedades: () => void): void {
   // En una referencia y no en las dependencias: quien llama define el aviso en

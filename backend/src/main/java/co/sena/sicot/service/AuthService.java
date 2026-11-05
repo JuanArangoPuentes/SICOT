@@ -1,11 +1,14 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.dto.auth.AuthResponse;
+import co.sena.sicot.dto.auth.CambiarContrasenaRequest;
 import co.sena.sicot.dto.auth.LoginRequest;
 import co.sena.sicot.entity.Usuario;
+import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.CredencialesInvalidasException;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.JwtService;
+import co.sena.sicot.security.LimiteDeBcrypt;
 import co.sena.sicot.security.LoginAttemptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -99,6 +102,69 @@ public class AuthService {
         String token = jwtService.generateToken(usuario);
         return new AuthResponse(token, usuario.getId(), usuario.getNombre(),
                 usuario.getEmail(), usuario.getRol());
+    }
+
+    /**
+     * Cambia la contraseña de la cuenta que hace la petición, sea cual sea su
+     * rol, y le devuelve una sesión nueva.
+     *
+     * <h2>Por qué exige la actual y cuenta los fallos</h2>
+     * La sesión sola no basta: con un equipo del Centro que quedó con la sesión
+     * abierta, o con un token copiado, cualquiera podría cambiar la contraseña
+     * y dejar fuera a su dueño. Y un fallo con la actual se cuenta en el mismo
+     * {@link LoginAttemptService} que el inicio de sesión: si no, este endpoint
+     * sería una forma de adivinar la contraseña de la cuenta sin el límite de
+     * cinco intentos.
+     *
+     * <h2>Por qué devuelve un token</h2>
+     * El cambio cierra todas las sesiones de la cuenta
+     * ({@link Usuario#revocarSesiones()}): las de otros equipos tienen que
+     * dejar de valer ya, igual que cuando el administrador restablece la
+     * contraseña. Eso incluye la del propio equipo, así que la respuesta trae
+     * un token emitido con la versión nueva y la persona sigue trabajando sin
+     * volver a entrar.
+     *
+     * <p>Sin {@code @Transactional}, por el mismo motivo que {@link #login}: las
+     * comparaciones y la codificación con BCrypt no retienen una conexión del
+     * pool.
+     *
+     * @param origen dirección de red de la petición, para el límite por IP
+     */
+    public AuthResponse cambiarContrasena(Long usuarioId, CambiarContrasenaRequest request, String origen) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .filter(Usuario::isActivo)
+                .orElseThrow(() -> new CredencialesInvalidasException("Sesión no válida."));
+        String nueva = request.contrasenaNueva();
+        if (!LimiteDeBcrypt.cabe(nueva)) {
+            throw new BusinessException(LimiteDeBcrypt.MENSAJE);
+        }
+
+        String correo = usuario.getEmail();
+        loginAttemptService.reservarIntento(correo, origen);
+        boolean actualCorrecta;
+        try {
+            actualCorrecta = coincide(request.contrasenaActual(), usuario.getPassword());
+        } catch (RuntimeException e) {
+            loginAttemptService.liberarIntento(correo, origen);
+            throw e;
+        }
+        // 400 y no 401: la sesión es válida, lo que falla es un dato del
+        // formulario. Un 401 haría que la aplicación cerrara la sesión.
+        if (!actualCorrecta) {
+            log.warn("Cambio de contraseña rechazado para {}: la actual no coincide.", correo);
+            throw new BusinessException("La contraseña actual no es correcta.");
+        }
+        loginAttemptService.registrarExito(correo, origen);
+
+        if (passwordEncoder.matches(nueva, usuario.getPassword())) {
+            throw new BusinessException("La contraseña nueva tiene que ser distinta de la actual.");
+        }
+        usuario.setPassword(passwordEncoder.encode(nueva));
+        usuario.revocarSesiones();
+        Usuario guardado = usuarioRepository.save(usuario);
+        log.info("La cuenta {} cambió su contraseña; sus demás sesiones quedaron cerradas.", correo);
+        return new AuthResponse(jwtService.generateToken(guardado), guardado.getId(), guardado.getNombre(),
+                guardado.getEmail(), guardado.getRol());
     }
 
     private boolean coincide(String password, String hash) {

@@ -26,7 +26,7 @@ const GestionPanel = lazy(() => import('@/screens/GestionPanel'))
 const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
-import { clearSession, getSession } from '@/services/session'
+import { alRenovarSesion, clearSession, getSession } from '@/services/session'
 import { vigilarLaCola } from '@/services/colaDeCambios'
 import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
 import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
@@ -323,6 +323,11 @@ function AppInner() {
   useEffect(() => {
     setAuthToken(session?.token ?? null)
   }, [session])
+
+  // Cambiar la contraseña propia revoca el token y trae otro sin cerrar la
+  // sesión (cuentaService). El estado de aquí tiene que quedarse con el nuevo:
+  // el efecto de arriba reaplica el de este estado, y el viejo ya no vale.
+  useEffect(() => alRenovarSesion(setSession), [])
 
   const tour = useMemo(
     () => (location.pathname.startsWith('/gestion') ? TOUR_GESTION : TOUR_SUPERVISOR),

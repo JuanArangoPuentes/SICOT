@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-11-03 contra el código: 16 controladores, 60 endpoints.**
+**Revisado el 2026-11-05 contra el código: 17 controladores, 61 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -22,6 +22,7 @@
 | # | Controlador | Método | Ruta | Rol en `@PreAuthorize` | Control de acceso real | Éxito | Forma de respuesta |
 |---|-------------|--------|------|------------------------|------------------------|-------|-------------------|
 | 1 | AuthController | POST | /api/auth/login | (público) | público | 200 | `AuthResponse` |
+| 61 | CuentaController | PUT | /api/cuenta/contrasena (cuerpo: `contrasenaActual`, `contrasenaNueva`) — desde el 05-11-2026, cualquier rol cambia SU contraseña; cierra sus demás sesiones | (autenticado) | `anyRequest().authenticated()` + la cuenta es siempre la de la sesión (no hay `id` en la ruta); la actual se exige y sus fallos cuentan en `LoginAttemptService` | 200 | `AuthResponse` con token nuevo |
 | 2 | UsuarioController | GET | /api/usuarios | ADMINISTRADOR, GESTION (lectura) | @PreAuthorize en clase + método | 200 | `List<UsuarioResponse>` |
 | 3 | UsuarioController | GET | /api/usuarios/{id} | ADMINISTRADOR | @PreAuthorize en clase | 200 | `UsuarioResponse` |
 | 4 | UsuarioController | POST | /api/usuarios | ADMINISTRADOR | @PreAuthorize en clase | **201** | `UsuarioResponse` |
