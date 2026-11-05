@@ -251,6 +251,13 @@ código, y por eso están en la base y no en Java:
 cuenta dejaba las acciones de esa persona atribuidas al «Sistema» — en el
 registro que existe precisamente para saber quién hizo qué.
 
+`V24` añade `registros.hecho_sin_conexion_en`, nula salvo en lo que el
+supervisor hizo sin red y llegó después por la cola de cambios de
+[ADR-015](../decisiones/ADR-015-trabajo-sin-conexion-del-supervisor.md). `fecha`
+sigue siendo la hora en que el servidor lo recibió, que es la única que SICOT
+garantiza; la nueva columna guarda aparte la que declaró el portátil, porque su
+dueño puede cambiarle el reloj.
+
 `V16` retoca esta misma tabla cuando el resumen periódico dejó de pasar por el
 modelo de IA (ver la sección «Revisión» de
 [ADR-008](../decisiones/ADR-008-motor-de-automatizaciones.md)). Cambia tres
@@ -317,6 +324,14 @@ comportamiento correcto.
 | `V14__formato_institucional_del_documento.sql` | `formato_id` en `documentos`: qué formato del catálogo representa cada archivo |
 | `V15__motor_de_automatizaciones.sql` | Tabla `tareas_automatizadas` (la cola de ADR-008) y `registros.origen` |
 | `V16__resumen_semanal_sin_modelo.sql` | Renombra el tipo de tarea, la regla y la clave de idempotencia del resumen periódico, y rehace su `CHECK`: el motor deja de usar el modelo de IA |
+| `V17__fecha_y_lugar_de_captura_de_las_fotos.sql` | Fecha y lugar de captura de las fotos de evidencia (MDL-205) |
+| `V18__documentos_formales_los_arma_sicot.sql` | Las cinco subetapas con documento formal dejan de decir que lo genera el Copiloto |
+| `V19__version_de_credenciales.sql` | Cambiar la contraseña cierra las sesiones abiertas |
+| `V20__proceso_real_del_supervisor.sql` | Los datos que pide el proceso real del supervisor (lista de Alex, 15-10-2026) |
+| `V21__solicitud_de_pedido_al_contratista.sql` | La solicitud de pedido al contratista |
+| `V22__acuerdo_de_entregas_y_contactos.sql` | Fechas de entrega acordadas, contactos de SST y ambiental, teléfono del contratista |
+| `V23__entregas_acordadas_tambien_al_reabrir.sql` | La exigencia del 2.4 también para los cerrados antes de la `V22` |
+| `V24__hora_declarada_sin_conexion.sql` | `registros.hecho_sin_conexion_en`: la hora que declara el equipo para lo hecho sin red (ADR-015) |
 
 El salto de `V1` a `V9` es intencional: las `V1`–`V8` originales se consolidaron
 en la `V1` actual y la `V9` se conservó porque ya estaba aplicada en bases

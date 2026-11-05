@@ -5,7 +5,7 @@ import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DatosAbiertosSecop;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

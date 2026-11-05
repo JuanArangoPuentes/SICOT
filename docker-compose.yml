@@ -33,7 +33,14 @@ services:
     ports:
       # 5433 en el host para no chocar con un PostgreSQL nativo ya corriendo
       # en 5432 (como el que usa el flujo de desarrollo sin Docker).
-      - "5433:5432"
+      #
+      # Solo en 127.0.0.1: la base tiene aquí una contraseña de conveniencia
+      # publicada en este mismo archivo. Publicada en todas las interfaces,
+      # cualquier equipo de la red llegaba a ella saltándose el backend en
+      # cuanto el portátil se abría a otro equipo para una prueba
+      # (docs/operacion/PROBAR_EN_OTRO_DISPOSITIVO.md) — y en la wifi de un
+      # Centro eso es media red. Desde este equipo se sigue entrando igual.
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sicot -d sicot"]
       interval: 5s
@@ -60,7 +67,9 @@ services:
       # servicio de Docker (resuelto por la red interna de compose).
       ADMINER_DEFAULT_SERVER: db
     ports:
-      - "8081:8080"
+      # Solo en 127.0.0.1, por lo mismo que la base: Adminer no tiene
+      # autenticación propia más allá de la contraseña de la base.
+      - "127.0.0.1:8081:8080"
     restart: unless-stopped
     deploy:
       resources:
@@ -192,9 +201,20 @@ services:
     build:
       context: ./frontend
       args:
-        # El navegador del usuario llama a esta URL directamente, por eso debe
-        # ser la URL alcanzable desde el host (no el nombre del servicio interno).
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+        # VACÍO = mismo origen: la aplicación llama a `/api/...` sobre la misma
+        # dirección por la que se abrió, y el nginx de la imagen lo reenvía al
+        # backend (ver frontend/nginx.conf.template). Es lo mismo que hace Caddy
+        # en producción.
+        #
+        # Antes aquí iba `http://localhost:8080`, y eso ataba la aplicación web
+        # a este equipo: el navegador de OTRO computador entendía «la API está
+        # en mi propia máquina», donde no hay nada. Poner la IP en su lugar lo
+        # arreglaba hasta que la IP cambiara — pasó el 03-11-2026 a media
+        # prueba. Con el mismo origen no hay ninguna dirección que acertar.
+        #
+        # Se puede seguir forzando desde el entorno si hace falta apuntar a un
+        # backend que no es el de esta pila.
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: sicot-frontend
     labels:
       org.opencontainers.image.title: "SICOT · Frontend"
@@ -202,21 +222,20 @@ services:
     environment:
       # Orígenes que se añaden a `connect-src` en la CSP que emite nginx.
       #
-      # Aquí, en desarrollo, la SPA vive en :8443 y llama al backend en :8080:
-      # son orígenes distintos, así que sin esta excepción el navegador bloquea
-      # todas las peticiones de la aplicación y la interfaz se queda vacía sin
-      # que nada falle del lado del servidor. La imagen trae el valor VACÍO por
-      # defecto (frontend/Dockerfile), que es el de producción — ver ADR-009 y
-      # la cabecera de frontend/nginx.conf.template.
+      # VACÍO, como en producción: desde que la API se sirve por el mismo
+      # origen (ver el `VITE_API_URL` de arriba y nginx.conf.template),
+      # `connect-src 'self'` ya la cubre y no hay ninguna excepción que
+      # mantener. Antes llevaba `http://localhost:8080` porque la SPA vivía en
+      # :8443 y llamaba al backend en :8080, y había que acordarse de añadir
+      # aquí cualquier origen nuevo —la IP de la máquina, por ejemplo— o el
+      # navegador bloqueaba todas las llamadas sin que nada fallara del lado
+      # del servidor.
       #
       # Se aplica al ARRANCAR el contenedor, no al construirlo (a diferencia de
       # VITE_API_URL, que Vite hornea en el build): cambiarlo solo necesita un
-      # `docker compose up -d frontend`, sin reconstruir la imagen.
-      #
-      # Si cambia VITE_API_URL de arriba —por ejemplo a la IP de la máquina para
-      # abrir SICOT desde otro equipo de la LAN— hay que añadir ESE mismo origen
-      # aquí, o la CSP bloqueará las llamadas.
-      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-http://localhost:8080 http://127.0.0.1:8080}
+      # `docker compose up -d frontend`, sin reconstruir la imagen. Sigue
+      # estando para quien apunte la aplicación a un backend de otro origen.
+      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-}
     depends_on:
       backend:
         condition: service_healthy

@@ -12,7 +12,7 @@ import co.sena.sicot.repository.RegistroRepository;
 import co.sena.sicot.service.AlertaService;
 import co.sena.sicot.service.EmailService;
 import co.sena.sicot.service.RegistroService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

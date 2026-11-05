@@ -11,7 +11,7 @@ honesto.
 ```
 ┌───────────────────────┐        ┌───────────────────────┐        ┌────────────────┐
 │       frontend         │ ─────▶ │        backend         │ ─────▶ │   PostgreSQL   │
-│  React 19 + Vite + TS  │  HTTP  │  Spring Boot 3 + JWT   │  JDBC  │   BD: sicot    │
+│  React 19 + Vite + TS  │  HTTP  │  Spring Boot 4 + JWT   │  JDBC  │   BD: sicot    │
 │  :8443                 │ ◀───── │  :8080                 │ ◀───── │                │
 └───────────────────────┘  JSON  └───────────────────────┘        └────────────────┘
                                             ▲
@@ -35,7 +35,7 @@ un servidor sin Ollama instalado. Detalle en
 | Carpeta | Qué es | README |
 |---|---|---|
 | [`frontend/`](./frontend) | UI en React 19 + TypeScript + Vite + Tailwind v4 | [Frontend](./frontend/README.md) |
-| [`backend/`](./backend) | API en Spring Boot 3 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
+| [`backend/`](./backend) | API en Spring Boot 4 + Java 25 + PostgreSQL + JWT | [Backend](./backend/README.md) |
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional y el [informe de empalme](./docs/producto/INFORME_DE_EMPALME.md), que lo explica de cero a quien no lo ha visto | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
@@ -238,10 +238,12 @@ Cada publicación llevará:
 
 ### El instalador del Supervisor
 
-La duda que bloqueaba este trabajo —si el supervisor necesita trabajar sin conexión— **está
-resuelta** desde el 1 de septiembre por
-[ADR-001](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md), que adoptó la interpretación
-B: la instalación local es la misma aplicación web en una ventana propia, y exige conexión. El
+La duda que bloqueaba este trabajo —si el supervisor necesita trabajar sin conexión— la resolvió
+primero [ADR-001](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md) (1 de septiembre,
+interpretación B: la misma aplicación web en una ventana propia, con conexión), y la
+reabrió [ADR-015](./docs/decisiones/ADR-015-trabajo-sin-conexion-del-supervisor.md) el 26 de
+octubre, cuando se decidió que SICOT sea 100 % local: desde la v0.8.0 la misma ventana guarda una
+copia, encola los cambios y los envía al volver la red, sin un segundo motor en el cliente. El
 escenario de «varios GB con el asistente de IA dentro» que se temía **no aplica**: bajo esa
 interpretación el modelo vive en el host del despliegue —`docker-compose.yml` apunta a
 `host.docker.internal:11434`— y la máquina del supervisor solo corre la ventana.
@@ -281,9 +283,13 @@ con sus campos etiquetados en vez de recortar columnas. Eso sirve igual abriendo
 navegador del teléfono que dentro de la aplicación empaquetada. El proyecto de Android existe y
 vive en [`frontend/src-tauri/gen/android`](./frontend/src-tauri).
 
-**Qué no hay:** un APK firmado y publicado —es una decisión de cuenta institucional—, ni versión
-para iPhone —exige macOS con Xcode y un programa de pago—, ni funcionamiento sin conexión, que
-sigue fuera de alcance por [`ADR-001`](./docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md).
+**Qué hay además:** el APK firmado se publica en cada versión desde la v0.4.0
+([ADR-013](./docs/decisiones/ADR-013-firma-y-distribucion-del-apk.md)), junto con uno de pruebas
+que acepta `http://`; y desde la v0.8.0 el supervisor trabaja sin red y su trabajo llega al volver
+([ADR-015](./docs/decisiones/ADR-015-trabajo-sin-conexion-del-supervisor.md)).
+
+**Qué no hay:** publicación en Google Play —exige una cuenta de pago a nombre de alguien— ni versión
+para iPhone —exige macOS con Xcode y un programa de pago—.
 
 Cómo compilarlo y qué cadena de herramientas exige está en
 [`frontend/README.md`](./frontend/README.md). El estado medido de la interfaz en un teléfono, con

@@ -1,8 +1,8 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.dto.secop.VerificacionSecopResponse.Documento;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,6 +73,25 @@ class DatosAbiertosSecopTest {
         assertThat(DatosAbiertosSecop.url(f, "bueno")).startsWith("https://community.secop.gov.co/");
         assertThat(DatosAbiertosSecop.url(f, "otro")).isNull();
         assertThat(DatosAbiertosSecop.url(f, "script")).isNull();
+    }
+
+    /*
+     * Si datos.gov.co cambia la forma de un enlace (un arreglo, un objeto dentro
+     * de «url»), el enlace se pierde y la verificación sigue. En Jackson 3
+     * asString() lanza sobre un contenedor, donde el asText() de Jackson 2 daba
+     * cadena vacía: sin cuidarlo, un cambio de esquema ajeno sería un 500.
+     */
+    @Test
+    @DisplayName("un enlace con una forma inesperada se descarta sin romper la consulta")
+    void unEnlaceConFormaInesperadaSeDescarta() throws Exception {
+        JsonNode f = fila("""
+                {"arreglo":["https://community.secop.gov.co/a","https://community.secop.gov.co/b"],
+                 "anidado":{"url":{"href":"https://community.secop.gov.co/a"}},
+                 "numero":{"url":42}}""");
+
+        assertThat(DatosAbiertosSecop.url(f, "arreglo")).isNull();
+        assertThat(DatosAbiertosSecop.url(f, "anidado")).isNull();
+        assertThat(DatosAbiertosSecop.url(f, "numero")).isNull();
     }
 
     @Test

@@ -5,8 +5,8 @@ import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.service.EmailService;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -65,7 +65,7 @@ class InvitacionDeSupervisorIntegrationTest extends PruebaDeIntegracion {
         assertThat(respuesta.get("credencialesEnviadas").asBoolean()).isTrue();
         // Si salió por correo, la clave no se devuelve: ya está donde tiene que estar.
         assertThat(respuesta.get("claveParaEntregar").isNull()).isTrue();
-        assertThat(respuesta.get("contrato").get("supervisorNombre").asText()).isEqualTo("Alex Fernando Zapata");
+        assertThat(respuesta.get("contrato").get("supervisorNombre").asString()).isEqualTo("Alex Fernando Zapata");
 
         // La cuenta existe, es de SUPERVISOR y el correo quedó en minúsculas.
         Usuario creado = usuarioRepository.findByEmail("afzapatar@sena.edu.co").orElseThrow();
@@ -89,7 +89,7 @@ class InvitacionDeSupervisorIntegrationTest extends PruebaDeIntegracion {
                 {"nombre":"Supervisora Nueva","email":"nueva@sena.edu.co","telefono":"3009998877"}
                 """, status().isOk());
 
-        String clave = respuesta.get("claveParaEntregar").asText();
+        String clave = respuesta.get("claveParaEntregar").asString();
         assertThat(clave).isNotBlank();
         assertThat(login("nueva@sena.edu.co", clave)).isNotBlank();
     }
@@ -112,8 +112,8 @@ class InvitacionDeSupervisorIntegrationTest extends PruebaDeIntegracion {
 
         assertThat(respuesta.get("cuentaCreada").asBoolean()).isTrue();
         assertThat(respuesta.get("credencialesEnviadas").asBoolean()).isFalse();
-        assertThat(respuesta.get("claveParaEntregar").asText()).isNotBlank();
-        assertThat(respuesta.get("detalle").asText()).contains("Entréguele usted");
+        assertThat(respuesta.get("claveParaEntregar").asString()).isNotBlank();
+        assertThat(respuesta.get("detalle").asString()).contains("Entréguele usted");
         assertThat(usuarioRepository.findByEmail("sincorreo@sena.edu.co")).isPresent();
     }
 
@@ -133,7 +133,7 @@ class InvitacionDeSupervisorIntegrationTest extends PruebaDeIntegracion {
 
         assertThat(respuesta.get("cuentaCreada").asBoolean()).isFalse();
         assertThat(respuesta.get("claveParaEntregar").isNull()).isTrue();
-        assertThat(respuesta.get("detalle").asText()).contains("ya tenía cuenta");
+        assertThat(respuesta.get("detalle").asString()).contains("ya tenía cuenta");
         // Su clave de siempre sigue sirviendo.
         assertThat(login("supervisor@soy.sena.edu.co", "Supervisor123*")).isNotBlank();
     }

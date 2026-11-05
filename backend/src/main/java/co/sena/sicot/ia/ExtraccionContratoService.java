@@ -5,7 +5,8 @@ import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DatosAbiertosSecop;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -418,7 +419,10 @@ public class ExtraccionContratoService {
         ExtraccionContratoResponse delModelo;
         try {
             delModelo = objectMapper.readValue(respuestaCruda, ExtraccionContratoResponse.class);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
+            // JacksonException y no IOException: en Jackson 3 los errores de lectura
+            // ya no son IOException. Quitar este catch en vez de cambiarlo convertiría
+            // una respuesta rara del modelo en un error 500 (ADR-014).
             // Solo un prefijo corto: la respuesta cruda puede reflejar texto del
             // PDF (incluido un intento de inyección) y no tiene por qué quedar
             // completa en el log del servidor.

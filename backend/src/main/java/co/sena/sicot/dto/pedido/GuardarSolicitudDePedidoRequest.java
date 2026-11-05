@@ -28,8 +28,7 @@ import java.util.List;
 public record GuardarSolicitudDePedidoRequest(
         @NotNull(message = "La solicitud de pedido es obligatoria (puede ir vacía para borrarla).")
         @Size(max = 300, message = "La solicitud de pedido admite máximo 300 ítems.")
-        @Valid
-        List<Item> items) {
+        List<@Valid Item> items) {
 
     /**
      * @param numero        obligatorio y único dentro de la solicitud: es como

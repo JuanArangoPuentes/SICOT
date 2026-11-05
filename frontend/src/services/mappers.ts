@@ -5,7 +5,8 @@
 
 import { AI_GENERATED_DOCS, DOCUMENTO_POR_SUBETAPA } from '@/data/contractFlow'
 import type { Step, SubStep } from '@/types/domain'
-import type { EtapaResponse, RegistroResponse } from './api/types'
+import type { EtapaResponse, RegistroResponse, SubetapaResponse } from './api/types'
+import type { ConPendiente } from './colaDeCambios'
 import type { Registro } from '@/components/Registros'
 import { formatFechaYHoraDelCentro } from './format'
 
@@ -30,6 +31,9 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       aiGenerated: AI_GENERATED_DOCS.has(ss.codigo),
       apiId: ss.id,
       documentosRequeridos: ss.documentosRequeridos ?? null,
+      // Lo pone la cola de cambios sobre la copia local (ADR-015): hecho en
+      // este equipo, todavía sin aceptar por el servidor.
+      pendienteDeEnviar: (ss as SubetapaResponse & ConPendiente).pendienteDeEnviar === true,
     })),
   }))
 }
@@ -81,6 +85,14 @@ export function mapRegistros(registros: RegistroResponse[]): Registro[] {
     // registro que existe precisamente para saber quién hizo qué.
     actor: r.origen === 'SISTEMA' ? 'Sistema' : (r.usuarioNombre ?? 'Usuario eliminado'),
     fecha: formatFechaYHoraDelCentro(r.fecha),
-    asunto: r.descripcion ?? humanizarAccion(r.accion),
+    // Lo hecho sin red llega con dos horas (V24): `fecha` es cuándo lo recibió
+    // el servidor, que es la que vale, y esta la que declaró el equipo. Se
+    // dicen las dos, cada una con su nombre, en vez de elegir una.
+    asunto:
+      (r.descripcion ?? humanizarAccion(r.accion)) +
+      (r.hechoSinConexionEn
+        ? ` Hecho sin conexión: ${formatFechaYHoraDelCentro(r.hechoSinConexionEn)} según el equipo; la fecha de la` +
+          ' columna es cuando llegó al servidor.'
+        : ''),
   }))
 }

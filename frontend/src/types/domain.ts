@@ -30,6 +30,9 @@ export interface SubStep {
   // Lo que el supervisor tiene que cargar antes de cerrar el paso ('ACTA_FIRMADA_Y_ENVIO'
   // en el paso del acta); lo exige el backend al cerrar la subetapa.
   documentosRequeridos?: string | null
+  // Cambiado sin red y guardado en la cola de este equipo: lo que se ve es la
+  // intención del supervisor, todavía sin aceptar por el servidor (ADR-015).
+  pendienteDeEnviar?: boolean
 }
 
 export interface Step {

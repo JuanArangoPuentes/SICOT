@@ -27,7 +27,10 @@ const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { clearSession, getSession } from '@/services/session'
+import { vigilarLaCola } from '@/services/colaDeCambios'
+import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
 import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
+import { useAlVolverALaVentana } from '@/hooks/useAlVolverALaVentana'
 import { onUnauthorized, setAuthToken } from '@/services/api/client'
 import { getContratos } from '@/services/contratoService'
 import { getRegistrosContrato } from '@/services/registroService'
@@ -214,6 +217,27 @@ function AppInner() {
     }
   }, [session])
 
+  // Al volver a la ventana, la LISTA de contratos del supervisor se pone al
+  // día: si Gestión lo designó para uno nuevo desde otro equipo, aparece en el
+  // selector sin recargar la página.
+  //
+  // Solo la lista, a propósito. Volver a ejecutar el efecto de arriba cambiaría
+  // también el contrato seleccionado y encendería su bandera de carga, así que
+  // la pantalla parpadearía «cargando» cada vez que alguien cambia de ventana.
+  useAlVolverALaVentana(() => {
+    if (!session || session.rol !== 'SUPERVISOR') return
+    getContratos(session.usuarioId)
+      .then((lista) => {
+        setContratos(lista)
+        // El contrato abierto, con la ficha nueva si Gestión la cambió desde
+        // otro equipo; si ya no está en la lista se deja como está, porque
+        // soltarlo a media pantalla sería peor que mostrarlo un momento más.
+        setContrato((actual) => lista.find((c) => c.id === actual?.id) ?? actual)
+      })
+      // Un fallo de fondo no borra lo que ya se ve: la lista buena sigue ahí.
+      .catch((err) => console.debug('No se pudo refrescar la lista de contratos:', err))
+  })
+
   // Registros de auditoría reales del contrato asignado (autoridad: backend)
   useEffect(() => {
     if (!contrato) {
@@ -271,6 +295,12 @@ function AppInner() {
 
   useEffect(() => {
     onUnauthorized(() => logout())
+    // Los reintentos de la cola de cambios: al volver la red y cada medio
+    // minuto mientras quede algo y haya sesión con el servidor (ADR-015).
+    vigilarLaCola()
+    // Y en una sesión abierta sin red, avisar cuando el servidor vuelva:
+    // sin token, nada más en ella se enteraría.
+    vigilarLaVueltaDelServidor()
   }, [])
 
   // Lleva la cuenta de las entradas de historial que apila la sesión, que es lo

@@ -2,7 +2,7 @@ package co.sena.sicot;
 
 import co.sena.sicot.dto.secop.VerificacionSecopResponse;
 import co.sena.sicot.service.DatosAbiertosSecop;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -193,7 +193,7 @@ class VerificacionSecopIntegrationTest extends PruebaDeIntegracion {
     }
 
     private String login(String email, String password) throws Exception {
-        return objectMapper.readTree(loginBody(email, password)).get("token").asText();
+        return objectMapper.readTree(loginBody(email, password)).get("token").asString();
     }
 
     private String loginBody(String email, String password) throws Exception {

@@ -49,11 +49,26 @@ final class ContactosEnUnDocumento {
      * 63 por etiqueta. Sin tope, una tira larga de letras sin arroba (un
      * párrafo «aaaa…», un base64 pegado en el PDF) hacía que cada posición
      * recorriera la tira hasta el final: 40.000 caracteres tardaban 26 s, con
-     * la conexión de la base tomada. Con tope, un millón tarda menos de un
-     * segundo.
+     * la conexión de la base tomada. Con tope dejó de colgarse; lo que la hace
+     * barata del todo es buscar solo alrededor de cada arroba (ver
+     * {@link #leer}).
      */
     private static final Pattern CORREO = Pattern.compile(
             "[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){0,8}\\.[A-Za-z]{2,24}");
+
+    /**
+     * Cuánto puede empezar un correo antes de su arroba: el primer carácter
+     * más los 63 del tope de la parte local de {@link #CORREO}.
+     */
+    private static final int ALCANCE_ANTES_DE_LA_ARROBA = 64;
+
+    /**
+     * Cuánto puede seguir un correo después de su arroba: la etiqueta, ocho
+     * más con su punto y el dominio final, con margen. Tiene que cubrir el
+     * correo más largo que {@link #CORREO} admite, o el corte de la región
+     * lo truncaría.
+     */
+    private static final int ALCANCE_DESPUES_DE_LA_ARROBA = 640;
 
     /**
      * Cómo se nombra cada rol en los documentos de contratación. Se busca sobre
@@ -91,7 +106,31 @@ final class ContactosEnUnDocumento {
         // «SST: a@x.co · Coordinador: b@x.co» la palabra SST es de a@, y sin
         // este tope se le sugería también a b@.
         int finDelAnterior = 0;
-        while (m.find() && unicos.size() < MAXIMO) {
+        // Se busca solo alrededor de cada arroba, no a lo largo de todo el
+        // texto. El tope de la parte local ya impedía que la búsqueda se
+        // colgara, pero no que probara cada posición: un millón de letras sin
+        // arroba seguían siendo ~64 millones de comparaciones, 2 s en el
+        // portátil de desarrollo y más de 5 —el tope de su prueba— con la
+        // máquina cargada (05-11-2026). Todo correo contiene una arroba y su
+        // parte local no puede contener otra, así que un correo que empiece
+        // antes de la arroba usa esa arroba y empieza como mucho 64 caracteres
+        // antes: buscar en esa ventana da exactamente los mismos correos, en
+        // el mismo orden, que recorrer el texto entero.
+        int desdeDonde = 0;
+        while (unicos.size() < MAXIMO) {
+            int arroba = texto.indexOf('@', desdeDonde);
+            if (arroba < 0) {
+                break;
+            }
+            m.region(Math.max(desdeDonde, arroba - ALCANCE_ANTES_DE_LA_ARROBA),
+                    Math.min(texto.length(), arroba + ALCANCE_DESPUES_DE_LA_ARROBA));
+            // Un correo que empieza después de esta arroba usa la siguiente:
+            // se busca en su propia vuelta, con su ventana entera.
+            if (!m.find() || m.start() > arroba) {
+                desdeDonde = arroba + 1;
+                continue;
+            }
+            desdeDonde = m.end();
             String correo = recortarPuntoFinal(m.group()).toLowerCase(Locale.ROOT);
             int desde = Math.max(0, m.start() - VENTANA_ANTES);
             int desdeElRol = Math.max(desde, finDelAnterior);

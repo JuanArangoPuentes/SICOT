@@ -3,13 +3,14 @@ package co.sena.sicot.controller;
 import co.sena.sicot.dto.ia.ChatRequest;
 import co.sena.sicot.dto.ia.ChatResponse;
 import co.sena.sicot.ia.CopilotoChatService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
@@ -105,13 +106,25 @@ public class CopilotoController {
     @PostMapping(value = "/chat/en-vivo", produces = "application/x-ndjson")
     @PreAuthorize("hasAnyRole('SUPERVISOR', 'ADMINISTRADOR')")
     public ResponseEntity<StreamingResponseBody> chatEnVivo(@PathVariable Long contratoId,
-                                                            @Valid @RequestBody ChatRequest request) {
+                                                            @Valid @RequestBody ChatRequest request,
+                                                            HttpServletResponse respuestaHttp) {
         copilotoChatService.exigirAcceso(contratoId);
         // La respuesta se escribe en otro hilo, que no hereda la sesión de esta
         // petición: sin ella, ContratoService.buscar no sabría quién pregunta.
         SecurityContext contexto = SecurityContextHolder.getContext();
+        // Se escribe en el flujo del servlet y no en el que Spring le pasa al
+        // cuerpo. Desde Spring Framework 7 ese flujo ignora flush()
+        // (ServletServerHttpResponse lo envuelve con StreamUtils.nonFlushing
+        // salvo que se active spring.http.response.flush.enabled), y Tomcat
+        // retenía todos los eventos hasta el final: ni el «inicio» salía, y un
+        // proxy podía cortar la primera pregunta de un contrato, que en CPU dura
+        // minutos (medido el 28-10-2026: 116 eventos en un solo instante, a los
+        // 57 s). Es el mismo flujo de debajo, con las cabeceras ya escritas.
+        // No se activa la bandera global porque devolvería el vaciado a todas
+        // las respuestas JSON, que es justo lo que Spring quitó a propósito.
         StreamingResponseBody cuerpo = salida -> {
-            RespuestaEnVivoDelCopiloto respuesta = new RespuestaEnVivoDelCopiloto(salida, objectMapper);
+            RespuestaEnVivoDelCopiloto respuesta =
+                    new RespuestaEnVivoDelCopiloto(respuestaHttp.getOutputStream(), objectMapper);
             SecurityContextHolder.setContext(contexto);
             try {
                 respuesta.atender(() -> copilotoChatService.atender(contratoId, request, respuesta::texto));

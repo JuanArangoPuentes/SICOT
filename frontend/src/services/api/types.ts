@@ -1,5 +1,5 @@
 // Tipos de la API del backend SICOT — espejo de los DTO de co.sena.sicot.dto.
-// Fuente de verdad: el backend (Spring Boot 3.5.3, puerto 8080).
+// Fuente de verdad: el backend (Spring Boot, puerto 8080).
 
 export type Rol = 'ADMINISTRADOR' | 'GESTION' | 'SUPERVISOR'
 export type EstadoContrato = 'BORRADOR' | 'ACTIVO' | 'SUSPENDIDO' | 'FINALIZADO' | 'CANCELADO'
@@ -545,6 +545,30 @@ export interface RegistroResponse {
   // es ON DELETE SET NULL. Sin este campo, el panel atribuía al "Sistema"
   // acciones de personas que ya no están en la organización.
   origen: OrigenRegistro
+  /**
+   * La hora que declaró el equipo si se hizo sin red y llegó por la cola de
+   * cambios (ADR-015, V24); null si se hizo con conexión. `fecha` es cuándo lo
+   * recibió el servidor.
+   */
+  hechoSinConexionEn?: string | null
+}
+
+/**
+ * Respuesta del sondeo de novedades: lo que pasó en el contrato desde la última
+ * vez que este equipo preguntó.
+ *
+ * `ultimoId` es la marca con la que preguntar la próxima vez, y es un
+ * identificador de la auditoría, no una hora: dos equipos de la misma red no
+ * tienen por qué estar en hora, y así el reloj de ninguno interviene. Nunca
+ * retrocede, así que se guarda tal cual.
+ *
+ * `novedades` viene casi siempre vacía, que es el caso para el que está hecho.
+ * Cuando trae algo no se aplica: se vuelven a pedir las pantallas enteras, que
+ * es lo único que el servidor garantiza.
+ */
+export interface NovedadesResponse {
+  ultimoId: number
+  novedades: RegistroResponse[]
 }
 
 // ─── Cronograma ──────────────────────────────────────────────────────────────

@@ -68,7 +68,7 @@ Nunca modificar por comodidad algo que ya funciona.
 ## Backend
 
 * Java 25
-* Spring Boot 3
+* Spring Boot 4 (Jackson 3: paquete `tools.jackson`)
 * Spring Web
 * Spring Data JPA
 * Hibernate

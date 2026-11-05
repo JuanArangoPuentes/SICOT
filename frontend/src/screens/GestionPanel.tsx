@@ -33,6 +33,7 @@ import {
 import { BotonCopiar } from '@/components/supervisor/enlacesExternos'
 import { getUsuarios } from '@/services/usuarioService'
 import { extraerDatosContrato, subirDocumento } from '@/services/documentoService'
+import { useAlVolverALaVentana } from '@/hooks/useAlVolverALaVentana'
 import { ApiError } from '@/services/api/client'
 import { formatCOP, formatFecha } from '@/services/format'
 
@@ -415,6 +416,15 @@ export default function GestionPanel({
     setContratos(lista.map(mapContratoRow))
     setErrorContratos('')
   }
+
+  // Al volver a la ventana, la tabla se pone al día: un contrato que el otro
+  // equipo creó, activó o reasignó aparece sin recargar la página. Un fallo de
+  // fondo no toca lo que ya se ve ni enciende el aviso de error: la tabla buena
+  // sigue ahí, y decir «no se pudieron consultar» sobre datos que sí están
+  // sería peor que no decir nada.
+  useAlVolverALaVentana(() => {
+    recargarContratos().catch((err) => console.debug('No se pudo refrescar la tabla de contratos:', err))
+  })
 
   const reintentarContratos = () => {
     setCargandoContratos(true)

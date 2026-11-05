@@ -1,8 +1,8 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -71,11 +71,11 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
         JsonNode etapas = leerEtapas(contratoId, supervisorToken);
         assertThat(etapas).hasSize(6);
         assertThat(contarSubetapas(etapas)).isEqualTo(21);
-        assertThat(etapas.get(0).get("estado").asText()).isEqualTo("COMPLETADA");
+        assertThat(etapas.get(0).get("estado").asString()).isEqualTo("COMPLETADA");
         JsonNode pasoDelActa = etapas.get(1).get("subEtapas").get(0);
-        assertThat(pasoDelActa.get("codigo").asText()).isEqualTo("2.1");
-        assertThat(pasoDelActa.get("estado").asText()).isEqualTo("EN_CURSO");
-        assertThat(pasoDelActa.get("documentosRequeridos").asText()).isEqualTo("ACTA_FIRMADA_Y_ENVIO");
+        assertThat(pasoDelActa.get("codigo").asString()).isEqualTo("2.1");
+        assertThat(pasoDelActa.get("estado").asString()).isEqualTo("EN_CURSO");
+        assertThat(pasoDelActa.get("documentosRequeridos").asString()).isEqualTo("ACTA_FIRMADA_Y_ENVIO");
 
         // 3. El paso del acta queda esperando: sin el acta firmada y la evidencia
         //    del envío no se cierra.
@@ -107,8 +107,8 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
         //     de entregas (paso 5 de la hoja de Alex): sin una fecha acordada no
         //     se cierra. Con una, sí.
         JsonNode pasoDeEntregas = etapas.get(1).get("subEtapas").get(3);
-        assertThat(pasoDeEntregas.get("codigo").asText()).isEqualTo("2.4");
-        assertThat(pasoDeEntregas.get("documentosRequeridos").asText()).isEqualTo("ENTREGAS_ACORDADAS");
+        assertThat(pasoDeEntregas.get("codigo").asString()).isEqualTo("2.4");
+        assertThat(pasoDeEntregas.get("documentosRequeridos").asString()).isEqualTo("ENTREGAS_ACORDADAS");
         mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDeEntregas.get("id").asLong())
                         .header("Authorization", "Bearer " + supervisorToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -139,7 +139,7 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
         // 5. Las 6 etapas quedan COMPLETADA al 100 %.
         JsonNode etapasFinales = leerEtapas(contratoId, supervisorToken);
         for (JsonNode etapa : etapasFinales) {
-            assertThat(etapa.get("estado").asText())
+            assertThat(etapa.get("estado").asString())
                     .as("etapa %s", etapa.get("numero").asInt())
                     .isEqualTo("COMPLETADA");
             assertThat(etapa.get("porcentaje").asInt()).isEqualTo(100);

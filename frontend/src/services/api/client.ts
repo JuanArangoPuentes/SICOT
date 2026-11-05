@@ -1,6 +1,7 @@
 // Cliente HTTP de SICOT — fetch con token Bearer, errores tipados y detección
 // de 401 para devolver al login. Sin dependencias externas.
 
+import { enAplicacionEmpaquetada } from '../entorno'
 import type { ErrorResponse } from './types'
 
 /**
@@ -13,10 +14,23 @@ import type { ErrorResponse } from './types'
  *
  * Se compara contra `undefined` y no se usa `??` a secas para que una cadena
  * vacía sea una elección válida y no caiga al valor de desarrollo.
+ *
+ * <p>Salvo dentro de la aplicación empaquetada (instalador y APK): allí el
+ * «mismo origen» es `http://tauri.localhost`, el propio WebView, donde nunca
+ * hay API. Desde ADR-016 la convención es dejar `VITE_API_URL` vacío, y quien
+ * compilara un APK en una consola con esa variable exportada vacía obtendría
+ * una instalación que pide `/api` a sí misma y falla con un 404 o un JSON
+ * inválido que no parece un problema de dirección. Con la dirección de
+ * desarrollo, en cambio, la pantalla de acceso ya sabe decir «escriba la
+ * dirección del servidor de su Centro» (ver entorno.ts).
  */
 const origenConfigurado = import.meta.env.VITE_API_URL
 export const ORIGEN_COMPILADO =
-  origenConfigurado === undefined || origenConfigurado === null ? 'http://localhost:8080' : origenConfigurado
+  origenConfigurado === undefined ||
+  origenConfigurado === null ||
+  (origenConfigurado === '' && enAplicacionEmpaquetada())
+    ? 'http://localhost:8080'
+    : origenConfigurado
 
 /** Dónde se guarda la dirección del servidor elegida en esta máquina. */
 export const CLAVE_SERVIDOR = 'sicot.servidor'
@@ -105,6 +119,27 @@ export function setAuthToken(token: string | null) {
   authToken = token
 }
 
+/**
+ * ¿Hay con qué presentarse al servidor? Una sesión abierta sin red
+ * (`accesoSinRed.ts`) no lleva token: sirve para ver la copia y guardar
+ * cambios en la cola, pero no para enviarlos.
+ */
+export function hayTokenDeSesion(): boolean {
+  return Boolean(authToken)
+}
+
+let oyenteDeContacto: (() => void) | null = null
+
+/**
+ * Avisa cada vez que el servidor acepta una petición con la sesión: es la
+ * prueba de que la cuenta sigue valiendo. El acceso sin red cuenta su ventana
+ * desde el último aviso, no desde el último inicio de sesión: quien trabaja con
+ * red todo el día no tiene por qué quedarse con menos margen al salir a campo.
+ */
+export function alResponderConSesion(oyente: (() => void) | null) {
+  oyenteDeContacto = oyente
+}
+
 export function onUnauthorized(handler: (() => void) | null) {
   unauthorizedHandler = handler
 }
@@ -182,6 +217,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!res.ok) {
     await lanzarError(res, path)
   }
+
+  if (authToken) oyenteDeContacto?.()
 
   if (res.status === 204) {
     return undefined as T

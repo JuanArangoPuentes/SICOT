@@ -9,6 +9,8 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
+import { CambiosSinEnviar } from './CambiosSinEnviar'
+import { VolvioElServidor } from './VolvioElServidor'
 import { SenaLogo, UserMenu } from './ui'
 import { IconChevron, IconSettings } from './icons'
 
@@ -277,7 +279,11 @@ export default function AppShell({
 
         {/* Encima de todo lo demás y en los tres paneles: si lo que se ve no
             vino del servidor, eso manda sobre cualquier otra cosa en pantalla. */}
+        <VolvioElServidor onEntrarDeNuevo={onLogout} />
         <AvisoDeCopiaLocal />
+        {/* Justo debajo: lo que se hizo sin red y todavía no está en el
+            expediente, y lo que el servidor no aceptó (ADR-015). */}
+        <CambiosSinEnviar />
         {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>

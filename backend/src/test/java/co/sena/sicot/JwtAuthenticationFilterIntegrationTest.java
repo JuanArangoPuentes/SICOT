@@ -4,7 +4,7 @@ import co.sena.sicot.dto.auth.AuthResponse;
 import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.security.JwtService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

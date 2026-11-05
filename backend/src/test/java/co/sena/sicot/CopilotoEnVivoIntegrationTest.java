@@ -3,8 +3,8 @@ package co.sena.sicot;
 import co.sena.sicot.dto.auth.AuthResponse;
 import co.sena.sicot.ia.IaNoDisponibleException;
 import co.sena.sicot.ia.OllamaClient;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -61,12 +61,12 @@ class CopilotoEnVivoIntegrationTest extends PruebaDeIntegracion {
         List<JsonNode> eventos = eventos(preguntar(contratoId, "¿qué riesgos ve en la póliza de este contrato?",
                 login("supervisor@soy.sena.edu.co", "Supervisor123*")));
 
-        assertThat(eventos).extracting(e -> e.get("tipo").asText())
+        assertThat(eventos).extracting(e -> e.get("tipo").asString())
                 .containsExactly("inicio", "texto", "texto", "fin");
-        assertThat(eventos.get(1).get("t").asText()).isEqualTo("La póliza ");
+        assertThat(eventos.get(1).get("t").asString()).isEqualTo("La póliza ");
         JsonNode fin = eventos.get(3).get("respuesta");
-        assertThat(fin.get("respuesta").asText()).isEqualTo("La póliza se verifica en SECOP II.");
-        assertThat(fin.get("fuente").asText()).isEqualTo("MODELO");
+        assertThat(fin.get("respuesta").asString()).isEqualTo("La póliza se verifica en SECOP II.");
+        assertThat(fin.get("fuente").asString()).isEqualTo("MODELO");
     }
 
     /** Lo que contesta un atajo no pasa por el modelo: llega entero en el evento final. */
@@ -77,9 +77,9 @@ class CopilotoEnVivoIntegrationTest extends PruebaDeIntegracion {
         List<JsonNode> eventos = eventos(preguntar(contratoId, "¿En qué paso voy?",
                 login("supervisor@soy.sena.edu.co", "Supervisor123*")));
 
-        assertThat(eventos).extracting(e -> e.get("tipo").asText()).containsExactly("inicio", "fin");
-        assertThat(eventos.get(1).get("respuesta").get("fuente").asText()).isEqualTo("SISTEMA");
-        assertThat(eventos.get(1).get("respuesta").get("respuesta").asText()).contains("Está en el paso 2");
+        assertThat(eventos).extracting(e -> e.get("tipo").asString()).containsExactly("inicio", "fin");
+        assertThat(eventos.get(1).get("respuesta").get("fuente").asString()).isEqualTo("SISTEMA");
+        assertThat(eventos.get(1).get("respuesta").get("respuesta").asString()).contains("Está en el paso 2");
         verifyNoInteractions(ollamaClient);
     }
 
@@ -94,9 +94,9 @@ class CopilotoEnVivoIntegrationTest extends PruebaDeIntegracion {
                 login("supervisor@soy.sena.edu.co", "Supervisor123*")));
 
         JsonNode ultimo = eventos.get(eventos.size() - 1);
-        assertThat(ultimo.get("tipo").asText()).isEqualTo("error");
+        assertThat(ultimo.get("tipo").asString()).isEqualTo("error");
         assertThat(ultimo.get("status").asInt()).isEqualTo(503);
-        assertThat(ultimo.get("mensaje").asText()).contains("no está disponible");
+        assertThat(ultimo.get("mensaje").asString()).contains("no está disponible");
     }
 
     /**

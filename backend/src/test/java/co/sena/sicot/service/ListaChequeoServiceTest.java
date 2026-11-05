@@ -161,6 +161,30 @@ class ListaChequeoServiceTest {
                 .hasMessageContaining("GCCON-F-999");
     }
 
+    /*
+     * Guardias de la migración a Jackson 3 (ADR-014, «los tres puntos que la red de pruebas no
+     * ve», el 2). En Jackson 2 un JSON roto lanza una IOException y el catch de cargarCatalogo
+     * la envuelve con el nombre del archivo. En Jackson 3 lanza JacksonException, que ya no es
+     * IOException: con el catch de antes el arranque seguiría fallando, pero sin decir cuál de
+     * los ocho archivos hay que abrir. Las dos formas de romperlo que de verdad pasan al
+     * regenerar un JSON a mano: una coma de más y un campo que el formato no tiene.
+     */
+    @Test
+    void unJsonMalFormadoDetieneElCatalogoNombrandoElArchivo() {
+        assertThatThrownBy(() -> ListaChequeoService.cargarCatalogo(
+                "classpath*:listas-chequeo-rotas/json-mal-formado/*.json"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("GCCON-F-998.json");
+    }
+
+    @Test
+    void unCampoQueElFormatoNoTieneDetieneElCatalogoNombrandoElArchivo() {
+        assertThatThrownBy(() -> ListaChequeoService.cargarCatalogo(
+                "classpath*:listas-chequeo-rotas/campo-desconocido/*.json"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("GCCON-F-997.json");
+    }
+
     private static ItemChequeo itemNumero(ListaChequeoDetalle lista, int numero) {
         return lista.etapas().stream()
                 .flatMap(etapa -> etapa.items().stream())

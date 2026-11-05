@@ -1,7 +1,7 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -105,7 +105,7 @@ class UnaSolaFirmaActivaPorUsuarioIntegrationTest extends PruebaDeIntegracion {
 
     /** Asigna una firma y devuelve su código público (FIRMA-XXXXXXXX). */
     private String codigoDeFirmaAsignada(String adminToken, long usuarioId) throws Exception {
-        return objectMapper.readTree(respuestaDeAsignar(adminToken, usuarioId)).get("firmaId").asText();
+        return objectMapper.readTree(respuestaDeAsignar(adminToken, usuarioId)).get("firmaId").asString();
     }
 
     private String respuestaDeAsignar(String adminToken, long usuarioId) throws Exception {

@@ -27,7 +27,15 @@ COPY --chown=node:node . .
 
 # Vite inlines VITE_* variables at build time, so this has to be a build arg,
 # not a runtime environment variable.
-ARG VITE_API_URL=http://localhost:8080
+#
+# VACÍO por omisión = mismo origen: la aplicación pide `/api/...` a la misma
+# dirección por la que se abrió, y el nginx de esta imagen (o Caddy, en
+# producción) la reenvía al backend (ADR-016). Antes el valor por omisión era
+# `http://localhost:8080`: una imagen construida sin argumentos —un `docker
+# build` a mano— le decía al navegador de OTRO equipo que la API estaba en su
+# propia máquina, y la CSP `connect-src 'self'` la bloqueaba además, sin ningún
+# error en el servidor.
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
@@ -77,7 +85,12 @@ USER root
 # `libcurl` viene del mismo origen que `curl`, así que subir el paquete arregla
 # los dos. Aquí sí y en el backend no: su base ya va por Alpine 3.24.3, que lo
 # trae corregido; la de nginx sigue en 3.24.2.
-RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.9.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
+#
+# libexpat otra vez (CI del 05-11-2026): 2.9.0-r0 trae tres HIGH de denegación
+# de servicio (CVE-2026-113351, -117610 y -118370) y 2.10.0-r0 las corrige. El
+# escaneo se detuvo en el backend antes de llegar aquí; esta base fija la misma
+# condición y quedaba igual de expuesta.
+RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
     "curl>=8.23.0-r0"
 
 COPY --from=build /build/dist /usr/share/nginx/html

@@ -81,6 +81,46 @@ class ContactosEnUnDocumentoTest {
                 .containsExactly("sst.ana@sena.edu.co");
     }
 
+    /**
+     * Buscar solo alrededor de cada arroba tiene que dar los mismos correos, y
+     * en el mismo orden, que recorrer el texto entero con la expresión: es lo
+     * que hacía antes del 05-11-2026. Se compara contra ese recorrido en los
+     * bordes que la ventana podría cortar: una parte local de 64 caracteres
+     * (el máximo), una de 65 (que ya no cabe y deja un correo más corto), el
+     * dominio más largo admitido, correos pegados, arrobas sueltas y dobles.
+     */
+    @Test
+    void buscarAlrededorDeCadaArrobaDaLoMismoQueRecorrerElTexto() {
+        String local64 = "b" + "c".repeat(63);
+        String local65 = "d" + "e".repeat(64);
+        String dominioLargo = "x".repeat(63) + ("." + "y".repeat(63)).repeat(8) + "." + "z".repeat(24);
+        String texto = String.join(" ",
+                local64 + "@sena.edu.co",
+                local65 + "@sena.edu.co",
+                "largo@" + dominioLargo,
+                "uno@a.co,dos@b.co;tres@c.co",
+                "@ suelta @@ doble a@@b.co",
+                "sin.dominio@ ni@.co",
+                "SST: sst.final@sena.edu.co.");
+
+        java.util.regex.Matcher todo = java.util.regex.Pattern.compile(
+                "[A-Za-z0-9][A-Za-z0-9._%+-]{0,63}@[A-Za-z0-9-]{1,63}(?:\\.[A-Za-z0-9-]{1,63}){0,8}\\.[A-Za-z]{2,24}")
+                .matcher(texto);
+        java.util.Set<String> esperados = new java.util.LinkedHashSet<>();
+        while (todo.find()) {
+            String c = todo.group().toLowerCase(java.util.Locale.ROOT);
+            while (c.endsWith(".") || c.endsWith("-")) {
+                c = c.substring(0, c.length() - 1);
+            }
+            esperados.add(c);
+        }
+
+        assertThat(ContactosEnUnDocumento.leer(texto))
+                .extracting(ContactosEnUnDocumento.Encontrado::correo)
+                .containsExactlyInAnyOrderElementsOf(esperados);
+        assertThat(esperados).contains(local64 + "@sena.edu.co", "largo@" + dominioLargo, "dos@b.co");
+    }
+
     /** «sst» dentro de otra palabra no es una mención de SST. */
     @Test
     void sstDebeSerUnaPalabraCompleta() {

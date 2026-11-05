@@ -84,7 +84,10 @@ import type {
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
+import { getContrato } from '@/services/contratoService'
+import { alEnviarCambios } from '@/services/colaDeCambios'
 import { getCronograma } from '@/services/cronogramaService'
+import { useNovedadesDelContrato } from '@/hooks/useNovedadesDelContrato'
 import { useRecursoDelContrato } from '@/hooks/useRecursoDelContrato'
 import {
   getDocumentosContrato,
@@ -575,6 +578,28 @@ export default function SupervisorPanel({
     }
   }, [contrato])
 
+  // Cuando la cola de cambios deja algo aplicado en el servidor, lo que se ve
+  // deja de ser la intención guardada y pasa a ser el estado de verdad: se
+  // vuelven a pedir las etapas para traer lo que el servidor calculó con ello
+  // (el porcentaje de la etapa, el paso siguiente activado).
+  const [vueltaDeLaCola, setVueltaDeLaCola] = useState(0)
+  // Sube cuando el servidor avisa de que OTRO equipo movió algo en este
+  // contrato. Es el mismo mecanismo que la línea de arriba —volver a pedir, no
+  // parchear lo que se ve— pero por una causa distinta: allí el cambio es
+  // propio y acaba de llegar; aquí no lo hizo este equipo.
+  const [novedadDelServidor, setNovedadDelServidor] = useState(0)
+  useEffect(
+    () =>
+      alEnviarCambios(() => {
+        setVueltaDeLaCola((n) => n + 1)
+        // Los contactos y las fechas de entrega también: si salieron de la
+        // copia con la nota «guardados en este equipo», la nota seguiría ahí
+        // aunque el servidor ya los tenga.
+        setVersionDelArranque((v) => v + 1)
+      }),
+    [],
+  )
+
   // Cargar etapas/subetapas reales del contrato asignado (autoridad: backend)
   useEffect(() => {
     if (!contrato) return
@@ -587,7 +612,7 @@ export default function SupervisorPanel({
     return () => {
       cancelado = true
     }
-  }, [contrato, setSteps])
+  }, [contrato, setSteps, vueltaDeLaCola, novedadDelServidor])
 
   // Alertas reales del contrato (no leídas).
   //
@@ -596,7 +621,11 @@ export default function SupervisorPanel({
   // eso a un supervisor cuando en realidad no se pudo consultar el servicio es
   // el peor error posible de esta pantalla — le asegura que todo está en orden
   // justo cuando el sistema no lo sabe.
-  const { datos: alertasCargadas, error: errorAlertas } = useRecursoDelContrato<AlertaResponse[]>(
+  const {
+    datos: alertasCargadas,
+    error: errorAlertas,
+    recargar: recargarAlertas,
+  } = useRecursoDelContrato<AlertaResponse[]>(
     contrato?.id ?? null,
     async (id) => (await getAlertasContrato(id)).filter((a) => !a.leida),
     SIN_ALERTAS,
@@ -868,18 +897,36 @@ export default function SupervisorPanel({
     // tutorial se queda sin poder continuar al terminar un paso.
     if (sub?.apiId && contrato) {
       try {
-        await cambiarEstadoSubetapa(sub.apiId, 'COMPLETADA')
+        // `null` es «guardado en este equipo, sin red»: el cambio está en la
+        // cola y la lectura de abajo lo trae encima de la copia, rotulado
+        // como pendiente de enviar (ADR-015).
+        const enviado = await cambiarEstadoSubetapa(contrato.id, { id: sub.apiId, codigo: sub.id }, 'COMPLETADA')
         const pasoActualizado = updated.find((s) => s.id === stepId)
         const eraUltimaDelPaso = pasoActualizado?.subSteps.every((s) => s.completed)
         if (eraUltimaDelPaso) {
           const siguientePaso = steps.find((s) => s.id === stepId + 1)
           const primeraSubSiguiente = siguientePaso?.subSteps[0]
           if (primeraSubSiguiente?.apiId) {
-            await cambiarEstadoSubetapa(primeraSubSiguiente.apiId, 'EN_CURSO')
+            await cambiarEstadoSubetapa(
+              contrato.id,
+              { id: primeraSubSiguiente.apiId, codigo: primeraSubSiguiente.id },
+              'EN_CURSO',
+            )
           }
         }
         const etapas = await getEtapasContrato(contrato.id)
         setSteps(mapEtapas(etapas))
+        if (enviado === null) {
+          setChatMsgs((prev) => [
+            ...prev,
+            {
+              role: 'ai',
+              text:
+                `Sin conexión con el servidor: el cierre de «${sub.label}» quedó guardado en este equipo y se ` +
+                'enviará en cuanto vuelva la red. Si el servidor no lo acepta, se lo diré con el motivo.',
+            },
+          ])
+        }
       } catch (e) {
         // No se guardó de verdad en el servidor — revertir el avance optimista
         // en vez de dejar un porcentaje "completado" que un refresco borraría
@@ -1233,11 +1280,41 @@ export default function SupervisorPanel({
   //
   // Ahora el cálculo está una sola vez, del lado que FR-002 declara autoridad de
   // las reglas de negocio (service/Cronograma.java), y esta pantalla lo pinta.
-  const { datos: cronograma } = useRecursoDelContrato<CronogramaResponse | null>(
+  const { datos: cronograma, recargar: recargarCronograma } = useRecursoDelContrato<CronogramaResponse | null>(
     contrato?.id ?? null,
     getCronograma,
     null,
   )
+
+  // Lo que hace que dos equipos sobre el mismo contrato se vean casi al
+  // instante. El sondeo solo AVISA; lo que trae el estado nuevo es esto: volver
+  // a pedirle al servidor cada lectura de la pantalla, que es la única
+  // autoridad sobre el expediente. Se vuelven a pedir las cuatro porque una
+  // sola acción del otro equipo las mueve todas a la vez — cerrar un sub-paso
+  // cambia las etapas, retira una alerta, puede dejar un documento y recalcula
+  // el cronograma.
+  useNovedadesDelContrato(contrato?.id ?? null, () => {
+    setNovedadDelServidor((n) => n + 1)
+    recargarAlertas()
+    recargarDocumentos()
+    recargarCronograma()
+    // Los contactos de SST y las fechas de entrega: los dos sub-pasos del
+    // arranque releen por este contador, igual que cuando los guarda el otro.
+    setVersionDelArranque((v) => v + 1)
+    // La auditoría del contrato, que es justo donde está lo que cambió: sin
+    // esto la vista de Registros del otro equipo se quedaba congelada.
+    void onRefreshRegistros().catch(() => {})
+    // Y la ficha misma. Si Gestión cambió las fechas, el valor o el
+    // contratista, la cabecera y el acuerdo de entregas (que valida contra el
+    // plazo) seguían con los datos de cuando se abrió la pantalla. Un fallo
+    // aquí —por ejemplo, un 404 porque lo reasignaron— no es motivo para
+    // tumbar el resto: la lista se pone al día al volver a la ventana.
+    if (contrato) {
+      getContrato(contrato.id)
+        .then((c) => onContratoActualizado?.(c))
+        .catch(() => {})
+    }
+  })
 
   const alertaCronograma: LiveAlert | null =
     cronograma && cronograma.semaforo !== 'SIN_DATOS'
@@ -1252,7 +1329,9 @@ export default function SupervisorPanel({
     setDismissed((prev) => new Set(prev).add(id))
     if (id.startsWith('api-')) {
       const apiId = Number(id.slice(4))
-      marcarAlertaLeida(apiId).catch((err) => console.error('No se pudo marcar la alerta como leída:', err))
+      marcarAlertaLeida(apiId, contrato?.id ?? null).catch((err) =>
+        console.error('No se pudo marcar la alerta como leída:', err),
+      )
       setAlertasApi((prev) => prev.filter((a) => a.id !== apiId))
     }
   }
@@ -1795,6 +1874,28 @@ export default function SupervisorPanel({
                                       SICOT genera
                                     </span>
                                   )}
+                                  {/* El «tercer estado» de ADR-015: hecho en este
+                                      equipo, todavía sin aceptar por el servidor.
+                                      Sin el rótulo, un cierre guardado sin red se
+                                      veía igual que uno que ya está en el
+                                      expediente. */}
+                                  {ss.pendienteDeEnviar && (
+                                    <span
+                                      title="Hecho sin conexión. Se envía al servidor cuando vuelva la red."
+                                      style={{
+                                        marginLeft: 6,
+                                        fontSize: 10,
+                                        color: 'var(--alert-leve)',
+                                        border: '1px solid var(--alert-leve)',
+                                        padding: '0 5px',
+                                        borderRadius: 3,
+                                        textDecoration: 'none',
+                                        display: 'inline-block',
+                                      }}
+                                    >
+                                      Pendiente de enviar
+                                    </span>
+                                  )}
                                 </span>
                               </div>
                               {/* Responsable y documento van como texto, no como
@@ -1886,7 +1987,9 @@ export default function SupervisorPanel({
                                   version={versionDelArranque}
                                   onGuardado={() => {
                                     setVersionDelArranque((v) => v + 1)
-                                    void onRefreshRegistros()
+                                    // Sin red el guardado va a la cola y el registro no
+                                    // se puede refrescar: no es un error de nadie.
+                                    void onRefreshRegistros().catch(() => {})
                                   }}
                                 />
                               )}
@@ -1918,7 +2021,7 @@ export default function SupervisorPanel({
                                     version={versionDelArranque}
                                     onGuardado={() => {
                                       setVersionDelArranque((v) => v + 1)
-                                      void onRefreshRegistros()
+                                      void onRefreshRegistros().catch(() => {})
                                     }}
                                   />
                                 </>

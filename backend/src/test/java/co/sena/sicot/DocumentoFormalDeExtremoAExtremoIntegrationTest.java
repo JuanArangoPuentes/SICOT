@@ -7,8 +7,8 @@ import co.sena.sicot.entity.enums.TipoDocumento;
 import co.sena.sicot.ia.PdfTextExtractor;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.DocumentoRepository;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -112,7 +112,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         long id = objectMapper.readTree(generado).get("id").asLong();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .param("huellaRevisada", objectMapper.readTree(generado).get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", objectMapper.readTree(generado).get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + supervisor))
                 .andExpect(status().isOk());
 
@@ -162,7 +162,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         assertThat(plantillas.toString()).doesNotContain("ACTA_INICIO");
         JsonNode certificado = null;
         for (JsonNode p : plantillas) {
-            if (p.get("tipo").asText().equals("CERTIFICACION_CUMPLIMIENTO")) {
+            if (p.get("tipo").asString().equals("CERTIFICACION_CUMPLIMIENTO")) {
                 certificado = p;
             }
         }
@@ -175,12 +175,12 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         // solo cuando hubo adición.
         java.util.Map<String, JsonNode> camposDelInforme = new java.util.HashMap<>();
         for (JsonNode p : plantillas) {
-            if (p.get("tipo").asText().equals("INFORME_SUPERVISION")) {
-                p.get("campos").forEach(c -> camposDelInforme.put(c.get("clave").asText(), c));
+            if (p.get("tipo").asString().equals("INFORME_SUPERVISION")) {
+                p.get("campos").forEach(c -> camposDelInforme.put(c.get("clave").asString(), c));
             }
         }
         assertThat(camposDelInforme.get("numeroFactura").get("porDocumento").asBoolean()).isTrue();
-        assertThat(camposDelInforme.get("valorActual").get("dependeDe").asText()).isEqualTo("adicion");
+        assertThat(camposDelInforme.get("valorActual").get("dependeDe").asString()).isEqualTo("adicion");
         assertThat(camposDelInforme.get("valorActual").get("opcional").asBoolean()).isTrue();
         assertThat(camposDelInforme.get("aseguradora").get("porDocumento").asBoolean()).isFalse();
         assertThat(camposDelInforme.get("aseguradora").get("dependeDe").isNull()).isTrue();
@@ -201,7 +201,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andReturn().getResponse().getContentAsString());
         JsonNode informeFinal = null;
         for (JsonNode p : plantillas) {
-            if (p.get("tipo").asText().equals("INFORME_FINAL")) {
+            if (p.get("tipo").asString().equals("INFORME_FINAL")) {
                 informeFinal = p;
             }
         }
@@ -441,7 +441,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         long id = generado.get("id").asLong();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + admin))
                 .andExpect(status().isForbidden());
         assertThat(documentoRepository.findById(id).orElseThrow().getFirmaId()).isNull();
@@ -588,7 +588,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
         contratoRepository.save(contrato);
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .param("huellaRevisada", generado.get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", generado.get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + nuevo))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("era otra persona")));
@@ -602,7 +602,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andReturn().getResponse().getContentAsString());
         assertThat(regenerado.get("id").asLong()).isEqualTo(id);
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
-                        .param("huellaRevisada", regenerado.get("huellaDelBorrador").asText())
+                        .param("huellaRevisada", regenerado.get("huellaDelBorrador").asString())
                         .header("Authorization", "Bearer " + nuevo))
                 .andExpect(status().isOk());
     }
@@ -625,7 +625,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(generado).get("id").asLong();
-        String huella = objectMapper.readTree(generado).get("huellaDelBorrador").asText();
+        String huella = objectMapper.readTree(generado).get("huellaDelBorrador").asString();
 
         mockMvc.perform(post("/api/contratos/{c}/documentos/{id}/firmar", contratoId, id)
                         .param("huellaRevisada", huella)
@@ -678,7 +678,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(jsonPath("$.huellaDelBorrador").exists())
                 .andReturn().getResponse().getContentAsString();
         long id = objectMapper.readTree(r).get("id").asLong();
-        String huellaRevisada = objectMapper.readTree(r).get("huellaDelBorrador").asText();
+        String huellaRevisada = objectMapper.readTree(r).get("huellaDelBorrador").asString();
         // Otra pestaña regenera el mismo borrador con otros datos.
         mockMvc.perform(post("/api/contratos/{c}/documentos/generar", contratoId)
                         .header("Authorization", "Bearer " + supervisor)
@@ -713,7 +713,7 @@ class DocumentoFormalDeExtremoAExtremoIntegrationTest extends PruebaDeIntegracio
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString());
         String ref = api.at("/paths/~1api~1contratos~1{contratoId}~1documentos~1generar/post/responses/200/content")
-                .elements().next().get("schema").get("$ref").asText();
+                .iterator().next().get("schema").get("$ref").asString();
         assertThat(ref).endsWith("/DocumentoGeneradoResponse");
         JsonNode propiedades = api.at("/components/schemas/DocumentoGeneradoResponse/properties");
         assertThat(propiedades.has("observacionesRedactadasConIa")).isTrue();

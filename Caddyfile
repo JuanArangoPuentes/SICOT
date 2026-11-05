@@ -75,7 +75,10 @@
 	handle /swagger-ui/* {
 		reverse_proxy backend:8080
 	}
-	handle /v3/api-docs/* {
+	# `*` sin barra delante: Swagger UI pide la definición en `/v3/api-docs`, a
+	# secas, y `/v3/api-docs/*` no la cubre. Esa petición caía en la SPA y
+	# Swagger decía «Failed to load API definition».
+	handle /v3/api-docs* {
 		reverse_proxy backend:8080
 	}
 	handle /swagger-ui.html {

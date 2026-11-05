@@ -60,6 +60,13 @@ vi.mock('@/components/AvatarLayer', () => ({ default: () => null }))
 vi.mock('@/components/Settings', () => ({ default: () => null }))
 vi.mock('@/services/contratoService', () => ({ getContratos: vi.fn() }))
 vi.mock('@/services/registroService', () => ({ getRegistrosContrato: vi.fn() }))
+// El sondeo de novedades (ADR-016) pregunta al abrir el contrato y cada pocos
+// segundos. Sin simularlo, la petición sale a un backend que aquí no existe y
+// ensucia la salida; se deja colgada porque estas pruebas no miden la
+// propagación entre equipos.
+vi.mock('@/services/novedadesService', () => ({
+  getNovedades: vi.fn(() => new Promise(() => {})),
+}))
 
 /** Índice de la entrada de historial actual, tal como lo lleva react-router. */
 const indiceDeHistorial = () => (window.history.state as { idx?: number } | null)?.idx ?? 0
