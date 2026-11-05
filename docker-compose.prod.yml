@@ -239,7 +239,14 @@ services:
       # devolvería la redirección a HTTPS y habría que decidir si eso cuenta
       # como sano. Esto pregunta lo que de verdad importa aquí — si el proxy
       # está en pie y con su configuración cargada.
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/config/"]
+      #
+      # 127.0.0.1 y no `localhost`: Caddy abre esa API solo en 127.0.0.1:2019,
+      # y el wget de Alpine resuelve `localhost` primero a ::1 cuando el
+      # contenedor tiene IPv6 en el loopback. Con `localhost` el proxy quedaba
+      # «unhealthy» estando sano, y el túnel, que espera a un proxy sano, no
+      # arrancaba (servidor del Centro, 05-11-2026, Docker 29.5.2). Es el mismo
+      # criterio del healthcheck del frontend en docker-compose.yml.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 5s
       retries: 3
