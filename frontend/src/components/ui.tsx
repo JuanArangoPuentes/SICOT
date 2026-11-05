@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import senaLogo from '@/assets/logo-sena.png'
-import { IconLogout } from './icons'
+import { IconLock, IconLogout } from './icons'
 
 // ─── Marca institucional ──────────────────────────────────────────────────────
 
@@ -615,6 +615,7 @@ export function UserMenu({
   avatarColor = 'var(--accent)',
   avatarTextColor = 'var(--on-accent)',
   onLogout,
+  onCambiarContrasena,
   onDark = false,
 }: {
   label: string
@@ -622,6 +623,8 @@ export function UserMenu({
   avatarColor?: string
   avatarTextColor?: string
   onLogout: () => void
+  /** Abre «Cambiar contraseña». Lo abre quien monta el menú (AppShell), para que ui.tsx no dependa del formulario. */
+  onCambiarContrasena?: () => void
   /** true cuando el menú vive sobre un fondo de color sólido (barra verde). */
   onDark?: boolean
 }) {
@@ -715,6 +718,34 @@ export function UserMenu({
             <div style={{ fontSize: 12, fontWeight: 600 }}>{label}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{email}</div>
           </div>
+          {onCambiarContrasena && (
+            <button
+              onClick={() => {
+                setOpen(false)
+                onCambiarContrasena()
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
+                padding: '10px 14px',
+                background: 'none',
+                border: 'none',
+                borderBottom: '1px solid var(--border)',
+                fontSize: 13,
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                textAlign: 'left',
+                fontFamily: 'var(--font-ui)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-soft)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              <IconLock size={14} />
+              Cambiar contraseña
+            </button>
+          )}
           <button
             onClick={() => {
               setOpen(false)

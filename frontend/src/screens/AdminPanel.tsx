@@ -13,6 +13,7 @@ import {
 } from '@/components/icons'
 import SeguimientoSupervisores, { ResumenSeguimiento } from '@/components/admin/SeguimientoSupervisores'
 import { getSeguimiento } from '@/services/seguimientoService'
+import { useRefrescoEnVivo } from '@/hooks/useRefrescoEnVivo'
 import type { AuthResponse, FormatoDocumentalResponse, SeguimientoResponse } from '@/services/api/types'
 import type { AdminTab } from '@/types/domain'
 import { getUsuarios, cambiarEstadoUsuario } from '@/services/usuarioService'
@@ -89,6 +90,17 @@ export default function AdminPanel({
       )
       .finally(() => setCargandoSeguimiento(false))
   }
+
+  // En vivo mientras la pestaña está abierta: lo que un supervisor cierra en su
+  // equipo aparece aquí en segundos, sin «Actualizar» (useRefrescoEnVivo). Sin
+  // el indicador de carga ni borrar lo que se ve: si una vuelta falla, la tabla
+  // se queda como estaba y el siguiente intento la pone al día.
+  useRefrescoEnVivo(tab === 'seguimiento', () =>
+    getSeguimiento().then((datos) => {
+      setSeguimiento(datos)
+      setErrorSeguimiento('')
+    }),
+  )
 
   const cargarFormatos = () => {
     getFormatos()

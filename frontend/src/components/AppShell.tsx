@@ -9,6 +9,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
+import { CambiarContrasenaModal } from './CambiarContrasenaModal'
 import { CambiosSinEnviar } from './CambiosSinEnviar'
 import { VolvioElServidor } from './VolvioElServidor'
 import { SenaLogo, UserMenu } from './ui'
@@ -112,6 +113,7 @@ export default function AppShell({
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(leerColapsada)
+  const [cambiandoContrasena, setCambiandoContrasena] = useState(false)
   const esMovil = useEsMovil()
   // En la fila inferior del teléfono siempre se ven rótulo y contador, sea cual
   // sea la preferencia de escritorio guardada en esta máquina.
@@ -273,9 +275,13 @@ export default function AppShell({
             avatarColor={avatarColor}
             avatarTextColor={avatarTextColor}
             onLogout={onLogout}
+            onCambiarContrasena={() => setCambiandoContrasena(true)}
             onDark={false}
           />
         </header>
+        {cambiandoContrasena && (
+          <CambiarContrasenaModal correo={usuario.email} onClose={() => setCambiandoContrasena(false)} />
+        )}
 
         {/* Encima de todo lo demás y en los tres paneles: si lo que se ve no
             vino del servidor, eso manda sobre cualquier otra cosa en pantalla. */}

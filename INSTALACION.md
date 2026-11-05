@@ -123,7 +123,11 @@ termina TLS delante de todo (ver
 ### 3. Entre y cambie la contraseña
 
 Con la base vacía, el backend crea la cuenta que declaró en `SICOT_ADMIN_*`.
-Entre con ella y **cámbiela desde el panel de administración**. Después retire
+Entre con ella y **cámbiela**: menú de su usuario (arriba a la derecha) →
+**Cambiar contraseña**. Cualquier cuenta, de cualquier rol, cambia la suya así;
+al hacerlo se cierran sus sesiones en otros equipos. «Resetear clave», en
+*Usuarios*, es otra cosa: el administrador le asigna a **otra** persona una
+contraseña temporal al azar. Después retire
 esas dos variables del `.env`: solo se usan cuando no hay ningún usuario, y
 Compose sigue funcionando sin ellas (actualizar, ver logs, sacar la raíz de la
 CA para los teléfonos).
