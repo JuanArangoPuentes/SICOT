@@ -31,7 +31,12 @@ WORKDIR /app
 # brotli-libs, por lo mismo (CI del 23-10-2026): la base trae 1.2.0-r1, con
 # CVE-2026-111497 (HIGH, escritura fuera de límites en el decodificador), y
 # Alpine ya publicó 1.2.1-r0.
-RUN apk add --no-cache "libexpat>=2.9.0-r0" "brotli-libs>=1.2.1-r0" \
+#
+# libexpat otra vez (CI del 05-11-2026): 2.9.0-r0 trae tres HIGH de denegación
+# de servicio (CVE-2026-113351, -117610 y -118370) y Alpine publicó 2.10.0-r0.
+# Hay que subir el mínimo y no basta con volver a construir: `apk add` con una
+# condición que lo instalado ya cumple no actualiza nada.
+RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" \
     && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 COPY --from=build /build/target/sicot-backend-*.jar app.jar
