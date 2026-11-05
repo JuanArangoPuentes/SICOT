@@ -144,7 +144,12 @@ log "Verificando la integridad del volcado…"
 if command -v pg_restore >/dev/null 2>&1; then
     verificar() { pg_restore -f - "$PARCIAL"; }
 elif [[ "$MODO" == "docker" ]]; then
-    verificar() { docker run --rm -i postgres:18-alpine pg_restore -f - < "$PARCIAL"; }
+    # Con el pg_restore del MISMO contenedor de la base, no con una imagen
+    # aparte. Antes era `docker run postgres:18-alpine`: una etiqueta flotante
+    # (el resto de la pila fija la versión exacta) y, en un servidor sin
+    # Internet —SICOT es 100 % local—, una descarga imposible: la verificación
+    # fallaba y el respaldo no se guardaba, con la imagen buena ya en el equipo.
+    verificar() { docker exec -i "$CONTENEDOR" pg_restore -f - < "$PARCIAL"; }
 else
     error "No hay pg_restore disponible para verificar el volcado."
     exit 3
