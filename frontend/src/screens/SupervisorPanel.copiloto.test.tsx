@@ -55,6 +55,15 @@ vi.mock('@/services/firmaService', () => ({
 vi.mock('@/services/cronogramaService', () => ({
   getCronograma: vi.fn(() => new Promise(() => {})),
 }))
+// El sondeo de novedades (ADR-016) pregunta al abrir el contrato y cada vez que
+// la ventana vuelve al primer plano. Aquí importa más que en otras pruebas del
+// panel: estas manejan a mano `visibilityState`, que es justo lo que despierta
+// al sondeo, así que sin simularlo cada cambio de visibilidad lanza una
+// petición a un backend que no existe. Se deja colgada —nunca resuelve— porque
+// lo que estas pruebas miden es el Copiloto, no la propagación entre equipos.
+vi.mock('@/services/novedadesService', () => ({
+  getNovedades: vi.fn(() => new Promise(() => {})),
+}))
 
 function ponerVisibilidad(estado: 'visible' | 'hidden') {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => estado })

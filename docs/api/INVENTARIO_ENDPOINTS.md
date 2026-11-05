@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-10-26 contra el código: 16 controladores, 59 endpoints.**
+**Revisado el 2026-11-03 contra el código: 16 controladores, 60 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -73,6 +73,7 @@
 | 38 | AlertaController | PATCH | /api/alertas/{id}/leida | SUPERVISOR, GESTION, ADMINISTRADOR | @PreAuthorize | 200 | `AlertaResponse` |
 | 39 | RegistroController | GET | /api/contratos/{contratoId}/registros | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `List<RegistroResponse>` |
 | 40 | RegistroController | GET | /api/registros | ADMINISTRADOR | @PreAuthorize | 200 | `List<RegistroResponse>` |
+| 60 | RegistroController | GET | /api/contratos/{contratoId}/novedades | (autenticado) | **Service: `verificarAccesoAlContrato`** | 200 | `NovedadesResponse`: `ultimoId` —la marca con la que volver a preguntar— y `novedades`. El sondeo de ADR-016; el contrato ajeno responde 404 como el resto |
 | 41 | ListaChequeoController | GET | /api/listas-chequeo | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<ListaChequeoResumen>` |
 | 42 | ListaChequeoController | GET | /api/listas-chequeo/{codigo} | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `ListaChequeoDetalle` |
 | 43 | AutomatizacionController | GET | /api/automatizaciones/estado | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `EstadoDelMotorResponse` |
@@ -93,7 +94,7 @@ son del momento en que se escribió: tómelas como pista, no como dirección.
 1. **Controladores SIN `@PreAuthorize`** (protegidos en service):
    - `EtapaController` — líneas 15-37: 2 endpoints, acceso verificado en `EtapaService.listarPorContrato`/`obtenerEtapaDeContrato`
    - `ListaChequeoController` — líneas 18-42: 2 endpoints, catálogo de solo lectura, sin control por contrato
-   - `RegistroController` — `listarPorContrato` protegido en service, `listarTodas` tiene `@PreAuthorize`
+   - `RegistroController` — `listarPorContrato` y `novedades` protegidos en service, `listarTodas` tiene `@PreAuthorize`. El sondeo tiene que pasar por la misma puerta que el expediente: un «sí, algo cambió» sobre un contrato ajeno ya es filtrar actividad, aunque no enseñe ni una línea (ADR-016)
    - `ArranqueDelContratoController` (22-10-2026) — 6 endpoints, todos protegidos en service con `ContratoService.buscar`. Uno escribe en el contrato siendo SUPERVISOR (`contacto-contratista/desde-secop`), y a propósito: solo llena lo vacío desde una fuente oficial, nunca pisa lo que registró Gestión
 
 2. **AlertaController asimétrico**:

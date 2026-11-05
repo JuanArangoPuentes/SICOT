@@ -553,6 +553,24 @@ export interface RegistroResponse {
   hechoSinConexionEn?: string | null
 }
 
+/**
+ * Respuesta del sondeo de novedades: lo que pasó en el contrato desde la última
+ * vez que este equipo preguntó.
+ *
+ * `ultimoId` es la marca con la que preguntar la próxima vez, y es un
+ * identificador de la auditoría, no una hora: dos equipos de la misma red no
+ * tienen por qué estar en hora, y así el reloj de ninguno interviene. Nunca
+ * retrocede, así que se guarda tal cual.
+ *
+ * `novedades` viene casi siempre vacía, que es el caso para el que está hecho.
+ * Cuando trae algo no se aplica: se vuelven a pedir las pantallas enteras, que
+ * es lo único que el servidor garantiza.
+ */
+export interface NovedadesResponse {
+  ultimoId: number
+  novedades: RegistroResponse[]
+}
+
 // ─── Cronograma ──────────────────────────────────────────────────────────────
 
 export type SemaforoCronograma = 'SIN_DATOS' | 'VERDE' | 'AMARILLO' | 'ROJO'

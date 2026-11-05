@@ -50,6 +50,13 @@ vi.mock('@/services/documentoService', () => {
     getPlantillasDocumento: vi.fn(),
   }
 })
+// El sondeo de novedades (ADR-016) pregunta al abrir el contrato y cada pocos
+// segundos. Sin simularlo, la petición sale a un backend que aquí no existe y
+// ensucia la salida; se deja colgada porque estas pruebas no miden la
+// propagación entre equipos.
+vi.mock('@/services/novedadesService', () => ({
+  getNovedades: vi.fn(() => new Promise(() => {})),
+}))
 vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
 }))

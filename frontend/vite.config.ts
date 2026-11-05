@@ -18,6 +18,26 @@ const versionDeSicot: string = JSON.parse(
 // previsualizador de Figma) que servían a una plataforma ya retirada: unas 300
 // líneas ajenas al proyecto, y de sus valores por defecto salía `lang="en"`.
 
+// A dónde reenvían /api y /actuator el servidor de desarrollo y el de vista
+// previa, para que la aplicación hable con la API por el MISMO origen — igual
+// que hacen Caddy en producción y el nginx de la imagen (ver
+// frontend/nginx.conf.template y el Caddyfile).
+//
+// Sin esto, el servidor de desarrollo sería el único entorno donde el frontend
+// y la API viven en orígenes distintos: habría que acordarse de `VITE_API_URL`
+// para levantarlo, y lo que se prueba aquí no se parecería a lo que se
+// despliega. `SICOT_BACKEND` existe para el caso raro de tener el backend en
+// otro puerto; `VITE_API_URL` sigue mandando en la aplicación cuando se define,
+// que es lo que usan el instalador de escritorio y el APK para apuntar a un
+// servidor que no es el suyo.
+//
+// Ojo: el proxy solo se usa si `VITE_API_URL` está definido y VACÍO
+// (`VITE_API_URL=` en `.env.development`). Sin definir, el cliente cae a
+// `http://localhost:8080` (services/api/client.ts) y llama al backend directo,
+// que desde este equipo funciona igual, pero desde otro equipo apunta a SU
+// propia máquina. La imagen de Docker sí lo deja vacío (docker-compose.yml).
+const destinoDelBackend = process.env.SICOT_BACKEND || 'http://localhost:8080'
+
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const emitSourcemaps = mode === 'development'
@@ -42,10 +62,18 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
+      proxy: {
+        '/api': { target: destinoDelBackend },
+        '/actuator': { target: destinoDelBackend },
+      },
     },
     preview: {
       host: '0.0.0.0',
       port: parseInt(process.env.PORT || '8443'),
+      proxy: {
+        '/api': { target: destinoDelBackend },
+        '/actuator': { target: destinoDelBackend },
+      },
     },
     // Pruebas de componente y de servicios (Vitest). Hasta ahora el frontend
     // no tenía ninguna prueba: su única red de seguridad era `tsc --noEmit`,

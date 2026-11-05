@@ -84,8 +84,10 @@ import type {
 import { getEtapasContrato, cambiarEstadoSubetapa } from '@/services/etapaService'
 import { guiaDelSubPaso } from '@/data/guiaSubPaso'
 import { getAlertasContrato, marcarAlertaLeida } from '@/services/alertaService'
+import { getContrato } from '@/services/contratoService'
 import { alEnviarCambios } from '@/services/colaDeCambios'
 import { getCronograma } from '@/services/cronogramaService'
+import { useNovedadesDelContrato } from '@/hooks/useNovedadesDelContrato'
 import { useRecursoDelContrato } from '@/hooks/useRecursoDelContrato'
 import {
   getDocumentosContrato,
@@ -581,6 +583,11 @@ export default function SupervisorPanel({
   // vuelven a pedir las etapas para traer lo que el servidor calculó con ello
   // (el porcentaje de la etapa, el paso siguiente activado).
   const [vueltaDeLaCola, setVueltaDeLaCola] = useState(0)
+  // Sube cuando el servidor avisa de que OTRO equipo movió algo en este
+  // contrato. Es el mismo mecanismo que la línea de arriba —volver a pedir, no
+  // parchear lo que se ve— pero por una causa distinta: allí el cambio es
+  // propio y acaba de llegar; aquí no lo hizo este equipo.
+  const [novedadDelServidor, setNovedadDelServidor] = useState(0)
   useEffect(
     () =>
       alEnviarCambios(() => {
@@ -605,7 +612,7 @@ export default function SupervisorPanel({
     return () => {
       cancelado = true
     }
-  }, [contrato, setSteps, vueltaDeLaCola])
+  }, [contrato, setSteps, vueltaDeLaCola, novedadDelServidor])
 
   // Alertas reales del contrato (no leídas).
   //
@@ -614,7 +621,11 @@ export default function SupervisorPanel({
   // eso a un supervisor cuando en realidad no se pudo consultar el servicio es
   // el peor error posible de esta pantalla — le asegura que todo está en orden
   // justo cuando el sistema no lo sabe.
-  const { datos: alertasCargadas, error: errorAlertas } = useRecursoDelContrato<AlertaResponse[]>(
+  const {
+    datos: alertasCargadas,
+    error: errorAlertas,
+    recargar: recargarAlertas,
+  } = useRecursoDelContrato<AlertaResponse[]>(
     contrato?.id ?? null,
     async (id) => (await getAlertasContrato(id)).filter((a) => !a.leida),
     SIN_ALERTAS,
@@ -1269,11 +1280,41 @@ export default function SupervisorPanel({
   //
   // Ahora el cálculo está una sola vez, del lado que FR-002 declara autoridad de
   // las reglas de negocio (service/Cronograma.java), y esta pantalla lo pinta.
-  const { datos: cronograma } = useRecursoDelContrato<CronogramaResponse | null>(
+  const { datos: cronograma, recargar: recargarCronograma } = useRecursoDelContrato<CronogramaResponse | null>(
     contrato?.id ?? null,
     getCronograma,
     null,
   )
+
+  // Lo que hace que dos equipos sobre el mismo contrato se vean casi al
+  // instante. El sondeo solo AVISA; lo que trae el estado nuevo es esto: volver
+  // a pedirle al servidor cada lectura de la pantalla, que es la única
+  // autoridad sobre el expediente. Se vuelven a pedir las cuatro porque una
+  // sola acción del otro equipo las mueve todas a la vez — cerrar un sub-paso
+  // cambia las etapas, retira una alerta, puede dejar un documento y recalcula
+  // el cronograma.
+  useNovedadesDelContrato(contrato?.id ?? null, () => {
+    setNovedadDelServidor((n) => n + 1)
+    recargarAlertas()
+    recargarDocumentos()
+    recargarCronograma()
+    // Los contactos de SST y las fechas de entrega: los dos sub-pasos del
+    // arranque releen por este contador, igual que cuando los guarda el otro.
+    setVersionDelArranque((v) => v + 1)
+    // La auditoría del contrato, que es justo donde está lo que cambió: sin
+    // esto la vista de Registros del otro equipo se quedaba congelada.
+    void onRefreshRegistros().catch(() => {})
+    // Y la ficha misma. Si Gestión cambió las fechas, el valor o el
+    // contratista, la cabecera y el acuerdo de entregas (que valida contra el
+    // plazo) seguían con los datos de cuando se abrió la pantalla. Un fallo
+    // aquí —por ejemplo, un 404 porque lo reasignaron— no es motivo para
+    // tumbar el resto: la lista se pone al día al volver a la ventana.
+    if (contrato) {
+      getContrato(contrato.id)
+        .then((c) => onContratoActualizado?.(c))
+        .catch(() => {})
+    }
+  })
 
   const alertaCronograma: LiveAlert | null =
     cronograma && cronograma.semaforo !== 'SIN_DATOS'

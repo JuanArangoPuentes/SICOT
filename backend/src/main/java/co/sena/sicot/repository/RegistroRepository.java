@@ -27,6 +27,39 @@ public interface RegistroRepository extends JpaRepository<Registro, Long> {
     List<Registro> findAllByOrderByFechaDesc(Pageable pageable);
 
     /**
+     * Lo que le pasó a un contrato después de una entrada dada.
+     *
+     * <p>Es la consulta que sostiene el sondeo de novedades: la hace un equipo
+     * cada pocos segundos mientras tiene el contrato abierto, para enterarse de
+     * lo que hizo otro. Lo que cuesta, dicho con exactitud: entra por el
+     * índice {@code idx_registros_contrato_fecha (contrato_id, fecha DESC)}
+     * de V11 y recorre las entradas de ESE contrato —unos cientos en uno con
+     * el proceso completo—, filtrando por {@code id}. No es una búsqueda por
+     * clave primaria, como decía antes este comentario, pero tampoco toca las
+     * de ningún otro contrato. Si un contrato llegara a decenas de miles de
+     * entradas, un índice {@code (contrato_id, id)} la volvería una sola
+     * búsqueda.
+     *
+     * <p>Se filtra por identificador y no por {@code fecha} a propósito: ver
+     * {@link co.sena.sicot.dto.registro.NovedadesResponse}. Lleva
+     * {@code Pageable} por lo mismo que las otras dos: un equipo que estuvo
+     * horas sin preguntar no puede hacer que la respuesta traiga la auditoría
+     * entera del contrato.
+     */
+    List<Registro> findByContratoIdAndIdGreaterThanOrderByIdDesc(Long contratoId, Long desdeId, Pageable limite);
+
+    /**
+     * El identificador de la última entrada de un contrato, o {@code null} si
+     * no tiene ninguna.
+     *
+     * <p>Es con lo que arranca el sondeo: la primera pregunta no trae
+     * novedades —la pantalla acaba de cargar el estado entero— sino la marca
+     * desde la que empezar a mirar.
+     */
+    @Query("SELECT MAX(r.id) FROM Registro r WHERE r.contrato.id = :contratoId")
+    Long ultimoIdDelContrato(@Param("contratoId") Long contratoId);
+
+    /**
      * El registro más reciente de cada contrato, en una sola consulta.
      *
      * <p>Si dos registros comparten el mismo instante máximo salen los dos; el

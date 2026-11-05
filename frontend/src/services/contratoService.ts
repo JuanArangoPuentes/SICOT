@@ -33,6 +33,16 @@ export function getContratos(supervisorId?: number, estado?: string): Promise<Co
   return conCopiaLocal(ruta, () => apiFetch<ContratoResponse[]>(ruta))
 }
 
+/**
+ * Un contrato por su id. Lo usa el aviso de novedades (ADR-016) para traer la
+ * ficha que Gestión acaba de cambiar desde otro equipo: las etapas y las
+ * alertas se releían, pero la cabecera y las fechas del contrato seguían con
+ * los datos de cuando se abrió la pantalla.
+ */
+export function getContrato(id: number): Promise<ContratoResponse> {
+  return apiFetch<ContratoResponse>(`/api/contratos/${id}`)
+}
+
 export function crearContrato(body: CrearContratoRequest): Promise<ContratoResponse> {
   return apiFetch<ContratoResponse>('/api/contratos', {
     method: 'POST',

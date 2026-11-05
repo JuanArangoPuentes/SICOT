@@ -62,4 +62,5 @@ parte del valor.
 | [012](./ADR-012-aplicacion-movil.md) | Qué es "la aplicación móvil" de SICOT | Aceptada |
 | [013](./ADR-013-firma-y-distribucion-del-apk.md) | Cómo se firma y se reparte la aplicación de Android | Aceptada |
 | [014](./ADR-014-salir-de-spring-boot-3-5.md) | Cuándo y cómo salir de Spring Boot 3.5 | Aceptada (ejecutada el 28-10-2026) |
-| [015](./ADR-015-trabajo-sin-conexion-del-supervisor.md) | Trabajo sin conexión del supervisor (sustituye la decisión de la 001) | Propuesta |
+| [015](./ADR-015-trabajo-sin-conexion-del-supervisor.md) | Trabajo sin conexión del supervisor (sustituye la decisión de la 001) | Aceptada (puntos 1, 3, 4 y 5 ejecutados el 30-10-2026) |
+| [016](./ADR-016-propagacion-entre-equipos.md) | Que dos equipos se vean casi al instante | Aceptada (ejecutada el 03-11-2026) |
