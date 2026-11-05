@@ -1,0 +1,85 @@
+# ═══════════════════════════════════════════════════════════════════════════
+# SICOT — publicación por un túnel de Cloudflare (capa opcional sobre prod)
+#
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml:docker-compose.tunel.yml
+#
+# Para un servidor que no puede abrir los puertos 80 y 443 a Internet, o que no
+# tiene un nombre en el DNS del Centro. El conector `cloudflared` corre como un
+# contenedor más de SICOT y abre una conexión SALIENTE hacia Cloudflare. Desde
+# Internet se entra por https://<SICOT_DOMINIO> con el certificado público de
+# Cloudflare: ni el APK oficial ni la aplicación de escritorio necesitan
+# instalar la raíz de Caddy. Paso a paso en INSTALACION.md, «Publicarlo por un
+# túnel de Cloudflare».
+#
+# Por qué un contenedor y no el servicio del sistema (`cloudflared service
+# install`):
+#   - Ese comando escribe siempre /etc/systemd/system/cloudflared.service y no
+#     admite otro nombre. En el servidor del Centro ese archivo ya es de otro
+#     proyecto: se negaría a instalar y sugeriría desinstalar el ajeno.
+#   - El paquete apt enlaza su binario sobre /usr/local/bin/cloudflared y
+#     cambiaría la versión que usan los túneles de otros proyectos del equipo.
+#   - Aquí el conector se actualiza, se reinicia y se apaga con SICOT, y su
+#     versión queda escrita en este archivo, no en lo que haya en el equipo.
+#
+# La IP fija de abajo NO es decorativa: es la única dirección en la que confía
+# Caddy para leer X-Forwarded-For (cabecera del Caddyfile, «EL TÚNEL DE
+# CLOUDFLARE ES ESE BALANCEADOR»). Sin ella, el backend vería a todo Internet
+# con la IP del conector y el límite de intentos fallidos por origen bloquearía
+# a todos a la vez.
+# ═══════════════════════════════════════════════════════════════════════════
+
+services:
+  proxy:
+    environment:
+      SICOT_TUNEL_IP: ${SICOT_TUNEL_IP:-172.29.254.2}
+    # Al declarar redes, el servicio queda SOLO en las que se listan: `default`
+    # va explícita para que el proxy siga alcanzando al backend y al frontend.
+    #
+    # El proxy también lleva IP fija en la red del túnel. Sin ella, Docker le da
+    # la primera dirección libre, y como arranca antes que el conector, se
+    # quedaba justo con la de este: el conector no arrancaba («Address already
+    # in use»). Pasó en la prueba del 05-11-2026 con Docker 29.7.2.
+    networks:
+      default: {}
+      tunel:
+        ipv4_address: ${SICOT_TUNEL_IP_PROXY:-172.29.254.3}
+
+  tunel:
+    # Versión exacta, como Caddy y Ollama: una etiqueta móvil traería otro
+    # conector en cualquier `pull` sin que nadie lo revise.
+    image: cloudflare/cloudflared:2026.10.7
+    container_name: sicot-tunel
+    restart: unless-stopped
+    # `--no-autoupdate`: en un contenedor la versión la decide la imagen, no el
+    # propio conector. La clave la lee de TUNNEL_TOKEN (abajo) y no de la línea
+    # de órdenes, así que no aparece en el `ps` del equipo. Sí la ve quien pueda
+    # usar Docker (`docker inspect`), igual que las demás claves del .env.
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${SICOT_TUNEL_TOKEN:?Defina SICOT_TUNEL_TOKEN en el .env con la clave del túnel (panel de Cloudflare, Networking > Tunnels) — ver INSTALACION.md}
+    networks:
+      tunel:
+        ipv4_address: ${SICOT_TUNEL_IP:-172.29.254.2}
+    depends_on:
+      proxy:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+networks:
+  # Solo el proxy y el conector. El conector no ve la base, el backend ni
+  # Ollama: lo único que alcanza es el proxy, y lo único que sale de él es la
+  # conexión hacia Cloudflare.
+  #
+  # Subred fija para que la IP del conector lo sea. Si choca con otra red de
+  # Docker del equipo, `up` falla con «Pool overlaps»: cambie en el .env
+  # SICOT_TUNEL_RED, SICOT_TUNEL_IP y SICOT_TUNEL_IP_PROXY. Las dos IP tienen
+  # que quedar dentro de la subred, ser distintas y no ser la .1, que es la del
+  # propio equipo: si Caddy confiara en ella, cualquier programa del servidor
+  # podría inventarse el origen.
+  tunel:
+    ipam:
+      config:
+        - subnet: ${SICOT_TUNEL_RED:-172.29.254.0/29}

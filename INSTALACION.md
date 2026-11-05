@@ -169,6 +169,82 @@ vez y fuera del servidor: el `.env` y la autoridad de certificados de Caddy.
 Sin esa autoridad, un servidor reinstalado genera otra, y ningún teléfono ni
 equipo de escritorio vuelve a conectar hasta instalarle la nueva.
 
+### Publicarlo por un túnel de Cloudflare (opcional)
+
+Sirve cuando el servidor no puede abrir los puertos 80 y 443 a Internet, o el
+nombre de SICOT no está en el DNS del Centro, pero sí hay un dominio gestionado
+en Cloudflare. El conector corre como un contenedor más de SICOT
+(`docker-compose.tunel.yml`) y abre una conexión **saliente**. Desde fuera se
+entra por `https://<SICOT_DOMINIO>` con el certificado público de Cloudflare,
+así que **ni los teléfonos ni los equipos de escritorio tienen que instalar la
+raíz de Caddy**. Es gratuito.
+
+**No instale `cloudflared` en el equipo** con el comando que propone el panel.
+`cloudflared service install` escribe siempre el mismo servicio del sistema
+(`cloudflared.service`) y choca con cualquier otro túnel del servidor. Además,
+el paquete apt reemplaza el binario que esos otros túneles usan. Aquí solo hace
+falta la clave del túnel.
+
+1. **En el panel de Cloudflare:** *Networking → Tunnels → Create a tunnel*.
+   Póngale nombre (por ejemplo `sicot`) y copie la clave: es lo que va después
+   de `--token` (o de `service install`) en el comando que muestra la página.
+   El identificador del túnel se crea al abrir esa página: no la abra en otro
+   equipo para copiar la clave, porque crearía otro túnel.
+2. **En el `.env` del servidor:**
+
+   | Variable | Valor |
+   | --- | --- |
+   | `COMPOSE_FILE` | `docker-compose.yml:docker-compose.prod.yml:docker-compose.tunel.yml` |
+   | `SICOT_TUNEL_TOKEN` | La clave del paso anterior |
+   | `SICOT_DOMINIO` | El nombre público, por ejemplo `sicot.medialab-sena.com` |
+   | `SICOT_TLS` | `internal`. El certificado público lo pone Cloudflare; el de Caddy solo cifra el tramo dentro del servidor |
+   | `CORS_ALLOWED_ORIGINS` | `https://` y el mismo nombre |
+   | `SICOT_PUERTO_HTTP` y `SICOT_PUERTO_HTTPS` | Solo si el 80 o el 443 ya son de otro programa, por ejemplo `127.0.0.1:8090` y `127.0.0.1:8443` |
+
+3. **Arranque** con `docker compose up -d` y mire el conector:
+   `docker compose logs tunel`. Tiene que decir `Registered tunnel connection`
+   (normalmente cuatro veces). En ese momento el panel muestra el conector
+   conectado y se activa **Continue**.
+4. **La ruta, en el panel:** *Routes → Add route → Published application*:
+
+   | Campo | Valor |
+   | --- | --- |
+   | Subdomain y Domain | Los de `SICOT_DOMINIO` |
+   | Path | Vacío |
+   | Service URL | `https://sicot-proxy:443` |
+   | *Additional application settings → TLS → Origin Server Name* | El mismo `SICOT_DOMINIO` |
+   | *Additional application settings → TLS* | Active la opción que desactiva la verificación del certificado (*No TLS Verify*) |
+
+   `https` y no `http`: Caddy responde al `http` con una redirección a `https`,
+   y por el túnel eso es un bucle. La verificación se desactiva porque el
+   certificado de Caddy es de su autoridad local; ese tramo no sale del
+   servidor. No toque los registros DNS que ya existan en el dominio: la ruta
+   crea el suyo.
+5. **Compruébelo** desde fuera del Centro (un teléfono con datos móviles):
+   `https://<SICOT_DOMINIO>` tiene que abrir sin aviso de certificado. Desde
+   el servidor, `curl -s https://<SICOT_DOMINIO>/actuator/health` responde
+   `{"status":"UP"}`. En el APK y en la aplicación de escritorio, la dirección
+   de *Configuración → Servidor* es esa misma.
+
+Dos cosas que conviene saber:
+
+- **La IP de cada persona sigue llegando al backend.** El conector tiene una IP
+  fija y es el único en quien confía Caddy para leer `X-Forwarded-For`
+  (cabecera del `Caddyfile`). Sin eso, el límite de intentos fallidos por
+  origen vería a todo Internet como un solo equipo y, con veinte errores de
+  cualquiera, nadie podría entrar durante quince minutos. Si la red del túnel
+  choca con otra de Docker (`Pool overlaps` al arrancar), cambie las tres
+  variables `SICOT_TUNEL_*` del `.env.example`; no quite la IP fija.
+- **Si el servidor pierde Internet, nadie llega a él**, tampoco desde la red
+  del Centro, porque el nombre apunta a Cloudflare. Las aplicaciones de
+  escritorio y el APK siguen trabajando sin red (ADR-015) y envían los cambios
+  al volver la conexión.
+
+**Para cambiar la clave** (si se filtró, o al entregar el servidor): en el
+panel, el túnel → *Overview → Refresh token*. Ponga la nueva en
+`SICOT_TUNEL_TOKEN` y ejecute `docker compose up -d tunel`. La anterior deja de
+abrir conexiones nuevas.
+
 ---
 
 ## Sobre el asistente de IA
@@ -269,7 +345,8 @@ equipo, con el archivo `raiz-sicot.crt` del apartado del teléfono:
   `certutil -user -addstore Root raiz-sicot.crt`.
 
 Después se cierra y se vuelve a abrir SICOT. Con un dominio con certificado
-público, nada de esto hace falta.
+público, nada de esto hace falta, y tampoco si el servidor se publica por el
+túnel de Cloudflare (ver «Publicarlo por un túnel de Cloudflare»).
 
 Para probar la aplicación en otro computador de la misma red contra el portátil
 de desarrollo (sin certificado, por `http://`), ver

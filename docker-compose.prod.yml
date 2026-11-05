@@ -213,9 +213,15 @@ services:
     environment:
       SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — el nombre (o la IP) con el que se abrirá SICOT}
       SICOT_TLS: ${SICOT_TLS:-internal}
+    # 80 y 443 salvo que el .env diga otra cosa. Se pueden cambiar porque hay
+    # servidores donde esos puertos ya son de otro programa: en el del Centro
+    # los usa el Nginx de otro proyecto, y con ellos fijos `up` fallaba con
+    # «port is already allocated». El valor admite la IP de escucha delante:
+    # con el túnel (docker-compose.tunel.yml) nadie entra por aquí, así que
+    # basta con `127.0.0.1:8443` para las pruebas desde el propio servidor.
     ports:
-      - "80:80"
-      - "443:443"
+      - "${SICOT_PUERTO_HTTP:-80}:80"
+      - "${SICOT_PUERTO_HTTPS:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Los certificados y las claves de cuenta ACME viven en volúmenes: sin
@@ -233,7 +239,14 @@ services:
       # devolvería la redirección a HTTPS y habría que decidir si eso cuenta
       # como sano. Esto pregunta lo que de verdad importa aquí — si el proxy
       # está en pie y con su configuración cargada.
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:2019/config/"]
+      #
+      # 127.0.0.1 y no `localhost`: Caddy abre esa API solo en 127.0.0.1:2019,
+      # y el wget de Alpine resuelve `localhost` primero a ::1 cuando el
+      # contenedor tiene IPv6 en el loopback. Con `localhost` el proxy quedaba
+      # «unhealthy» estando sano, y el túnel, que espera a un proxy sano, no
+      # arrancaba (servidor del Centro, 05-11-2026, Docker 29.5.2). Es el mismo
+      # criterio del healthcheck del frontend en docker-compose.yml.
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 5s
       retries: 3
