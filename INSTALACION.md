@@ -1,8 +1,14 @@
-# Instalación de SICOT — base del proyecto v0.3.0
+# Instalación de SICOT
 
 Este paquete es el **árbol completo del proyecto**, listo para levantarlo. Solo
 lleva lo versionado: no incluye `.env`, ni dependencias descargadas, ni nada
 compilado. Todo eso se genera en el primer arranque.
+
+**De dónde sacarlo.** Del `sicot-v<versión>.zip` de la versión que se va a
+instalar, en **Releases** del repositorio, y no de un `git clone` a secas: la
+rama por defecto (`master`) va muy por detrás de lo publicado mientras la
+fusión `develop → master` espera, y un clon sin `-b` trae una SICOT de
+septiembre. Si se clona, que sea la etiqueta: `git clone -b v0.8.0 <repo>`.
 
 Si lo que busca es entender qué hace SICOT antes de instalarlo, empiece por
 [`README.md`](README.md); esta guía asume que ya decidió montarlo.
@@ -232,10 +238,12 @@ entrega el instalador `SICOT_<versión>_x64-setup.exe`, publicado como asset
 aparte en esta misma versión.
 
 Esa aplicación es la misma SICOT en su propia ventana, y habla con el servidor
-que usted acaba de montar. **Requiere conexión**: no funciona sin red, y es una
-decisión tomada a conciencia en
-[`ADR-001`](docs/decisiones/ADR-001-bifurcamiento-de-despliegue.md), no una
-carencia pendiente.
+que usted acaba de montar. **Trabaja también sin red** desde la v0.8.0
+([`ADR-015`](docs/decisiones/ADR-015-trabajo-sin-conexion-del-supervisor.md),
+que sustituye lo que decía ADR-001): guarda una copia de lo que el supervisor
+vio con conexión, deja entrar con la contraseña recordada durante 72 horas y
+envía los cambios al volver la red. Firmar, generar y cargar documentos siguen
+exigiendo conexión con el servidor.
 
 Lo único que hay que decirle al supervisor después de instalarla es **la
 dirección de este servidor**, que él escribe una vez en *Configuración →
@@ -331,7 +339,7 @@ falta.
 | Publicación en Google Play | Exige una cuenta de pago a nombre de alguien: decisión institucional, prohibida por ADR-012 sin ella |
 | Teléfonos de 32 bits | Se publica para arm64, que cubre los teléfonos de los últimos años |
 | Versión para iPhone | Exige macOS con Xcode, que el equipo no tiene, y un programa de desarrollador de pago |
-| Funcionar sin conexión | Igual que el escritorio, exige red. Es una decisión tomada a conciencia (ADR-001), no una carencia |
+| Firmar, generar o cargar documentos sin conexión | Desde la v0.8.0 el resto del trabajo del supervisor sí se hace sin red y se envía al volver (ADR-015); estas tres acciones no, porque el documento y su firma los produce el servidor |
 | Seguir esperando al copiloto con la aplicación cerrada | Android corta las conexiones de las aplicaciones en segundo plano. Si el supervisor sale mientras el copiloto piensa, SICOT lo dice y vuelve a preguntar al volver |
 
 ### Dos avisos que ahorran diagnósticos difíciles

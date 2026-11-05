@@ -118,6 +118,32 @@ almacenamiento del WebView al cerrar la aplicación— solo existe en el teléfo
 | 18 | Con red, abrir el contrato. Activar el modo avión, agregar un contacto de SST en el 2.2 y cerrarlo. **Cerrar la aplicación del todo**, volver a abrirla, quitar el modo avión | Sin red: «Sin conexión con el servidor», «2 cambios guardados en este equipo» y el 2.2 con «Pendiente de enviar». Tras reabrir siguen ahí. Con red, en menos de 30 s la franja desaparece y en Registros cada cambio trae la hora del teléfono | Sin recorrer |
 | 19 | Con el token vencido (o tras más de 8 h sin entrar), en modo avión, entrar con la contraseña | Entra; el aviso dice «Entró sin conexión con la contraseña recordada» y hasta cuándo vale. Con otra contraseña no entra. Al quitar el modo avión avisa «Volvió la conexión» y, al entrar de nuevo, envía lo guardado | Sin recorrer |
 
+### Dos equipos sobre el mismo contrato (ADR-016), desde el 05-11-2026
+
+| # | Qué hacer | Qué tiene que pasar | Resultado |
+| --- | --- | --- | --- |
+| 20 | En el teléfono y en un computador, entrar como supervisor y abrir el **mismo** contrato. Con el teléfono quieto, cerrar el 2.2 desde el computador. Después, con SICOT en segundo plano en el teléfono (otra aplicación delante), marcar una alerta como leída en el computador y volver a SICOT | Quieto y delante, en unos 5 s el teléfono muestra el 2.2 cerrado, el avance y las alertas al día sin tocar nada. Al volver de segundo plano se pone al día **en el acto**, sin esperar. En Registros aparecen las dos entradas | Sin recorrer |
+
+### Lo que la v0.8.0 obliga a volver a recorrer
+
+Un resultado vale para el código del día en que se obtuvo. La v0.8.0 cambia
+dos cosas que están debajo de puntos ya pasados, y por eso **7, 11 y 17 se
+recorren de nuevo** con ella aunque su fila diga «Pasa»:
+
+- **El backend pasó a Spring Boot 4** (ADR-014, 28-10-2026), y con él cambió
+  cómo sale la respuesta en vivo del Copiloto: Spring 7 volvió inútil el
+  `flush()` y hubo que escribir directo en la salida del servlet. Los tres
+  puntos vigilan justo esa respuesta cuando el teléfono sale de la aplicación o
+  apaga la pantalla.
+- **El APK puede hablar por el 8443**, a través del nginx que ahora reenvía la
+  API (ADR-016). Es un tramo que la respuesta en vivo no atravesaba antes.
+  Conviene recorrerlos una vez contra `http://<IP>:8443` (APK de pruebas) y
+  otra contra el `https://` de Caddy (APK oficial, servidor del Centro).
+
+Con la 0.8.0 la compuerta queda cumplida cuando, además de los 17 de arriba, el
+18, el 19 y el 20 tienen resultado y fecha, y el 7, el 11 y el 17 tienen uno
+**posterior al 05-11-2026**.
+
 ## Fallos conocidos, abiertos
 
 Lo que el recorrido encontró y todavía no se puede dar por cerrado. Queda escrito
