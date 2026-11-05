@@ -522,6 +522,21 @@ jobs:
           docker compose -f docker-compose.yml -f docker-compose.prod.yml config --format json \
             | jq -e '[.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] == ["proxy"]' > /dev/null \
             || { echo "::error::En producción hay otro servicio, además del proxy, con puertos publicados (ADR-009)."; exit 1; }
+          # La capa del túnel de Cloudflare. Lo que se fija es de lo que depende
+          # el límite de intentos por origen (cabecera del Caddyfile): que Caddy
+          # confíe EXACTAMENTE en la IP fija del conector, que el conector solo
+          # esté en la red del túnel (no ve la base ni el backend), que el proxy
+          # tenga otra IP fija (sin ella se quedaba con la del conector y este no
+          # arrancaba) y que el conector no publique puertos.
+          SICOT_TUNEL_TOKEN=relleno-solo-para-ci \
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tunel.yml config --format json \
+            | jq -e '.services.proxy.environment.SICOT_TUNEL_IP == .services.tunel.networks.tunel.ipv4_address
+                     and (.services.tunel.networks | keys) == ["tunel"]
+                     and .services.proxy.networks.tunel.ipv4_address != null
+                     and .services.proxy.networks.tunel.ipv4_address != .services.tunel.networks.tunel.ipv4_address
+                     and ((.services.tunel.ports // []) | length) == 0
+                     and ([.services | to_entries[] | select((.value.ports // []) | length > 0) | .key] == ["proxy"])' > /dev/null \
+            || { echo "::error::docker-compose.tunel.yml dejaría al backend sin la IP real de los clientes o al conector fuera de su red."; exit 1; }
 
       - name: Validar el Caddyfile
         # Ni `nginx -t` ni `config` miran el Caddyfile, y un error en él solo
@@ -547,6 +562,21 @@ jobs:
               -e SICOT_TLS="$tls" \
               "$imagen" caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
+          # Con la capa del túnel, la IP del conector entra en `trusted_proxies`.
+          # Sin ella la lista queda vacía; con ella tiene que quedar esa sola IP.
+          echo "SICOT_TUNEL_IP=172.29.254.2"
+          docker run --rm \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -e SICOT_DOMINIO=sicot.ci.invalid -e SICOT_TLS=internal -e SICOT_TUNEL_IP=172.29.254.2 \
+            "$imagen" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+            | jq -e '[.apps.http.servers[].trusted_proxies.ranges] == [["172.29.254.2"]]' > /dev/null \
+            || { echo "::error::Con el túnel, Caddy no confía exactamente en la IP del conector."; exit 1; }
+          docker run --rm \
+            -v "$PWD/Caddyfile:/etc/caddy/Caddyfile:ro" \
+            -e SICOT_DOMINIO=sicot.ci.invalid -e SICOT_TLS=internal \
+            "$imagen" caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile \
+            | jq -e '[.apps.http.servers[].trusted_proxies.ranges // []] == [[]]' > /dev/null \
+            || { echo "::error::Sin el túnel, Caddy confía en algún proxy: un cliente podría inventarse el origen."; exit 1; }
 
       - name: Comprobar que los puertos coinciden entre Caddy, nginx y los Dockerfile
         # Ya pasó: el Caddyfile mandaba la SPA al 80 mientras nginx escuchaba en

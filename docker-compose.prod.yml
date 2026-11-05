@@ -213,9 +213,15 @@ services:
     environment:
       SICOT_DOMINIO: ${SICOT_DOMINIO:?Defina SICOT_DOMINIO en el .env — el nombre (o la IP) con el que se abrirá SICOT}
       SICOT_TLS: ${SICOT_TLS:-internal}
+    # 80 y 443 salvo que el .env diga otra cosa. Se pueden cambiar porque hay
+    # servidores donde esos puertos ya son de otro programa: en el del Centro
+    # los usa el Nginx de otro proyecto, y con ellos fijos `up` fallaba con
+    # «port is already allocated». El valor admite la IP de escucha delante:
+    # con el túnel (docker-compose.tunel.yml) nadie entra por aquí, así que
+    # basta con `127.0.0.1:8443` para las pruebas desde el propio servidor.
     ports:
-      - "80:80"
-      - "443:443"
+      - "${SICOT_PUERTO_HTTP:-80}:80"
+      - "${SICOT_PUERTO_HTTPS:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # Los certificados y las claves de cuenta ACME viven en volúmenes: sin

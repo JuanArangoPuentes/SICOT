@@ -54,7 +54,33 @@
 # otro balanceador delante, se declara SOLO la IP de ese balanceador. Declarar la
 # red del Centro (10.0.0.0/8, 192.168.0.0/16…) permitiría a cualquier equipo
 # elegir su propio origen escribiendo la cabecera, y escapar así del bloqueo.
+#
+# EL TÚNEL DE CLOUDFLARE ES ESE BALANCEADOR
+# -----------------------------------------
+# Con docker-compose.tunel.yml (INSTALACION.md, «Publicarlo por un túnel de
+# Cloudflare») todas las peticiones llegan desde el contenedor del conector. Sin
+# confiar en él, Caddy pondría la IP del conector en X-Forwarded-For y el
+# backend vería a todo Internet como un solo equipo: veinte contraseñas erradas
+# de cualquiera dejarían sin entrar a todos durante quince minutos.
+#
+# Por eso esa capa le da al conector una IP FIJA en una red que solo comparte
+# con este proxy, y pasa esa IP en SICOT_TUNEL_IP. Solo esa dirección queda en
+# `trusted_proxies`: Caddy conserva la cabecera que trae (la escribe el borde de
+# Cloudflare, que añade al final la IP real de quien se conectó) y le agrega la
+# del conector. La RemoteIpValve del backend recorre la cadena de derecha a
+# izquierda, salta la del conector por ser interna y se queda con la del
+# cliente. Lo que un cliente invente en la cabecera queda a la izquierda de esa
+# IP real y no se lee.
+#
+# Sin la capa del túnel, SICOT_TUNEL_IP no existe y la lista queda vacía: Caddy
+# no confía en nadie y todo funciona exactamente como se describe arriba.
 # ═══════════════════════════════════════════════════════════════════════════
+
+{
+	servers {
+		trusted_proxies static {$SICOT_TUNEL_IP}
+	}
+}
 
 {$SICOT_DOMINIO:localhost} {
 	# `internal` o el correo de la cuenta ACME: ver «CÓMO ELIGE EL CERTIFICADO».

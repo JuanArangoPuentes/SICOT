@@ -14,6 +14,7 @@ procedimiento.
 | `JWT_SECRET` | Firma de los tokens de sesión | Solo el backend |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | Cuenta de correo saliente | Solo el backend |
 | `SICOT_ADMIN_EMAIL` / `SICOT_ADMIN_PASSWORD` | Administrador del primer arranque | Solo el backend, y solo con la tabla de usuarios vacía |
+| `SICOT_TUNEL_TOKEN` | La identidad del servidor ante Cloudflare: quien la tenga puede recibir el tráfico de `SICOT_DOMINIO` | Solo el contenedor `sicot-tunel`, y solo con `docker-compose.tunel.yml` |
 
 Todos viven en un único archivo `.env` en la raíz del proyecto, **en el host de
 despliegue**. Ese archivo nunca se sube al repositorio: está en `.gitignore` y se
@@ -110,6 +111,24 @@ Para cambiar la contraseña de esa cuenta ya creada, se hace **desde la propia
 aplicación** (panel de Administración), no tocando el `.env`. Lo correcto tras el
 primer arranque es **retirar ambas variables** del archivo: no sirven para nada y
 son una credencial de más esperando a filtrarse.
+
+### `SICOT_TUNEL_TOKEN`
+
+Solo existe si el servidor se publica por el túnel de Cloudflare
+(INSTALACION.md, «Publicarlo por un túnel de Cloudflare»).
+
+```bash
+# 1. En el panel de Cloudflare: Networking → Tunnels → el túnel → Overview → Refresh token
+# 2. Poner la clave nueva en SICOT_TUNEL_TOKEN del .env
+# 3. Recrear solo el conector, con los tres archivos
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.tunel.yml   up -d --force-recreate --no-deps tunel
+```
+
+**Efecto:** unos segundos sin acceso desde fuera mientras el conector se
+reconecta. La clave anterior deja de abrir conexiones nuevas.
+
+**Cuándo hacerlo:** si la clave se pegó en un chat, un correo o un documento, y
+al entregar el servidor a otra persona.
 
 ## Cuándo hay que rotar, sin excepción
 
