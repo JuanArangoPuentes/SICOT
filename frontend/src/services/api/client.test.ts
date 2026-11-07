@@ -132,7 +132,7 @@ describe('apiFetch', () => {
 
     await expect(apiFetch('/api/contratos')).rejects.toMatchObject({
       status: 502,
-      message: 'Error 502',
+      message: 'El servidor de SICOT no respondió a tiempo (error 502 del intermediario).',
     })
   })
 })

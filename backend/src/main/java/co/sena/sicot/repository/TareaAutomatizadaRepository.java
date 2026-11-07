@@ -95,6 +95,18 @@ public interface TareaAutomatizadaRepository extends JpaRepository<TareaAutomati
      * si la restauración cabe en el RTO de 4 h de ADR-002. Añadir una tabla que
      * crece de forma monótona con seis reglas evaluándose a diario contradiría
      * esa decisión.
+     *
+     * <p><b>Nunca las de un contrato ACTIVO.</b> La fila de una tarea es
+     * también la memoria de idempotencia: lo único que impide que una regla de
+     * calendario vuelva a emitir un aviso es que su clave siga en la tabla. La
+     * purga borraba esas filas a los 30 días, y el aviso de «contrato vencido»
+     * —documentado como único— volvía cada 31 días mientras el contrato siguiera
+     * ACTIVO; lo mismo un cronograma estancado en el mismo tramo de atraso. Las
+     * reglas de calendario solo evalúan contratos ACTIVO, así que mientras el
+     * contrato lo esté sus claves tienen que seguir ahí. Cuando sale de ACTIVO
+     * ya no hay nada que repetir y la retención normal vuelve a aplicar. El
+     * crecimiento queda acotado por la vida de los contratos en curso, no por el
+     * calendario.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
@@ -102,6 +114,9 @@ public interface TareaAutomatizadaRepository extends JpaRepository<TareaAutomati
              WHERE t.estado IN (co.sena.sicot.entity.enums.EstadoTareaAutomatizada.COMPLETADA,
                                 co.sena.sicot.entity.enums.EstadoTareaAutomatizada.DESCARTADA)
                AND t.fechaActualizacion < :limite
+               AND (t.contrato IS NULL
+                    OR t.contrato.id NOT IN (SELECT c.id FROM Contrato c
+                                              WHERE c.estado = co.sena.sicot.entity.enums.EstadoContrato.ACTIVO))
             """)
     int purgarResueltasAnterioresA(@Param("limite") Instant limite);
 }

@@ -6,8 +6,7 @@
 // importaran desde ella, invirtiendo la dependencia (una pieza dependiendo de
 // quien la usa).
 
-import type { EstadoFormato, FirmaResponse, Rol, UsuarioResponse } from '@/services/api/types'
-import type { ChipType } from '@/components/ui'
+import type { FirmaResponse, Rol, UsuarioResponse } from '@/services/api/types'
 import { formatFecha } from '@/services/format'
 
 export interface UserRow {
@@ -15,10 +14,8 @@ export interface UserRow {
   nombre: string
   correo: string
   telefono: string
-  cargo: string
   rol: string
   activo: boolean
-  centros: string
   /** Rol y teléfono tal como los devuelve la API — los exige PUT /api/usuarios/{id}. */
   rolApi: Rol
   telefonoApi: string | null
@@ -34,21 +31,10 @@ export interface FirmaRow {
   activa: boolean
 }
 
-// Actividad de los últimos 30 días — sin endpoint de estadísticas agregadas
-// todavía; se deja vacío a propósito (estado honesto) en vez de inventar
-// números. El panel ya maneja el caso vacío mostrando un mensaje, no un mock.
-export const ACTIVIDAD: { dia: string; creados: number; supervisados: number; cerrados: number }[] = []
-
 export const ROL_LABEL: Record<Rol, string> = {
   ADMINISTRADOR: 'Administrador',
   GESTION: 'Gestor de Contratación',
   SUPERVISOR: 'Supervisor',
-}
-
-export const ROL_CARGO: Record<Rol, string> = {
-  ADMINISTRADOR: 'Administrador del sistema',
-  GESTION: 'Profesional de Gestión',
-  SUPERVISOR: 'Instructor',
 }
 
 export const mapUser = (u: UsuarioResponse): UserRow => ({
@@ -56,10 +42,8 @@ export const mapUser = (u: UsuarioResponse): UserRow => ({
   nombre: u.nombre,
   correo: u.email,
   telefono: u.telefono ?? '—',
-  cargo: ROL_CARGO[u.rol],
   rol: ROL_LABEL[u.rol],
   activo: u.activo,
-  centros: '—',
   rolApi: u.rol,
   telefonoApi: u.telefono,
 })
@@ -73,11 +57,6 @@ export const mapFirma = (f: FirmaResponse): FirmaRow => ({
   fecha: formatFecha(f.fechaAsignacion),
   activa: f.activa,
 })
-
-export const FORMATO_CHIP: Record<EstadoFormato, { label: string; type: ChipType }> = {
-  VIGENTE: { label: 'Vigente', type: 'vigente' },
-  OBSOLETO: { label: 'Obsoleto', type: 'inactive' },
-}
 
 // Contraseña inicial de una cuenta real. Se usa `crypto.getRandomValues`, no
 // `Math.random()`: `Math.random()` no es criptográficamente seguro — su estado

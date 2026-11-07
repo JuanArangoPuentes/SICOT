@@ -3,14 +3,12 @@
 // del documento por subetapa es parte de la definición del proceso GCCON-P-010
 // (base de conocimiento local, igual que FORMAL_DOCS).
 
-import { STEPS_INITIAL, AI_GENERATED_DOCS } from '@/data/contractFlow'
+import { AI_GENERATED_DOCS, DOCUMENTO_POR_SUBETAPA } from '@/data/contractFlow'
 import type { Step, SubStep } from '@/types/domain'
-import type { EtapaResponse, RegistroResponse } from './api/types'
+import type { EtapaResponse, RegistroResponse, SubetapaResponse } from './api/types'
+import type { ConPendiente } from './colaDeCambios'
 import type { Registro } from '@/components/Registros'
-
-const DOCUMENTOS_POR_CODIGO = new Map<string, string>(
-  STEPS_INITIAL.flatMap((s) => s.subSteps).map((ss) => [ss.id, ss.document]),
-)
+import { formatFechaYHoraDelCentro } from './format'
 
 const STATUS_FROM_ESTADO: Record<EtapaResponse['estado'], Step['status']> = {
   COMPLETADA: 'completed',
@@ -27,24 +25,17 @@ export function mapEtapas(etapas: EtapaResponse[]): Step[] {
       id: ss.codigo,
       label: ss.nombre,
       responsible: ss.responsable,
-      document: DOCUMENTOS_POR_CODIGO.get(ss.codigo) ?? ss.descripcion,
+      document: DOCUMENTO_POR_SUBETAPA[ss.codigo] ?? ss.descripcion,
+      description: ss.descripcion,
       completed: ss.estado === 'COMPLETADA',
       aiGenerated: AI_GENERATED_DOCS.has(ss.codigo),
       apiId: ss.id,
+      documentosRequeridos: ss.documentosRequeridos ?? null,
+      // Lo pone la cola de cambios sobre la copia local (ADR-015): hecho en
+      // este equipo, todavía sin aceptar por el servidor.
+      pendienteDeEnviar: (ss as SubetapaResponse & ConPendiente).pendienteDeEnviar === true,
     })),
   }))
-}
-
-function formatRegistroFecha(iso: string): string {
-  return new Date(iso)
-    .toLocaleString('es-CO', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    .replace(',', '')
 }
 
 // Categorías de la bitácora. Cubren las doce acciones que el backend registra
@@ -93,7 +84,15 @@ export function mapRegistros(registros: RegistroResponse[]): Registro[] {
     // borrar una cuenta dejaba sus acciones atribuidas al "Sistema" en el
     // registro que existe precisamente para saber quién hizo qué.
     actor: r.origen === 'SISTEMA' ? 'Sistema' : (r.usuarioNombre ?? 'Usuario eliminado'),
-    fecha: formatRegistroFecha(r.fecha),
-    asunto: r.descripcion ?? humanizarAccion(r.accion),
+    fecha: formatFechaYHoraDelCentro(r.fecha),
+    // Lo hecho sin red llega con dos horas (V24): `fecha` es cuándo lo recibió
+    // el servidor, que es la que vale, y esta la que declaró el equipo. Se
+    // dicen las dos, cada una con su nombre, en vez de elegir una.
+    asunto:
+      (r.descripcion ?? humanizarAccion(r.accion)) +
+      (r.hechoSinConexionEn
+        ? ` Hecho sin conexión: ${formatFechaYHoraDelCentro(r.hechoSinConexionEn)} según el equipo; la fecha de la` +
+          ' columna es cuando llegó al servidor.'
+        : ''),
   }))
 }

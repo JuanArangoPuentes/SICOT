@@ -1,0 +1,17 @@
+-- ═══════════════════════════════════════════════════════════════════════════
+-- La hora que declara el equipo para lo que el supervisor hizo sin red.
+--
+-- POR QUÉ
+-- -------
+-- Desde la cola de cambios de ADR-015, un sub-paso cerrado en bodega a las 9:00
+-- puede llegar al servidor a las 15:00, cuando vuelve la red. `fecha` sigue
+-- siendo la hora en que el servidor lo recibió, que es la única que SICOT
+-- garantiza. Esta columna guarda, aparte y con su propio nombre, la que dijo el
+-- portátil: sin ella el expediente afirmaría que el paso se cerró a las 15:00,
+-- y reemplazar `fecha` por la del portátil haría depender la auditoría de un
+-- reloj que su dueño puede cambiar.
+--
+-- Nula en todo lo que se hizo con conexión, que es casi todo y es todo lo
+-- anterior a esta migración.
+-- ═══════════════════════════════════════════════════════════════════════════
+ALTER TABLE registros ADD COLUMN hecho_sin_conexion_en TIMESTAMPTZ;

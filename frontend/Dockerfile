@@ -1,5 +1,10 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
-FROM node:22-alpine AS build
+# Imágenes base fijadas por versión exacta, no por rama ("22-alpine"). Una rama
+# flotante cambia por debajo sin que nadie lo revise y, peor, puede dejar de
+# moverse sin que nadie lo note: así quedó esta imagen en nginx 1.27, una rama
+# cerrada que ya no recibía parches. Ahora una versión nueva llega como PR de
+# Dependabot (ecosistema docker) y el CI escanea la imagen resultante con Trivy.
+FROM node:22.23.3-alpine AS build
 
 # Usuario no-root también aquí, no sólo en la imagen final. La etapa de build se
 # descarta, así que el riesgo no es lo que quede publicado: es que este es el
@@ -22,7 +27,15 @@ COPY --chown=node:node . .
 
 # Vite inlines VITE_* variables at build time, so this has to be a build arg,
 # not a runtime environment variable.
-ARG VITE_API_URL=http://localhost:8080
+#
+# VACÍO por omisión = mismo origen: la aplicación pide `/api/...` a la misma
+# dirección por la que se abrió, y el nginx de esta imagen (o Caddy, en
+# producción) la reenvía al backend (ADR-016). Antes el valor por omisión era
+# `http://localhost:8080`: una imagen construida sin argumentos —un `docker
+# build` a mano— le decía al navegador de OTRO equipo que la API estaba en su
+# propia máquina, y la CSP `connect-src 'self'` la bloqueaba además, sin ningún
+# error en el servidor.
+ARG VITE_API_URL=
 ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
@@ -30,7 +43,15 @@ RUN npm run build
 # Imagen "unprivileged": nginx corre como usuario no-root desde el arranque
 # (mismo patrón que backend/Dockerfile). Funciona sin cambios porque ya
 # escuchamos en el puerto 8443, no privilegiado.
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+#
+# 1.30 es la rama estable mantenida. La 1.27 que había aquí se cerró en 2025 y
+# su imagen dejó de reconstruirse, con nginx y Alpine incluidos: esta imagen
+# sirve la SPA que guarda el JWT y seguía sin parches sin que nada lo señalara.
+# 1.30.6 desde el 23-10-2026: la 1.30.5 traía nginx con tres CVE altas
+# (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
+# expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
+# imágenes del CI marcó, y la 1.30.6 las corrige.
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
@@ -38,6 +59,47 @@ FROM nginxinc/nginx-unprivileged:1.27-alpine
 # el `USER root` de arriba sería el último y la imagen final correría como root
 # —justo lo que la variante "unprivileged" viene a evitar.
 USER root
+
+# La imagen base trae libtiff 4.7.1-r0, con CVE-2026-4775 (HIGH): ejecución de
+# código o caída por un desbordamiento de entero con signo. Alpine ya publicó
+# 4.7.2-r0, así que este arreglo es gratis — no es el caso de Spring, donde la
+# versión corregida está detrás de una versión mayor de pago en esfuerzo. Lo
+# que no se puede es esperar a que nginx reconstruya su imagen: el escaneo de
+# imágenes es un chequeo obligatorio y hasta entonces no entra ningún PR.
+#
+# Se sube SOLO ese paquete y no `apk upgrade` entero, a propósito: así el resto
+# de la imagen sigue siendo exactamente la que publica nginx, que es lo que la
+# etiqueta fijada promete, y el día que falle se sabrá por qué. Cuando la rama
+# 1.30 traiga 4.7.2-r0 o posterior, esta línea sobra y se quita.
+#
+# libexpat, por lo mismo (CI del 18-10-2026): la base trae 2.8.5-r0, con
+# CVE-2026-77214 (HIGH, lectura fuera del búfer al parsear XML), y Alpine ya
+# publicó 2.9.0-r0. El backend lleva la misma línea. Y libx11, del mismo día:
+# 1.8.13-r0 trae CVE-2026-88806 (HIGH, desbordamiento de montículo con un
+# servidor X malicioso) y 1.8.14-r0 la corrige. Y brotli-libs (CI del
+# 23-10-2026): 1.2.0-r1 trae CVE-2026-111497 (HIGH, escritura fuera de límites
+# en el decodificador) y 1.2.1-r0 la corrige; el backend lleva la misma línea.
+#
+# Y curl (CI del 27-10-2026): la base trae 8.22.0-r0, con CVE-2026-92392 (HIGH,
+# uso después de liberar al subir por HTTP/2), y Alpine ya publicó 8.23.0-r0.
+# `libcurl` viene del mismo origen que `curl`, así que subir el paquete arregla
+# los dos. Aquí sí y en el backend no: su base ya va por Alpine 3.24.3, que lo
+# trae corregido; la de nginx sigue en 3.24.2.
+#
+# libexpat otra vez (CI del 05-11-2026): 2.9.0-r0 trae tres HIGH de denegación
+# de servicio (CVE-2026-113351, -117610 y -118370) y 2.10.0-r0 las corrige. El
+# escaneo se detuvo en el backend antes de llegar aquí; esta base fija la misma
+# condición y quedaba igual de expuesta.
+#
+# Y musl y zlib (CI del 07-11-2026, PR #149): la base trae musl 1.2.6-r2, con
+# CVE-2026-107891 (HIGH, ejecución de código por un desbordamiento de entero en
+# regcomp), y zlib 1.3.2-r0, con CVE-2026-85091 (HIGH, desbordamiento de
+# montículo en gz_vacate). Alpine ya publicó 1.2.6-r3 y 1.3.2-r1. `musl-utils`
+# sale del mismo paquete fuente que `musl` y tiene que subir con él. El backend
+# no las necesita: su base ya va por Alpine 3.24.3, que las trae corregidas.
+RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
+    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1"
+
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
 # `envsubst` todo lo que haya en templates/ y deja el resultado en conf.d. Es lo

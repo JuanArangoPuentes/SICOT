@@ -36,6 +36,14 @@ public class Subetapa {
     @Column(nullable = false, length = 150)
     private String responsable;
 
+    /**
+     * Qué tiene que cargar el supervisor antes de poder cerrar el paso, o
+     * {@code null} si nada. Hoy solo existe {@code ACTA_FIRMADA_Y_ENVIO}: el
+     * acta de inicio firmada y la evidencia de que la devolvió por correo.
+     */
+    @Column(name = "documentos_requeridos", length = 40)
+    private String documentosRequeridos;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -56,4 +64,7 @@ public class Subetapa {
 
     public String getResponsable() { return responsable; }
     public void setResponsable(String responsable) { this.responsable = responsable; }
+
+    public String getDocumentosRequeridos() { return documentosRequeridos; }
+    public void setDocumentosRequeridos(String documentosRequeridos) { this.documentosRequeridos = documentosRequeridos; }
 }

@@ -95,6 +95,10 @@ describe('EvidenciaFotografica', () => {
     fireEvent.change(container.querySelectorAll('input[type="file"]')[0], { target: { files: [enorme] } })
 
     expect(screen.getByText(/el máximo son 20 MB/i)).toBeTruthy()
+    // Revisión del 25-09-2026: el botón seguía activo y la subía igual.
+    const cargar = screen.getByRole('button', { name: /Cargar evidencia/i })
+    expect((cargar as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(cargar)
     expect(subirDocumento).not.toHaveBeenCalled()
   })
 
@@ -148,5 +152,14 @@ describe('EvidenciaFotografica', () => {
 
     expect(screen.getByText(/No se tomó ninguna foto/)).toBeTruthy()
     expect(screen.getByText(/Aplicaciones › SICOT › Permisos/)).toBeTruthy()
+  })
+
+  it('después de «Agregar otra» sigue avisando si la cámara se cierra sin foto', async () => {
+    await cargarDesde(0, {})
+    fireEvent.click(screen.getByRole('button', { name: /Agregar otra/i }))
+
+    fireEvent(document.querySelectorAll('input[type="file"]')[0], new Event('cancel'))
+
+    expect(screen.getByText(/No se tomó ninguna foto/)).toBeTruthy()
   })
 })

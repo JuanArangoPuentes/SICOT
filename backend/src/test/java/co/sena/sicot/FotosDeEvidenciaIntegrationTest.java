@@ -2,7 +2,7 @@ package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
 import co.sena.sicot.service.FotoConExif;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -102,7 +102,7 @@ class FotosDeEvidenciaIntegrationTest extends PruebaDeIntegracion {
 
         mockMvc.perform(multipart("/api/contratos/{c}/documentos", contratoId)
                         .file(new MockMultipartFile("archivo", "acta.pdf", "application/pdf",
-                                "%PDF-1.4 acta".getBytes(StandardCharsets.UTF_8)))
+                                ArchivoDePrueba.pdfDeUnaPagina("acta de inicio")))
                         .header("Authorization", "Bearer " + gestion))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.capturaFecha").doesNotExist());

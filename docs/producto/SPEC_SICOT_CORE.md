@@ -67,17 +67,21 @@ chat del Copiloto que no debe alucinar funciones inexistentes.
 
 ---
 
-### User Story 3 - ADMINISTRADOR gestiona usuarios, formatos y firmas (Priority: P2)
+### User Story 3 - ADMINISTRADOR supervisa a los supervisores y gestiona sus cuentas (Priority: P2)
 
-Un usuario con rol ADMINISTRADOR crea/activa/desactiva usuarios, envía credenciales reales,
-administra el catálogo de formatos documentales oficiales, y asigna firmas electrónicas a las
-cuentas.
+Un usuario con rol ADMINISTRADOR —la Subdirección— ve el avance de cada supervisor contrato
+por contrato, crea/activa/desactiva usuarios, envía credenciales reales y asigna firmas
+electrónicas a las cuentas. Desde el 06-11-2026 su panel tiene solo eso: el avance (vista de
+entrada), Usuarios y Firmas electrónicas. El «Panel de control» de cifras del sistema y el
+catálogo de formatos documentales salieron de su pantalla; el catálogo y su API
+(`/api/formatos`) siguen en el servidor con lo ya cargado.
 
-**Why this priority**: Soporta la operación del sistema (altas de usuarios, formatos vigentes)
+**Why this priority**: Soporta la operación del sistema (altas de usuarios, firmas, seguimiento de los supervisores)
 pero no bloquea el uso diario de GESTIÓN/SUPERVISOR.
 
-**Independent Test**: Login como `administrador@soy.sena.edu.co`, crear un usuario, enviarle
-credenciales reales, subir un formato documental, asignar una firma electrónica.
+**Independent Test**: Login como `administrador@soy.sena.edu.co`, ver el avance de los
+supervisores, crear un usuario, enviarle credenciales reales, asignar una firma electrónica
+(también desde la tarjeta del supervisor que no la tiene).
 
 **Acceptance Scenarios**:
 
@@ -137,14 +141,18 @@ que su rol permite (ej. un SUPERVISOR no puede consultar el Copiloto de un contr
   (`POST /api/contratos/{id}/copiloto/chat`), anclado a los datos reales del contrato y sus
   etapas, restringido al supervisor asignado o a ADMINISTRADOR.
 - **FR-008**: El Copiloto NUNCA DEBE sugerir una función de carga de archivos por sub-paso que no
-  existe — la única acción en sub-pasos de verificación es "Marcar completado".
+  existe — la única acción en sub-pasos de verificación es "Marcar completado", salvo en 3.1 y
+  3.2, donde el supervisor carga fotos de la entrega con "Cargar evidencia". Tampoco DEBE negar
+  esa carga donde sí existe.
 - **FR-009**: Antes de cerrar el último sub-paso de una etapa, el sistema DEBE pedir una revisión
   asesora de IA (no bloqueante) — la confirmación final siempre la da un humano.
 - **FR-010**: El sistema DEBE calcular una alerta de cronograma tipo semáforo (verde/amarillo/
   rojo) en vivo a partir de fechas reales del contrato, sin infraestructura de scheduling.
-- **FR-011**: ADMINISTRADOR DEBE poder gestionar usuarios (`/api/usuarios`), enviar credenciales
-  reales (`POST /api/usuarios/{id}/enviar-credenciales`), administrar el catálogo de formatos
-  documentales (`/api/formatos`) y asignar firmas electrónicas (`/api/firmas`).
+- **FR-011**: ADMINISTRADOR DEBE poder ver el avance de los supervisores
+  (`/api/seguimiento/supervisores`), gestionar usuarios (`/api/usuarios`), enviar credenciales
+  reales (`POST /api/usuarios/{id}/enviar-credenciales`) y asignar firmas electrónicas
+  (`/api/firmas`). El catálogo de formatos (`/api/formatos`) sigue en la API, sin pantalla
+  desde el 06-11-2026.
 - **FR-012**: El sistema DEBE bloquear temporalmente un email tras varios intentos de login
   fallidos (fuerza bruta).
 - **FR-013**: El sistema DEBE validar archivos subidos por su contenido real (no solo extensión)

@@ -21,7 +21,7 @@ for (const rol of Object.keys(CUENTAS_DEV) as keyof (typeof CUENTAS_DEV)[]) {
 
 test('contraseña incorrecta muestra el error y no navega', async ({ page }) => {
   await page.goto('/')
-  await page.getByPlaceholder('correo@soy.sena.edu.co').fill(CUENTAS_DEV.GESTION.email)
+  await page.getByPlaceholder('usuario@sena.edu.co').fill(CUENTAS_DEV.GESTION.email)
   await page.getByPlaceholder('••••••••••').fill('claveIncorrecta')
   await page.getByRole('button', { name: /Ingresar/ }).click()
 
@@ -30,5 +30,5 @@ test('contraseña incorrecta muestra el error y no navega', async ({ page }) => 
   // end-to-end detecta tanto una regresión del backend como del mapeo de
   // errores del frontend.
   await expect(page.getByText('Credenciales inválidas.')).toBeVisible()
-  await expect(page.getByPlaceholder('correo@soy.sena.edu.co')).toBeVisible()
+  await expect(page.getByPlaceholder('usuario@sena.edu.co')).toBeVisible()
 })

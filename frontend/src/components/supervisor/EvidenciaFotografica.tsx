@@ -48,6 +48,11 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
   // se haya negado el permiso de cámara: wry responde «ninguna foto» y nada más,
   // así que sin este aviso el botón parecería no hacer nada.
   const [camaraSinFoto, setCamaraSinFoto] = useState(false)
+  // Tras una carga, la vista 'cargada' no pinta los <input>: React los
+  // desmonta y, con «Agregar otra», crea otros nuevos. El efecto tiene que
+  // volver a engancharse al campo nuevo; con dependencias vacías se quedaba en
+  // el primero y el aviso de cámara sin foto dejaba de salir desde la segunda.
+  const camposMontados = estado.fase !== 'cargada'
 
   useEffect(() => {
     const campo = campoCamara.current
@@ -57,7 +62,7 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
     const alCancelar = () => setCamaraSinFoto(true)
     campo.addEventListener('cancel', alCancelar)
     return () => campo.removeEventListener('cancel', alCancelar)
-  }, [])
+  }, [camposMontados])
 
   const elegir = (archivo: File | undefined, origen: Origen) => {
     if (!archivo) return
@@ -77,6 +82,10 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
 
   const cargar = async () => {
     if (estado.fase !== 'elegida' && estado.fase !== 'error') return
+    // Una foto que ya se sabe demasiado grande no se sube: el servidor la
+    // rechaza igual, después de gastar los datos del teléfono, y con un mensaje
+    // genérico porque corta la conexión a mitad de la subida.
+    if (estado.archivo.size > TAMANIO_MAXIMO_BYTES) return
     const { archivo, vistaPrevia, origen } = estado
     setEstado({ fase: 'cargando', archivo, vistaPrevia, origen })
     try {
@@ -104,6 +113,9 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
     if (campoCamara.current) campoCamara.current.value = ''
     if (campoGaleria.current) campoGaleria.current.value = ''
   }
+
+  const demasiadoGrande =
+    estado.fase !== 'vacio' && estado.fase !== 'cargada' && estado.archivo.size > TAMANIO_MAXIMO_BYTES
 
   if (estado.fase === 'cargada') {
     const { documento, origen } = estado
@@ -189,9 +201,9 @@ export default function EvidenciaFotografica({ contratoId, subetapaApiId, codigo
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               className="btn-green"
-              style={{ ...BOTON, opacity: estado.fase === 'cargando' ? 0.6 : 1 }}
+              style={{ ...BOTON, opacity: estado.fase === 'cargando' || demasiadoGrande ? 0.6 : 1 }}
               onClick={cargar}
-              disabled={estado.fase === 'cargando'}
+              disabled={estado.fase === 'cargando' || demasiadoGrande}
             >
               {estado.fase === 'cargando' ? 'Cargando…' : 'Cargar evidencia'}
             </button>

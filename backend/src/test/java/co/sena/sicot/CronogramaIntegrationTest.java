@@ -4,7 +4,7 @@ import co.sena.sicot.automatizacion.EjecutorDeTareas;
 import co.sena.sicot.automatizacion.MotorDeAutomatizacion;
 import co.sena.sicot.dto.auth.AuthResponse;
 import co.sena.sicot.repository.AlertaRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -94,7 +94,7 @@ class CronogramaIntegrationTest extends PruebaDeIntegracion {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        String mensajeDeLaPantalla = objectMapper.readTree(respuesta).get("mensaje").asText();
+        String mensajeDeLaPantalla = objectMapper.readTree(respuesta).get("mensaje").asString();
 
         motor.evaluarCalendario(LocalDate.now(reloj));
         ejecutor.procesarPendientes();

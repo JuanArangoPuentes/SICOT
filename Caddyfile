@@ -13,14 +13,25 @@
 #
 # CÓMO ELIGE EL CERTIFICADO
 # -------------------------
-# Depende de lo que valga SICOT_DOMINIO en el .env:
+# Lo decide SICOT_TLS en el .env, no el nombre, y por defecto es `internal`:
 #
-#   - Un dominio público (sicot.ejemplo.gov.co): Caddy obtiene y renueva un
-#     certificado de Let's Encrypt solo, sin configuración adicional. Requiere
-#     que los puertos 80 y 443 sean alcanzables desde Internet.
-#   - Un nombre interno o una IP: Caddy emite un certificado local. Cifra
-#     igual; el navegador pide confiar en él una vez. Es el caso más probable
-#     en la red del centro.
+#   - `internal`: Caddy emite el certificado con su propia autoridad local.
+#     Cifra igual; el navegador pide confiar en él una vez y en los teléfonos
+#     hay que instalar la raíz (INSTALACION.md). Es el caso más probable en la
+#     red del Centro.
+#   - Un correo (sistemas@ejemplo.gov.co): Caddy lo pide a Let's Encrypt por ACME,
+#     con ese correo como contacto, y lo renueva solo. SOLO para un nombre
+#     público con los puertos 80 y 443 alcanzables desde Internet.
+#
+# Antes no había esta línea y Caddy adivinaba por el nombre: certificado local
+# solo para localhost, IPs, *.local, *.internal y similares; ACME para
+# cualquier otro. Un nombre del DNS interno del Centro bajo un dominio real
+# (sicot.<centro>.sena.edu.co) parece público: Caddy intentaba ACME, los
+# desafíos fallaban porque desde Internet no se llega, y el sitio se quedaba
+# SIN certificado —ni navegador, ni APK, ni escritorio completaban la
+# conexión—, con solo reintentos en el log. Equivocarse hacia `internal` se ve
+# al instante (el navegador avisa) y se corrige con una línea; equivocarse
+# hacia ACME dejaba el sitio caído sin decir por qué.
 #
 # POR QUÉ EL BACKEND VA ANTES QUE EL FRONTEND
 # -------------------------------------------
@@ -43,9 +54,38 @@
 # otro balanceador delante, se declara SOLO la IP de ese balanceador. Declarar la
 # red del Centro (10.0.0.0/8, 192.168.0.0/16…) permitiría a cualquier equipo
 # elegir su propio origen escribiendo la cabecera, y escapar así del bloqueo.
+#
+# EL TÚNEL DE CLOUDFLARE ES ESE BALANCEADOR
+# -----------------------------------------
+# Con docker-compose.tunel.yml (INSTALACION.md, «Publicarlo por un túnel de
+# Cloudflare») todas las peticiones llegan desde el contenedor del conector. Sin
+# confiar en él, Caddy pondría la IP del conector en X-Forwarded-For y el
+# backend vería a todo Internet como un solo equipo: veinte contraseñas erradas
+# de cualquiera dejarían sin entrar a todos durante quince minutos.
+#
+# Por eso esa capa le da al conector una IP FIJA en una red que solo comparte
+# con este proxy, y pasa esa IP en SICOT_TUNEL_IP. Solo esa dirección queda en
+# `trusted_proxies`: Caddy conserva la cabecera que trae (la escribe el borde de
+# Cloudflare, que añade al final la IP real de quien se conectó) y le agrega la
+# del conector. La RemoteIpValve del backend recorre la cadena de derecha a
+# izquierda, salta la del conector por ser interna y se queda con la del
+# cliente. Lo que un cliente invente en la cabecera queda a la izquierda de esa
+# IP real y no se lee.
+#
+# Sin la capa del túnel, SICOT_TUNEL_IP no existe y la lista queda vacía: Caddy
+# no confía en nadie y todo funciona exactamente como se describe arriba.
 # ═══════════════════════════════════════════════════════════════════════════
 
+{
+	servers {
+		trusted_proxies static {$SICOT_TUNEL_IP}
+	}
+}
+
 {$SICOT_DOMINIO:localhost} {
+	# `internal` o el correo de la cuenta ACME: ver «CÓMO ELIGE EL CERTIFICADO».
+	# Caddy rechaza al arrancar cualquier otro valor.
+	tls {$SICOT_TLS:internal}
 
 	# La API, la documentación y las métricas.
 	#
@@ -61,7 +101,10 @@
 	handle /swagger-ui/* {
 		reverse_proxy backend:8080
 	}
-	handle /v3/api-docs/* {
+	# `*` sin barra delante: Swagger UI pide la definición en `/v3/api-docs`, a
+	# secas, y `/v3/api-docs/*` no la cubre. Esa petición caía en la SPA y
+	# Swagger decía «Failed to load API definition».
+	handle /v3/api-docs* {
 		reverse_proxy backend:8080
 	}
 	handle /swagger-ui.html {

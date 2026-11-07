@@ -24,19 +24,25 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PdfTextExtractorTest {
 
     private final PdfTextExtractor extractor = new PdfTextExtractor();
-    private final SimplePdfWriter escritor = new SimplePdfWriter(Clock.systemDefaultZone());
+    private final PdfInstitucional escritor = new PdfInstitucional(Clock.systemDefaultZone());
+
+    private byte[] documento(String numeroContrato, String texto) {
+        PlantillaDocumentoIA acta = PlantillaDocumentoIA.CATALOGO.get("ACTA_INICIO");
+        return escritor.generar(new DocumentoFormal(acta.formato(), "Acta de Inicio", numeroContrato, "Alex Zapata",
+                "Generado en SICOT", List.of(new BloqueDocumento.Titulo(List.of(BloqueDocumento.Tramo.negrita(
+                        "FORMATO ACTA DE INICIO " + numeroContrato))), new BloqueDocumento.Parrafo(texto))));
+    }
 
     @Test
     void extraeElTextoDeUnPdfRealGeneradoPorElPropioSistema() {
-        byte[] pdf = escritor.generar(
-                "Acta de Inicio", "GCCON-F-018", "CO1.PCCNTR.7986334",
-                "Alex Zapata", "Supervisor del contrato",
-                List.of("El presente documento deja constancia del inicio de la ejecucion."));
+        byte[] pdf = documento("CO1.PCCNTR.7986334",
+                "El presente documento deja constancia del inicio de la ejecucion.");
 
         String texto = extractor.extraerTexto(pdf);
 
         assertThat(texto)
-                .contains("Acta de Inicio")
+                .contains("FORMATO ACTA DE INICIO")
+                .contains("GCCON-F-018 V.04")
                 .contains("CO1.PCCNTR.7986334")
                 .contains("deja constancia del inicio");
     }
@@ -57,7 +63,7 @@ class PdfTextExtractorTest {
 
     @Test
     void unPdfTruncadoAMitadTampocoRompeElContratoDeErrores() {
-        byte[] completo = escritor.generar("Informe", List.of("contenido"));
+        byte[] completo = documento("CO1.PCCNTR.1", "contenido");
         byte[] truncado = new byte[completo.length / 2];
         System.arraycopy(completo, 0, truncado, 0, truncado.length);
 

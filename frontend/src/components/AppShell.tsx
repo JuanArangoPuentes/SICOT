@@ -8,6 +8,10 @@
 // mismo software y no como tres pantallas distintas.
 
 import { useEffect, useState, type ReactNode } from 'react'
+import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
+import { CambiarContrasenaModal } from './CambiarContrasenaModal'
+import { CambiosSinEnviar } from './CambiosSinEnviar'
+import { VolvioElServidor } from './VolvioElServidor'
 import { SenaLogo, UserMenu } from './ui'
 import { IconChevron, IconSettings } from './icons'
 
@@ -83,6 +87,7 @@ export default function AppShell({
   title,
   subtitle,
   actions,
+  barra,
   children,
 }: {
   /** Etiqueta del módulo/rol — se muestra en la cabecera y bajo la marca. */
@@ -98,9 +103,17 @@ export default function AppShell({
   title: string
   subtitle?: string
   actions?: ReactNode
+  /**
+   * Franja de ancho completo entre la cabecera y el contenido, para lo que
+   * cambia el contexto de toda la pantalla (el contrato en supervisión). No va
+   * en `actions`: la cabecera tiene alto fijo y ahí no cabía sin tapar el menú
+   * del usuario a 800 px.
+   */
+  barra?: ReactNode
   children: ReactNode
 }) {
   const [collapsed, setCollapsed] = useState<boolean>(leerColapsada)
+  const [cambiandoContrasena, setCambiandoContrasena] = useState(false)
   const esMovil = useEsMovil()
   // En la fila inferior del teléfono siempre se ven rótulo y contador, sea cual
   // sea la preferencia de escritorio guardada en esta máquina.
@@ -262,10 +275,22 @@ export default function AppShell({
             avatarColor={avatarColor}
             avatarTextColor={avatarTextColor}
             onLogout={onLogout}
+            onCambiarContrasena={() => setCambiandoContrasena(true)}
             onDark={false}
           />
         </header>
+        {cambiandoContrasena && (
+          <CambiarContrasenaModal correo={usuario.email} onClose={() => setCambiandoContrasena(false)} />
+        )}
 
+        {/* Encima de todo lo demás y en los tres paneles: si lo que se ve no
+            vino del servidor, eso manda sobre cualquier otra cosa en pantalla. */}
+        <VolvioElServidor onEntrarDeNuevo={onLogout} />
+        <AvisoDeCopiaLocal />
+        {/* Justo debajo: lo que se hizo sin red y todavía no está en el
+            expediente, y lo que el servidor no aceptó (ADR-015). */}
+        <CambiosSinEnviar />
+        {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>
     </div>

@@ -70,35 +70,70 @@ public class LoginAttemptService {
     private final ConcurrentHashMap<String, Estado> intentos = new ConcurrentHashMap<>();
 
     /**
+     * Cuenta un intento de inicio de sesión <b>antes</b> de comprobar la
+     * contraseña, o lo rechaza con 429 si ya se llegó al tope.
+     *
+     * <h2>Por qué se cuenta antes y no después</h2>
+     * Antes se miraba el contador al entrar y el fallo se sumaba al salir,
+     * después de BCrypt. Entre una cosa y otra pasan unos 100 ms, y todas las
+     * peticiones que llegaban en esa ventana veían el contador por debajo del
+     * tope: doscientos POST simultáneos contra un correo eran doscientos
+     * intentos por ventana, no cinco. Comprobar y sumar en el mismo
+     * {@code compute} hace que los intentos en vuelo también cuenten.
+     *
+     * <p>Por eso un intento reservado cuenta como fallo hasta que se demuestre
+     * lo contrario: {@link #registrarExito} lo devuelve si la contraseña era
+     * correcta, y {@link #liberarIntento} si no se llegó a decidir (la base no
+     * respondió, por ejemplo). Una contraseña equivocada no necesita nada más:
+     * la reserva ya es el fallo.
+     *
      * @param email  correo con el que se intenta entrar
      * @param origen dirección IP de la petición; puede ser {@code null} si no
      *               se pudo determinar, en cuyo caso solo se aplica el límite
      *               por correo
      */
-    public void verificarNoBloqueado(String email, String origen) {
-        comprobar(clavePorCorreo(email),
+    public void reservarIntento(String email, String origen) {
+        String claveCorreo = clavePorCorreo(email);
+        reservar(claveCorreo, MAX_INTENTOS_POR_CORREO,
                 "Demasiados intentos fallidos con este correo. Intente de nuevo en unos minutos.");
         if (origen != null && !origen.isBlank()) {
-            comprobar(clavePorOrigen(origen),
-                    "Demasiados intentos fallidos desde esta red. Intente de nuevo en unos minutos.");
-        }
-    }
-
-    public void registrarFallo(String email, String origen) {
-        registrar(clavePorCorreo(email), MAX_INTENTOS_POR_CORREO);
-        if (origen != null && !origen.isBlank()) {
-            registrar(clavePorOrigen(origen), MAX_INTENTOS_POR_ORIGEN);
+            try {
+                reservar(clavePorOrigen(origen), MAX_INTENTOS_POR_ORIGEN,
+                        "Demasiados intentos fallidos desde esta red. Intente de nuevo en unos minutos.");
+            } catch (DemasiadasSolicitudesException e) {
+                // El intento no llega a hacerse, así que tampoco puede quedar
+                // contado contra el correo.
+                devolver(claveCorreo, MAX_INTENTOS_POR_CORREO);
+                throw e;
+            }
         }
     }
 
     /**
-     * Un inicio de sesión correcto limpia el contador del correo, pero
-     * <b>no</b> el del origen. Si así fuera, quien está probando cuentas ajenas
-     * podría reiniciar su propio contador de red simplemente entrando una vez
-     * con una cuenta que sí controla, y el límite por IP dejaría de servir.
+     * Un inicio de sesión correcto limpia el contador del correo, pero del
+     * origen solo devuelve su propia reserva: <b>no</b> lo limpia. Si lo
+     * limpiara, quien está probando cuentas ajenas podría reiniciar su propio
+     * contador de red simplemente entrando una vez con una cuenta que sí
+     * controla, y el límite por IP dejaría de servir. Y si no devolviera la
+     * reserva, los inicios de sesión correctos de un Centro que sale a internet
+     * por una sola IP acabarían bloqueándolo entero.
      */
-    public void registrarExito(String email) {
+    public void registrarExito(String email, String origen) {
         intentos.remove(clavePorCorreo(email));
+        if (origen != null && !origen.isBlank()) {
+            devolver(clavePorOrigen(origen), MAX_INTENTOS_POR_ORIGEN);
+        }
+    }
+
+    /**
+     * Deshace una reserva cuyo intento no llegó a resolverse por algo ajeno a
+     * las credenciales. Una caída de la base no puede dejar a nadie bloqueado.
+     */
+    public void liberarIntento(String email, String origen) {
+        devolver(clavePorCorreo(email), MAX_INTENTOS_POR_CORREO);
+        if (origen != null && !origen.isBlank()) {
+            devolver(clavePorOrigen(origen), MAX_INTENTOS_POR_ORIGEN);
+        }
     }
 
     /**
@@ -118,20 +153,18 @@ public class LoginAttemptService {
         intentos.clear();
     }
 
-    private void comprobar(String clave, String mensaje) {
-        Estado estado = intentos.get(clave);
-        if (estado != null && estado.sigueBloqueado()) {
-            long espera = Duration.between(Instant.now(), estado.bloqueadoHasta()).toSeconds();
-            throw new DemasiadasSolicitudesException(mensaje, espera);
-        }
-    }
-
-    private void registrar(String clave, int maximo) {
+    private void reservar(String clave, int maximo, String mensaje) {
         if (intentos.size() >= MAX_ENTRADAS) {
             purgarEntradasCaducadas();
         }
         intentos.compute(clave, (k, actual) -> {
             Instant ahora = Instant.now();
+            if (actual != null && actual.bloqueadoEn(ahora)) {
+                // Lanzar dentro de compute deja la entrada como estaba: un
+                // intento rechazado no suma ni alarga el bloqueo.
+                long espera = Duration.between(ahora, actual.bloqueadoHasta()).toSeconds();
+                throw new DemasiadasSolicitudesException(mensaje, espera);
+            }
             // El contador se reinicia si la entrada anterior ya caducó. Sin esto,
             // una cuenta que alguna vez llegó al máximo quedaba atrapada: cada
             // error posterior, por aislado que fuera, la volvía a bloquear otros
@@ -140,6 +173,22 @@ public class LoginAttemptService {
             int cuenta = (actual == null || actual.caducado(ahora)) ? 1 : actual.intentos() + 1;
             Instant bloqueadoHasta = cuenta >= maximo ? ahora.plus(DURACION_BLOQUEO) : null;
             return new Estado(cuenta, bloqueadoHasta, ahora);
+        });
+    }
+
+    /**
+     * Resta una reserva. Si con ella el contador baja del tope, el bloqueo lo
+     * había puesto justo esa reserva —mientras hay bloqueo no se aceptan
+     * otras—, así que deja de tener motivo y se levanta.
+     */
+    private void devolver(String clave, int maximo) {
+        intentos.computeIfPresent(clave, (k, actual) -> {
+            int cuenta = actual.intentos() - 1;
+            if (cuenta <= 0) {
+                return null;
+            }
+            Instant bloqueadoHasta = cuenta >= maximo ? actual.bloqueadoHasta() : null;
+            return new Estado(cuenta, bloqueadoHasta, actual.ultimoIntento());
         });
     }
 
@@ -160,8 +209,8 @@ public class LoginAttemptService {
 
     private record Estado(int intentos, Instant bloqueadoHasta, Instant ultimoIntento) {
 
-        private boolean sigueBloqueado() {
-            return bloqueadoHasta != null && bloqueadoHasta.isAfter(Instant.now());
+        private boolean bloqueadoEn(Instant ahora) {
+            return bloqueadoHasta != null && bloqueadoHasta.isAfter(ahora);
         }
 
         /**
@@ -170,7 +219,7 @@ public class LoginAttemptService {
          * olvidarse o reiniciarse.
          */
         private boolean caducado(Instant ahora) {
-            if (bloqueadoHasta != null && bloqueadoHasta.isAfter(ahora)) {
+            if (bloqueadoEn(ahora)) {
                 return false;
             }
             return ultimoIntento.plus(VENTANA_INTENTOS).isBefore(ahora);

@@ -1,0 +1,5 @@
+{
+  "codigo": "GCCON-F-997",
+  "nombre": "Lista con un campo que el formato no tiene",
+  "campoQueNoExiste": true
+}

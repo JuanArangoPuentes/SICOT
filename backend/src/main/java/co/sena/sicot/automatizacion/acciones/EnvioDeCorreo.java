@@ -7,6 +7,7 @@ import co.sena.sicot.automatizacion.ResultadoDeAccion;
 import co.sena.sicot.automatizacion.TareaEnEjecucion;
 import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.service.EmailService;
+import co.sena.sicot.service.RegistroService;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,10 +30,12 @@ import org.springframework.stereotype.Component;
 public class EnvioDeCorreo implements AccionDeTarea {
 
     private final EmailService emailService;
+    private final RegistroService registroService;
     private final PayloadJson payloadJson;
 
-    public EnvioDeCorreo(EmailService emailService, PayloadJson payloadJson) {
+    public EnvioDeCorreo(EmailService emailService, RegistroService registroService, PayloadJson payloadJson) {
         this.emailService = emailService;
+        this.registroService = registroService;
         this.payloadJson = payloadJson;
     }
 
@@ -57,6 +60,14 @@ public class EnvioDeCorreo implements AccionDeTarea {
         // para devolver "descartada" convertiría un mal minuto del correo en un
         // aviso al supervisor que nadie volverá a intentar.
         emailService.enviar(datos.destinatario(), datos.asunto(), datos.cuerpo());
+
+        // La constancia va después del envío, con el actor SISTEMA de ADR-008:
+        // es la prueba de que SICOT avisó. Guarda el destinatario y el asunto,
+        // no el cuerpo: el cuerpo repite datos del contrato que ya están en el
+        // expediente y haría ilegible la bitácora.
+        registroService.registrarDelSistema(tarea.contratoId(), "CORREO_ENVIADO",
+                "Correo enviado a " + datos.destinatario() + " por la automatización '"
+                        + tarea.regla() + "': " + datos.asunto());
         return ResultadoDeAccion.hecha();
     }
 }

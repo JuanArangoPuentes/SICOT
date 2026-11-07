@@ -1,5 +1,7 @@
 import { guardarArchivo } from '@/services/guardarArchivo'
+import { useGuardadoDeArchivo } from '@/hooks/useGuardadoDeArchivo'
 import { useState } from 'react'
+import AvisoDeGuardado from './AvisoDeGuardado'
 import { Chip } from './ui'
 
 /**
@@ -26,6 +28,7 @@ export default function Registros({ extra }: { extra: Registro[] }) {
   const [actor, setActor] = useState('')
   const [desde, setDesde] = useState('')
   const [hasta, setHasta] = useState('')
+  const guardado = useGuardadoDeArchivo()
 
   const toDate = (f: string) => {
     const [d, m, y] = f.slice(0, 10).split('/')
@@ -59,10 +62,10 @@ export default function Registros({ extra }: { extra: Registro[] }) {
     const bom = String.fromCharCode(0xfeff)
     const salto = String.fromCharCode(13, 10)
     const csv = bom + [cabecera.map(escapar).join(';'), ...filas].join(salto)
-    const hoy = new Date().toISOString().slice(0, 10)
+    const nombre = `sicot-registros-${new Date().toISOString().slice(0, 10)}.csv`
     // `guardarArchivo` y no un enlace `download`: en el APK de Android el
     // enlace no hacía nada, sin error ni aviso (MDL-184).
-    void guardarArchivo(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `sicot-registros-${hoy}.csv`)
+    void guardado.guardar(nombre, () => guardarArchivo(new Blob([csv], { type: 'text/csv;charset=utf-8' }), nombre))
   }
 
   const iconFor = (t: Registro['tipo']) =>
@@ -106,6 +109,8 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           Descargar registros (CSV)
         </button>
       </div>
+
+      <AvisoDeGuardado aviso={guardado.aviso} error={guardado.error} />
 
       {/* Filtros */}
       <div
