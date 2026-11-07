@@ -122,7 +122,7 @@ almacenamiento del WebView al cerrar la aplicación— solo existe en el teléfo
 
 | # | Qué hacer | Qué tiene que pasar | Resultado |
 | --- | --- | --- | --- |
-| 20 | En el teléfono y en un computador, entrar como supervisor y abrir el **mismo** contrato. Con el teléfono quieto, cerrar el 2.2 desde el computador. Después, con SICOT en segundo plano en el teléfono (otra aplicación delante), marcar una alerta como leída en el computador y volver a SICOT | Quieto y delante, en unos 5 s el teléfono muestra el 2.2 cerrado, el avance y las alertas al día sin tocar nada. Al volver de segundo plano se pone al día **en el acto**, sin esperar. En Registros aparecen las dos entradas | Sin recorrer |
+| 20 | En el teléfono y en un computador, entrar como supervisor y abrir el **mismo** contrato. Con el teléfono quieto, cerrar el 2.2 desde el computador. Después, con SICOT en segundo plano en el teléfono (otra aplicación delante), guardar un contacto de SST en el computador y volver a SICOT. No vale marcar una alerta como leída: no queda en la auditoría y por eso no avisa | Quieto y delante, en unos 5 s el teléfono muestra el 2.2 cerrado, el avance y las alertas al día sin tocar nada. Al volver de segundo plano se pone al día **en el acto**, sin esperar. En Registros aparecen las dos entradas | Sin recorrer. En la aplicación de **escritorio** pasa · 05-11-2026: con la ventana delante y sin tocarla, vio a los 3 s un sub-paso que otro equipo pasó a EN_CURSO y releyó etapas, alertas, documentos, registros, cronograma y la ficha |
 
 ### Cambiar la contraseña propia, desde la v0.9.0
 
