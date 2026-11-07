@@ -111,6 +111,13 @@ public class EtapaService {
         }
 
         recalcularEtapa(subetapa.getEtapa());
+        // Con el acta de inicio firmada y devuelta, el contrato está en
+        // ejecución: pasa a ACTIVO para que corran los avisos de plazo (ver
+        // ContratoService.activarPorActaDeInicioFirmada).
+        if (nuevoEstado == EstadoSubetapa.COMPLETADA
+                && GcconP010Plantilla.ACTA_FIRMADA_Y_ENVIO.equals(subetapa.getDocumentosRequeridos())) {
+            contratoService.activarPorActaDeInicioFirmada(contrato);
+        }
         return EtapaMapper.toSubetapaResponse(subetapa);
     }
 

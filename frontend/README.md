@@ -235,7 +235,6 @@ src/
     ├── registroService.ts     bitácora de auditoría
     ├── usuarioService.ts      usuarios
     ├── firmaService.ts        firmas electrónicas
-    ├── formatoService.ts      catálogo de formatos
     ├── mappers.ts             DTO del backend → modelo de la UI
     ├── format.ts              formato de moneda (COP) y fechas
     └── session.ts             sesión persistida en localStorage

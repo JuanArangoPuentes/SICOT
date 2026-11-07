@@ -1,73 +1,10 @@
-// Piezas visuales compartidas por las cuatro vistas del panel de Administración.
+// Piezas visuales compartidas por las vistas del panel de Administración.
 //
 // Extraído de AdminPanel.tsx, que reunía las cuatro vistas, sus cuatro modales y
 // sus piezas compartidas en un solo archivo de 913 líneas — el mismo patrón que
 // ya se aplicó a SupervisorPanel.tsx (ver components/supervisor/).
 
 import type React from 'react'
-
-export function Widget({
-  icon,
-  label,
-  value,
-  hint,
-  tone = 'ok',
-}: {
-  icon?: React.ReactNode
-  label: string
-  value: string
-  hint: string
-  tone?: 'ok' | 'warn'
-}) {
-  const tint = tone === 'warn' ? 'var(--alert-leve)' : 'var(--accent)'
-  return (
-    <div className={`stat-card${tone === 'warn' ? ' warn' : ''}`}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        {icon && (
-          <div
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              flexShrink: 0,
-              color: tint,
-              background: tone === 'warn' ? 'rgba(184,120,10,0.12)' : 'var(--accent-soft)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            {icon}
-          </div>
-        )}
-        <div
-          style={{
-            fontSize: 11,
-            letterSpacing: '0.06em',
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            fontWeight: 600,
-          }}
-        >
-          {label}
-        </div>
-      </div>
-      <div
-        style={{
-          fontSize: 32,
-          fontWeight: 700,
-          color: tint,
-          lineHeight: 1.3,
-          fontFamily: 'var(--font-display)',
-          margin: '2px 0',
-        }}
-      >
-        {value}
-      </div>
-      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{hint}</div>
-    </div>
-  )
-}
 
 export function SectionHead({
   icon,

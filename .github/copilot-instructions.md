@@ -136,12 +136,12 @@ aceptada). `frontend/src/main.tsx` monta `<BrowserRouter>` y
 | `/login` | cualquiera | — |
 | `/supervisor/:vista` | SUPERVISOR | `bandeja`, `contrato`, `alertas`, `documentos`, `registros` |
 | `/gestion` | GESTION | una sola pantalla, sin sub-vista en la URL |
-| `/admin/:vista` | ADMINISTRADOR | `dashboard`, `seguimiento`, `documentos`, `usuarios`, `firmas` |
+| `/admin/:vista` | ADMINISTRADOR | `seguimiento`, `usuarios`, `firmas` (desde el 06-11-2026 el Administrador solo supervisa; `/admin/dashboard` y `/admin/documentos` redirigen a `/admin/seguimiento`) |
 
 Reglas que ya están implementadas y hay que conservar:
 
 1. `/supervisor` y `/admin` redirigen a su vista por defecto (`bandeja`,
-   `dashboard`); la raíz y cualquier ruta desconocida van al panel del rol de la
+   `seguimiento`); la raíz y cualquier ruta desconocida van al panel del rol de la
    sesión, o a `/login` si no hay sesión.
 2. Entrar a la ruta de otro rol **redirige**, no muestra un error. La URL no es
    un control de acceso: la autoridad sobre permisos es el backend.
@@ -595,7 +595,9 @@ Actualmente están conectadas al backend:
   valor generado en el cliente);
 * **firmas electrónicas administrativas** (asignación por parte del ADMINISTRADOR);
 * **lectura/extracción real de ficha PDF** (Apache PDFBox + Ollama; PDFs con texto);
-* **catálogo documental del administrador** (formatos: subida, descarga y borrado reales);
+* **seguimiento de supervisores del administrador** (avance en vivo de cada contrato y firma asignable
+  desde la tarjeta del supervisor; el catálogo de formatos `/api/formatos` sigue en la API, sin
+  pantalla desde el 06-11-2026);
 * **notificación/entrega real de credenciales por correo**;
 * **alerta de cronograma tipo semáforo**, computada en vivo desde las fechas reales del
   contrato;
@@ -621,8 +623,6 @@ Estas funcionalidades NO tienen backend funcional y NO deben fingirse como reale
 * extracción desde DOCX (hoy solo PDF; `ExtraccionContratoService` rechaza otros formatos con
   un mensaje claro en vez de fingir que los leyó);
 * RAG normativo / detección automática de inconsistencias documentales;
-* gráfica avanzada de actividad del panel de administrador (no existe endpoint de estadísticas
-  agregadas; el panel muestra un estado vacío honesto, no números inventados);
 * carga de archivos en los sub-pasos de verificación del supervisor (**no existe**, con una sola
   excepción: en 3.1 y 3.2 se cargan **fotos de la entrega** con «Cargar evidencia». En todos los
   demás la única acción es "Marcar completado" — el Copiloto tiene prohibido explícitamente

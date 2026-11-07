@@ -1,18 +1,17 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AdminPanel from './AdminPanel'
 import { PrefsProvider } from '@/prefs'
 import { sesionAdministrador } from '@/test/dobles'
-import { ApiError } from '@/services/api/client'
-import type { FormatoDocumentalResponse } from '@/services/api/types'
+import type { SeguimientoResponse, UsuarioResponse } from '@/services/api/types'
 
 /**
- * Pruebas del panel de administración, después de partirlo de 913 a 370 líneas.
+ * Pruebas del panel del Administrador.
  *
- * La descomposición se había validado solo con el chequeo de tipos y clics
- * manuales: TypeScript confirma que las piezas encajan, no que sigan mostrando
- * lo mismo. Estas pruebas fijan lo que la pantalla debe seguir haciendo para
- * que una segunda ronda de refactor no la vacíe en silencio.
+ * Desde el 06-11-2026 el panel es solo para supervisar a los supervisores: el
+ * avance de cada uno y las cuentas y firmas con que trabajan. Estas pruebas
+ * fijan eso, para que una vista de cifras generales o el catálogo de formatos
+ * no vuelvan a colarse en la pantalla de la Subdirección.
  */
 
 vi.mock('@/services/usuarioService', () => ({
@@ -21,12 +20,6 @@ vi.mock('@/services/usuarioService', () => ({
   actualizarUsuario: vi.fn(),
   cambiarEstadoUsuario: vi.fn(),
   enviarCredenciales: vi.fn(),
-}))
-vi.mock('@/services/formatoService', () => ({
-  getFormatos: vi.fn(),
-  subirFormato: vi.fn(),
-  eliminarFormato: vi.fn(),
-  descargarFormato: vi.fn(),
 }))
 vi.mock('@/services/seguimientoService', () => ({
   getSeguimiento: vi.fn(),
@@ -38,11 +31,39 @@ vi.mock('@/services/firmaService', () => ({
   getMiFirma: vi.fn(),
 }))
 
+const ALEX: UsuarioResponse = {
+  id: 7,
+  nombre: 'Alex Fernando Zapata Ríos',
+  email: 'afzapatar@sena.edu.co',
+  telefono: '3001234567',
+  rol: 'SUPERVISOR',
+  activo: true,
+  fechaCreacion: '2026-10-15T14:00:00Z',
+}
+
+function seguimientoCon(firmaVigente: boolean): SeguimientoResponse {
+  return {
+    supervisores: [
+      {
+        id: ALEX.id,
+        nombre: ALEX.nombre,
+        email: ALEX.email,
+        activo: true,
+        firmaVigente,
+        contratosFinalizados: 0,
+        contratos: [],
+      },
+    ],
+    contratosSinSupervisor: [],
+    generadoEn: '2026-11-06T20:00:00Z',
+  }
+}
+
 function montar(props: Partial<React.ComponentProps<typeof AdminPanel>> = {}) {
   return render(
     <PrefsProvider>
       <AdminPanel
-        vista="usuarios"
+        vista="seguimiento"
         onCambiarVista={vi.fn()}
         usuario={sesionAdministrador()}
         onLogout={vi.fn()}
@@ -58,20 +79,27 @@ describe('AdminPanel', () => {
   // a fijar los valores de retorno en cada prueba, no al declarar el mock.
   beforeEach(async () => {
     localStorage.clear()
-    vi.mocked((await import('@/services/usuarioService')).getUsuarios).mockResolvedValue([])
-    vi.mocked((await import('@/services/formatoService')).getFormatos).mockResolvedValue([])
+    vi.mocked((await import('@/services/usuarioService')).getUsuarios).mockResolvedValue([ALEX])
     vi.mocked((await import('@/services/firmaService')).getFirmas).mockResolvedValue([])
-    vi.mocked((await import('@/services/seguimientoService')).getSeguimiento).mockResolvedValue({
-      supervisores: [],
-      contratosSinSupervisor: [],
-      generadoEn: '2026-09-24T20:00:00Z',
-    })
+    vi.mocked((await import('@/services/seguimientoService')).getSeguimiento).mockResolvedValue(seguimientoCon(true))
   })
 
-  it('muestra la vista de usuarios cuando la URL la selecciona', async () => {
-    montar({ vista: 'usuarios' })
+  it('el avance de los supervisores encabeza el panel con el semáforo de los contratos', async () => {
+    montar()
 
-    await waitFor(() => expect(screen.getAllByText(/usuarios/i).length).toBeGreaterThan(0))
+    expect(await screen.findByText('Cómo van los contratos activos')).toBeInTheDocument()
+    expect(screen.getByText(ALEX.nombre)).toBeInTheDocument()
+  })
+
+  it('solo ofrece supervisar y gestionar cuentas: sin panel de cifras ni catálogo de formatos', async () => {
+    montar()
+    await screen.findByText(ALEX.nombre)
+
+    expect(screen.getAllByText('Avance de los supervisores').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Usuarios').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Firmas electrónicas').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Panel de Control')).not.toBeInTheDocument()
+    expect(screen.queryByText('Formatos documentales')).not.toBeInTheDocument()
   })
 
   /**
@@ -80,73 +108,73 @@ describe('AdminPanel', () => {
    * pantalla — el defecto que ese ADR corrigió.
    */
   it('respeta la vista que le llega por props, no una interna', async () => {
-    montar({ vista: 'documentos' })
+    montar({ vista: 'usuarios' })
 
-    await waitFor(() => expect(screen.getAllByText(/documentos/i).length).toBeGreaterThan(0))
+    expect(await screen.findByText('Gestión de Usuarios')).toBeInTheDocument()
+    expect(screen.queryByText('Cómo van los contratos activos')).not.toBeInTheDocument()
   })
 
-  it('pide al backend los datos de las tres secciones al montar', async () => {
+  it('pide al servidor las cuentas, las firmas y el avance al montar', async () => {
     const { getUsuarios } = await import('@/services/usuarioService')
-    const { getFormatos } = await import('@/services/formatoService')
     const { getFirmas } = await import('@/services/firmaService')
+    const { getSeguimiento } = await import('@/services/seguimientoService')
 
     montar()
 
     await waitFor(() => {
       expect(getUsuarios).toHaveBeenCalled()
-      expect(getFormatos).toHaveBeenCalled()
       expect(getFirmas).toHaveBeenCalled()
+      expect(getSeguimiento).toHaveBeenCalled()
     })
   })
 
   /**
-   * Un fallo del backend no debe dejar la pantalla en blanco ni romper el
-   * render: el administrador tiene que poder seguir navegando.
+   * Un fallo del servidor no debe dejar la pantalla en blanco ni hacerse pasar
+   * por una lista vacía: el administrador tiene que saber que no se consultó.
    */
-  it('sobrevive a que el backend falle al cargar', async () => {
+  it('si no se pudieron consultar las cuentas, lo dice en vez de mostrar una tabla vacía', async () => {
     const { getUsuarios } = await import('@/services/usuarioService')
-    vi.mocked(getUsuarios).mockRejectedValue(new Error('backend caído'))
+    vi.mocked(getUsuarios).mockRejectedValue(new Error('servidor caído'))
 
-    montar()
+    montar({ vista: 'usuarios' })
 
-    await waitFor(() => expect(screen.getAllByText(/usuarios/i).length).toBeGreaterThan(0))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron consultar las cuentas')
   })
 
-  describe('descargar un formato', () => {
-    const formato: FormatoDocumentalResponse = {
-      id: 4,
-      codigo: 'GCCON-F-018',
-      nombre: 'Acta de Inicio',
-      version: '03',
-      tipoArchivo: 'DOCX',
-      nombreArchivo: 'GCCON-F-018.docx',
-      tamanioBytes: 20480,
-      estado: 'VIGENTE',
-      subidoPorNombre: null,
-      fechaActualizacion: '2026-09-01T08:00:00Z',
-    }
+  describe('la firma del supervisor desde el avance', () => {
+    it('al supervisor sin firma se le asigna desde su propia tarjeta', async () => {
+      const { getSeguimiento } = await import('@/services/seguimientoService')
+      const { crearFirma } = await import('@/services/firmaService')
+      vi.mocked(getSeguimiento).mockResolvedValue(seguimientoCon(false))
+      vi.mocked(crearFirma).mockResolvedValue({
+        id: 1,
+        usuarioId: ALEX.id,
+        usuarioNombre: ALEX.nombre,
+        usuarioEmail: ALEX.email,
+        firmaId: 'FE-2026-0007',
+        activa: true,
+        asignadoPorId: 1,
+        asignadoPorNombre: 'Administrador SICOT',
+        fechaAsignacion: '2026-11-06T20:05:00Z',
+      })
 
-    async function descargar(resultado: () => Promise<unknown>) {
-      const servicio = await import('@/services/formatoService')
-      vi.mocked(servicio.getFormatos).mockResolvedValue([formato])
-      vi.mocked(servicio.descargarFormato).mockImplementation(resultado as typeof servicio.descargarFormato)
-      montar({ vista: 'documentos' })
-      fireEvent.click(await screen.findByRole('button', { name: /descargar/i }))
-    }
+      montar()
+      const tarjeta = await screen.findByRole('region', { name: `Supervisor ${ALEX.nombre}` })
+      fireEvent.click(within(tarjeta).getByRole('button', { name: 'Asignar firma' }))
 
-    // Antes: `.catch(() => {})`. Con la sesión caducada o el formato borrado,
-    // el botón no hacía nada visible.
-    it('si falla, dice por qué', async () => {
-      await descargar(() => Promise.reject(new ApiError(404, 'El formato ya no existe.')))
+      // El diálogo abre con SU cuenta elegida, no con la primera de la lista.
+      const dialogo = await screen.findByRole('dialog')
+      expect(within(dialogo).getByRole('combobox')).toHaveValue(String(ALEX.id))
+      fireEvent.click(within(dialogo).getByRole('button', { name: 'Asignar firma' }))
 
-      expect(await screen.findByRole('alert')).toHaveTextContent('El formato ya no existe.')
+      await waitFor(() => expect(crearFirma).toHaveBeenCalledWith({ usuarioId: ALEX.id }))
     })
 
-    // En el APK el «Guardar como» se cierra sin más señal.
-    it('en el teléfono confirma que quedó guardado', async () => {
-      await descargar(() => Promise.resolve('guardado'))
+    it('no ofrece el botón a quien ya tiene firma vigente', async () => {
+      montar()
+      const tarjeta = await screen.findByRole('region', { name: `Supervisor ${ALEX.nombre}` })
 
-      expect(await screen.findByRole('status')).toHaveTextContent('«GCCON-F-018.docx» quedó guardado en el teléfono.')
+      expect(within(tarjeta).queryByRole('button', { name: 'Asignar firma' })).not.toBeInTheDocument()
     })
   })
 })

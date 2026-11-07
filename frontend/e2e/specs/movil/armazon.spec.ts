@@ -25,7 +25,7 @@ const PANTALLAS: Record<Rol, readonly string[]> = {
     '/supervisor/registros',
   ],
   GESTION: ['/gestion'],
-  ADMINISTRADOR: ['/admin/dashboard', '/admin/seguimiento', '/admin/documentos', '/admin/usuarios', '/admin/firmas'],
+  ADMINISTRADOR: ['/admin/seguimiento', '/admin/usuarios', '/admin/firmas'],
 }
 
 /**
@@ -36,7 +36,7 @@ const PANTALLAS: Record<Rol, readonly string[]> = {
 const ANCLA_DE_NAVEGACION: Record<Rol, string> = {
   SUPERVISOR: '[data-tour="nav-bandeja"]',
   GESTION: '[data-tour="nav-contratos"]',
-  ADMINISTRADOR: '[data-tour="nav-dashboard"]',
+  ADMINISTRADOR: '[data-tour="nav-seguimiento"]',
 }
 
 /** Mínimo cómodo para un dedo. Un objetivo de 24 px es cómodo con un ratón. */

@@ -220,10 +220,13 @@ describe('si la consulta falla no se puede reemplazar lo que hay', () => {
     expect(screen.getByRole('button', { name: 'Volver a consultar' })).toBeTruthy()
   })
 
-  it('con el contrato en borrador avisa que los recordatorios empiezan al activarlo', async () => {
+  // Desde el 06-11-2026 el contrato se activa al cerrar el 2.1: decir que
+  // depende de Gestión mandaba al supervisor a pedir algo que no hace falta.
+  it('con el contrato en borrador avisa que los recordatorios empiezan al cerrar el 2.1', async () => {
     render(<AcuerdoDeEntregas contrato={{ ...LOTE_4, estado: 'BORRADOR' }} />)
 
-    expect(await screen.findByText(/SICOT empieza a recordar las entregas cuando Gestión lo active/)).toBeTruthy()
+    expect(await screen.findByText(/se activa al cerrar el paso 2\.1/)).toBeTruthy()
+    expect(screen.queryByText(/cuando Gestión lo active/)).toBeNull()
   })
 })
 

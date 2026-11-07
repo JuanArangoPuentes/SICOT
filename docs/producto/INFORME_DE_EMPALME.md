@@ -38,9 +38,9 @@ Hay tres roles, y no son intercambiables.
 
 | Rol | Quién es | Qué hace en SICOT | Desde dónde |
 |---|---|---|---|
-| **GESTION** | Unidad de Gestión Contractual | Carga la ficha del contrato, asigna el supervisor, activa el contrato | Computador, desde el navegador |
+| **GESTION** | Unidad de Gestión Contractual | Carga la ficha del contrato y asigna el supervisor (lo invita por correo si no tiene cuenta) | Computador, desde el navegador |
 | **SUPERVISOR** | El supervisor designado | Recorre los 6 pasos del contrato, carga evidencias, firma documentos | Teléfono (APK) o computador |
-| **ADMINISTRADOR** | Quien administra el sistema | Cuentas, formatos institucionales, seguimiento de todos los supervisores | Computador |
+| **ADMINISTRADOR** | La Subdirección (o quien supervise a los supervisores) | Solo supervisa: ve el avance de cada supervisor y administra las cuentas y firmas con que trabajan | Computador |
 
 El **supervisor** es quien más usa el sistema, y es el único para quien existe
 una aplicación de teléfono. Eso es deliberado: su trabajo ocurre en bodega, en
@@ -154,13 +154,17 @@ Si el correo no sale —porque no hay servidor de correo configurado— la panta
 lo dice y muestra la clave para que Gestión la entregue en mano, avisando de que
 no se vuelve a mostrar. Un supervisor que ya tiene cuenta conserva la suya.
 
-Por último, **activa el contrato**. Eso importa: solo los contratos activos
-entran en las reglas de calendario, es decir, solo esos se vigilan.
+El contrato queda **activo** cuando el supervisor cierra el paso 2.1 (acta de
+inicio firmada y devuelta); Gestión solo lo activa a mano si el contrato ya
+venía en ejecución. Eso importa: solo los contratos activos entran en las
+reglas de calendario, es decir, solo esos se vigilan.
 
 ### Administración
 
-Cuentas de usuario, carga de los formatos institucionales, y una pantalla de
-**seguimiento de supervisores** donde ve en qué va cada uno.
+Es la Subdirección, y su panel es solo de supervisión: el **avance de cada
+supervisor** (la vista de entrada, con el semáforo de los contratos), las
+cuentas de usuario y las firmas electrónicas, que también se asignan desde la
+tarjeta del supervisor que no la tiene.
 
 ---
 
@@ -288,7 +292,7 @@ planearlo antes del 30-04-2027.
 
 ### 9.3 La prueba manual del APK
 
-Son 17 puntos y es la compuerta antes de llevar nada a `master`. Dos quedan
+Son 17 puntos (16 vigentes: el 15, borrar un formato, se retiró el 06-11-2026) y es la compuerta antes de llevar nada a `master`. Dos quedan
 «pasa con matiz» y conviene repetirlos en un teléfono real, no en el emulador:
 el 11 y el 17, los dos sobre qué pasa cuando el Copiloto está respondiendo y uno
 sale de la aplicación.

@@ -1,6 +1,7 @@
 package co.sena.sicot.service;
 
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
 /**
@@ -148,6 +149,8 @@ public record Cronograma(
         return inicio.plusDays(hastaElFinalDeLaEtapa);
     }
 
+    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
     private static String redactar(Semaforo semaforo, double plazo, double avance, double brecha,
                                    long totales, long completadas,
                                    Integer etapaActual, LocalDate cierreEsperado, Integer diasDeAtraso) {
@@ -156,11 +159,15 @@ public record Cronograma(
 
         String detalleEtapa = "";
         if (etapaActual != null && cierreEsperado != null && diasDeAtraso != null) {
+            // dd/MM/yyyy, como el resto de fechas que lee el supervisor. Con el
+            // toString de LocalDate la bandeja decía «hacia el 2026-11-04» junto
+            // a plazos escritos «14/10/2026 – 15/12/2026» (06-11-2026).
+            String fecha = FECHA.format(cierreEsperado);
             detalleEtapa = diasDeAtraso > 0
                     ? " La etapa %d debía cerrarse hacia el %s según el cronograma estimado, hace %d día(s)."
-                            .formatted(etapaActual, cierreEsperado, diasDeAtraso)
+                            .formatted(etapaActual, fecha, diasDeAtraso)
                     : " La etapa %d debería cerrarse hacia el %s según el cronograma estimado."
-                            .formatted(etapaActual, cierreEsperado);
+                            .formatted(etapaActual, fecha);
         }
 
         String juicio = switch (semaforo) {

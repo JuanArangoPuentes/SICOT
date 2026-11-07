@@ -316,6 +316,13 @@ export default function GestionPanel({
   const [uploadState, setUploadState] = useState<UploadState>('idle')
   const [showModal, setShowModal] = useState(false)
   const [lastProcessedContract, setLastProcessedContract] = useState<{ id: string; supervisor: string } | null>(null)
+  // La invitación que se abre sola al cargar un contrato cuya designación nombra
+  // a alguien sin cuenta. Si un adjunto falló, la ventana de carga se queda
+  // abierta con el aviso y la invitación espera a que Gestión la cierre: antes
+  // se perdía, y con ella el nombre de la designación.
+  const [invitacionPendiente, setInvitacionPendiente] = useState<{ contrato: ContratoResponse; nombre: string } | null>(
+    null,
+  )
   const [extraccion, setExtraccion] = useState<ExtraccionContratoResponse | null>(null)
   const [errorExtraccion, setErrorExtraccion] = useState('')
   const [archivosSeleccionados, setArchivosSeleccionados] = useState<File[]>([])
@@ -338,6 +345,9 @@ export default function GestionPanel({
   const [busyAsignar, setBusyAsignar] = useState(false)
   const [errorAsignar, setErrorAsignar] = useState('')
   const [supervisores, setSupervisores] = useState<SupervisorOption[]>([])
+  // Si la lista no se pudo consultar, una lista vacía no dice que el designado
+  // no tenga cuenta: no se afirma ni se abre la invitación sola.
+  const [supervisoresConsultados, setSupervisoresConsultados] = useState(false)
   // Las dos formas de poner supervisor. Hasta el 26-10-2026 solo existía la
   // primera: uno que no estuviera ya en SICOT no se podía asignar desde aquí,
   // había que pedirle al Administrador que le creara la cuenta y le mandara la
@@ -405,6 +415,7 @@ export default function GestionPanel({
     setSupervisores(
       lista.filter((u) => u.rol === 'SUPERVISOR' && u.activo).map((u) => ({ id: u.id, nombre: u.nombre })),
     )
+    setSupervisoresConsultados(true)
   }
 
   useEffect(() => {
@@ -608,13 +619,32 @@ export default function GestionPanel({
       const sup = supervisores.find((s) => String(s.id) === supervisor)
       setLastProcessedContract({ id: creado.numeroContrato, supervisor: sup?.nombre ?? '— Sin asignar —' })
       await recargarContratos()
+      // La designación nombra a alguien que todavía no tiene cuenta: el paso
+      // siguiente es invitarlo, así que se abre la invitación con su nombre en
+      // vez de dejar a Gestión buscando «Asignar supervisor» en la tabla. Si
+      // eligió a otro de la lista, o a nadie habiendo cuenta, no se insiste.
+      const designado = extraccion?.supervisorDesignado?.trim()
+      const designadoSinCuenta =
+        !supervisor &&
+        designado &&
+        supervisoresConsultados &&
+        !supervisores.some((s) => mismaPersona(s.nombre, designado))
+          ? designado
+          : null
       // Si algún adjunto no se cargó, la ventana se queda abierta con el aviso:
       // antes se cerraba sola a los 1,2 s, antes de poder leerlo.
       const fallaronAdjuntos = subidos < archivosSeleccionados.length
       if (!fallaronAdjuntos) {
-        setTimeout(() => {
+        if (designadoSinCuenta) {
           setShowModal(false)
-        }, 1200)
+          abrirAsignacion(creado, designadoSinCuenta)
+        } else {
+          setTimeout(() => {
+            setShowModal(false)
+          }, 1200)
+        }
+      } else if (designadoSinCuenta) {
+        setInvitacionPendiente({ contrato: creado, nombre: designadoSinCuenta })
       }
     } catch (e) {
       setErrorCrear(motivoDelServidor(e, 'No se pudo crear el contrato.'))
@@ -693,16 +723,29 @@ export default function GestionPanel({
     }
   }
 
-  const abrirAsignacion = (c: ContratoResponse) => {
+  /**
+   * @param nombreDeLaDesignacion el supervisor que nombra la designación cuando
+   *   todavía no tiene cuenta en SICOT: el diálogo abre en «invitar por correo»
+   *   con su nombre escrito, y Gestión solo añade el correo y el teléfono.
+   */
+  const abrirAsignacion = (c: ContratoResponse, nombreDeLaDesignacion?: string) => {
     setContratoParaAsignar(c)
     setSupervisorElegido(c.supervisorId ? String(c.supervisorId) : '')
     setErrorAsignar('')
     // Con la lista vacía —un SICOT recién instalado— elegir de ella no lleva a
     // ninguna parte: se abre directo en el correo.
-    setFormaDeAsignar(supervisores.length > 0 ? 'DE_LA_LISTA' : 'POR_CORREO')
-    setInvitado({ nombre: '', email: '', telefono: '' })
+    setFormaDeAsignar(supervisores.length > 0 && !nombreDeLaDesignacion ? 'DE_LA_LISTA' : 'POR_CORREO')
+    setInvitado({ nombre: nombreDeLaDesignacion ?? '', email: '', telefono: '' })
     setInvitacion(null)
   }
+
+  // El aviso «Ficha procesada» guarda una copia del supervisor del contrato
+  // recién cargado. Sin esto, tras la invitación que se abre sola seguía
+  // diciendo «Sin asignar» con el supervisor ya puesto en la tabla.
+  const alAsignarSupervisor = (c: ContratoResponse) =>
+    setLastProcessedContract((p) =>
+      p && p.id === c.numeroContrato && c.supervisorNombre ? { ...p, supervisor: c.supervisorNombre } : p,
+    )
 
   const cerrarAsignacion = () => {
     setContratoParaAsignar(null)
@@ -718,7 +761,7 @@ export default function GestionPanel({
     setBusyAsignar(true)
     setErrorAsignar('')
     try {
-      await asignarSupervisor(contratoParaAsignar.id, Number(supervisorElegido))
+      alAsignarSupervisor(await asignarSupervisor(contratoParaAsignar.id, Number(supervisorElegido)))
       await recargarContratos()
       setContratoParaAsignar(null)
     } catch (e) {
@@ -752,6 +795,7 @@ export default function GestionPanel({
     setErrorAsignar('')
     try {
       const hecho = await invitarSupervisor(contratoParaAsignar.id, datos)
+      alAsignarSupervisor(hecho.contrato)
       await recargarContratos()
       // La cuenta nueva tiene que aparecer en la lista para la próxima
       // asignación; si falla, no es motivo para dar por mala la invitación.
@@ -891,7 +935,9 @@ export default function GestionPanel({
         )}
 
         {/* Contracts table */}
-        <div data-tour="tabla" className="card" style={{ overflow: 'hidden' }}>
+        {/* `tabla-adaptable`: pasa a tarjetas cuando la tabla no cabe en su
+            contenedor, no solo en un teléfono (ver index.css). */}
+        <div data-tour="tabla" className="card tabla-adaptable" style={{ overflow: 'hidden' }}>
           <div
             style={{
               padding: '12px 16px',
@@ -1062,7 +1108,13 @@ export default function GestionPanel({
       {showModal && (
         <Modal
           title="Cargar nueva ficha de contrato"
-          onClose={() => setShowModal(false)}
+          onClose={() => {
+            setShowModal(false)
+            if (invitacionPendiente) {
+              abrirAsignacion(invitacionPendiente.contrato, invitacionPendiente.nombre)
+              setInvitacionPendiente(null)
+            }
+          }}
           width={480}
           hideClose={uploadState === 'done'}
         >
@@ -1383,8 +1435,9 @@ export default function GestionPanel({
                   {extraccion?.supervisorDesignado && (
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 5 }}>
                       La designación nombra a: <strong>{extraccion.supervisorDesignado}</strong>
-                      {!supervisores.some((s) => mismaPersona(s.nombre, extraccion.supervisorDesignado ?? '')) &&
-                        ' — no coincide con ningún supervisor de SICOT; elíjalo a mano o pídale al Administrador que le cree la cuenta.'}
+                      {supervisoresConsultados &&
+                        !supervisores.some((s) => mismaPersona(s.nombre, extraccion.supervisorDesignado ?? '')) &&
+                        ' — no coincide con ningún supervisor activo de SICOT. Si ya tiene cuenta, elíjalo de la lista; si no, déjelo sin elegir: al cargar el contrato se abre la invitación por correo con su nombre, y le llegan sus datos de acceso.'}
                     </div>
                   )}
                 </div>
@@ -1761,8 +1814,9 @@ export default function GestionPanel({
             activos. Mientras siga en borrador, SICOT no emite ninguno.
           </p>
           <p style={{ fontSize: 12.5, color: 'var(--text-muted)', margin: '0 0 4px', lineHeight: 1.6 }}>
-            Cuándo corresponde activarlo lo decide usted: SICOT no supone en qué paso del GCCON-P-010 ocurre. Volver a
-            borrador no es posible.
+            Si no lo activa usted, SICOT lo activa solo cuando el supervisor cierra el paso 2.1, con el Acta de Inicio
+            firmada y la evidencia de que la devolvió ya cargadas: es cuando el contrato arranca. Actívelo aquí si el
+            contrato ya venía en ejecución. Volver a borrador no es posible.
           </p>
 
           {errorActivar && (

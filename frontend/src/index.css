@@ -570,6 +570,14 @@ input[type='radio'] {
   align-items: center;
   gap: 8px;
 }
+/* Un botón de la cabecera no se parte en renglones: a 1024 px, con la barra
+   lateral abierta, «+ Cargar nueva ficha» de Gestión quedaba en tres renglones
+   dentro de una cabecera de alto fijo (06-11-2026). Lo que cede es el título,
+   que ya se corta con puntos suspensivos. */
+.app-header-acciones > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 
 /* Franja bajo la cabecera para lo que cambia el contexto de toda la pantalla:
    hoy, el selector del contrato en supervisión cuando el supervisor lleva más
@@ -988,6 +996,14 @@ input[type='radio'] {
   .rail .rail-label {
     display: none !important;
   }
+  /* Desde que los botones de la cabecera no se parten en renglones
+     (.app-header-acciones), lo que cede en una tableta es el título: a 768 px
+     se quedaba en 37 px («Co…»). La etiqueta del rol («Panel Gestión») repite
+     lo que dice la pantalla entera y se oculta aquí, como ya se hacía en el
+     teléfono, para que el título se lea. */
+  .role-badge {
+    display: none;
+  }
 }
 
 /* ══ PANTALLA ESTRECHA — el armazón se reordena para el pulgar ═══════════════
@@ -1241,6 +1257,82 @@ input[type='radio'] {
     line-height: 1.5;
     text-transform: uppercase;
     color: var(--text-muted);
+  }
+}
+
+/* ── De tabla a tarjetas también en un portátil ──────────────────────────────
+   El registro de contratos de Gestión necesita unos 955 px para sus siete
+   columnas (los mínimos de COLUMNAS_REGISTRO más las separaciones). La regla
+   de arriba solo lo convertía en tarjetas por debajo de 767 px de VENTANA, y
+   entre 768 y unos 1250 px la tabla no cabía en su tarjeta, que recorta con
+   `overflow: hidden`: con la barra lateral abierta, a 1024 px el contenedor
+   mide 728 px y la columna ACCIONES —«Editar», «Asignar supervisor»,
+   «Activar»— quedaba fuera, sin desplazamiento posible (06-11-2026). Gestión
+   no podía asignarle el supervisor a un contrato desde un portátil corriente.
+
+   Lo que decide la forma es el ancho del contenedor, no el de la ventana, así
+   que se pregunta por él (consulta de contenedor). Las reglas son las mismas
+   de la pantalla estrecha. */
+.tabla-adaptable {
+  container-type: inline-size;
+}
+@container (max-width: 959px) {
+  .tabla-adaptable .tabla-cabecera {
+    display: none !important;
+  }
+  .tabla-adaptable .tabla-fila {
+    display: block !important;
+    padding: 12px 14px !important;
+  }
+  .tabla-adaptable .tabla-fila > * {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+    padding: 4px 0;
+  }
+  .tabla-adaptable .tabla-fila > *[data-col]::before {
+    content: attr(data-col);
+    flex: 0 0 35%;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    line-height: 1.5;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+}
+
+/* Las tablas de Usuarios y de Firmas del Administrador tienen el mismo
+   defecto con otras medidas: a 1024 px «Asignar firma», «Resetear clave»,
+   «Desactivar» y «Revocar» quedaban fuera de la tarjeta (06-11-2026). Cada una
+   pasa a una columna por debajo de lo que necesita (unos 920 px Usuarios y
+   unos 1050 Firmas); la cabecera se oculta porque ya no tiene a qué alinearse. */
+.tabla-usuarios {
+  container-name: tabla-usuarios;
+}
+.tabla-firmas {
+  container-name: tabla-firmas;
+}
+@container tabla-usuarios (max-width: 939px) {
+  .tabla-usuarios .data-grid:not(.data-grid-row) {
+    display: none !important;
+  }
+  .tabla-usuarios .data-grid-row {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    justify-items: start;
+  }
+}
+@container tabla-firmas (max-width: 1069px) {
+  .tabla-firmas .data-grid:not(.data-grid-row) {
+    display: none !important;
+  }
+  .tabla-firmas .data-grid-row {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    justify-items: start;
   }
 }
 

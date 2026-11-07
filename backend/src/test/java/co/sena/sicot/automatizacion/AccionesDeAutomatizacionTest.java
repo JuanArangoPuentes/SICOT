@@ -253,6 +253,28 @@ class AccionesDeAutomatizacionTest {
                 .doesNotContain("14 de 27");
     }
 
+    /**
+     * La activación por el acta firmada deja el motivo en la descripción, con
+     * «paso 2.1» dentro. El resumen le quitaba todos los puntos al texto entero
+     * y le decía al supervisor «(paso 21)», junto a «se completó la subetapa 2.1».
+     */
+    @Test
+    void elCambioDeEstadoSeCuentaSinDestrozarElMotivo() {
+        when(lectorDeContratos.porId(7L)).thenReturn(Optional.of(contrato()));
+        when(registroRepository.findByContratoIdOrderByFechaDesc(eq(7L), any(Pageable.class)))
+                .thenReturn(List.of(registro("ESTADO_CAMBIADO",
+                        "Estado del contrato: BORRADOR → ACTIVO, porque el supervisor cargó el Acta de Inicio "
+                                + "firmada y la evidencia de que la devolvió (paso 2.1).")));
+
+        redaccionDeResumen.ejecutar(tareaDeResumen());
+
+        ArgumentCaptor<String> texto = ArgumentCaptor.forClass(String.class);
+        verify(alertaService).crearDelSistema(anyLong(), any(), any(), texto.capture());
+        assertThat(texto.getValue())
+                .contains("el contrato pasó de BORRADOR a ACTIVO")
+                .doesNotContain("paso 21");
+    }
+
     /** Varias subetapas se enumeran en español, con «y» antes de la última. */
     @Test
     void enumeraVariasSubetapasComoSeEscribeEnEspanol() {

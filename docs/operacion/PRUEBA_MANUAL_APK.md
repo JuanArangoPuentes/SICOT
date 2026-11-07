@@ -91,7 +91,7 @@ responde— corre por un camino nuevo y conviene recorrerlos en un teléfono rea
 | 12 | Repetir el 11 sin salir de la aplicación | Antes de firmar aparece «Revisar antes de firmar» con la redacción y lo que cambió frente a las notas; solo firma al pulsar «Firmar», y «Cancelar» deja el borrador sin firmar | Pasa · 14-10-2026 — «Cancelar» dejó el 3.4 en PENDIENTE; «Firmar» lo cerró y firmó el documento |
 | 13 | Contrato → botón «atrás» del sistema | Vuelve a la vista anterior; en la pantalla de acceso, sale de la aplicación | Pasa · 14-10-2026 — las dos mitades: vuelve a la vista anterior, y en la pantalla de acceso sale de la aplicación **también después de cerrar sesión**. El 18-10, en el APK oficial de la 0.5.0, se recomprobó la segunda mitad: tras cerrar sesión, «atrás» llevó al lanzador |
 | 14 | Como Gestión: «Cargar nueva ficha» y elegir un PDF | Se abre el selector del sistema y el archivo aparece en SICOT | Pasa · 08-10-2026 — el 14-10 se recomprobó solo que el selector del sistema se abre |
-| 15 | Como Administración: eliminar un formato | Diálogo de confirmación del sistema; al aceptar, el formato desaparece | Pasa · 14-10-2026 — con el GCCON-F-031 real (881 kB) cargado para poder borrarlo; el catálogo queda como estaba |
+| 15 | ~~Como Administración: eliminar un formato~~ | **Retirado el 06-11-2026.** La vista de formatos salió del panel del Administrador, y con ella el único diálogo de confirmación del sistema (`confirm()`) que le quedaba a SICOT: no hay nada que recorrer | Pasó el 14-10-2026 mientras existió |
 | 16 | Cerrar sesión | Vuelve a la pantalla de acceso | Pasa · 18-10-2026 — APK oficial de la 0.5.0 |
 | 17 | Preguntar al copiloto y dejar el teléfono quieto, sin tocarlo, más que el apagado automático de pantalla | La pantalla sigue encendida hasta que llega la respuesta y después se apaga como siempre. Si se apagó, anotarlo (ese WebView no permite mantenerla encendida): al desbloquear, SICOT dice que se cortó y vuelve a preguntar solo; la respuesta aparece | Pasa con matiz · 18-10-2026 — en el APK oficial de la 0.5.0, mientras el Copiloto respondía (55 s) la ventana tuvo `FLAG_KEEP_SCREEN_ON` y lo soltó al llegar la respuesta (`dumpsys window`): el puente que la mantiene encendida sobrevive a R8. No se dejó el teléfono quieto más que el apagado automático. El 08-10, sin ese puente, la pantalla se apagó y al desbloquear la respuesta estaba ahí (83,9 s) |
 
@@ -104,7 +104,7 @@ declaración, y ninguna prueba automática lo vería.
 
 Si algo de la tabla no pasa, la versión no se publica hasta saber por qué. Un
 punto «sin recorrer» tampoco es un punto que pase: la compuerta está cumplida
-cuando los 17 tienen resultado y fecha.
+cuando los 16 vigentes (el 15 se retiró el 06-11-2026) tienen resultado y fecha.
 
 ### Trabajo sin red (ADR-015), desde el 30-10-2026
 
@@ -140,7 +140,7 @@ recorren de nuevo** con ella aunque su fila diga «Pasa»:
   Conviene recorrerlos una vez contra `http://<IP>:8443` (APK de pruebas) y
   otra contra el `https://` de Caddy (APK oficial, servidor del Centro).
 
-Con la 0.8.0 la compuerta queda cumplida cuando, además de los 17 de arriba, el
+Con la 0.8.0 la compuerta queda cumplida cuando, además de los 16 vigentes de arriba, el
 18, el 19 y el 20 tienen resultado y fecha, y el 7, el 11 y el 17 tienen uno
 **posterior al 05-11-2026**.
 
@@ -159,11 +159,12 @@ vive en un informe se pierde.
   funciona; la revisión está esperando en un panel que no se ve. Observado el
   14-10-2026. El arreglo razonable es que el botón despliegue el panel.
 
-- **El cargador de fichas de Gestión y el de formatos abren el diálogo del
-  sistema, y sus botones salen en el idioma del teléfono.** El texto de
-  «Cancelar / Aceptar» de un `confirm()` y los rótulos del selector de archivos
-  los escribe Android, no SICOT: en el emulador, configurado en inglés, salen
-  `CANCEL` y `OK` mientras el resto de la pantalla está en español. En el
+- **El cargador de fichas de Gestión abre el diálogo del sistema, y sus
+  botones salen en el idioma del teléfono.** Los rótulos del selector de
+  archivos los escribe Android, no SICOT: en el emulador, configurado en inglés,
+  salen en inglés mientras el resto de la pantalla está en español (el 14-10
+  pasaba lo mismo con el `CANCEL`/`OK` del `confirm()` de borrar un formato,
+  que ya no existe). En el
   teléfono de un supervisor, configurado en español, saldrán en español. No es
   un fallo de la aplicación y no se puede arreglar desde ella; se deja escrito
   para que quien recorra la lista en un equipo en inglés no lo reporte como uno.
