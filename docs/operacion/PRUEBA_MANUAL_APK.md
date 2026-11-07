@@ -124,6 +124,17 @@ almacenamiento del WebView al cerrar la aplicación— solo existe en el teléfo
 | --- | --- | --- | --- |
 | 20 | En el teléfono y en un computador, entrar como supervisor y abrir el **mismo** contrato. Con el teléfono quieto, cerrar el 2.2 desde el computador. Después, con SICOT en segundo plano en el teléfono (otra aplicación delante), marcar una alerta como leída en el computador y volver a SICOT | Quieto y delante, en unos 5 s el teléfono muestra el 2.2 cerrado, el avance y las alertas al día sin tocar nada. Al volver de segundo plano se pone al día **en el acto**, sin esperar. En Registros aparecen las dos entradas | Sin recorrer |
 
+### Cambiar la contraseña propia, desde la v0.9.0
+
+La v0.9.0 es la primera con «Cambiar contraseña» en el APK (PR #148). En el
+navegador ya pasó contra el backend (05-11-2026); lo que falta ver es el
+teléfono: el menú del usuario sin nombre visible (solo el círculo con la
+inicial) y que la huella del acceso sin red se rehaga con la clave nueva.
+
+| # | Qué hacer | Qué tiene que pasar | Resultado |
+| --- | --- | --- | --- |
+| 21 | Como supervisor, tocar el círculo con la inicial (arriba a la derecha) → «Cambiar contraseña». Primero con la actual equivocada; después bien. Cerrar sesión y entrar con las dos claves; por último, en modo avión, entrar con la nueva y con la anterior | Con la actual equivocada dice el error y **no** cierra la sesión. Bien hecha, sigue en sesión. Después la anterior ya no entra y la nueva sí, también sin red; sin red, la anterior tampoco | Sin recorrer |
+
 ### Lo que la v0.8.0 obliga a volver a recorrer
 
 Un resultado vale para el código del día en que se obtuvo. La v0.8.0 cambia
@@ -142,7 +153,7 @@ recorren de nuevo** con ella aunque su fila diga «Pasa»:
 
 Con la 0.8.0 la compuerta queda cumplida cuando, además de los 16 vigentes de arriba, el
 18, el 19 y el 20 tienen resultado y fecha, y el 7, el 11 y el 17 tienen uno
-**posterior al 05-11-2026**.
+**posterior al 05-11-2026**. Con la 0.9.0, además, el 21.
 
 ## Fallos conocidos, abiertos
 

@@ -17,10 +17,11 @@ Nada, si el otro equipo es un computador y basta con el navegador: eso es el
 aplicaciones instaladas, que es lo que usará un supervisor de verdad.
 
 Todo está en las versiones publicadas de GitHub (**Releases** del
-repositorio). **Use la v0.8.0 o una posterior**: la v0.7.0 no trae el trabajo
+repositorio). **Use la v0.9.0 o una posterior**: la v0.7.0 no trae el trabajo
 sin red (ADR-015) ni que los equipos se vean entre sí (ADR-016), así que con ella
-las pruebas de abajo no tienen nada que mostrar. La pantalla de acceso dice qué
-versión está instalada («SICOT v0.8.0»).
+las pruebas de abajo no tienen nada que mostrar; y la v0.8.0 no trae «Cambiar
+contraseña», que el correo de credenciales le pide usar al supervisor invitado.
+La pantalla de acceso dice qué versión está instalada («SICOT v0.9.0»).
 
 | Archivo | Para qué |
 | --- | --- |
