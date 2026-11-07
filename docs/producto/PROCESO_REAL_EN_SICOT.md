@@ -50,7 +50,11 @@ toda la información, y avisa al supervisor que fue designado.
   registro presupuestal, el lugar y el **correo del contratista**: los 16 datos
   en menos de un segundo.
 - Si el supervisor nombrado en la designación es usuario de SICOT, queda
-  preseleccionado.
+  preseleccionado. Si todavía no tiene cuenta (la designación trae su nombre,
+  no su correo), al cargar el contrato se abre la invitación por correo con su
+  nombre ya escrito: Gestión añade el correo y el teléfono, y le llegan sus
+  datos de acceso (06-11-2026). SICOT no manda mensajes de texto: un SMS exige
+  una pasarela de pago, y el proceso real ya avisa por correo.
 - Al registrar el contrato, el supervisor recibe en su bandeja el aviso: «Fue
   designado supervisor del contrato … Su primer paso: firmar y devolver el Acta
   de Inicio que le envía Contratación, y cargarla aquí con la evidencia del
@@ -96,6 +100,11 @@ el sistema le explica qué se hace en este paso.
   de que se devolvió (el pantallazo o el PDF del correo respondido).
 - El paso **no se puede cerrar** hasta tener las dos. Eso lo exige el servidor,
   no solo la pantalla.
+- **Desde el 06-11-2026, al cerrarse este paso el contrato queda «Activo».** Con
+  el acta de inicio firmada y devuelta el contrato arranca, y los avisos de plazo
+  (vencimiento, entregas acordadas) solo corren con el contrato activo. Antes
+  dependía de que Gestión pulsara «Activar», que no es un paso del proceso real:
+  si no lo hacía, el contrato seguía en borrador y ningún aviso salía.
 - El Copiloto explica qué hacer: firmar el acta, devolverla respondiendo el
   correo de Contratación y cargar las dos cosas.
 

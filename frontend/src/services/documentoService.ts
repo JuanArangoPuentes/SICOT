@@ -77,7 +77,7 @@ export function verificarIntegridad(contratoId: number, documentoId: number): Pr
 
 // Descarga el archivo real (PDF generado por SICOT o cargado manualmente)
 // vía fetch con token Bearer — apiFetch no sirve aquí porque la respuesta es
-// binaria, no JSON (mismo patrón que formatoService.descargarFormato).
+// binaria, no JSON.
 //
 // El guardado lo hace `guardarArchivo`, no un enlace `download`: en el APK de
 // Android ese enlace no hacía nada y el acta firmada se perdía (MDL-184).

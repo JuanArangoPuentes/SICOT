@@ -184,10 +184,18 @@ export default function AcuerdoDeEntregas({
           antes y el mismo día, y el paso no se cierra sin al menos una.
         </span>
         {/* Los recordatorios solo corren sobre contratos activos: prometerlos
-            con el contrato en borrador sería decir algo que no va a pasar. */}
-        {contrato.estado !== 'ACTIVO' && (
+            con el contrato en borrador sería decir algo que no va a pasar.
+            Desde el 06-11-2026 el contrato se activa al cerrarse el 2.1 (lo hace
+            el propio supervisor); antes decía «cuando Gestión lo active». */}
+        {contrato.estado === 'BORRADOR' && (
           <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>
-            El contrato no está activo: SICOT empieza a recordar las entregas cuando Gestión lo active.
+            El contrato todavía no está activo: se activa al cerrar el paso 2.1 (Acta de Inicio firmada y la evidencia
+            de que la devolvió), y desde entonces SICOT le recuerda cada entrega.
+          </span>
+        )}
+        {contrato.estado !== 'BORRADOR' && contrato.estado !== 'ACTIVO' && (
+          <span style={{ fontSize: 11.5, color: 'var(--alert-leve)' }}>
+            El contrato no está activo: mientras siga así, SICOT no recuerda las entregas.
           </span>
         )}
 

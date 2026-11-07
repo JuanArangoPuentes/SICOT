@@ -290,6 +290,36 @@ public class ContratoService {
         return ContratoMapper.toResponse(guardado);
     }
 
+    /**
+     * El contrato entra en ejecución cuando el supervisor devuelve firmada el
+     * Acta de Inicio: lo llama {@code EtapaService} al cerrarse el paso 2.1.
+     *
+     * <h2>Por qué no basta el botón «Activar» de Gestión</h2>
+     * Las reglas de calendario del motor —el aviso de vencimiento, el
+     * recordatorio de cada entrega acordada— solo miran contratos ACTIVO
+     * ({@code LectorDeContratos.vigentes}). En el proceso real nadie «activa»
+     * un contrato: arranca con el acta de inicio firmada (hoja de Alex, paso 2).
+     * Si Gestión no pulsaba «Activar», el contrato se quedaba en BORRADOR todo
+     * su plazo y ninguno de esos avisos salía, sin que nada lo dijera: en el
+     * recorrido del 06-11-2026 el contrato del Lote 4 llegó al cierre del paso
+     * 6 en BORRADOR.
+     *
+     * <p>Solo mueve BORRADOR → ACTIVO, la única transición del contrato que el
+     * backend tiene confirmada; un contrato suspendido, finalizado o cancelado
+     * no se toca. Queda en la bitácora con el motivo.
+     */
+    @Transactional
+    public void activarPorActaDeInicioFirmada(Contrato contrato) {
+        if (contrato.getEstado() != EstadoContrato.BORRADOR) {
+            return;
+        }
+        contrato.setEstado(EstadoContrato.ACTIVO);
+        Contrato guardado = contratoRepository.save(contrato);
+        registroService.registrar(guardado, "ESTADO_CAMBIADO",
+                "Estado del contrato: BORRADOR → ACTIVO, porque el supervisor cargó el Acta de Inicio firmada y "
+                        + "la evidencia de que la devolvió (paso 2.1).");
+    }
+
     @Transactional(readOnly = true)
     public Contrato buscar(Long id) {
         Contrato contrato = contratoRepository.findById(id)

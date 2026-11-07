@@ -10,6 +10,25 @@ import { loginComo } from '../../fixtures/auth'
  * La suite móvil no lo veía —en un teléfono la tabla se vuelve tarjetas— y la
  * de escritorio no medía esta pantalla.
  */
+/**
+ * Entre 768 y unos 1250 px la tabla no cabía en su tarjeta, que recorta, y la
+ * columna ACCIONES quedaba fuera sin desplazamiento posible: a 1024 px, con la
+ * barra lateral abierta, Gestión no podía asignar el supervisor ni activar el
+ * contrato (recorrido del 06-11-2026). Ahí la tabla pasa a tarjetas.
+ */
+test('a 1024 px las acciones de cada contrato quedan a la vista', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await loginComo(page, 'GESTION')
+  const asignar = page.getByTitle(/Asignar o cambiar el supervisor de/).first()
+  await expect(asignar).toBeVisible({ timeout: 15_000 })
+
+  const boton = await asignar.boundingBox()
+  const tarjeta = await page.locator('[data-tour="tabla"]').boundingBox()
+  // Dentro de la tarjeta (que recorta lo que se sale) y de la ventana.
+  expect((boton?.x ?? 0) + (boton?.width ?? 0)).toBeLessThanOrEqual((tarjeta?.x ?? 0) + (tarjeta?.width ?? 0))
+  expect((boton?.x ?? 0) + (boton?.width ?? 0)).toBeLessThanOrEqual(1024)
+})
+
 for (const ancho of [1280, 1366]) {
   test(`a ${ancho} px el objeto del contrato tiene espacio para leerse`, async ({ page }) => {
     await page.setViewportSize({ width: ancho, height: 800 })

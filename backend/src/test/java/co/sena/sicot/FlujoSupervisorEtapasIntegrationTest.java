@@ -164,6 +164,60 @@ class FlujoSupervisorEtapasIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(jsonPath("$.estado").value("ACTIVO"));
     }
 
+    /**
+     * En el proceso real nadie «activa» un contrato: arranca con el acta de
+     * inicio firmada. Los avisos de plazo solo miran contratos ACTIVO, y si
+     * Gestión no pulsaba «Activar» el contrato seguía en BORRADOR todo su plazo
+     * sin que ninguno saliera (recorrido del 06-11-2026 con el Lote 4).
+     */
+    @Test
+    void cerrarElPasoDelActaFirmadaPoneElContratoEnEjecucion() throws Exception {
+        String gestionToken = login("gestion@soy.sena.edu.co", "Gestion123*");
+        String supervisorToken = login("supervisor@soy.sena.edu.co", "Supervisor123*");
+        long supervisorId = objectMapper.readTree(
+                loginBody("supervisor@soy.sena.edu.co", "Supervisor123*")).get("usuarioId").asLong();
+        String crear = mockMvc.perform(post("/api/contratos")
+                        .header("Authorization", "Bearer " + gestionToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"numeroContrato":"CO1.PCCNTR.ACTAACTIVA","objeto":"El acta firmada lo pone en ejecución",
+                                 "valor":1000000,"fechaInicio":"2026-01-01","fechaFin":"2026-12-31"}
+                                """))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long contratoId = objectMapper.readTree(crear).get("id").asLong();
+        mockMvc.perform(patch("/api/contratos/{id}/supervisor", contratoId)
+                        .header("Authorization", "Bearer " + gestionToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"supervisorId\":" + supervisorId + "}"))
+                .andExpect(status().isOk());
+        // Gestión no lo activa: con supervisor y todo, sigue en BORRADOR.
+        mockMvc.perform(get("/api/contratos/{id}", contratoId)
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(jsonPath("$.estado").value("BORRADOR"));
+
+        long pasoDelActaId = leerEtapas(contratoId, supervisorToken)
+                .get(1).get("subEtapas").get(0).get("id").asLong();
+        cargar(contratoId, pasoDelActaId, supervisorToken, "acta-firmada.pdf", "application/pdf",
+                ArchivoDePrueba.pdfDeUnaPagina("acta firmada"));
+        cargarConNombre(contratoId, pasoDelActaId, supervisorToken, "correo.png", "image/png",
+                ArchivoDePrueba.imagen("png"), "Evidencia del envío del acta");
+        mockMvc.perform(patch("/api/subetapas/{id}/estado", pasoDelActaId)
+                        .header("Authorization", "Bearer " + supervisorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"estado\":\"COMPLETADA\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/contratos/{id}", contratoId)
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(jsonPath("$.estado").value("ACTIVO"));
+        String registros = mockMvc.perform(get("/api/contratos/{id}/registros", contratoId)
+                        .header("Authorization", "Bearer " + supervisorToken))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(registros).contains("porque el supervisor cargó el Acta de Inicio firmada");
+    }
+
     private void cargar(long contratoId, long subetapaId, String token, String nombre, String tipo, byte[] bytes)
             throws Exception {
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders

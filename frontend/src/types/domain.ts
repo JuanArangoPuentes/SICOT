@@ -11,7 +11,14 @@ import type { AccionCopiloto } from '@/services/api/types'
 /** Vistas del panel del Supervisor — una por entrada de la barra lateral. */
 export type Tab = 'bandeja' | 'contrato' | 'alertas' | 'documentos' | 'registros'
 
-export type AdminTab = 'dashboard' | 'seguimiento' | 'documentos' | 'usuarios' | 'firmas'
+/**
+ * Vistas del panel del Administrador. Desde el 06-11-2026 son solo las de
+ * supervisar a los demás: el avance de cada supervisor y las cuentas y firmas
+ * con que trabajan. Quien entra con este rol es la Subdirección, que no lleva
+ * contratos; el «Panel de control» de cifras del sistema y el catálogo de
+ * formatos salieron de su panel (ver AdminPanel.tsx).
+ */
+export type AdminTab = 'seguimiento' | 'usuarios' | 'firmas'
 export type UploadState = 'idle' | 'analyzing' | 'detect' | 'review' | 'done'
 
 export interface SubStep {

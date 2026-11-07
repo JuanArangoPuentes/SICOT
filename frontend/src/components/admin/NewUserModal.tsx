@@ -173,7 +173,9 @@ export function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCre
           style={{ width: '100%', padding: '9px 10px' }}
         />
       </Field>
-      <Field label="Cargo">
+      {/* «Rol» y no «Cargo»: lo que se elige es el rol de la cuenta en SICOT; el
+          cargo de la persona no se guarda en ninguna parte. */}
+      <Field label="Rol en SICOT">
         <select value={rol} onChange={(e) => setRol(e.target.value)}>
           <option>Supervisor</option>
           <option>Gestor de Contratación</option>

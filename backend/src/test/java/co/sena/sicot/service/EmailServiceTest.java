@@ -17,12 +17,14 @@ import static org.mockito.Mockito.when;
 class EmailServiceTest {
 
     /**
-     * SICOT no tiene ninguna pantalla ni endpoint para que una persona cambie su
-     * propia contraseña. El correo pedía hacerlo «la primera vez que ingreses»:
-     * una instrucción del propio sistema que nadie podía cumplir.
+     * Desde el 05-11-2026 cada cuenta cambia su propia contraseña desde el menú
+     * de su usuario (PUT /api/cuenta/contrasena). El correo seguía diciendo que
+     * había que pedírsela al administrador, y quien la recibía por correo se
+     * quedaba con esa. Ahora dice dónde cambiarla, y sigue diciendo a quién
+     * acudir si la olvida.
      */
     @Test
-    void elCorreoDeCredencialesNoPideAlgoQueElSistemaNoPermite() throws Exception {
+    void elCorreoDeCredencialesDiceDondeCambiarLaContrasenaTemporal() throws Exception {
         JavaMailSender mailSender = mock(JavaMailSender.class);
         when(mailSender.createMimeMessage()).thenReturn(new MimeMessage(Session.getInstance(new Properties())));
         EmailService servicio = new EmailService(mailSender);
@@ -36,8 +38,13 @@ class EmailServiceTest {
         String cuerpo = (String) enviado.getValue().getContent();
         assertThat(cuerpo)
                 .contains("ClaveTest123")
-                .doesNotContainIgnoringCase("cambiala")
-                .doesNotContainIgnoringCase("temporal")
-                .contains("pídele que te asigne una nueva");
+                .contains("«Cambiar contraseña»")
+                // En el teléfono el nombre no se ve; y la 0.8.0 publicada no trae la opción.
+                .contains("el círculo con su inicial")
+                .contains("es una versión anterior al 05-11-2026: actualícelo")
+                .contains("pídale al administrador de SICOT que le asigne una nueva")
+                // De usted, como el aviso de designación que llega junto con él.
+                .doesNotContain("tus datos")
+                .doesNotContain("cámbiala");
     }
 }

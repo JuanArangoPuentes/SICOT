@@ -206,7 +206,10 @@ borran: los documentos ya firmados con ellas deben seguir siendo rastreables.
 ### `formatos_documentales`
 
 Catálogo de los formatos institucionales del SENA (GCCON-F-031, GIL-F-010, …) que
-Gestión carga como plantillas. `version` es la versión del **formato del SENA**
+el Administrador cargaba como referencia (`POST /api/formatos` es solo suyo). Desde
+el 06-11-2026 no tiene pantalla: la tabla y `/api/formatos` conservan lo ya
+cargado, y la generación de documentos no la lee (reproduce los formatos desde el
+código, `docs/formatos/README.md`). `version` es la versión del **formato del SENA**
 (v1, v2, …) y la calcula la aplicación al recargar el mismo código — no confundir
 con `lock_version`, que es del control de concurrencia.
 

@@ -8,7 +8,7 @@ compilado. Todo eso se genera en el primer arranque.
 instalar, en **Releases** del repositorio, y no de un `git clone` a secas: la
 rama por defecto (`master`) va muy por detrás de lo publicado mientras la
 fusión `develop → master` espera, y un clon sin `-b` trae una SICOT de
-septiembre. Si se clona, que sea la etiqueta: `git clone -b v0.8.0 <repo>`.
+septiembre. Si se clona, que sea la etiqueta: `git clone -b v0.9.0 <repo>`.
 
 Si lo que busca es entender qué hace SICOT antes de instalarlo, empiece por
 [`README.md`](README.md); esta guía asume que ya decidió montarlo.

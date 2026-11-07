@@ -381,6 +381,49 @@ describe('GestionPanel', () => {
     }
 
     /**
+     * La designación (GCCON-F-032) nombra al supervisor, pero no trae su
+     * correo. Si todavía no tiene cuenta, el formulario mandaba a «pedirle al
+     * Administrador que le cree la cuenta», cuando Gestión misma lo invita: al
+     * cargar el contrato se abre su invitación con el nombre ya escrito.
+     */
+    it('si la designación nombra a alguien sin cuenta, al cargar el contrato se abre su invitación con el nombre escrito', async () => {
+      const { extraerDatosContrato, subirDocumento } = await import('@/services/documentoService')
+      const { crearContrato } = await import('@/services/contratoService')
+      vi.mocked(extraerDatosContrato).mockResolvedValue({
+        idContrato: 'CO1.PCCNTR.10057820',
+        objeto: 'Contratar el suministro de materiales para la formación',
+        proveedor: 'SUMINISTROS MAYBE S.A.S',
+        nit: '800154801',
+        representanteLegal: 'LUZ MARINA MEJIA PEREZ',
+        valor: '45900300',
+        vigenciaInicio: '2026-10-14',
+        vigenciaFin: '2026-12-15',
+        lugarEjecucion: 'Centro Tecnológico del Mobiliario',
+        registroPresupuestal: '123726',
+        tipoContrato: 'Suministro de Bienes',
+        supervisorDesignado: 'Alex Fernando Zapata Rios',
+      })
+      vi.mocked(subirDocumento).mockResolvedValue(undefined as never)
+      vi.mocked(crearContrato).mockResolvedValue(
+        contrato({ numeroContrato: 'CO1.PCCNTR.10057820', supervisorId: null, supervisorNombre: null }),
+      )
+
+      const { container } = montar()
+      fireEvent.click((await screen.findAllByText(/Cargar nueva ficha/))[0])
+      const input = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement
+      fireEvent.change(input, {
+        target: { files: [new File(['%PDF'], 'designacion.pdf', { type: 'application/pdf' })] },
+      })
+      fireEvent.click(await screen.findByText(/Continuar a confirmación/))
+      expect(await screen.findByText(/no coincide con ningún supervisor activo de SICOT/)).toBeInTheDocument()
+      expect(screen.queryByText(/pídale al Administrador/)).not.toBeInTheDocument()
+      fireEvent.click(screen.getByText(/Confirmar y cargar/))
+
+      expect(await screen.findByLabelText('Invitar a uno nuevo por su correo')).toBeChecked()
+      expect(screen.getByPlaceholderText('Nombre y apellidos')).toHaveValue('Alex Fernando Zapata Rios')
+    })
+
+    /**
      * Sin supervisores en SICOT, la condición anterior escondía el botón de
      * asignar: los contratos de un SICOT recién instalado no se podían asignar
      * a nadie, que es justo cuando invitar hace falta.

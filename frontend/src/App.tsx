@@ -85,7 +85,7 @@ const TOUR_GESTION: TourStep[] = [
 // sigue siendo el backend: una URL no es un control de acceso.
 const rutaDeRol = (u: AuthResponse): string => {
   if (u.rol === 'SUPERVISOR') return '/supervisor/bandeja'
-  if (u.rol === 'ADMINISTRADOR') return '/admin/dashboard'
+  if (u.rol === 'ADMINISTRADOR') return '/admin/seguimiento'
   if (u.rol === 'GESTION') return '/gestion'
   return '/login'
 }
@@ -113,7 +113,7 @@ function guardarContratoElegido(usuarioId: number, contratoId: number) {
     // sin almacenamiento, el selector sigue funcionando en esta sesión
   }
 }
-const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'seguimiento', 'documentos', 'usuarios', 'firmas']
+const VISTAS_ADMIN: AdminTab[] = ['seguimiento', 'usuarios', 'firmas']
 
 /** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
 function vistaValida<T extends string>(valor: string | undefined, permitidas: T[], porDefecto: T): T {
@@ -430,7 +430,7 @@ function AppInner() {
               <PanelAdminEnRuta usuario={s} onLogout={logout} onOpenSettings={() => setSettingsOpen(true)} />
             ))}
           />
-          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/admin" element={<Navigate to="/admin/seguimiento" replace />} />
 
           {/* Raíz y cualquier ruta desconocida: al panel del rol, o al login. */}
           <Route path="*" element={<Navigate to={session ? rutaDeRol(session) : '/login'} replace />} />
@@ -480,13 +480,12 @@ function PanelSupervisorEnRuta(props: Omit<React.ComponentProps<typeof Superviso
 function PanelAdminEnRuta(props: Omit<React.ComponentProps<typeof AdminPanel>, 'vista' | 'onCambiarVista'>) {
   const { vista } = useParams()
   const navigate = useNavigate()
-  return (
-    <AdminPanel
-      {...props}
-      vista={vistaValida<AdminTab>(vista, VISTAS_ADMIN, 'dashboard')}
-      onCambiarVista={(t) => navigate(`/admin/${t}`)}
-    />
-  )
+  // Las vistas que salieron del panel (/admin/dashboard, /admin/documentos)
+  // siguen en marcadores y en la sesión que el navegador restaura: se
+  // reemplazan por la del avance, para que la barra de direcciones no diga una
+  // vista y la pantalla muestre otra.
+  if (!VISTAS_ADMIN.includes(vista as AdminTab)) return <Navigate to="/admin/seguimiento" replace />
+  return <AdminPanel {...props} vista={vista as AdminTab} onCambiarVista={(t) => navigate(`/admin/${t}`)} />
 }
 
 export default function App() {

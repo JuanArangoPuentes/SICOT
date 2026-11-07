@@ -75,7 +75,7 @@ export function NewFirmaModal({
               className="card"
               style={{ padding: '10px 14px', marginBottom: 4, fontSize: 12, color: 'var(--text-secondary)' }}
             >
-              {seleccionado.correo} · {seleccionado.cargo}
+              {seleccionado.correo} · {seleccionado.rol}
             </div>
           )}
 

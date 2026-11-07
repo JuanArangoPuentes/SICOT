@@ -45,23 +45,35 @@ public class EmailService {
      * Correo con los datos de acceso, tanto al crear la cuenta como al
      * restablecer la contraseña.
      *
-     * <p>Antes pedía «cambiala la primera vez que ingreses», pero SICOT no tiene
-     * ninguna pantalla ni endpoint para que una persona cambie su propia
-     * contraseña: era una instrucción del propio sistema imposible de cumplir.
-     * El texto dice lo que de verdad se puede hacer, que es pedirle al
-     * administrador una nueva, y lo que eso provoca.
+     * <p>Hasta el 05-11-2026 SICOT no tenía cómo cambiar la contraseña propia, y
+     * este correo decía, con razón, que había que pedirle una nueva al
+     * administrador. Desde ese día existe «Cambiar contraseña» en el menú del
+     * usuario (PUT /api/cuenta/contrasena), pero el correo siguió mandando a
+     * pedirla: el supervisor recién invitado se quedaba con la temporal, que
+     * además viajó por correo. El texto dice ahora dónde cambiarla al entrar.
+     *
+     * <p>Dice qué buscar en el teléfono (allí el nombre no se ve, solo el
+     * círculo con la inicial) y qué hacer si la opción no aparece: el APK y el
+     * instalador publicados hasta la 0.8.0 son anteriores a «Cambiar
+     * contraseña», y el aviso de designación enlaza a la última versión.
+     *
+     * <p>Trata de usted, como el aviso de designación
+     * ({@code NotificacionDeSupervisorAsignado}): al supervisor que Gestión
+     * invita le llegan los dos a la vez, y uno tuteaba y el otro no.
      */
     public void enviarCredenciales(String destinatario, String nombre, String password) {
         enviar(destinatario,
                 "SICOT — Credenciales de acceso",
                 "Hola " + nombre + ",\n\n"
-                        + "Estos son tus datos de acceso a SICOT (Sistema Inteligente para la Gestión y "
+                        + "Estos son sus datos de acceso a SICOT (Sistema Inteligente para la Gestión y "
                         + "Acompañamiento de Contratos).\n\n"
                         + "Correo: " + destinatario + "\n"
                         + "Contraseña: " + password + "\n\n"
-                        + "La contraseña la asignó el administrador de SICOT. Si necesitas cambiarla, o crees que "
-                        + "otra persona la conoce, pídele que te asigne una nueva: al hacerlo se cierran las "
-                        + "sesiones abiertas con la anterior.\n\n"
+                        + "Es una contraseña temporal: cámbiela al entrar, desde el menú de su usuario (arriba a la "
+                        + "derecha: su nombre, o en el teléfono el círculo con su inicial) → «Cambiar contraseña». "
+                        + "Si su SICOT no muestra esa opción, es una versión anterior al 05-11-2026: actualícelo. "
+                        + "Si la olvida, o cree que otra persona la conoce, pídale al administrador de SICOT que le "
+                        + "asigne una nueva: al hacerlo se cierran las sesiones abiertas con la anterior.\n\n"
                         + "— SICOT · Centro Tecnológico del Mobiliario (SENA)");
     }
 

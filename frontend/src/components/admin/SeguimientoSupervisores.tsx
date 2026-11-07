@@ -334,7 +334,14 @@ function TarjetaContrato({ c }: { c: ContratoSeguimiento }) {
   )
 }
 
-function TarjetaSupervisor({ s }: { s: SupervisorSeguimiento }) {
+function TarjetaSupervisor({
+  s,
+  onAsignarFirma,
+}: {
+  s: SupervisorSeguimiento
+  /** Presente solo si desde aquí se le puede asignar la firma a este supervisor. */
+  onAsignarFirma?: () => void
+}) {
   return (
     <section className="card" style={{ padding: 16, minWidth: 0 }} aria-label={`Supervisor ${s.nombre}`}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 12 }}>
@@ -372,9 +379,33 @@ function TarjetaSupervisor({ s }: { s: SupervisorSeguimiento }) {
           />
         </div>
       </div>
-      {!s.firmaVigente && s.contratos.length > 0 && (
-        <div style={{ fontSize: 12, color: 'var(--alert-critica)', marginBottom: 10 }}>
-          No podrá firmar los documentos de sus contratos hasta que se le asigne una firma en «Firmas electrónicas».
+      {!s.firmaVigente && (s.contratos.length > 0 || onAsignarFirma) && (
+        <div
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 10,
+            alignItems: 'center',
+            fontSize: 12,
+            color: s.contratos.length > 0 ? 'var(--alert-critica)' : 'var(--text-muted)',
+            marginBottom: 10,
+          }}
+        >
+          <span style={{ flex: '1 1 220px', minWidth: 0 }}>
+            {s.contratos.length > 0
+              ? 'No podrá firmar los documentos de sus contratos hasta que tenga una firma electrónica.'
+              : 'Todavía no tiene firma electrónica: la necesitará para firmar los documentos de sus contratos.'}
+            {!onAsignarFirma && ' Se asigna en «Firmas electrónicas».'}
+          </span>
+          {onAsignarFirma && (
+            <button
+              className="btn-green"
+              onClick={onAsignarFirma}
+              style={{ padding: '8px 14px', fontSize: 12, minHeight: 44 }}
+            >
+              Asignar firma
+            </button>
+          )}
         </div>
       )}
       {s.contratos.length === 0 ? (
@@ -390,7 +421,7 @@ function TarjetaSupervisor({ s }: { s: SupervisorSeguimiento }) {
   )
 }
 
-/** Cifras del seguimiento para el panel de control. */
+/** Cifras del seguimiento para la cabecera del avance de los supervisores. */
 export function resumenSeguimiento(datos: SeguimientoResponse) {
   const contratos = [...datos.supervisores.flatMap((s) => s.contratos), ...datos.contratosSinSupervisor]
   const activos = contratos.filter((c) => c.estado === 'ACTIVO')
@@ -409,7 +440,7 @@ export function resumenSeguimiento(datos: SeguimientoResponse) {
   }
 }
 
-/** Resumen para el panel de control: cuántos contratos van bien y qué hay que atender. */
+/** Resumen que encabeza el avance de los supervisores: cuántos contratos van bien y qué hay que atender. */
 export function ResumenSeguimiento({ datos }: { datos: SeguimientoResponse }) {
   const r = resumenSeguimiento(datos)
   const cifras = [
@@ -455,11 +486,17 @@ export default function SeguimientoSupervisores({
   error,
   cargando,
   onActualizar,
+  onAsignarFirma,
+  puedeAsignarFirma,
 }: {
   datos: SeguimientoResponse | null
   error: string
   cargando: boolean
   onActualizar: () => void
+  /** Abre la asignación de firma para ese supervisor (el panel del Administrador). */
+  onAsignarFirma?: (s: SupervisorSeguimiento) => void
+  /** Si la cuenta de ese supervisor admite una firma desde aquí (activa y conocida). */
+  puedeAsignarFirma?: (s: SupervisorSeguimiento) => boolean
 }) {
   const [filtro, setFiltro] = useState('')
   const f = filtro.trim().toLowerCase()
@@ -542,7 +579,9 @@ export default function SeguimientoSupervisores({
         <div className="card" style={{ padding: '32px 16px', textAlign: 'center' }}>
           <IconUsers size={26} style={{ opacity: 0.4, margin: '0 auto 10px' }} />
           <div style={{ fontSize: 13, fontWeight: 600 }}>Todavía no hay supervisores registrados</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Créelos en «Usuarios» con el rol Supervisor.</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Créelos en «Usuarios» con el rol Supervisor, o Gestión los invita por correo al asignarles un contrato.
+          </div>
         </div>
       )}
 
@@ -551,7 +590,15 @@ export default function SeguimientoSupervisores({
       )}
 
       {supervisores.map((s) => (
-        <TarjetaSupervisor key={s.id} s={s} />
+        <TarjetaSupervisor
+          key={s.id}
+          s={s}
+          onAsignarFirma={
+            onAsignarFirma && (puedeAsignarFirma ? puedeAsignarFirma(s) : s.activo)
+              ? () => onAsignarFirma(s)
+              : undefined
+          }
+        />
       ))}
     </div>
   )

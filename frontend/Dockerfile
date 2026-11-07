@@ -90,8 +90,15 @@ USER root
 # de servicio (CVE-2026-113351, -117610 y -118370) y 2.10.0-r0 las corrige. El
 # escaneo se detuvo en el backend antes de llegar aquí; esta base fija la misma
 # condición y quedaba igual de expuesta.
+#
+# Y musl y zlib (CI del 07-11-2026, PR #149): la base trae musl 1.2.6-r2, con
+# CVE-2026-107891 (HIGH, ejecución de código por un desbordamiento de entero en
+# regcomp), y zlib 1.3.2-r0, con CVE-2026-85091 (HIGH, desbordamiento de
+# montículo en gz_vacate). Alpine ya publicó 1.2.6-r3 y 1.3.2-r1. `musl-utils`
+# sale del mismo paquete fuente que `musl` y tiene que subir con él. El backend
+# no las necesita: su base ya va por Alpine 3.24.3, que las trae corregidas.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
-    "curl>=8.23.0-r0"
+    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
