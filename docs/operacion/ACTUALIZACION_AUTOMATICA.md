@@ -180,3 +180,43 @@ La clave **pública** correspondiente está en
 `frontend/src-tauri/tauri.conf.json`, y ahí es donde tiene que estar: es lo que
 hace que una instalación rechace cualquier paquete que no venga de este
 repositorio. Las llaves del APK son otras y están en ADR-013.
+
+## Pedirle cosas al servidor sin estar en el Centro
+
+Esto **no** hace falta para que SICOT funcione ni para que se actualice: el
+temporizador de arriba no habla con nadie. Es para lo otro — que quien mantiene
+el proyecto pueda pedirle al servidor que mire un registro, compruebe un
+contenedor o diagnostique un despliegue, estando fuera del Centro.
+
+```bash
+sudo ./scripts/instalar-remote-control.sh
+```
+
+Deja `claude remote-control` corriendo como servicio, en el clon, arrancando con
+la máquina y volviendo solo si se cae la red. Antes de esto hacía falta una
+terminal abierta a mano: al cerrarla, o al reiniciar el servidor, el canal
+desaparecía sin avisar.
+
+**Qué puede hacer quien se conecte por ahí, dicho sin adornos:** ejecutar
+comandos en el servidor como el usuario dueño del clon, dentro de esa carpeta.
+**No** puede usar `sudo` sin la contraseña, que no está guardada en ningún sitio;
+las tareas de root —parar el temporizador, leer `/var/log`— siguen necesitando a
+una persona. Y solo se conectan sesiones de Claude de la misma cuenta, después
+de que su dueño lo haya autorizado una vez, en persona, en un dispositivo de
+confianza.
+
+El interruptor, cuando no se quiera:
+
+```bash
+sudo systemctl disable --now claude-remote-control
+```
+
+Mirarlo:
+
+```bash
+systemctl status claude-remote-control
+```
+
+```bash
+sudo journalctl -u claude-remote-control -f
+```
