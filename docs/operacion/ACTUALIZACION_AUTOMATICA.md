@@ -36,6 +36,25 @@ Deja el clon en `master`, instala las dos unidades de systemd, enciende el
 temporizador y hace el primer despliegue. Es idempotente: volver a correrlo
 sirve para mover el clon de sitio o cambiar la rama (`SICOT_RAMA=...`).
 
+### Si `git` dejó de funcionarle a su dueño
+
+Si en el servidor aparece esto:
+
+```
+error: permisos insuficientes para agregar un objeto a la base de datos del repositorio .git/objects
+fatal: failed to write object
+```
+
+es el daño que dejaba una versión anterior de estos scripts, que corrían `git`
+como root dentro de un clon ajeno. Se repara volviendo a correr el instalador
+—lo detecta y lo arregla— o a mano:
+
+```bash
+sudo chown -R "$(stat -c %U .)" .
+```
+
+Ya no vuelve a ocurrir: las órdenes de git se ejecutan como el dueño del clon.
+
 ### Qué hace en cada corrida
 
 1. `git fetch`. Compara `master` con el commit anotado en `.ultimo-despliegue`

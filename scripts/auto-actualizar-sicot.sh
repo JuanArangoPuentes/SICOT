@@ -85,6 +85,35 @@ export GIT_CONFIG_VALUE_0="$SICOT_DIR"
 # —el proxy no está en el perfil de desarrollo— no cuenta como fallo.
 CONTENEDORES_VITALES=(sicot-backend sicot-frontend)
 
+# GIT CORRE COMO EL DUEÑO DEL CLON, NO COMO ROOT
+# ----------------------------------------------
+# Este script corre como root —lo necesita para Docker y para el registro— pero
+# el clon es del usuario del Centro. Si git escribe ahí como root, deja objetos
+# de root en `.git/objects`, y a partir de ese momento el dueño NO PUEDE usar su
+# propio repositorio: cualquier `git fetch` suyo falla con «permisos
+# insuficientes para agregar un objeto a la base de datos». Pasó en el servidor
+# del Centro el 10-11-2026, y el daño sobrevive al script: hay que arreglarlo a
+# mano con un `chown -R`.
+#
+# Así que las órdenes de git se ejecutan como el dueño. Tiene dos ventajas
+# además de no romper nada: lo que git escriba queda con el dueño correcto, y
+# desaparece el motivo para declarar `safe.directory` en esas llamadas.
+DUENO_DEL_CLON="$(stat -c %U "$SICOT_DIR" 2>/dev/null || echo root)"
+
+git_del_clon() {
+  if [ "$(id -u)" = "0" ] && [ "$DUENO_DEL_CLON" != "root" ]; then
+    sudo -u "$DUENO_DEL_CLON" git -C "$SICOT_DIR" "$@"
+  else
+    git -C "$SICOT_DIR" "$@"
+  fi
+}
+
+# Lo que este script escribe en el clon (el estado del despliegue) también es
+# del dueño: si no, él no puede corregirlo ni borrarlo.
+suyo() {
+  [ "$(id -u)" = "0" ] && [ "$DUENO_DEL_CLON" != "root" ] && chown "$DUENO_DEL_CLON" "$@" 2>/dev/null || true
+}
+
 registrar() {
   printf '%s  %s\n' "$(date '+%Y-%m-%d %H:%M:%S%z')" "$*" >> "$SICOT_LOG"
 }
@@ -121,10 +150,12 @@ $(tail -n 40 "$SICOT_LOG" 2>/dev/null)
 # versión nueva seguiría levantando la versión nueva.
 volver_atras() {
   local motivo="$1"
-  git reset --quiet --hard "$ANTES" || true
+  git_del_clon reset --quiet --hard "$ANTES" || true
   printf '%s\n' "$NUEVO" > "$SICOT_FALLIDO"
+  suyo "$SICOT_FALLIDO"
   if docker compose up -d --build --remove-orphans >> "$SICOT_LOG" 2>&1; then
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$ANTES" > "$SICOT_ESTADO"
+    suyo "$SICOT_ESTADO"
     registrar "VUELTA ATRÁS  ${ANTES:0:8} restaurado ($motivo). No se reintentará ${NUEVO:0:8} solo."
     avisar_fallo "$(printf 'El servidor intentó actualizarse a %s y %s. Volvió solo a %s, así que SICOT sigue en pie, pero en la versión anterior: lo que traía ese commit NO está desplegado.' "${NUEVO:0:8}" "$motivo" "${ANTES:0:8}")"
   else
@@ -162,7 +193,7 @@ fi
 descargar() {
   local intento
   for intento in 1 2 3; do
-    if MOTIVO=$(git fetch --quiet --prune origin "$SICOT_RAMA" 2>&1); then
+    if MOTIVO=$(git_del_clon fetch --quiet --prune origin "$SICOT_RAMA" 2>&1); then
       return 0
     fi
     sleep $((intento * 5))
@@ -192,10 +223,10 @@ fi
 if [ -f "$SICOT_ESTADO" ]; then
   ANTES="$(awk 'END {print $2}' "$SICOT_ESTADO")"
 else
-  ANTES="$(git rev-parse HEAD)"
+  ANTES="$(git_del_clon rev-parse HEAD)"
   registrar "AVISO  no hay $SICOT_ESTADO: se toma el commit del clon (${ANTES:0:8}) como lo desplegado."
 fi
-NUEVO="$(git rev-parse "origin/$SICOT_RAMA")"
+NUEVO="$(git_del_clon rev-parse "origin/$SICOT_RAMA")"
 
 if [ "$ANTES" = "$NUEVO" ] && [ "$SICOT_FORZAR" != "1" ]; then
   exit 0
@@ -211,7 +242,7 @@ if [ "$SICOT_FORZAR" != "1" ] && [ "$NUEVO" = "$(cat "$SICOT_FALLIDO" 2>/dev/nul
   exit 0
 fi
 
-registrar "INICIO  $SICOT_RAMA: ${ANTES:0:8} → ${NUEVO:0:8} · $(git log -1 --pretty=%s "$NUEVO")"
+registrar "INICIO  $SICOT_RAMA: ${ANTES:0:8} → ${NUEVO:0:8} · $(git_del_clon log -1 --pretty=%s "$NUEVO")"
 
 # ── 1. Respaldo antes de tocar nada ─────────────────────────────────────────
 # Sin esto, el deshacer del punto 3 recupera el código pero no los datos que el
@@ -233,12 +264,12 @@ fi
 # Si alguien editó archivos del repositorio en el servidor —un parche de
 # urgencia, una prueba— `git reset --hard` se los llevaría sin dejar rastro. Se
 # guardan en un stash con fecha: el despliegue sigue y el trabajo no se pierde.
-if ! git diff --quiet || ! git diff --quiet --cached; then
-  git stash push --quiet --message "auto-actualizar $(date '+%Y-%m-%d %H:%M')" || true
+if ! git_del_clon diff --quiet || ! git_del_clon diff --quiet --cached; then
+  git_del_clon stash push --quiet --message "auto-actualizar $(date '+%Y-%m-%d %H:%M')" || true
   registrar "AVISO  había cambios locales; quedaron guardados en 'git stash list'."
 fi
 
-git reset --quiet --hard "$NUEVO"
+git_del_clon reset --quiet --hard "$NUEVO"
 
 # ── 3. Reconstruir y arrancar ───────────────────────────────────────────────
 # `COMPOSE_FILE` viene del .env del servidor (prod, y el túnel si se publica
@@ -272,6 +303,7 @@ while [ "$SECONDS" -lt "$ESPERADO" ]; do
     # del servidor en semanas, y un disco lleno tumba PostgreSQL.
     docker image prune --force >> "$SICOT_LOG" 2>&1 || true
     printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$NUEVO" > "$SICOT_ESTADO"
+    suyo "$SICOT_ESTADO"
     rm -f "$SICOT_FALLIDO"
     exit 0
   fi

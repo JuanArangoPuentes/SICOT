@@ -34,6 +34,35 @@ export GIT_CONFIG_VALUE_0="$SICOT_DIR"
 
 [ "$(id -u)" = "0" ] || { echo "Córralo con sudo: necesita escribir en $UNIDADES." >&2; exit 1; }
 
+# GIT CORRE COMO EL DUEÑO DEL CLON, NO COMO ROOT
+# ----------------------------------------------
+# Este script corre como root —lo necesita para Docker y para el registro— pero
+# el clon es del usuario del Centro. Si git escribe ahí como root, deja objetos
+# de root en `.git/objects`, y a partir de ese momento el dueño NO PUEDE usar su
+# propio repositorio: cualquier `git fetch` suyo falla con «permisos
+# insuficientes para agregar un objeto a la base de datos». Pasó en el servidor
+# del Centro el 10-11-2026, y el daño sobrevive al script: hay que arreglarlo a
+# mano con un `chown -R`.
+#
+# Así que las órdenes de git se ejecutan como el dueño. Tiene dos ventajas
+# además de no romper nada: lo que git escriba queda con el dueño correcto, y
+# desaparece el motivo para declarar `safe.directory` en esas llamadas.
+DUENO_DEL_CLON="$(stat -c %U "$SICOT_DIR" 2>/dev/null || echo root)"
+
+git_del_clon() {
+  if [ "$(id -u)" = "0" ] && [ "$DUENO_DEL_CLON" != "root" ]; then
+    sudo -u "$DUENO_DEL_CLON" git -C "$SICOT_DIR" "$@"
+  else
+    git -C "$SICOT_DIR" "$@"
+  fi
+}
+
+# Lo que este script escribe en el clon (el estado del despliegue) también es
+# del dueño: si no, él no puede corregirlo ni borrarlo.
+suyo() {
+  [ "$(id -u)" = "0" ] && [ "$DUENO_DEL_CLON" != "root" ] && chown "$DUENO_DEL_CLON" "$@" 2>/dev/null || true
+}
+
 for programa in git docker flock systemctl; do
   command -v "$programa" > /dev/null 2>&1 || { echo "Falta '$programa' en este equipo." >&2; exit 1; }
 done
@@ -52,6 +81,18 @@ echo
 # desde `develop`). Se deja en la rama que se va a seguir, para que lo que diga
 # `git status` ahí coincida con lo que de verdad corre.
 cd "$SICOT_DIR"
+
+# Reparar el daño que hacía la versión anterior de estos scripts: corrían git
+# como root y dejaban objetos de root dentro de `.git`, con lo que el dueño del
+# clon dejaba de poder usar su propio repositorio («permisos insuficientes para
+# agregar un objeto a la base de datos»). Ya no ocurre —git corre como el dueño—
+# pero el daño sobrevive al arreglo, así que se limpia aquí: es el único momento
+# en que este código corre como root y sabe de quién tiene que ser todo.
+if [ "$DUENO_DEL_CLON" != "root" ] && [ -n "$(find "$SICOT_DIR" -user root -print -quit 2>/dev/null)" ]; then
+  echo "Hay archivos de root en el clon (los dejó una versión anterior de estos scripts)."
+  chown -R "$DUENO_DEL_CLON" "$SICOT_DIR"
+  echo "Devueltos a $DUENO_DEL_CLON: ya puede volver a usar git sin sudo."
+fi
 
 # Lo primero, antes de mover el clon: dejar anotado qué está desplegado de
 # verdad. Lo que corre ahora se construyó desde el commit en el que está el clon
@@ -75,27 +116,28 @@ else
   # Para averiguar el commit: `docker image inspect` de la imagen que corre, o
   # la fecha de construcción de las imágenes contra el historial de la rama.
   if [ -n "${SICOT_DESPLEGADO:-}" ]; then
-    DESPLEGADO="$(git rev-parse --verify "$SICOT_DESPLEGADO^{commit}" 2>/dev/null)" || {
+    DESPLEGADO="$(git_del_clon rev-parse --verify "$SICOT_DESPLEGADO^{commit}" 2>/dev/null)" || {
       echo "SICOT_DESPLEGADO=$SICOT_DESPLEGADO no es un commit de este repositorio." >&2
       exit 1
     }
   else
-    DESPLEGADO="$(git rev-parse HEAD)"
+    DESPLEGADO="$(git_del_clon rev-parse HEAD)"
   fi
   printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$DESPLEGADO" > "$SICOT_DIR/.ultimo-despliegue"
-  echo "Lo que corre ahora se anota como desplegado: ${DESPLEGADO:0:8} ($(git log -1 --pretty=%s "$DESPLEGADO"))"
+  suyo "$SICOT_DIR/.ultimo-despliegue"
+  echo "Lo que corre ahora se anota como desplegado: ${DESPLEGADO:0:8} ($(git_del_clon log -1 --pretty=%s "$DESPLEGADO"))"
   echo "Si eso NO es lo que construyó las imágenes que están corriendo, vuelva a correr este"
   echo "instalador con SICOT_DESPLEGADO=<commit>, o corrija a mano el archivo:"
   echo "  $SICOT_DIR/.ultimo-despliegue"
 fi
 
-git fetch --quiet --prune origin "$SICOT_RAMA"
-if ! git diff --quiet || ! git diff --quiet --cached; then
-  git stash push --quiet --message "instalar-auto-actualizacion $(date '+%Y-%m-%d %H:%M')" || true
+git_del_clon fetch --quiet --prune origin "$SICOT_RAMA"
+if ! git_del_clon diff --quiet || ! git_del_clon diff --quiet --cached; then
+  git_del_clon stash push --quiet --message "instalar-auto-actualizacion $(date '+%Y-%m-%d %H:%M')" || true
   echo "Había cambios locales: quedaron guardados ('git stash list')."
 fi
-git checkout --quiet -B "$SICOT_RAMA" "origin/$SICOT_RAMA"
-echo "El clon quedó en $SICOT_RAMA → $(git rev-parse --short HEAD)"
+git_del_clon checkout --quiet -B "$SICOT_RAMA" "origin/$SICOT_RAMA"
+echo "El clon quedó en $SICOT_RAMA → $(git_del_clon rev-parse --short HEAD)"
 
 mkdir -p "$SICOT_RESPALDOS"
 
