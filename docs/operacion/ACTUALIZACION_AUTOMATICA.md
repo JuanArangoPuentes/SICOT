@@ -54,12 +54,15 @@ sirve para mover el clon de sitio o cambiar la rama (`SICOT_RAMA=...`).
 ### Mirarlo
 
 ```bash
-sudo tail -f /var/log/sicot-auto-actualizar.log
+tail -f /var/log/sicot-auto-actualizar.log
 ```
 
-El `sudo` hace falta: el registro es de root y en 0640. Sin él, quien acaba de
-instalar esto recibe «Permiso denegado» justo cuando va a comprobar si su
-despliegue salió bien.
+Lo escribe root, pero queda con el grupo del clon para que lo lea su dueño sin
+`sudo` — y con él, una sesión de Claude que corra en el servidor como ese
+usuario, que es quien diagnostica cuando no hay nadie en el Centro. Sigue en
+`0640`: lleva la salida de `docker compose build` y del respaldo, y no hay
+motivo para abrirlo al resto del servidor. Si da «Permiso denegado», el
+instalador se corrió antes de este cambio: vuelva a correrlo, es idempotente.
 
 ```bash
 systemctl list-timers sicot-auto-actualizar.timer
@@ -191,6 +194,17 @@ contenedor o diagnostique un despliegue, estando fuera del Centro.
 ```bash
 sudo ./scripts/instalar-remote-control.sh
 ```
+
+Si responde que no encontró el ejecutable `claude`, pregúnteselo al propio
+usuario del servidor (`command -v claude` en su terminal) y dígaselo:
+
+```bash
+sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh
+```
+
+Pasa cuando la ruta de `claude` la añade `~/.bashrc` o un gestor de versiones de
+Node, que no se cargan en el shell no interactivo con el que el instalador
+pregunta.
 
 Deja `claude remote-control` corriendo como servicio, en el clon, arrancando con
 la máquina y volviendo solo si se cae la red. Antes de esto hacía falta una
