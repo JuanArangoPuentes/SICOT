@@ -61,6 +61,25 @@ Por qué así:
 - **Lo que falla, lo cuenta él.** Si el despliegue no se puede completar, el
   script abre una incidencia en GitHub cuando el servidor tiene `gh`
   autenticado. Es el único canal de aviso que no exige abrirle una entrada.
+- **Lo desplegado se anota; no se deduce del clon.** Lo que decide si hay algo
+  que desplegar es desde qué commit se construyeron las imágenes que corren, y
+  eso no es el commit en el que está el clon: son dos cosas que se separan justo
+  en el peor momento. La primera versión de este script comparaba `HEAD` contra
+  `origin/master`, y como el instalador deja el clon en `master` antes de
+  arrancar el servicio, la primera corrida concluía «ya está al día» y el Centro
+  se quedaba con las imágenes viejas, sin una línea en el registro. Lo encontró
+  el Claude del propio servidor al ir a instalarlo, antes de instalar nada.
+- **Un commit que falló no se reintenta solo.** Sin esa compuerta, un `master`
+  roto disparaba respaldo, reconstrucción, fallo y vuelta atrás cada diez
+  minutos, indefinidamente, sobre el servidor que el Centro está usando. Se
+  reintenta cuando llega otro commit —que es lo que de verdad arregla algo— o a
+  mano con `SICOT_FORZAR=1`.
+- **El servicio corre como root sobre un clon de otro usuario, y git se niega a
+  eso** desde la 2.35.2 («detected dubious ownership»). Se declara
+  `safe.directory` en las llamadas de estos dos scripts y en ningún sitio más:
+  tocar la configuración global del servidor dejaría la instalación dependiendo
+  de que alguien se acordara de hacerlo, y el fallo volvería en el próximo
+  servidor.
 
 ### 2. El instalador de escritorio se compila al publicar una etiqueta
 

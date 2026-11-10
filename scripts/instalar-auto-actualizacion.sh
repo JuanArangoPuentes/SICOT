@@ -64,10 +64,28 @@ cd "$SICOT_DIR"
 if [ -f "$SICOT_DIR/.ultimo-despliegue" ]; then
   echo "Ya había anotación de lo desplegado: $(cat "$SICOT_DIR/.ultimo-despliegue"). Se respeta."
 else
-  DESPLEGADO="$(git rev-parse HEAD)"
+  # SICOT_DESPLEGADO existe para el caso en que el clon YA se movió antes de
+  # instalar, que es justo lo que pasa cuando alguien trae `master` para
+  # conseguir este script. Entonces HEAD ya no dice qué construyó las imágenes
+  # que corren, y volver el clon atrás con `git reset` tampoco sirve: en ese
+  # commit anterior estos scripts no existen todavía.
+  #
+  #   sudo SICOT_DESPLEGADO=<commit> ./scripts/instalar-auto-actualizacion.sh
+  #
+  # Para averiguar el commit: `docker image inspect` de la imagen que corre, o
+  # la fecha de construcción de las imágenes contra el historial de la rama.
+  if [ -n "${SICOT_DESPLEGADO:-}" ]; then
+    DESPLEGADO="$(git rev-parse --verify "$SICOT_DESPLEGADO^{commit}" 2>/dev/null)" || {
+      echo "SICOT_DESPLEGADO=$SICOT_DESPLEGADO no es un commit de este repositorio." >&2
+      exit 1
+    }
+  else
+    DESPLEGADO="$(git rev-parse HEAD)"
+  fi
   printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$DESPLEGADO" > "$SICOT_DIR/.ultimo-despliegue"
   echo "Lo que corre ahora se anota como desplegado: ${DESPLEGADO:0:8} ($(git log -1 --pretty=%s "$DESPLEGADO"))"
-  echo "Si eso NO es lo que construyó las imágenes que están corriendo, corrija ese archivo antes de seguir:"
+  echo "Si eso NO es lo que construyó las imágenes que están corriendo, vuelva a correr este"
+  echo "instalador con SICOT_DESPLEGADO=<commit>, o corrija a mano el archivo:"
   echo "  $SICOT_DIR/.ultimo-despliegue"
 fi
 

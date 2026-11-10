@@ -20,13 +20,28 @@ cd /ruta/al/clon/de/SICOT
 sudo ./scripts/instalar-auto-actualizacion.sh
 ```
 
+**Si para conseguir este script hubo que traer `master` al clon**, entonces el
+commit del clon ya no dice qué construyó las imágenes que están corriendo, y hay
+que decírselo. Volver el clon atrás con `git reset` no sirve: en ese commit
+anterior el script todavía no existe.
+
+```bash
+sudo SICOT_DESPLEGADO=<commit que construyó las imágenes> ./scripts/instalar-auto-actualizacion.sh
+```
+
+Para averiguar ese commit, la fecha de construcción de las imágenes
+(`docker image inspect`) contra el historial de la rama.
+
 Deja el clon en `master`, instala las dos unidades de systemd, enciende el
 temporizador y hace el primer despliegue. Es idempotente: volver a correrlo
 sirve para mover el clon de sitio o cambiar la rama (`SICOT_RAMA=...`).
 
 ### Qué hace en cada corrida
 
-1. `git fetch`. Si `master` no avanzó, termina sin escribir nada.
+1. `git fetch`. Compara `master` con el commit anotado en `.ultimo-despliegue`
+   —no con el commit del clon, que puede no ser lo que construyó las imágenes
+   que corren— y, si no hay nada nuevo, termina sin escribir nada. Tampoco
+   reintenta un commit anotado en `.ultimo-fallo`.
 2. Respalda con `scripts/respaldo-sicot.sh`. **Si el respaldo falla, no
    actualiza**: Flyway no deshace una migración.
 3. Trae el commit (lo que esté cambiado en el servidor se guarda en `git stash`,
@@ -59,6 +74,14 @@ sudo systemctl stop sicot-auto-actualizar.timer
 ```bash
 sudo SICOT_FORZAR=1 ./scripts/auto-actualizar-sicot.sh
 ```
+
+`SICOT_FORZAR=1` es también la forma de reintentar un commit que ya falló: el
+temporizador no lo reintenta solo, a propósito.
+
+Dos cosas que conviene saber al leer el registro después de una vuelta atrás: la
+vuelta atrás revierte **también estos scripts**, así que la corrida siguiente es
+la del script de la versión anterior; y el commit que falló queda anotado en
+`.ultimo-fallo`, que es lo que hace que no se reintente.
 
 ```bash
 sudo systemctl disable --now sicot-auto-actualizar.timer
