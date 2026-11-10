@@ -11,6 +11,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { AvisoDeCopiaLocal } from './AvisoDeCopiaLocal'
 import { CambiarContrasenaModal } from './CambiarContrasenaModal'
 import { CambiosSinEnviar } from './CambiosSinEnviar'
+import { AvisoDeVersionNueva } from './AvisoDeVersionNueva'
 import { VolvioElServidor } from './VolvioElServidor'
 import { SenaLogo, UserMenu } from './ui'
 import { IconChevron, IconSettings } from './icons'
@@ -290,6 +291,9 @@ export default function AppShell({
         {/* Justo debajo: lo que se hizo sin red y todavía no está en el
             expediente, y lo que el servidor no aceptó (ADR-015). */}
         <CambiosSinEnviar />
+        {/* Y debajo, lo que le pasa a la instalación misma: que se está
+            actualizando, o que hay versión nueva que bajar (ADR-017). */}
+        <AvisoDeVersionNueva />
         {barra && <div className="app-barra">{barra}</div>}
         <div className="app-content">{children}</div>
       </div>

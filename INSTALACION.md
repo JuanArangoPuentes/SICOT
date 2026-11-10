@@ -173,6 +173,23 @@ vez y fuera del servidor: el `.env` y la autoridad de certificados de Caddy.
 Sin esa autoridad, un servidor reinstalado genera otra, y ningún teléfono ni
 equipo de escritorio vuelve a conectar hasta instalarle la nueva.
 
+### 5. Déjelo actualizarse solo
+
+```bash
+sudo ./scripts/instalar-auto-actualizacion.sh
+```
+
+Desde ese momento el servidor mira cada diez minutos si `master` avanzó y, si
+avanzó, respalda, reconstruye y comprueba que SICOT quedó sano; si no quedó
+sano, vuelve solo a la versión anterior. Nadie tiene que entrar a hacer
+`git pull`.
+
+Antes de esto, el servidor se quedaba atrás sin que nada lo dijera: el 10 de
+noviembre de 2026 servía la 0.8.0 con la 0.9.0 publicada tres días antes. El
+detalle, y cómo mirarlo o pararlo, está en
+[`docs/operacion/ACTUALIZACION_AUTOMATICA.md`](docs/operacion/ACTUALIZACION_AUTOMATICA.md)
+y el porqué en [ADR-017](docs/decisiones/ADR-017-actualizacion-automatica.md).
+
 ### Publicarlo por un túnel de Cloudflare (opcional)
 
 Sirve cuando el servidor no puede abrir los puertos 80 y 443 a Internet, o el
@@ -229,6 +246,17 @@ falta la clave del túnel.
    el servidor, `curl -s https://<SICOT_DOMINIO>/actuator/health` responde
    `{"status":"UP"}`. En el APK y en la aplicación de escritorio, la dirección
    de *Configuración → Servidor* es esa misma.
+
+6. **Fuerce `https` en el borde.** En el panel: *SSL/TLS → Edge
+   Certificates → **Always Use HTTPS***. Sin esto, `http://<SICOT_DOMINIO>`
+   **sirve SICOT en texto claro** hasta Cloudflare: el proxy del servidor sí
+   redirige, pero el borde contesta antes y nadie llega a ese redirect.
+   Comprobado el 10-11-2026 contra el servidor real: `http://` devolvía 200 con
+   la aplicación entera, y la API respondía por el mismo camino. La cabecera
+   `Strict-Transport-Security` que emite Caddy solo protege a quien ya entró una
+   vez por `https`, así que no cubre la primera visita de un supervisor que
+   escriba el nombre a secas. Es la misma clase de fallo que ADR-009 vino a
+   cerrar, reaparecida un escalón más afuera.
 
 Dos cosas que conviene saber:
 
