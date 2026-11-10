@@ -217,9 +217,26 @@ jobs:
         run: |
           set -eu
           if ! gh release view "$ETIQUETA" > /dev/null 2>&1; then
-            gh release create "$ETIQUETA" \
-              --title "$ETIQUETA" \
-              --notes "Versión $ETIQUETA. El instalador de Windows y el descriptor del actualizador los adjunta este mismo flujo; el APK firmado lo adjunta «Publicar APK»."
+            # Las notas de la versión viven en el repositorio, en
+            # docs/versiones/<etiqueta>.md, y no se escriben a mano en GitHub
+            # después de publicar. Son lo único de una versión que lee alguien
+            # que no programa —el supervisor que va a decidir si instala, el
+            # área de sistemas que va a actualizar el servidor— y hasta la
+            # 0.9.0 se redactaban en la interfaz de GitHub: sin revisión, sin
+            # historial y sin posibilidad de corregirlas en el mismo PR que
+            # introduce lo que describen. Si el archivo no está, se publica un
+            # texto mínimo y la versión sale igual: quedarse sin publicar por
+            # no tener las notas sería peor.
+            NOTAS="docs/versiones/${ETIQUETA}.md"
+            if [ -f "$NOTAS" ]; then
+              echo "Notas tomadas de $NOTAS"
+              gh release create "$ETIQUETA" --title "$ETIQUETA" --notes-file "$NOTAS"
+            else
+              echo "::warning::No hay $NOTAS: la versión se publica con un texto mínimo."
+              gh release create "$ETIQUETA" \
+                --title "$ETIQUETA" \
+                --notes "Versión $ETIQUETA. El instalador de Windows y el descriptor del actualizador los adjunta este mismo flujo; el APK firmado lo adjunta «Publicar APK»."
+            fi
           fi
           gh release upload "$ETIQUETA" publicar/* --clobber
 
