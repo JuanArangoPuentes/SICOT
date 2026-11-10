@@ -70,6 +70,23 @@ crea la versión de GitHub si no existe y adjunta el `.exe`, el `.msi`, la firma
 y el `latest.json`. Empujar una etiqueta `v*` es la única orden que hace falta
 para publicar.
 
+Y esa orden se puede dar **desde Actions**, sin un clon del repositorio: al
+dispararlo a mano con una versión, el flujo crea la etiqueta sobre la cabeza de
+`master`. Publicar deja de ser un comando y pasa a ser un campo y un botón, que
+para un proyecto que mantiene una sola persona con relevos previstos a tres o
+cuatro años importa más que la elegancia: «acuérdese de anotar la etiqueta y
+empujarla» es la clase de paso que se pierde en un relevo, y cuando se pierde,
+el Centro se queda sin la versión que ya estaba lista.
+
+**La compuerta que hace que eso sea seguro** es que la etiqueta no se crea a
+ciegas: antes de crearla, el flujo lee la versión que declara `tauri.conf.json`
+en la cabeza de `master` y la compara con la que se pidió; si no coinciden, se
+detiene sin crear nada. Una etiqueta no se puede mover sin romper lo que ya la
+haya descargado, así que una equivocada es un error que se arrastra. La
+comprobación posterior, ya con el repositorio descargado y mirando también
+`Cargo.toml`, sigue en su sitio: aquella evita publicar un instalador que
+anuncia otra versión, esta evita dejar una etiqueta inservible.
+
 ### 3. La aplicación de escritorio se actualiza sola; la de Android avisa
 
 El plugin `updater` de Tauri consulta el `latest.json` de la última versión
