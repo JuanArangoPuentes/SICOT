@@ -31,15 +31,52 @@ USUARIO="${SICOT_USUARIO:-$(stat -c %U "$SICOT_DIR")}"
 HOGAR="$(getent passwd "$USUARIO" | cut -d: -f6)"
 [ -n "$HOGAR" ] || { echo "No se pudo averiguar el HOME de '$USUARIO'." >&2; exit 1; }
 
-# `claude` se busca COMO ESE USUARIO y con su sesión de inicio, porque suele
-# estar en su ~/.local/bin o detrás de un gestor de versiones de Node, no en el
-# PATH de root. Si se escribiera a mano una ruta aquí, la unidad se rompería en
-# la próxima actualización de Claude Code.
-CLAUDE="$(sudo -u "$USUARIO" -i command -v claude 2>/dev/null || true)"
-if [ -z "$CLAUDE" ]; then
+# CÓMO SE BUSCA `claude`, Y POR QUÉ NO BASTA UN `command -v`
+# ----------------------------------------------------------
+# Se busca COMO EL USUARIO dueño del clon, nunca en el PATH de root, porque
+# Claude Code se instala en su HOME. Pero preguntarle a un shell de INICIO no
+# alcanza, y eso se comprobó en el servidor del Centro el 10-11-2026: allí
+# `claude` funciona al escribirlo en una terminal y sin embargo
+# `sudo -u … -i command -v claude` no lo encuentra. El motivo habitual es que la
+# ruta la añade `~/.bashrc` —o un gestor de versiones de Node—, y `.bashrc` no
+# se carga en un shell no interactivo.
+#
+# Así que se prueban cuatro cosas, de la más fiable a la más tosca, y se acepta
+# que quien sabe la respuesta la dé directamente con SICOT_CLAUDE=/ruta.
+encontrar_claude() {
+  # 0. Dicho a mano. Gana siempre.
+  if [ -n "${SICOT_CLAUDE:-}" ]; then
+    printf '%s' "$SICOT_CLAUDE"
+    return
+  fi
+  # 1. Shell de inicio, que es lo correcto cuando la instalación es ordenada.
+  local via
+  via="$(sudo -u "$USUARIO" -i command -v claude 2>/dev/null || true)"
+  [ -n "$via" ] && { printf '%s' "$via"; return; }
+  # 2. Shell interactivo, que es lo que sí carga ~/.bashrc y los gestores de
+  #    versiones de Node. `-i` sin terminal se queja, pero responde.
+  via="$(sudo -u "$USUARIO" bash -ic 'command -v claude' 2>/dev/null | tr -d '\r' | tail -1 || true)"
+  [ -x "$via" ] && { printf '%s' "$via"; return; }
+  # 3. Los sitios donde Claude Code se instala, por orden de probabilidad.
+  local candidato
+  for candidato in "$HOGAR/.local/bin/claude" "$HOGAR/.claude/local/claude" \
+                   "$HOGAR/bin/claude" /usr/local/bin/claude /usr/bin/claude; do
+    [ -x "$candidato" ] && { printf '%s' "$candidato"; return; }
+  done
+  # 4. Rastrear su HOME. Acotado en profundidad para no recorrer el disco.
+  via="$(find "$HOGAR" -maxdepth 5 -name claude -type f -perm -u+x 2>/dev/null | head -1)"
+  [ -n "$via" ] && printf '%s' "$via"
+}
+
+CLAUDE="$(encontrar_claude)"
+if [ -z "$CLAUDE" ] || [ ! -x "$CLAUDE" ]; then
   echo "No encontré el ejecutable 'claude' para el usuario '$USUARIO'." >&2
-  echo "Compruebe que Claude Code está instalado para ese usuario:" >&2
-  echo "  sudo -u $USUARIO -i command -v claude" >&2
+  echo >&2
+  echo "Pregúnteselo a él mismo, en una terminal de ese usuario:" >&2
+  echo "  command -v claude" >&2
+  echo >&2
+  echo "y vuelva a correr este instalador diciéndole la ruta:" >&2
+  echo "  sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh" >&2
   exit 1
 fi
 RUTA="$(dirname "$CLAUDE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

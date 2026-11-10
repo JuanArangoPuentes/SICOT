@@ -98,7 +98,20 @@ git checkout --quiet -B "$SICOT_RAMA" "origin/$SICOT_RAMA"
 echo "El clon quedó en $SICOT_RAMA → $(git rev-parse --short HEAD)"
 
 mkdir -p "$SICOT_RESPALDOS"
+
+# El registro lo escribe root, pero lo LEE quien mantiene el servidor, que es el
+# dueño del clon. Hasta el 10-11-2026 quedaba en root:root 0640 y el dueño
+# recibía «Permiso denegado» justo cuando iba a comprobar si su despliegue había
+# salido bien; se le añadió `sudo` a la sugerencia, que era tapar el agujero en
+# vez de cerrarlo. Dándole el grupo del clon lo lee sin `sudo` —y con él lo lee
+# también una sesión de Claude que corra en el servidor como ese usuario, que no
+# tiene `sudo` y es justo quien diagnostica cuando no hay nadie en el Centro.
+#
+# Sigue en 0640: lleva la salida de `docker compose build` y del respaldo, y no
+# hay motivo para abrirlo al resto del servidor.
+GRUPO_DEL_CLON="$(stat -c %G "$SICOT_DIR")"
 touch "$SICOT_LOG"
+chown "root:$GRUPO_DEL_CLON" "$SICOT_LOG"
 chmod 640 "$SICOT_LOG"
 chmod +x "$SICOT_DIR/scripts/auto-actualizar-sicot.sh"
 
@@ -123,7 +136,9 @@ echo
 # esto es el usuario del Centro, y sin `sudo` lo que recibe es «Permiso
 # denegado» justo cuando va a comprobar si su despliegue salió bien. Pasó en el
 # servidor del Centro el 10-11-2026, con estas mismas líneas en pantalla.
+# Sin `sudo` en el `tail`: el registro acaba de quedar legible por el grupo del
+# clon, así que su dueño —quien está leyendo esto— puede mirarlo directamente.
 echo "Cómo se mira a partir de ahora:"
-echo "  sudo tail -f $SICOT_LOG"
+echo "  tail -f $SICOT_LOG"
 echo "  systemctl status sicot-auto-actualizar.service"
 echo "  sudo journalctl -u sicot-auto-actualizar.service -n 50"
