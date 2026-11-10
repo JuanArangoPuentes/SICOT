@@ -119,6 +119,28 @@ ahora. Desde ahí, se actualizan solas.
 | `TAURI_SIGNING_PRIVATE_KEY` | firma el instalador de escritorio; la aplicación solo acepta actualizaciones firmadas con esta llave | las instalaciones existentes dejan de actualizarse solas: hay que instalarlas una vez a mano con una versión que lleve la llave nueva |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | la contraseña de esa llave (vacía si se generó sin contraseña) | lo mismo |
 
+### Cómo se guardan
+
+En *Settings → Secrets and variables → Actions → New repository secret*:
+
+- **`TAURI_SIGNING_PRIVATE_KEY`**: el contenido del archivo de la llave privada
+  (`tauri signer generate` lo escribe como **una sola línea** de base64 que
+  empieza por `dW50cnVzdGVkIGNvbW1lbnQ6`). Pegar la línea entera, **sin salto de
+  línea ni espacios al final**: comprobado el 10-11-2026, con un salto de más
+  `tauri signer sign` responde «failed to decode base64 secret key: Invalid
+  symbol». Por eso el flujo le quita los espacios antes de usarla, pero cuanto
+  más limpio entre, menos hay que diagnosticar.
+- **`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`**: **vacío**, si la llave se generó sin
+  contraseña. Si GitHub no admite guardar un secreto vacío, se puede omitir: el
+  flujo declara la variable de todos modos y entonces vale cadena vacía, que es
+  lo que la llave espera. Lo que **no** se puede es inventarle una contraseña:
+  con una que no sea la de la llave, la firma falla con «incorrect updater
+  private key password».
+
+Para comprobar que la llave guardada sirve, sin publicar nada: *Actions →
+Publicar escritorio → Run workflow* con una etiqueta ya existente. El primer
+paso dice si la llave está y cuántos caracteres tiene tras limpiarla.
+
 La clave **pública** correspondiente está en
 `frontend/src-tauri/tauri.conf.json`, y ahí es donde tiene que estar: es lo que
 hace que una instalación rechace cualquier paquete que no venga de este
