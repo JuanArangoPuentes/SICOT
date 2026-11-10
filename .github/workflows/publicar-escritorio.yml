@@ -16,9 +16,22 @@ name: Publicar escritorio
 #
 # CUÁNDO CORRE
 # ------------
-# Al empujar una etiqueta `v*`. Esa etiqueta es la única orden que hace falta
-# para publicar: este flujo crea la versión de GitHub si no existe, adjunta el
-# instalador y el descriptor, y pide el APK al flujo `publicar-apk.yml`.
+# De dos maneras, y las dos publican lo mismo:
+#
+#   - Al empujar una etiqueta `v*`.
+#   - A mano, desde Actions, indicando la versión. Si esa etiqueta todavía no
+#     existe, **este flujo la crea** sobre la cabeza de `master`.
+#
+# Lo segundo existe para que publicar no dependa de que alguien tenga un clon
+# del repositorio en el equipo correcto, con la etiqueta bien escrita. SICOT lo
+# mantiene una sola persona con relevos previstos a tres o cuatro años
+# (CONTRIBUTING.md): «acuérdese de anotar la etiqueta y empujarla» es
+# exactamente la clase de paso que se pierde en un relevo. Desde Actions, la
+# versión se publica con un campo y un botón.
+#
+# La etiqueta sigue siendo lo que se publica: se crea ANTES de compilar y desde
+# ella se saca todo, así que lo que queda en la versión de GitHub es
+# reproducible desde ese commit.
 #
 # LA FIRMA DEL ACTUALIZADOR NO ES LA FIRMA DEL APK
 # ------------------------------------------------
@@ -44,7 +57,7 @@ on:
   workflow_dispatch:
     inputs:
       etiqueta:
-        description: 'Etiqueta ya existente a la que compilar y adjuntar el instalador (p. ej. v0.10.0)'
+        description: 'Versión a publicar (p. ej. v0.10.0). Si la etiqueta no existe, se crea sobre master'
         required: true
 
 permissions:
@@ -57,6 +70,11 @@ jobs:
     timeout-minutes: 60
     env:
       ETIQUETA: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
+      # De dónde sale la etiqueta cuando la crea este flujo. Es `master` porque
+      # es lo que el CI dejó en verde y lo que `develop → master` declara
+      # desplegable; publicar desde `develop` sacaría al Centro una integración
+      # intermedia.
+      RAMA_ESTABLE: master
 
     steps:
       - name: Comprobar y limpiar el secreto de firma
@@ -111,6 +129,43 @@ jobs:
         env:
           LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           CLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Crear la etiqueta si se pidió a mano y todavía no existe
+        # Solo cuando el flujo se dispara a mano: si llegó por un `push` de
+        # etiqueta, esa etiqueta ya existe y aquí no hay nada que hacer.
+        #
+        # LA COMPUERTA QUE HACE QUE ESTO SEA SEGURO
+        # -----------------------------------------
+        # Una etiqueta no se puede mover sin romper lo que ya la haya
+        # descargado, así que crear una equivocada es un error que se arrastra.
+        # Por eso NO se crea a ciegas: primero se lee la versión que declara
+        # `tauri.conf.json` en la cabeza de la rama estable y se compara con lo
+        # que se pidió. Si no coinciden, el flujo se detiene SIN crear nada y
+        # dice qué hay que subir antes. La comprobación posterior (la que mira
+        # también Cargo.toml, ya con el repositorio descargado) sigue en su
+        # sitio: esta es la que evita dejar basura en el repositorio, aquella es
+        # la que evita publicar un instalador que anuncia otra versión.
+        if: github.ref_type != 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$ETIQUETA" > /dev/null 2>&1; then
+            echo "La etiqueta $ETIQUETA ya existe: se publica desde ella y no se toca."
+            exit 0
+          fi
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RAMA_ESTABLE" --jq .object.sha)
+          VERSION=$(gh api "repos/$GITHUB_REPOSITORY/contents/frontend/src-tauri/tauri.conf.json?ref=$SHA" \
+            -H "Accept: application/vnd.github.raw" | jq -r .version)
+          ESPERADA="${ETIQUETA#v}"
+          echo "$RAMA_ESTABLE está en ${SHA:0:8} y declara la versión $VERSION; se pidió $ETIQUETA."
+          if [ "$VERSION" != "$ESPERADA" ]; then
+            echo "::error::$RAMA_ESTABLE declara $VERSION y se pidió $ETIQUETA. Suba la versión en tauri.conf.json y Cargo.toml y mergéela a $RAMA_ESTABLE antes de publicar. No se creó ninguna etiqueta."
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$ETIQUETA" -f sha="$SHA" --silent
+          echo "Etiqueta $ETIQUETA creada sobre $RAMA_ESTABLE (${SHA:0:8})."
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:

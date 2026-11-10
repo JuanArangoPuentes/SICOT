@@ -26,6 +26,12 @@ SICOT_RESPALDOS="${SICOT_RESPALDOS:-/var/backups/sicot}"
 SICOT_LOG="${SICOT_LOG:-/var/log/sicot-auto-actualizar.log}"
 UNIDADES=/etc/systemd/system
 
+# Por lo mismo que en auto-actualizar-sicot.sh: este script corre con sudo sobre
+# un clon que es de otro usuario, y git se niega a tocarlo sin esto.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0="$SICOT_DIR"
+
 [ "$(id -u)" = "0" ] || { echo "Córralo con sudo: necesita escribir en $UNIDADES." >&2; exit 1; }
 
 for programa in git docker flock systemctl; do
@@ -46,6 +52,43 @@ echo
 # desde `develop`). Se deja en la rama que se va a seguir, para que lo que diga
 # `git status` ahí coincida con lo que de verdad corre.
 cd "$SICOT_DIR"
+
+# Lo primero, antes de mover el clon: dejar anotado qué está desplegado de
+# verdad. Lo que corre ahora se construyó desde el commit en el que está el clon
+# en este momento, y en cuanto se haga el `checkout` esa información se pierde.
+#
+# Sin esta anotación pasan dos cosas, las dos silenciosas: la primera corrida
+# concluye «ya está al día» y no despliega nada —el Centro se queda con las
+# imágenes viejas—, y si se la fuerza, la vuelta atrás apunta a la misma versión
+# que acaba de fallar, con lo que deja de ser una vuelta atrás.
+if [ -f "$SICOT_DIR/.ultimo-despliegue" ]; then
+  echo "Ya había anotación de lo desplegado: $(cat "$SICOT_DIR/.ultimo-despliegue"). Se respeta."
+else
+  # SICOT_DESPLEGADO existe para el caso en que el clon YA se movió antes de
+  # instalar, que es justo lo que pasa cuando alguien trae `master` para
+  # conseguir este script. Entonces HEAD ya no dice qué construyó las imágenes
+  # que corren, y volver el clon atrás con `git reset` tampoco sirve: en ese
+  # commit anterior estos scripts no existen todavía.
+  #
+  #   sudo SICOT_DESPLEGADO=<commit> ./scripts/instalar-auto-actualizacion.sh
+  #
+  # Para averiguar el commit: `docker image inspect` de la imagen que corre, o
+  # la fecha de construcción de las imágenes contra el historial de la rama.
+  if [ -n "${SICOT_DESPLEGADO:-}" ]; then
+    DESPLEGADO="$(git rev-parse --verify "$SICOT_DESPLEGADO^{commit}" 2>/dev/null)" || {
+      echo "SICOT_DESPLEGADO=$SICOT_DESPLEGADO no es un commit de este repositorio." >&2
+      exit 1
+    }
+  else
+    DESPLEGADO="$(git rev-parse HEAD)"
+  fi
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$DESPLEGADO" > "$SICOT_DIR/.ultimo-despliegue"
+  echo "Lo que corre ahora se anota como desplegado: ${DESPLEGADO:0:8} ($(git log -1 --pretty=%s "$DESPLEGADO"))"
+  echo "Si eso NO es lo que construyó las imágenes que están corriendo, vuelva a correr este"
+  echo "instalador con SICOT_DESPLEGADO=<commit>, o corrija a mano el archivo:"
+  echo "  $SICOT_DIR/.ultimo-despliegue"
+fi
+
 git fetch --quiet --prune origin "$SICOT_RAMA"
 if ! git diff --quiet || ! git diff --quiet --cached; then
   git stash push --quiet --message "instalar-auto-actualizacion $(date '+%Y-%m-%d %H:%M')" || true
