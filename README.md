@@ -39,7 +39,7 @@ un servidor sin Ollama instalado. Detalle en
 | [`mcp/`](./mcp) | Servidor MCP delgado sobre la API real, para asistentes de IA | [MCP](./mcp/README.md) |
 | [`docs/producto/`](./docs/producto) | Qué hace SICOT: especificación funcional y el [informe de empalme](./docs/producto/INFORME_DE_EMPALME.md), que lo explica de cero a quien no lo ha visto | — |
 | [`docs/api/`](./docs/api) | Inventario de endpoints: rol, control de acceso y forma de respuesta | — |
-| [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), base de datos local, backup y restauración | — |
+| [`docs/operacion/`](./docs/operacion) | Operación día a día: [modelo de datos](./docs/operacion/MODELO_DE_DATOS.md), [actualización automática](./docs/operacion/ACTUALIZACION_AUTOMATICA.md), base de datos local, backup y restauración | — |
 | [`docs/decisiones/`](./docs/decisiones) | Decisiones de arquitectura (ADR): despliegue, respaldo, IA, automatizaciones | — |
 | [`docs/formatos/`](./docs/formatos) | Qué se decidió para cada formato institucional al armarlo desde SICOT | — |
 | [`docs/historico/`](./docs/historico) | Fotos de una fecha: auditorías, revisiones y fases cerradas. No describen el SICOT de hoy | [Histórico](./docs/historico/README.md) |
