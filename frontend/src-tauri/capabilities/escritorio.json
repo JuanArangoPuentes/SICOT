@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "escritorio",
+  "description": "Permite que la aplicación de escritorio se actualice sola (ADR-017): consultar si hay versión nueva, descargar e instalar el paquete firmado, y reiniciarse para quedar corriendo la versión nueva. Solo escritorio: en Android la instalación la autoriza el sistema y el actualizador de Tauri no existe, así que allí estos permisos no se conceden ni harían nada. No se concede 'process:allow-exit': cerrar la aplicación sin volver a abrirla no es algo que haga falta, y a quien lo viera le parecería que SICOT se cayó.",
+  "windows": ["main"],
+  "platforms": ["windows", "linux", "macOS"],
+  "permissions": ["updater:default", "process:allow-restart"]
+}

@@ -1,0 +1,197 @@
+name: Publicar escritorio
+
+# Compila el instalador de Windows FIRMADO para el actualizador, publica la
+# versión en GitHub y deja el `latest.json` del que se actualizan solas las
+# instalaciones de los supervisores (ADR-017).
+#
+# POR QUÉ EXISTE ESTE FLUJO
+# -------------------------
+# Hasta la 0.9.0, el `.exe` y el `.msi` de cada versión se compilaban en el
+# portátil de quien desarrolla y se subían a mano a la versión de GitHub (se ve
+# en quién adjuntó cada archivo: el APK lo sube `github-actions[bot]`, el
+# instalador no). Eso tenía dos consecuencias: publicar dependía de que ese
+# equipo estuviera disponible, y nadie podía comprobar con qué código se
+# compiló el instalador que se instala en el Centro. Aquí se compila desde la
+# etiqueta, a la vista, y el resultado queda firmado.
+#
+# CUÁNDO CORRE
+# ------------
+# Al empujar una etiqueta `v*`. Esa etiqueta es la única orden que hace falta
+# para publicar: este flujo crea la versión de GitHub si no existe, adjunta el
+# instalador y el descriptor, y pide el APK al flujo `publicar-apk.yml`.
+#
+# LA FIRMA DEL ACTUALIZADOR NO ES LA FIRMA DEL APK
+# ------------------------------------------------
+# Son dos llaves distintas y no se pueden mezclar:
+#   - `SICOT_ANDROID_KEYSTORE_*` firma el APK, y Android la usa para decidir si
+#     una instalación puede reemplazar a otra (ADR-013).
+#   - `TAURI_SIGNING_PRIVATE_KEY` firma el instalador de escritorio, y la
+#     aplicación la usa para decidir si acepta una actualización. Su clave
+#     pública está escrita en `frontend/src-tauri/tauri.conf.json`: una
+#     instalación solo instala lo que esa llave firmó, así que un instalador
+#     subido por cualquier otro no se aplica ni interceptando la descarga.
+# Si la llave se pierde, las instalaciones existentes dejan de poder
+# actualizarse solas y hay que volver a instalarlas una vez a mano. Por eso el
+# flujo se detiene antes de compilar si el secreto no está.
+#
+# ACCIONES FIJADAS POR SHA, por el mismo motivo que en `ci.yml` y
+# `publicar-apk.yml`: una etiqueta como `@v4` es mutable, y este flujo tiene en
+# memoria la llave con que se firma lo que se instala en el Centro.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Etiqueta ya existente a la que compilar y adjuntar el instalador (p. ej. v0.10.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  escritorio:
+    name: Instalador de Windows firmado (Tauri · x64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      ETIQUETA: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
+
+      - name: Comprobar que el secreto de firma está presente
+        # Antes de gastar media hora compilando. Sin la llave, Tauri produciría
+        # un instalador sin `.sig` y el `latest.json` quedaría sin firma: las
+        # instalaciones lo rechazarían una por una, en silencio, y el síntoma
+        # —«a nadie le llegó la actualización»— aparecería días después.
+        shell: bash
+        run: |
+          set -eu
+          if [ -z "${LLAVE:-}" ]; then
+            echo "::error::Falta el secreto TAURI_SIGNING_PRIVATE_KEY. Ver ADR-017."
+            exit 1
+          fi
+        env:
+          LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      - name: Comprobar que la etiqueta es la versión de la aplicación
+        # La misma compuerta que en `publicar-apk.yml`, y por el mismo motivo:
+        # el nombre del archivo sale de la etiqueta, pero la versión que la
+        # aplicación anuncia —y con la que el actualizador compara— sale de
+        # tauri.conf.json. Publicar v0.10.0 con la versión sin subir dejaría a
+        # las instalaciones intentando actualizarse a lo que ya tienen.
+        shell: bash
+        run: |
+          set -eu
+          ESPERADA="${ETIQUETA#v}"
+          CONF=$(node -p "require('./frontend/src-tauri/tauri.conf.json').version")
+          CARGO=$(sed -n 's/^version = "\(.*\)"$/\1/p' frontend/src-tauri/Cargo.toml | head -1)
+          echo "Etiqueta: $ETIQUETA · tauri.conf.json: $CONF · Cargo.toml: $CARGO"
+          for PAR in "tauri.conf.json:$CONF" "Cargo.toml:$CARGO"; do
+            [ "${PAR#*:}" = "$ESPERADA" ] || {
+              echo "::error::${PAR%%:*} dice ${PAR#*:} y la etiqueta es $ETIQUETA. Suba la versión antes de publicar."
+              exit 1
+            }
+          done
+
+      - name: Configurar Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Preparar Rust
+        # La imagen de Windows trae rustup pero puede venir sin toolchain por
+        # omisión; declararlo es más corto que diagnosticarlo.
+        shell: bash
+        run: |
+          set -eu
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Compilar el instalador firmado
+        working-directory: frontend
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build
+
+      - name: Reunir los archivos y armar el descriptor
+        # `latest.json` es lo que consulta cada instalación: la versión, la URL
+        # del instalador y su firma. Se arma aquí, con la firma que acaba de
+        # producir el bundler, y no a mano: una firma que no corresponda al
+        # archivo hace que la actualización se rechace sin decir por qué.
+        shell: bash
+        run: |
+          set -eu
+          VERSION="${ETIQUETA#v}"
+          BUNDLE=frontend/src-tauri/target/release/bundle
+          EXE=$(find "$BUNDLE/nsis" -name '*-setup.exe' | head -1)
+          FIRMA=$(find "$BUNDLE/nsis" -name '*-setup.exe.sig' | head -1)
+          MSI=$(find "$BUNDLE/msi" -name '*.msi' | head -1)
+          [ -n "$EXE" ] || { echo "::error::No se generó el instalador NSIS."; exit 1; }
+          [ -n "$FIRMA" ] || { echo "::error::El instalador salió sin firma: revise TAURI_SIGNING_PRIVATE_KEY."; exit 1; }
+          mkdir -p publicar
+          cp "$EXE" publicar/
+          cp "$FIRMA" publicar/
+          [ -z "$MSI" ] || cp "$MSI" publicar/
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'node:fs'
+            const nombre = process.argv[1]
+            const firma = readFileSync(process.argv[2], 'utf8').trim()
+            const version = process.argv[3]
+            const etiqueta = process.argv[4]
+            writeFileSync('publicar/latest.json', JSON.stringify({
+              version,
+              notes: 'Novedades de esta versión: https://github.com/JuanArangoPuentes/SICOT/releases/tag/' + etiqueta,
+              pub_date: new Date().toISOString(),
+              platforms: {
+                'windows-x86_64': {
+                  signature: firma,
+                  url: 'https://github.com/JuanArangoPuentes/SICOT/releases/download/' + etiqueta + '/' + nombre,
+                },
+              },
+            }, null, 2) + '\n')
+          " "$(basename "$EXE")" "$FIRMA" "$VERSION" "$ETIQUETA"
+          cat publicar/latest.json
+          ls -lh publicar
+
+      - name: Publicar la versión y adjuntar lo compilado
+        # `gh release create` solo si no existe: cuando la versión se publica a
+        # mano desde GitHub, este flujo adjunta sobre la que ya está.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if ! gh release view "$ETIQUETA" > /dev/null 2>&1; then
+            gh release create "$ETIQUETA" \
+              --title "$ETIQUETA" \
+              --notes "Versión $ETIQUETA. El instalador de Windows y el descriptor del actualizador los adjunta este mismo flujo; el APK firmado lo adjunta «Publicar APK»."
+          fi
+          gh release upload "$ETIQUETA" publicar/* --clobber
+
+      - name: Pedir el APK firmado
+        # El APK se compila en Linux con el SDK de Android, así que es otro
+        # flujo. GitHub no deja que un flujo lanzado con el token por omisión
+        # dispare otro —es la protección contra bucles—, así que esto puede no
+        # surtir efecto; cuando no lo surta, el APK se pide desde la pestaña
+        # Actions («Publicar APK» → Run workflow → la etiqueta). No se falla por
+        # eso: el instalador y el descriptor ya quedaron publicados.
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run publicar-apk.yml -f etiqueta="$ETIQUETA" \
+            || echo "::notice::Pida «Publicar APK» a mano para $ETIQUETA."
