@@ -82,11 +82,19 @@ también en el propio paquete que descarga el navegador.
 1. Suba la versión en `frontend/src-tauri/tauri.conf.json` y en
    `frontend/src-tauri/Cargo.toml` (las dos: el flujo se detiene si no coinciden
    con la etiqueta).
-2. Mergee a `master`.
-3. Empuje la etiqueta:
+2. Escriba las notas en `docs/versiones/vX.Y.Z.md`.
+3. Mergee a `master`.
+4. Dispare la publicación, de una de estas dos maneras:
+
+   - **Desde Actions**, sin necesidad de un clon: *Publicar escritorio → Run
+     workflow*, y escriba la versión (`v0.10.0`). Si la etiqueta no existe, el
+     flujo la crea sobre la cabeza de `master` — pero solo si la versión que
+     `master` declara coincide con la que se pidió; si no, se detiene sin crear
+     nada y dice qué falta subir.
+   - **Empujando la etiqueta**, que es lo mismo por el otro extremo:
 
 ```bash
-git tag v0.10.0 && git push origin v0.10.0
+git tag -a v0.10.0 -m "v0.10.0" && git push origin v0.10.0
 ```
 
 El flujo «Publicar escritorio» compila el instalador en Windows, lo firma, crea
