@@ -63,11 +63,25 @@ jobs:
         with:
           ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
 
-      - name: Comprobar que el secreto de firma está presente
-        # Antes de gastar media hora compilando. Sin la llave, Tauri produciría
-        # un instalador sin `.sig` y el `latest.json` quedaría sin firma: las
-        # instalaciones lo rechazarían una por una, en silencio, y el síntoma
-        # —«a nadie le llegó la actualización»— aparecería días después.
+      - name: Comprobar y limpiar el secreto de firma
+        # Dos cosas, antes de gastar media hora compilando.
+        #
+        # 1. Que la llave esté. Sin ella, Tauri produciría un instalador sin
+        #    `.sig` y el `latest.json` quedaría sin firma: las instalaciones lo
+        #    rechazarían una por una, en silencio, y el síntoma —«a nadie le
+        #    llegó la actualización»— aparecería días después.
+        #
+        # 2. Quitarle los espacios y los saltos de línea. La llave es una sola
+        #    línea de base64, y un salto de línea al final NO se perdona:
+        #    comprobado el 10-11-2026 con la llave real, `tauri signer sign`
+        #    responde «failed to decode base64 secret key: Invalid symbol». Ese
+        #    salto aparece solo con copiar el archivo desde un editor de texto,
+        #    que es exactamente cómo se guarda este secreto la primera vez. Sin
+        #    esta limpieza, el error no se vería hasta la primera publicación, y
+        #    diría que la llave está mal en vez de que sobra un carácter.
+        #
+        #    `add-mask` va antes de escribirla en el entorno para que el valor
+        #    limpio quede tapado en el registro igual que el secreto original.
         shell: bash
         run: |
           set -eu
@@ -75,6 +89,10 @@ jobs:
             echo "::error::Falta el secreto TAURI_SIGNING_PRIVATE_KEY. Ver ADR-017."
             exit 1
           fi
+          LIMPIA=$(printf '%s' "$LLAVE" | tr -d '[:space:]')
+          echo "::add-mask::$LIMPIA"
+          echo "TAURI_SIGNING_PRIVATE_KEY=$LIMPIA" >> "$GITHUB_ENV"
+          echo "La llave de firma está presente (${#LIMPIA} caracteres tras limpiar espacios)."
         env:
           LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
@@ -121,8 +139,12 @@ jobs:
 
       - name: Compilar el instalador firmado
         working-directory: frontend
+        # TAURI_SIGNING_PRIVATE_KEY la pone el paso de limpieza, en el entorno
+        # del job. La contraseña se declara aunque el secreto no exista: entonces
+        # vale cadena vacía, que es lo que espera una llave generada sin
+        # contraseña. Comprobado el 10-11-2026: con la variable vacía firma, y
+        # SIN la variable falla con «incorrect updater private key password».
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npm run tauri build
 
