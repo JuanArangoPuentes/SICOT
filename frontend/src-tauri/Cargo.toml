@@ -36,6 +36,27 @@ tauri-plugin-fs = "2"
 debug = false
 strip = "debuginfo"
 
+# El actualizador de escritorio y el reinicio que lo remata (ADR-017). Van
+# declarados solo para escritorio porque el actualizador de Tauri no existe para
+# Android ni iOS: en el APK, registrarlo no compilaria.
+#
+# `default-features = false` NO es un ajuste cosmetico: la feature `zip`, que
+# viene por omision, arrastra el crate `zip`, y el 10-11-2026 ese crate traia
+# CVE-2026-115905 (CRITICA) y CVE-2026-115909 (ALTA), sin version corregida
+# dentro del rango que el plugin acepta (pide "4", y el arreglo esta en la 9).
+# Lo paro el escaneo de Trivy del CI, que es exactamente para lo que esta.
+#
+# Se puede desactivar porque SICOT no la usa: esa feature sirve para que el
+# actualizador sepa abrir un artefacto comprimido, y el nuestro es el instalador
+# NSIS tal cual (`-setup.exe`, ver publicar-escritorio.yml). Lo que si hace falta
+# se declara a mano, porque apagar las features por omision tambien apagaria la
+# descarga por HTTPS: `rustls-tls` es el TLS con que el plugin baja el
+# instalador, y `system-proxy` hace que respete el proxy del equipo, que en la
+# red de un Centro del SENA puede ser la unica salida a Internet.
+#
+# Si algun dia el artefacto de escritorio pasa a ser un .zip, hay que volver a
+# encender esta feature y comprobar antes que el crate `zip` ya no esta
+# vulnerable.
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-process = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }

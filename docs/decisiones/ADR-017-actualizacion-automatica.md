@@ -100,6 +100,20 @@ va a bloquear sería peor que no decir nada.
 - **Las instalaciones que hoy tienen la 0.9.0 no se actualizan solas**: esa
   versión no lleva el actualizador dentro. Hay que instalar **una última vez a
   mano** la primera versión que lo traiga (la 0.10.0); desde ahí, nunca más.
+- **El actualizador va sin la feature `zip`.** Viene por omisión y arrastra el
+  crate `zip`, que el 10-11-2026 traía una vulnerabilidad crítica y una alta sin
+  arreglo dentro del rango que el plugin acepta; lo paró el escaneo del CI. Se
+  puede apagar porque SICOT no la usa: esa feature sirve para abrir un artefacto
+  comprimido, y el de escritorio es el instalador NSIS tal cual. Lo que sí hace
+  falta queda declarado a mano (`rustls-tls` para la descarga y `system-proxy`
+  para respetar el proxy del Centro). Si el artefacto pasara a ser un `.zip`,
+  hay que volver a encenderla y comprobar antes que el crate ya esté corregido.
+- **Las versiones del paquete npm y del crate de Rust de cada plugin tienen que
+  ir en el mismo minor**, y Tauri lo comprueba antes de compilar. Por eso los
+  tres paquetes del actualizador van fijados con `~` y no con `^`: un `npm
+  install` que subiera solo la mitad de JavaScript deja la compilación de
+  Android y la de escritorio sin arrancar, con un error que no menciona
+  `package.json`.
 - El disco del servidor ya no se llena de imágenes viejas: cada despliegue que
   queda sano hace `docker image prune`. Un disco lleno tumba PostgreSQL, y eso
   sí sería una caída de verdad.
