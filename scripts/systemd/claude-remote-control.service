@@ -37,6 +37,12 @@ Description=Claude Code Remote Control en el clon de SICOT
 Documentation=https://code.claude.com/docs/en/remote-control
 After=network-online.target
 Wants=network-online.target
+# Un corte de red largo no debe dejar la unidad apagada para siempre. Va en
+# [Unit] y no en [Service]: systemd avisó de la equivocación en el servidor del
+# Centro —«Unknown key name 'StartLimitIntervalSec' in section 'Service',
+# ignoring»— y una clave ignorada es peor que ninguna, porque el archivo dice
+# una cosa y el sistema hace otra.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -47,8 +53,6 @@ WorkingDirectory=__SICOT_DIR__
 ExecStart=__CLAUDE__ remote-control --spawn=same-dir
 Restart=always
 RestartSec=30
-# Un corte de red largo no debe dejar la unidad apagada para siempre.
-StartLimitIntervalSec=0
 
 [Install]
 WantedBy=multi-user.target
