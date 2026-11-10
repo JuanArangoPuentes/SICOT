@@ -26,6 +26,12 @@ SICOT_RESPALDOS="${SICOT_RESPALDOS:-/var/backups/sicot}"
 SICOT_LOG="${SICOT_LOG:-/var/log/sicot-auto-actualizar.log}"
 UNIDADES=/etc/systemd/system
 
+# Por lo mismo que en auto-actualizar-sicot.sh: este script corre con sudo sobre
+# un clon que es de otro usuario, y git se niega a tocarlo sin esto.
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0="$SICOT_DIR"
+
 [ "$(id -u)" = "0" ] || { echo "Córralo con sudo: necesita escribir en $UNIDADES." >&2; exit 1; }
 
 for programa in git docker flock systemctl; do
@@ -46,6 +52,25 @@ echo
 # desde `develop`). Se deja en la rama que se va a seguir, para que lo que diga
 # `git status` ahí coincida con lo que de verdad corre.
 cd "$SICOT_DIR"
+
+# Lo primero, antes de mover el clon: dejar anotado qué está desplegado de
+# verdad. Lo que corre ahora se construyó desde el commit en el que está el clon
+# en este momento, y en cuanto se haga el `checkout` esa información se pierde.
+#
+# Sin esta anotación pasan dos cosas, las dos silenciosas: la primera corrida
+# concluye «ya está al día» y no despliega nada —el Centro se queda con las
+# imágenes viejas—, y si se la fuerza, la vuelta atrás apunta a la misma versión
+# que acaba de fallar, con lo que deja de ser una vuelta atrás.
+if [ -f "$SICOT_DIR/.ultimo-despliegue" ]; then
+  echo "Ya había anotación de lo desplegado: $(cat "$SICOT_DIR/.ultimo-despliegue"). Se respeta."
+else
+  DESPLEGADO="$(git rev-parse HEAD)"
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$DESPLEGADO" > "$SICOT_DIR/.ultimo-despliegue"
+  echo "Lo que corre ahora se anota como desplegado: ${DESPLEGADO:0:8} ($(git log -1 --pretty=%s "$DESPLEGADO"))"
+  echo "Si eso NO es lo que construyó las imágenes que están corriendo, corrija ese archivo antes de seguir:"
+  echo "  $SICOT_DIR/.ultimo-despliegue"
+fi
+
 git fetch --quiet --prune origin "$SICOT_RAMA"
 if ! git diff --quiet || ! git diff --quiet --cached; then
   git stash push --quiet --message "instalar-auto-actualizacion $(date '+%Y-%m-%d %H:%M')" || true
