@@ -204,7 +204,18 @@ sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh
 
 Pasa cuando la ruta de `claude` la añade `~/.bashrc` o un gestor de versiones de
 Node, que no se cargan en el shell no interactivo con el que el instalador
-pregunta.
+pregunta. En el servidor del Centro estaba en
+`/home/medialab/.npm-global/bin/claude`, el prefijo de quien configuró npm para
+instalar sin `sudo`.
+
+Si la unidad queda instalada pero **no activa**, mire su registro: el error
+`env: 'node': No such file or directory` significa que `node` no está en el PATH
+de la unidad. El instalador lo busca y lo añade; si node vino de un gestor de
+versiones poco habitual, dígaselo igual que el otro:
+
+```bash
+sudo SICOT_CLAUDE=/ruta/a/claude ./scripts/instalar-remote-control.sh
+```
 
 Deja `claude remote-control` corriendo como servicio, en el clon, arrancando con
 la máquina y volviendo solo si se cae la red. Antes de esto hacía falta una
