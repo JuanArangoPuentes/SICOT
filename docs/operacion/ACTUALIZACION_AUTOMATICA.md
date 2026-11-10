@@ -54,8 +54,12 @@ sirve para mover el clon de sitio o cambiar la rama (`SICOT_RAMA=...`).
 ### Mirarlo
 
 ```bash
-tail -f /var/log/sicot-auto-actualizar.log
+sudo tail -f /var/log/sicot-auto-actualizar.log
 ```
+
+El `sudo` hace falta: el registro es de root y en 0640. Sin él, quien acaba de
+instalar esto recibe «Permiso denegado» justo cuando va a comprobar si su
+despliegue salió bien.
 
 ```bash
 systemctl list-timers sicot-auto-actualizar.timer
