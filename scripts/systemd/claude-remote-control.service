@@ -1,0 +1,54 @@
+# Mantener viva la sesión de Remote Control de Claude Code en el servidor.
+#
+# PARA QUÉ SIRVE, Y POR QUÉ NO ES PARTE DE SICOT
+# ----------------------------------------------
+# Esto no lo necesita SICOT para funcionar: el servidor se actualiza solo con
+# `sicot-auto-actualizar.timer` sin que nadie hable con él. Esta unidad es para
+# lo OTRO —que quien mantiene el proyecto pueda pedirle cosas al servidor
+# cuando no está en el Centro—: deja corriendo `claude remote-control` en el
+# clon, de modo que una sesión de Claude autorizada de la misma cuenta pueda
+# pedirle que mire un registro, compruebe un contenedor o diagnostique un
+# despliegue, sin que nadie vaya hasta la máquina.
+#
+# Antes de esto hacía falta una terminal abierta a mano: al cerrarla, o al
+# reiniciar el servidor, el canal desaparecía sin avisar.
+#
+# QUÉ PUEDE HACER LO QUE SE CONECTE POR AQUÍ, DICHO SIN ADORNOS
+# ------------------------------------------------------------
+# Ejecutar comandos en este servidor como el usuario dueño del clon, dentro de
+# esa carpeta. NO puede usar `sudo` sin la contraseña, que no está guardada en
+# ningún sitio: las tareas de root —parar el temporizador, leer el registro de
+# /var/log— siguen necesitando a una persona. Quien puede conectarse son las
+# sesiones de Claude de la misma cuenta, y solo después de que su dueño lo haya
+# autorizado una vez, en persona, en un dispositivo de confianza.
+#
+# El interruptor para quitarlo:
+#   sudo systemctl disable --now claude-remote-control
+#
+# POR QUÉ `Restart=always` CON 30 SEGUNDOS
+# ----------------------------------------
+# El proceso mantiene una conexión saliente; si se corta la red del Centro,
+# termina y hay que volver a levantarlo. Treinta segundos entre intentos es
+# suficientemente lento para no tropezar con el límite de arranques de systemd
+# en un corte largo, y suficientemente rápido para que el canal vuelva por sí
+# solo cuando la red vuelve.
+[Unit]
+Description=Claude Code Remote Control en el clon de SICOT
+Documentation=https://code.claude.com/docs/en/remote-control
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__USUARIO__
+Environment=HOME=__HOGAR__
+Environment=PATH=__RUTA__
+WorkingDirectory=__SICOT_DIR__
+ExecStart=__CLAUDE__ remote-control --spawn=same-dir
+Restart=always
+RestartSec=30
+# Un corte de red largo no debe dejar la unidad apagada para siempre.
+StartLimitIntervalSec=0
+
+[Install]
+WantedBy=multi-user.target
