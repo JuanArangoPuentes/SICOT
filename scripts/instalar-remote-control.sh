@@ -58,14 +58,22 @@ encontrar_claude() {
   via="$(sudo -u "$USUARIO" bash -ic 'command -v claude' 2>/dev/null | tr -d '\r' | tail -1 || true)"
   [ -x "$via" ] && { printf '%s' "$via"; return; }
   # 3. Los sitios donde Claude Code se instala, por orden de probabilidad.
+  #    `.npm-global/bin` es el prefijo que usa quien configuró npm para instalar
+  #    sin sudo; es donde estaba en el servidor del Centro.
   local candidato
   for candidato in "$HOGAR/.local/bin/claude" "$HOGAR/.claude/local/claude" \
+                   "$HOGAR/.npm-global/bin/claude" "$HOGAR/.npm/bin/claude" \
                    "$HOGAR/bin/claude" /usr/local/bin/claude /usr/bin/claude; do
     [ -x "$candidato" ] && { printf '%s' "$candidato"; return; }
   done
   # 4. Rastrear su HOME. Acotado en profundidad para no recorrer el disco.
-  via="$(find "$HOGAR" -maxdepth 5 -name claude -type f -perm -u+x 2>/dev/null | head -1)"
-  [ -n "$via" ] && printf '%s' "$via"
+  #    Se admiten enlaces simbólicos (`-type l`) porque una instalación global de
+  #    npm deja justamente eso en su `bin`: un enlace al `cli.js` del paquete.
+  #    Con `-type f` a secas, el caso más común se escapaba.
+  local hallado
+  while IFS= read -r hallado; do
+    [ -x "$hallado" ] && { printf '%s' "$hallado"; return; }
+  done < <(find "$HOGAR" -maxdepth 5 -name claude \( -type f -o -type l \) 2>/dev/null)
 }
 
 CLAUDE="$(encontrar_claude)"
@@ -79,11 +87,23 @@ if [ -z "$CLAUDE" ] || [ ! -x "$CLAUDE" ]; then
   echo "  sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh" >&2
   exit 1
 fi
-RUTA="$(dirname "$CLAUDE"):/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# `node` TAMBIÉN tiene que estar en el PATH de la unidad. El ejecutable de
+# Claude Code instalado por npm es un enlace a un script que empieza por
+# `#!/usr/bin/env node`: sin node a la vista, systemd no lo arranca y el error
+# —«env: 'node': No such file or directory»— no menciona a Claude por ningún
+# lado. Si node vino de apt está en /usr/bin y ya estaría cubierto; si vino de
+# un gestor de versiones, vive en el HOME del usuario y hay que buscarlo igual
+# que el propio claude.
+NODE="$(sudo -u "$USUARIO" bash -ic 'command -v node' 2>/dev/null | tr -d '\r' | tail -1 || true)"
+[ -x "$NODE" ] || NODE="$(sudo -u "$USUARIO" -i command -v node 2>/dev/null || true)"
+RUTA="$(dirname "$CLAUDE")"
+[ -x "$NODE" ] && RUTA="$RUTA:$(dirname "$NODE")"
+RUTA="$RUTA:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 echo "Clon:     $SICOT_DIR"
 echo "Usuario:  $USUARIO (HOME $HOGAR)"
 echo "Claude:   $CLAUDE"
+echo "Node:     ${NODE:-(no encontrado; se confía en /usr/bin/node)}"
 echo
 
 sed -e "s|__USUARIO__|$USUARIO|g" \
