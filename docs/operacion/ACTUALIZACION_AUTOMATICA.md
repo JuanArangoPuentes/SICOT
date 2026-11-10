@@ -196,11 +196,17 @@ sudo ./scripts/instalar-remote-control.sh
 ```
 
 Si responde que no encontró el ejecutable `claude`, pregúnteselo al propio
-usuario del servidor (`command -v claude` en su terminal) y dígaselo:
+usuario del servidor (`command -v claude` en su terminal) y pásele esa ruta como
+argumento:
 
 ```bash
-sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh
+sudo ./scripts/instalar-remote-control.sh /la/ruta/que/salio
 ```
+
+Como argumento y no como variable de entorno: `sudo` limpia el entorno, así que
+`sudo SICOT_CLAUDE=… ./script` puede llegar sin la variable según la
+configuración de sudoers del servidor — y entonces el instalador diría que no
+encuentra nada aunque se le haya dicho dónde está.
 
 Pasa cuando la ruta de `claude` la añade `~/.bashrc` o un gestor de versiones de
 Node, que no se cargan en el shell no interactivo con el que el instalador

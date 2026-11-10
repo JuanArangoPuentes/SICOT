@@ -2,7 +2,15 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # SICOT — dejar Remote Control de Claude Code arrancando solo en el servidor
 #
-#   sudo ./scripts/instalar-remote-control.sh
+#   sudo ./scripts/instalar-remote-control.sh [ruta/al/ejecutable/claude]
+#
+# La ruta es opcional: si no se da, se busca. Se da cuando la búsqueda falla y
+# alguien ya sabe la respuesta (`command -v claude` en la terminal de ese
+# usuario). Va como ARGUMENTO y no solo como variable de entorno porque `sudo`
+# limpia el entorno: `sudo SICOT_CLAUDE=… ./script` puede llegar sin la
+# variable, según la configuración de sudoers del servidor, y entonces el script
+# dice que no encuentra nada aunque se le haya dicho dónde está. Un argumento no
+# se pierde. (SICOT_CLAUDE sigue funcionando, para quien lo tenga escrito.)
 #
 # Se corre UNA VEZ. Deja una unidad de systemd que mantiene viva la sesión de
 # Remote Control en este clon, para que quien mantiene el proyecto pueda pedirle
@@ -44,7 +52,11 @@ HOGAR="$(getent passwd "$USUARIO" | cut -d: -f6)"
 # Así que se prueban cuatro cosas, de la más fiable a la más tosca, y se acepta
 # que quien sabe la respuesta la dé directamente con SICOT_CLAUDE=/ruta.
 encontrar_claude() {
-  # 0. Dicho a mano. Gana siempre.
+  # 0. Dicho a mano, como argumento o como variable. Gana siempre.
+  if [ -n "${1:-}" ]; then
+    printf '%s' "$1"
+    return
+  fi
   if [ -n "${SICOT_CLAUDE:-}" ]; then
     printf '%s' "$SICOT_CLAUDE"
     return
@@ -76,15 +88,15 @@ encontrar_claude() {
   done < <(find "$HOGAR" -maxdepth 5 -name claude \( -type f -o -type l \) 2>/dev/null)
 }
 
-CLAUDE="$(encontrar_claude)"
+CLAUDE="$(encontrar_claude "${1:-}")"
 if [ -z "$CLAUDE" ] || [ ! -x "$CLAUDE" ]; then
   echo "No encontré el ejecutable 'claude' para el usuario '$USUARIO'." >&2
   echo >&2
   echo "Pregúnteselo a él mismo, en una terminal de ese usuario:" >&2
   echo "  command -v claude" >&2
   echo >&2
-  echo "y vuelva a correr este instalador diciéndole la ruta:" >&2
-  echo "  sudo SICOT_CLAUDE=/la/ruta/que/salio ./scripts/instalar-remote-control.sh" >&2
+  echo "y vuelva a correr este instalador pasándole esa ruta:" >&2
+  echo "  sudo ./scripts/instalar-remote-control.sh /la/ruta/que/salio" >&2
   exit 1
 fi
 # `node` TAMBIÉN tiene que estar en el PATH de la unidad. El ejecutable de
@@ -102,7 +114,7 @@ RUTA="$RUTA:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 echo "Clon:     $SICOT_DIR"
 echo "Usuario:  $USUARIO (HOME $HOGAR)"
-echo "Claude:   $CLAUDE"
+echo "Claude:   $CLAUDE${1:+  (dada como argumento)}"
 echo "Node:     ${NODE:-(no encontrado; se confía en /usr/bin/node)}"
 echo
 
