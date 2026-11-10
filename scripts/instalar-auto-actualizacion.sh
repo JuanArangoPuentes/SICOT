@@ -82,6 +82,18 @@ echo
 # `git status` ahí coincida con lo que de verdad corre.
 cd "$SICOT_DIR"
 
+# Reparar el daño que hacía la versión anterior de estos scripts: corrían git
+# como root y dejaban objetos de root dentro de `.git`, con lo que el dueño del
+# clon dejaba de poder usar su propio repositorio («permisos insuficientes para
+# agregar un objeto a la base de datos»). Ya no ocurre —git corre como el dueño—
+# pero el daño sobrevive al arreglo, así que se limpia aquí: es el único momento
+# en que este código corre como root y sabe de quién tiene que ser todo.
+if [ "$DUENO_DEL_CLON" != "root" ] && [ -n "$(find "$SICOT_DIR" -user root -print -quit 2>/dev/null)" ]; then
+  echo "Hay archivos de root en el clon (los dejó una versión anterior de estos scripts)."
+  chown -R "$DUENO_DEL_CLON" "$SICOT_DIR"
+  echo "Devueltos a $DUENO_DEL_CLON: ya puede volver a usar git sin sudo."
+fi
+
 # Lo primero, antes de mover el clon: dejar anotado qué está desplegado de
 # verdad. Lo que corre ahora se construyó desde el commit en el que está el clon
 # en este momento, y en cuanto se haga el `checkout` esa información se pierde.
