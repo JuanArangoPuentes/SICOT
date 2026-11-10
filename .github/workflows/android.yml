@@ -43,6 +43,14 @@ on:
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
       - '.github/workflows/android.yml'
+  # A mano, sobre cualquier rama: para sacar un APK de pruebas (acepta
+  # http://) de un cambio que no toca `src-tauri`. El filtro de arriba es el
+  # correcto para la compuerta, pero dejaba sin APK todo el trabajo que vive en
+  # frontend/src —el trabajo sin red (ADR-015) y el sondeo entre equipos
+  # (ADR-016) no produjeron ninguno— y obligaba a compilarlo en una máquina
+  # con el NDK. No se añade frontend/src a `paths`: eso haría correr este job,
+  # el más lento, en cada cambio de pantalla.
+  workflow_dispatch:
 
 concurrency:
   group: android-${{ github.ref }}

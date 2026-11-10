@@ -1,6 +1,8 @@
 package co.sena.sicot.dto.ia;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -25,7 +27,21 @@ public record ChatRequest(
         // "explícamelo distinto") tengan sentido en vez de responderse en el
         // vacío. Rol: "user" o "ai".
         @Size(max = 80, message = "El historial de conversación es demasiado largo.")
-        List<@Valid ChatTurno> historial
+        List<@Valid ChatTurno> historial,
+        // Identificador que el cliente genera para cada pregunta y repite en el
+        // reintento automático al volver de segundo plano (opcional). Con él,
+        // el reintento recibe la respuesta de la inferencia que ya estaba en
+        // curso en vez de lanzar una segunda que compita con ella por la CPU.
+        @Size(max = 64, message = "El identificador de la solicitud no puede superar 64 caracteres.")
+        @Pattern(regexp = "[A-Za-z0-9-]+", message = "El identificador de la solicitud solo admite letras, números y guiones.")
+        String idSolicitud,
+        // Paso (1..6) que el supervisor está a punto de cerrar (opcional). Si
+        // viene, «pregunta» es SOLO lo que él describió que hizo, y las
+        // instrucciones de la revisión las arma el servidor: el cliente ya no
+        // redacta la tarea del modelo ni gasta en ella el tope de 8000.
+        @Min(value = 1, message = "El paso a revisar debe estar entre 1 y 6.")
+        @Max(value = 6, message = "El paso a revisar debe estar entre 1 y 6.")
+        Integer revisarPaso
 ) {
     public record ChatTurno(
             @Pattern(regexp = "user|ai", message = "El rol de cada turno debe ser 'user' o 'ai'.")

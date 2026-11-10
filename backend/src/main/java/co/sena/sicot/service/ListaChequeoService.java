@@ -5,9 +5,10 @@ import co.sena.sicot.dto.chequeo.ListaChequeoResumen;
 import co.sena.sicot.dto.chequeo.TipoListaChequeo;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.mapper.ListaChequeoMapper;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.stereotype.Service;
@@ -71,13 +72,22 @@ public class ListaChequeoService {
      * pruebas puedan verificar los JSON reales sin levantar el contexto de la aplicación.
      */
     static Map<String, ListaChequeoDetalle> cargarCatalogo() {
+        return cargarCatalogo(PATRON_RECURSOS);
+    }
+
+    /**
+     * Igual que {@link #cargarCatalogo()} pero sobre otro patrón de recursos: existe para que una
+     * prueba pueda comprobar con un archivo roto que el error nombra el archivo, sin tocar el
+     * catálogo real.
+     */
+    static Map<String, ListaChequeoDetalle> cargarCatalogo(String patron) {
         ObjectMapper mapper = JsonMapper.builder()
                 .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .build();
 
         Resource[] recursos;
         try {
-            recursos = new PathMatchingResourcePatternResolver().getResources(PATRON_RECURSOS);
+            recursos = new PathMatchingResourcePatternResolver().getResources(patron);
         } catch (IOException e) {
             throw new IllegalStateException("No se pudo leer el catálogo de listas de chequeo.", e);
         }
@@ -93,7 +103,10 @@ public class ListaChequeoService {
             ListaChequeoDetalle lista;
             try (InputStream entrada = recurso.getInputStream()) {
                 lista = mapper.readValue(entrada, ListaChequeoDetalle.class);
-            } catch (IOException e) {
+            } catch (IOException | JacksonException e) {
+                // Las dos: IOException al abrir el recurso, JacksonException al leer un
+                // JSON roto, que en Jackson 3 ya no es IOException. Con solo la primera
+                // el arranque fallaría igual, pero sin decir qué archivo abrir.
                 throw new IllegalStateException(
                         "No se pudo leer la lista de chequeo " + recurso.getFilename() + ".", e);
             }

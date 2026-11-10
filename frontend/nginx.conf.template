@@ -115,6 +115,111 @@ server {
     # y de Android (tauri.conf.json) lleva el mismo cambio.
     set $csp "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ${CSP_CONNECT_SRC_EXTRA}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
 
+    # ── La API, por el mismo origen que la aplicación ───────────────────────
+    #
+    # Lo mismo que hace Caddy en producción (ver Caddyfile): /api, /actuator y
+    # la documentación van al backend; todo lo demás, a la SPA. Aquí se repite
+    # para que en desarrollo la aplicación web viva en UN solo origen, igual
+    # que en el Centro.
+    #
+    # POR QUÉ, si antes funcionaba cruzando orígenes. Porque no funcionaba
+    # fuera de este equipo. La dirección de la API la hornea Vite al construir
+    # (`VITE_API_URL`), así que una imagen construida con `localhost` le dice al
+    # navegador del OTRO computador que la API está en su propia máquina, donde
+    # no hay nada; y una construida con la IP de este deja de servir en cuanto
+    # la IP cambia — pasó el 03-11-2026 a media prueba, al cambiar de red. Con
+    # el proxy no hay ninguna dirección que acertar: quien abra
+    # `http://<lo-que-sea>:8443` llega a la API por ese mismo sitio.
+    #
+    # De paso desaparecen dos cosas que había que mantener cuadradas entre sí:
+    # el `connect-src` de la CSP de aquí abajo y el `VITE_API_URL` del build. Y
+    # el otro equipo necesita UN puerto abierto en el cortafuegos, no dos. La
+    # lista de orígenes de CORS del backend deja de importar para el navegador
+    # SOLO porque aquí abajo se reenvía el Host tal cual (ver `Host`).
+    #
+    # El 8080 se sigue publicando en docker-compose.yml y sirve igual: la
+    # aplicación de escritorio y el APK lo usan tal cual, y Swagger vive ahí.
+    # Esto no lo sustituye, le añade un camino que no depende de la IP.
+
+    # El nombre `backend` se resuelve en cada petición con el DNS de Docker, y
+    # no una sola vez al cargar la configuración. Con `proxy_pass
+    # http://backend:8080` literal, nginx lo resolvía al arrancar: si el backend
+    # todavía no existía —al reiniciar el PC, Docker levanta los contenedores
+    # sin el orden de `depends_on`— el frontend no arrancaba («host not found
+    # in upstream»), y si el backend se recreaba con otra IP, nginx seguía
+    # llamando a la vieja y todo /api daba 502 mientras el 8080 respondía bien.
+    # Con una variable en `proxy_pass`, nginx pregunta al resolvedor y respeta
+    # su caducidad. Sin URI en la variable se reenvía la ruta original entera.
+    resolver 127.0.0.11 valid=10s ipv6=off;
+    set $sicot_backend http://backend:8080;
+
+    proxy_http_version 1.1;
+
+    # El Host con el que llegó la petición, puerto incluido —la variable
+    # http_host de nginx y no host, que lo pierde—. Sin esto nginx manda
+    # `Host: backend:8080`, y Spring decide si una petición es «de otro origen»
+    # comparando su cabecera Origin con el Host: el navegador del OTRO computador manda
+    # `Origin: http://<IP>:8443` en cada POST, Spring lo veía distinto de
+    # `backend:8080`, lo trataba como CORS y, como esa IP no está en
+    # CORS_ALLOWED_ORIGINS, respondía 403 «Invalid CORS request». La página
+    # cargaba y no dejaba entrar. En este mismo equipo no se veía, porque
+    # `localhost:8443` sí está en la lista (comprobado con curl el 05-11-2026:
+    # 403 con el Origin de la IP, 401 con el de localhost).
+    #
+    # Es lo mismo que hace Caddy en producción, que reenvía el Host original por
+    # omisión. El upstream es fijo (`$sicot_backend`), así que el Host del
+    # cliente no decide a dónde se conecta nginx: solo llega al backend.
+    proxy_set_header Host $http_host; # nosemgrep: generic.nginx.security.request-host-used.request-host-used
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # `^~` y no un prefijo a secas: nginx evalúa los bloques con expresión
+    # regular ANTES que los de prefijo, y más abajo hay uno que captura todo lo
+    # que termine en .js, .css, .svg… Sin esto, el día que una ruta de la API
+    # acabe en una de esas extensiones se serviría desde el disco de la SPA y
+    # devolvería 404, con el proxy intacto y sin nada en los logs del backend.
+    # `^~` dice: si este prefijo es el que mejor encaja, no mires las regex.
+    location ^~ /api/ {
+        proxy_pass $sicot_backend;
+
+        # Sin buffering: la respuesta del Copiloto llega token a token
+        # (`application/x-ndjson`, ver CopilotoController y ADR-014). Guardada
+        # en un búfer, llegaría entera al final y parecería que el streaming
+        # «no funciona» — que es exactamente el síntoma que costó encontrar al
+        # migrar a Spring 7. El backend ya manda `X-Accel-Buffering: no`, que
+        # nginx respeta; esto lo deja dicho también aquí, para todo /api.
+        proxy_buffering off;
+        proxy_request_buffering off;
+
+        # Una pregunta abierta al Copiloto sobre CPU tarda minutos
+        # (`OLLAMA_TIMEOUT_SECONDS`, 900 s por omisión). Con el minuto que trae
+        # nginx por defecto, el proxy cortaría la respuesta antes que el modelo.
+        proxy_read_timeout 960s;
+        proxy_send_timeout 960s;
+
+        # Los documentos pesan hasta 20 MB
+        # (`spring.servlet.multipart.max-file-size`). El 1 MB por defecto de
+        # nginx rechazaría la carga con un 413 antes de que el backend la viera.
+        client_max_body_size 25m;
+    }
+
+    location ^~ /actuator/ {
+        proxy_pass $sicot_backend;
+    }
+
+    # La documentación de la API, para alcanzarla también por este puerto.
+    location ^~ /swagger-ui/ {
+        proxy_pass $sicot_backend;
+    }
+
+    location ^~ /v3/api-docs {
+        proxy_pass $sicot_backend;
+    }
+
+    location = /swagger-ui.html {
+        proxy_pass $sicot_backend;
+    }
+
     location / {
         # SICOT no usa router de navegador (la pantalla se controla por estado en
         # App.tsx), pero esto evita 404 si alguien navega directo a una ruta.

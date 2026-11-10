@@ -25,6 +25,11 @@ public record ContratoResponse(
         String numeroRegistroPresupuestal,
         LocalDate fechaRegistroPresupuestal,
         String centroCosto,
+        String enlaceSecop,
+        String apoyoSupervision,
+        LocalDate fechaDesignacion,
+        String correoContratista,
+        String telefonoContratista,
         Instant fechaCreacion
 ) {
 }

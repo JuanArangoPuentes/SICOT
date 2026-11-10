@@ -197,10 +197,10 @@ src/
 ├── prefs.tsx                  Contexto de preferencias/tema (persistidas en localStorage)
 │
 ├── types/
-│   └── domain.ts              Tipos compartidos: Screen, Tab, Step, SubStep, ChatMsg…
+│   └── domain.ts              Tipos compartidos: Tab, AdminTab, Step, SubStep, ChatMsg…
 │
 ├── data/
-│   └── contractFlow.ts        Proceso GCCON-P-010: etapas, tutorial, catálogo de documentos
+│   └── contractFlow.ts        Proceso GCCON-P-010: documento por subetapa, tutorial, catálogo de documentos
 │
 ├── screens/                   Una pantalla completa por archivo
 │   ├── LoginScreen.tsx
@@ -235,7 +235,6 @@ src/
     ├── registroService.ts     bitácora de auditoría
     ├── usuarioService.ts      usuarios
     ├── firmaService.ts        firmas electrónicas
-    ├── formatoService.ts      catálogo de formatos
     ├── mappers.ts             DTO del backend → modelo de la UI
     ├── format.ts              formato de moneda (COP) y fechas
     └── session.ts             sesión persistida en localStorage
@@ -246,8 +245,11 @@ crudos del backend dentro del JSX.
 
 ## Convenciones
 
-- **Navegación manual**, sin react-router: el estado `Screen` en `App.tsx` decide qué se
-  renderiza.
+- **La vista activa vive en la URL**, con React Router
+  ([ADR-007](../docs/decisiones/ADR-007-enrutado-y-enlaces-profundos.md)):
+  `/supervisor/:vista`, `/gestion`, `/admin/:vista`. No hay ningún tipo `Screen`
+  ni variable de estado que decida la pantalla; una vista desconocida cae en la
+  de por defecto en vez de romper.
 - **Capa HTTP con `fetch`**, sin Axios.
 - **El backend es la autoridad**: el frontend no inventa estados, reglas de negocio ni datos.
 - **Iconos SVG en línea** (`components/icons.tsx`), no emoji.

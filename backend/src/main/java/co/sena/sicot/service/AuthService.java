@@ -1,17 +1,19 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.dto.auth.AuthResponse;
+import co.sena.sicot.dto.auth.CambiarContrasenaRequest;
 import co.sena.sicot.dto.auth.LoginRequest;
 import co.sena.sicot.entity.Usuario;
+import co.sena.sicot.exception.BusinessException;
 import co.sena.sicot.exception.CredencialesInvalidasException;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.JwtService;
+import co.sena.sicot.security.LimiteDeBcrypt;
 import co.sena.sicot.security.LoginAttemptService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -52,24 +54,39 @@ public class AuthService {
     }
 
     /**
+     * <h2>Por qué no es {@code @Transactional}</h2>
+     * BCrypt tarda deliberadamente unos 100 ms de CPU (el doble si la
+     * contraseña trae espacios). Con todo el método en una transacción, la
+     * conexión de Hikari que tomó {@code findByEmail} quedaba retenida mientras
+     * tanto: una ráfaga de logins sin autenticar ocupaba las diez conexiones del
+     * pool esperando turno de CPU, y el resto de la API respondía con timeouts.
+     * La consulta del usuario usa la conexión solo lo que dura; la comparación
+     * de contraseñas ocurre sin ninguna.
+     *
      * @param origen dirección de red desde la que llega el intento, para el
      *               límite por IP; {@code null} si no se pudo determinar
      */
-    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request, String origen) {
         String email = request.email().trim().toLowerCase();
-        loginAttemptService.verificarNoBloqueado(email, origen);
+        loginAttemptService.reservarIntento(email, origen);
 
-        Usuario usuario = usuarioRepository.findByEmail(email).orElse(null);
+        Usuario usuario;
+        boolean passwordCorrecta;
+        try {
+            usuario = usuarioRepository.findByEmail(email).orElse(null);
+            // Se compara siempre, exista el usuario o no: contra su hash real o
+            // contra el señuelo. Es lo que iguala los tiempos de respuesta.
+            String hash = usuario != null ? usuario.getPassword() : HASH_SEÑUELO;
+            passwordCorrecta = coincide(request.password(), hash);
+        } catch (RuntimeException e) {
+            // No se llegó a saber si las credenciales eran buenas (la base no
+            // respondió, por ejemplo): ese intento no puede contar como fallo.
+            loginAttemptService.liberarIntento(email, origen);
+            throw e;
+        }
 
-        // Se compara siempre, exista el usuario o no: contra su hash real o
-        // contra el señuelo. Es lo que iguala los tiempos de respuesta.
-        boolean passwordCorrecta = passwordEncoder.matches(
-                request.password(),
-                usuario != null ? usuario.getPassword() : HASH_SEÑUELO);
-
+        // En los dos rechazos la reserva se queda: ya es el fallo contado.
         if (usuario == null || !passwordCorrecta) {
-            loginAttemptService.registrarFallo(email, origen);
             log.warn("Login fallido para el correo {}", email);
             throw new CredencialesInvalidasException("Credenciales inválidas.");
         }
@@ -77,14 +94,95 @@ public class AuthService {
             // También cuenta como fallo: si no, una cuenta desactivada sería un
             // objetivo con intentos ilimitados para adivinar su contraseña, que
             // seguirá siendo válida el día que se reactive.
-            loginAttemptService.registrarFallo(email, origen);
             log.warn("Login rechazado: la cuenta {} está inactiva.", email);
             throw new CredencialesInvalidasException(
                     "El usuario está inactivo. Contacte al administrador.");
         }
-        loginAttemptService.registrarExito(email);
+        loginAttemptService.registrarExito(email, origen);
         String token = jwtService.generateToken(usuario);
         return new AuthResponse(token, usuario.getId(), usuario.getNombre(),
                 usuario.getEmail(), usuario.getRol());
+    }
+
+    /**
+     * Cambia la contraseña de la cuenta que hace la petición, sea cual sea su
+     * rol, y le devuelve una sesión nueva.
+     *
+     * <h2>Por qué exige la actual y cuenta los fallos</h2>
+     * La sesión sola no basta: con un equipo del Centro que quedó con la sesión
+     * abierta, o con un token copiado, cualquiera podría cambiar la contraseña
+     * y dejar fuera a su dueño. Y un fallo con la actual se cuenta en el mismo
+     * {@link LoginAttemptService} que el inicio de sesión: si no, este endpoint
+     * sería una forma de adivinar la contraseña de la cuenta sin el límite de
+     * cinco intentos.
+     *
+     * <h2>Por qué devuelve un token</h2>
+     * El cambio cierra todas las sesiones de la cuenta
+     * ({@link Usuario#revocarSesiones()}): las de otros equipos tienen que
+     * dejar de valer ya, igual que cuando el administrador restablece la
+     * contraseña. Eso incluye la del propio equipo, así que la respuesta trae
+     * un token emitido con la versión nueva y la persona sigue trabajando sin
+     * volver a entrar.
+     *
+     * <p>Sin {@code @Transactional}, por el mismo motivo que {@link #login}: las
+     * comparaciones y la codificación con BCrypt no retienen una conexión del
+     * pool.
+     *
+     * @param origen dirección de red de la petición, para el límite por IP
+     */
+    public AuthResponse cambiarContrasena(Long usuarioId, CambiarContrasenaRequest request, String origen) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .filter(Usuario::isActivo)
+                .orElseThrow(() -> new CredencialesInvalidasException("Sesión no válida."));
+        String nueva = request.contrasenaNueva();
+        if (!LimiteDeBcrypt.cabe(nueva)) {
+            throw new BusinessException(LimiteDeBcrypt.MENSAJE);
+        }
+
+        String correo = usuario.getEmail();
+        loginAttemptService.reservarIntento(correo, origen);
+        boolean actualCorrecta;
+        try {
+            actualCorrecta = coincide(request.contrasenaActual(), usuario.getPassword());
+        } catch (RuntimeException e) {
+            loginAttemptService.liberarIntento(correo, origen);
+            throw e;
+        }
+        // 400 y no 401: la sesión es válida, lo que falla es un dato del
+        // formulario. Un 401 haría que la aplicación cerrara la sesión.
+        if (!actualCorrecta) {
+            log.warn("Cambio de contraseña rechazado para {}: la actual no coincide.", correo);
+            throw new BusinessException("La contraseña actual no es correcta.");
+        }
+        loginAttemptService.registrarExito(correo, origen);
+
+        if (passwordEncoder.matches(nueva, usuario.getPassword())) {
+            throw new BusinessException("La contraseña nueva tiene que ser distinta de la actual.");
+        }
+        usuario.setPassword(passwordEncoder.encode(nueva));
+        usuario.revocarSesiones();
+        Usuario guardado = usuarioRepository.save(usuario);
+        log.info("La cuenta {} cambió su contraseña; sus demás sesiones quedaron cerradas.", correo);
+        return new AuthResponse(jwtService.generateToken(guardado), guardado.getId(), guardado.getNombre(),
+                guardado.getEmail(), guardado.getRol());
+    }
+
+    private boolean coincide(String password, String hash) {
+        if (passwordEncoder.matches(password, hash)) {
+            return true;
+        }
+        // Una contraseña pegada desde el correo de credenciales (o desde un
+        // chat) suele arrastrar un espacio al final, que no se ve en el campo.
+        // El 25-09-2026 eso dejó fuera al supervisor de prueba en el escritorio
+        // y en Android con la contraseña correcta: el campo tenía 17 caracteres
+        // y la contraseña 16. Desde entonces ninguna contraseña nueva puede
+        // empezar ni terminar en espacio (ver CrearUsuarioRequest), así que
+        // quitarlos solo puede recuperar lo que la persona quiso escribir.
+        // Se prueba primero tal cual, por si una cuenta anterior tuviera uno de
+        // verdad, y la segunda comparación también va contra el señuelo cuando
+        // el usuario no existe, para no delatar por el tiempo qué correos hay.
+        String sinEspacios = password.strip();
+        return !sinEspacios.isEmpty() && !sinEspacios.equals(password)
+                && passwordEncoder.matches(sinEspacios, hash);
     }
 }

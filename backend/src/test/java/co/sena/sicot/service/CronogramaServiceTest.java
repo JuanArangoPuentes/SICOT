@@ -83,11 +83,11 @@ class CronogramaServiceTest {
     void unMinutoDespuesDeLaFronteraSigueSiendoHoyEnElCentro() {
         // 19:01 del 23 en Bogotá = 00:01 del 24 en UTC. Con LocalDate.now() de
         // la JVM, aquí la etapa aparecía atrasada un día y el mensaje decía
-        // «debía cerrarse hacia el 2026-09-23, hace 1 día(s)».
+        // «debía cerrarse hacia el 23/09/2026, hace 1 día(s)».
         Cronograma cronograma = cronogramaA("2026-09-24T00:01:00Z");
 
         assertThat(cronograma.cierreEsperado()).isEqualTo(HOY_EN_BOGOTA);
         assertThat(cronograma.diasDeAtraso()).isZero();
-        assertThat(cronograma.mensaje()).contains("debería cerrarse hacia el 2026-09-23").doesNotContain("hace 1 día");
+        assertThat(cronograma.mensaje()).contains("debería cerrarse hacia el 23/09/2026").doesNotContain("hace 1 día");
     }
 }

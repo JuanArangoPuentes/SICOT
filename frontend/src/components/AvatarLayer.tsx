@@ -9,8 +9,14 @@ export interface TourStep {
 
 /**
  * Capa del avatar del Copiloto.
- * - follower: avatar flotante que sigue suavemente el cursor y descansa abajo a la derecha.
- * - guide: tutorial asistido, el avatar se posiciona junto al elemento que explica.
+ * - Recorrido guiado (en cualquier modo): el avatar se posiciona junto al
+ *   elemento que explica.
+ * - Modo «Follower»: avatar flotante que sigue suavemente el cursor, descansa
+ *   abajo a la derecha y, al pulsarlo, abre el Copiloto.
+ *
+ * `onOpenChat` llega solo donde hay un Copiloto que abrir. Sin él no se pinta
+ * el avatar flotante: antes aparecía también en Gestión y Administración, y al
+ * pulsarlo solo mostraba un pulgar arriba.
  */
 export default function AvatarLayer({
   tour,
@@ -21,15 +27,14 @@ export default function AvatarLayer({
   tour: TourStep[]
   tourActive: boolean
   onTourEnd: () => void
-  onOpenChat: () => void
+  onOpenChat?: () => void
 }) {
   const { prefs } = usePrefs()
   const [pos, setPos] = useState({ x: window.innerWidth - 110, y: window.innerHeight - 130 })
   const [step, setStep] = useState(0)
   const [rect, setRect] = useState<DOMRect | null>(null)
-  const [reaction, setReaction] = useState<string | null>(null)
 
-  const followerOn = prefs.avatarMode === 'follower' && !tourActive
+  const followerOn = prefs.avatarMode === 'follower' && !tourActive && onOpenChat !== undefined
 
   // Follower: sigue el cursor con retardo y vuelve a la esquina al quedar inactivo
   useEffect(() => {
@@ -50,7 +55,7 @@ export default function AvatarLayer({
     }
   }, [followerOn])
 
-  // Guide: localiza el elemento del paso actual
+  // Recorrido guiado: localiza el elemento del paso actual
   useEffect(() => {
     if (!tourActive) {
       setRect(null)
@@ -178,12 +183,9 @@ export default function AvatarLayer({
 
   return (
     <button
-      onClick={() => {
-        onOpenChat()
-        setReaction('👍')
-        setTimeout(() => setReaction(null), 1200)
-      }}
-      title={`${prefs.avatarName} — abrir chat`}
+      onClick={onOpenChat}
+      title={`${prefs.avatarName} — abrir el Copiloto`}
+      aria-label={`${prefs.avatarName} — abrir el Copiloto`}
       className="avatar-float fade-in-up"
       style={{
         position: 'fixed',
@@ -193,7 +195,6 @@ export default function AvatarLayer({
         width: 64,
         height: 64,
         borderRadius: '50%',
-        fontSize: 28,
         cursor: 'pointer',
         color: 'var(--accent)',
         background: 'var(--bg-card)',
@@ -205,7 +206,7 @@ export default function AvatarLayer({
         transition: 'top 320ms cubic-bezier(0.4,0,0.2,1), left 320ms cubic-bezier(0.4,0,0.2,1)',
       }}
     >
-      {reaction ?? <AvatarIcon id={prefs.avatarId} size={28} />}
+      <AvatarIcon id={prefs.avatarId} size={28} />
     </button>
   )
 }

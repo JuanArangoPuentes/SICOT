@@ -1,6 +1,8 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.automatizacion.EventoDeNegocio;
+import co.sena.sicot.config.HechoSinConexionInterceptor;
+import co.sena.sicot.dto.registro.NovedadesResponse;
 import co.sena.sicot.dto.registro.RegistroResponse;
 import co.sena.sicot.entity.Contrato;
 import co.sena.sicot.entity.Registro;
@@ -47,6 +49,14 @@ public class RegistroService {
 
     /** Tope del listado por contrato. Mismo criterio que en {@code AlertaService}. */
     private static final int MAX_REGISTROS_POR_CONTRATO = 200;
+
+    /**
+     * Tope de una respuesta de novedades. Es bajo a propósito: si un equipo
+     * estuvo tanto tiempo sin preguntar como para acumular más, lo que necesita
+     * no es la lista sino volver a pedir las pantallas enteras, y eso es lo que
+     * hace en cuanto ve una sola novedad.
+     */
+    private static final int MAX_NOVEDADES = 50;
 
     private final RegistroRepository registroRepository;
     // Se inyecta el repositorio (no ContratoService) a propósito: ContratoService
@@ -95,6 +105,29 @@ public class RegistroService {
         guardar(contrato, accion, descripcion, null, OrigenRegistro.SISTEMA);
     }
 
+    /**
+     * Lo mismo, para quien solo tiene el id del contrato.
+     *
+     * <p>Es la variante que usan las acciones del motor: quien llama es un hilo
+     * cuya transacción de lectura ya se cerró, así que una entidad que viniera
+     * de fuera sería un proxy de otra sesión. Se resuelve aquí dentro, igual que
+     * hace {@code AlertaService.crearDelSistema} por el mismo motivo.
+     *
+     * <p>Si el contrato ya no existe —se borró entre encolar la tarea y
+     * ejecutarla— no se registra nada: el expediente al que pertenecería la
+     * constancia desapareció con él, y hacerla global la dejaría flotando en la
+     * auditoría general sin nada a lo que referirse.
+     */
+    @Transactional
+    public void registrarDelSistema(Long contratoId, String accion, String descripcion) {
+        if (contratoId == null) {
+            guardar(null, accion, descripcion, null, OrigenRegistro.SISTEMA);
+            return;
+        }
+        contratoRepository.findById(contratoId)
+                .ifPresent(contrato -> guardar(contrato, accion, descripcion, null, OrigenRegistro.SISTEMA));
+    }
+
     private void guardar(Contrato contrato, String accion, String descripcion,
                          Usuario usuario, OrigenRegistro origen) {
         Registro registro = new Registro();
@@ -103,6 +136,11 @@ public class RegistroService {
         registro.setAccion(accion);
         registro.setDescripcion(descripcion);
         registro.setOrigen(origen);
+        // Solo lo que hace una persona puede haberse hecho sin red: lo del
+        // sistema lo hace el servidor, que no se desconecta de sí mismo.
+        if (origen == OrigenRegistro.USUARIO) {
+            HechoSinConexionInterceptor.enLaSolicitudActual().ifPresent(registro::setHechoSinConexionEn);
+        }
         registroRepository.save(registro);
 
         if (origen == OrigenRegistro.USUARIO) {
@@ -126,6 +164,61 @@ public class RegistroService {
         return registroRepository
                 .findByContratoIdOrderByFechaDesc(contratoId, PageRequest.of(0, MAX_REGISTROS_POR_CONTRATO))
                 .stream().map(RegistroMapper::toResponse).toList();
+    }
+
+    /**
+     * Qué ha pasado en un contrato desde la entrada {@code desdeId}, para que
+     * un equipo se entere de lo que hizo otro sin recargar la pantalla.
+     *
+     * <h2>Por qué sobre la auditoría y no sobre las entidades</h2>
+     * Porque {@code registros} ya es el punto por el que pasa todo cambio
+     * relevante —es la misma razón por la que el motor de automatizaciones se
+     * enganchó aquí (ver arriba)—, y porque ninguna de las entidades que
+     * escribe el supervisor tiene columna de última modificación: filtrar por
+     * ellas exigiría añadirla a nueve tablas y acordarse de mantenerla. Si
+     * quedó en la auditoría, se avisa; y si alguien añade mañana una acción
+     * nueva, se avisa sola.
+     *
+     * <h2>El trato con quien pregunta</h2>
+     * La primera vez se llama sin {@code desdeId} y lo único que vuelve es la
+     * marca: no hay «novedades» contra nada, porque la pantalla acaba de
+     * cargar el estado entero. A partir de ahí se manda la marca anterior y
+     * vuelve lo que haya pasado después, más la marca nueva.
+     *
+     * <p>La marca nunca retrocede: sin novedades se devuelve la misma que
+     * llegó, así que el cliente puede guardarla tal cual sin compararla.
+     *
+     * <h2>Lo que esta consulta no promete</h2>
+     * Que ninguna entrada se quede sin avisar. Dos escrituras simultáneas
+     * pueden confirmarse en orden distinto al de sus identificadores, y una
+     * respuesta cortada por el tope salta igual a la más reciente. No importa,
+     * y conviene entender por qué: <b>esto es un aviso, no los datos</b>. Quien
+     * recibe una novedad vuelve a pedir las pantallas enteras, así que el
+     * efecto de lo que no se avisó llega igual con el aviso siguiente —o al
+     * volver a la ventana, que también relee. Lo que se perdería es un aviso,
+     * nunca un cambio del expediente.
+     */
+    @Transactional(readOnly = true)
+    public NovedadesResponse novedadesDesde(Long contratoId, Long desdeId) {
+        Contrato contrato = contratoRepository.findById(contratoId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Contrato", contratoId));
+        // La misma puerta que el listado de auditoría: un SUPERVISOR solo
+        // sondea el contrato que tiene asignado. Sin esto, este endpoint sería
+        // una rendija para saber si un contrato ajeno se movió.
+        SecurityUtils.verificarAccesoAlContrato(contrato);
+
+        if (desdeId == null) {
+            Long ultimo = registroRepository.ultimoIdDelContrato(contratoId);
+            // Sin auditoría todavía, se arranca en 0: la primera entrada que se
+            // escriba tendrá un identificador mayor y entrará por su propio pie.
+            return new NovedadesResponse(ultimo != null ? ultimo : 0L, List.of());
+        }
+
+        List<Registro> nuevos = registroRepository
+                .findByContratoIdAndIdGreaterThanOrderByIdDesc(contratoId, desdeId, PageRequest.of(0, MAX_NOVEDADES));
+        // El primero es el mayor (vienen de la más reciente a la más vieja).
+        Long ultimoId = nuevos.isEmpty() ? desdeId : nuevos.getFirst().getId();
+        return new NovedadesResponse(ultimoId, nuevos.stream().map(RegistroMapper::toResponse).toList());
     }
 
     @Transactional(readOnly = true)

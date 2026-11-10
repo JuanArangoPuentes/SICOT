@@ -37,7 +37,7 @@
 # `develop` atrás. Ocurrió de verdad con la primera corrección de seguridad
 # que llegó.
 
-# ENFRIAMIENTO ANTES DE ADOPTAR UNA VERSIÓN (`cooldown`, en los cuatro
+# ENFRIAMIENTO ANTES DE ADOPTAR UNA VERSIÓN (`cooldown`, en todos los
 # ecosistemas). Los compromisos de paquetes que se han visto en npm y en Maven
 # siguen todos el mismo patrón: se publica una versión con código añadido y se
 # retira o se marca en cuestión de horas. Un actualizador automático sin espera
@@ -138,6 +138,61 @@ updates:
       default-days: 7
     open-pull-requests-limit: 2
     labels: [dependencias, ci]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  # Las imágenes base. Antes no se vigilaban: los Dockerfile y los compose
+  # usaban ramas flotantes ("22-alpine", "2-alpine") y nginx se quedó en la
+  # 1.27, una rama cerrada que ya no recibía parches, sin que ningún PR ni
+  # ninguna compuerta lo señalara. Ahora se fijan por versión exacta y la
+  # versión nueva llega aquí, como cualquier otra dependencia.
+  #
+  # Mismo enfriamiento y mismo filtro de versiones mayores que el resto, y SOLO
+  # `default-days`, como en `github-actions`: una opción que un ecosistema no
+  # admite invalida el archivo entero y deja a todos sin actualizar. Las
+  # mayores (PostgreSQL 19, Node 24) se suben a mano: PostgreSQL además exige
+  # migrar los datos.
+  - package-ecosystem: docker
+    directory: /backend
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    labels: [dependencias, backend]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    labels: [dependencias, frontend]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+
+  # PostgreSQL, Adminer, Caddy y Ollama viven en los archivos de Compose de la
+  # raíz, no en un Dockerfile.
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 2
+    labels: [dependencias]
     ignore:
       - dependency-name: "*"
         update-types: [version-update:semver-major]

@@ -8,6 +8,7 @@ import co.sena.sicot.automatizacion.ResultadoDeAccion;
 import co.sena.sicot.automatizacion.TareaEnEjecucion;
 import co.sena.sicot.entity.enums.TipoTareaAutomatizada;
 import co.sena.sicot.service.AlertaService;
+import co.sena.sicot.service.RegistroService;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,13 +30,16 @@ public class CreacionDeAlerta implements AccionDeTarea {
 
     private final AlertaService alertaService;
     private final LectorDeContratos lectorDeContratos;
+    private final RegistroService registroService;
     private final PayloadJson payloadJson;
 
     public CreacionDeAlerta(AlertaService alertaService,
                             LectorDeContratos lectorDeContratos,
+                            RegistroService registroService,
                             PayloadJson payloadJson) {
         this.alertaService = alertaService;
         this.lectorDeContratos = lectorDeContratos;
+        this.registroService = registroService;
         this.payloadJson = payloadJson;
     }
 
@@ -60,6 +64,15 @@ public class CreacionDeAlerta implements AccionDeTarea {
 
         alertaService.crearDelSistema(
                 tarea.contratoId(), datos.tipoAlerta(), datos.prioridad(), datos.mensaje());
+
+        // La constancia va DESPUÉS de crear la alerta y no antes, para que no
+        // pueda afirmar algo que no llegó a pasar. Es lo que da sentido a la
+        // columna `registros.origen` que pide ADR-008: ante un «nunca me
+        // avisaron», el expediente tiene la prueba de que SICOT sí avisó, y se
+        // distingue de un aviso que escribió una persona.
+        registroService.registrarDelSistema(tarea.contratoId(), "ALERTA_EMITIDA",
+                "Alerta " + datos.tipoAlerta() + " (prioridad " + datos.prioridad()
+                        + ") emitida por la automatización '" + tarea.regla() + "': " + datos.mensaje());
         return ResultadoDeAccion.hecha();
     }
 }

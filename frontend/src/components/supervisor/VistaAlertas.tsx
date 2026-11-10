@@ -8,22 +8,30 @@
 // sistema no puede saberlo.
 
 import { SectionHeader, type LiveAlert } from '@/components/ui'
-import type { AlertaResponse, ContratoResponse } from '@/services/api/types'
+import type { AlertaResponse, ContratoResponse, TipoAlerta } from '@/services/api/types'
+import type { DestinoDeAlerta } from './destinoDeAlerta'
 
 export default function VistaAlertas({
   contrato,
   alertaCronograma,
   alertasApi,
   errorAlertas,
-  onResolver,
+  destinoDe,
+  onIrA,
 }: {
   contrato: ContratoResponse
   alertaCronograma: LiveAlert | null
   alertasApi: AlertaResponse[]
   errorAlertas: boolean
-  onResolver: (id: string) => void
+  destinoDe: (tipo: TipoAlerta) => DestinoDeAlerta | null
+  onIrA: (destino: DestinoDeAlerta) => void
 }) {
-  const resolveAlert = onResolver
+  // Sin destino, la tarjeta va sin botón: es mejor que uno que lleve a un
+  // paso que no tiene que ver con la alerta.
+  const accion = (tipo: TipoAlerta) => {
+    const destino = destinoDe(tipo)
+    return destino ? { actionLabel: destino.etiqueta, onAction: () => onIrA(destino) } : {}
+  }
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: 24, minWidth: 0 }}>
       <SectionHeader
@@ -39,8 +47,7 @@ export default function VistaAlertas({
           }
           title="Cronograma del paso activo"
           desc={alertaCronograma.text}
-          actionLabel="Ver paso"
-          onAction={() => resolveAlert(alertaCronograma.id)}
+          {...accion('CRONOGRAMA')}
         />
       )}
 
@@ -59,8 +66,7 @@ export default function VistaAlertas({
               severity={severity}
               title={a.tipo.charAt(0) + a.tipo.slice(1).toLowerCase().replace('_', ' ')}
               desc={a.mensaje}
-              actionLabel="Ir al paso"
-              onAction={() => resolveAlert('api-' + a.id)}
+              {...accion(a.tipo)}
             />
           )
         })}

@@ -1,7 +1,7 @@
 package co.sena.sicot.automatizacion;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 /**
@@ -36,7 +36,7 @@ public class PayloadJson {
     public String escribir(PayloadDeTarea payload) {
         try {
             return objectMapper.writeValueAsString(payload);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             // Solo puede pasar si alguien añade una variante no serializable.
             // Es un error de programación, no una condición de ejecución.
             throw new IllegalStateException("No se pudo serializar el payload de la tarea.", e);
@@ -52,7 +52,7 @@ public class PayloadJson {
     public <T extends PayloadDeTarea> T leer(String json, Class<T> tipo) {
         try {
             return objectMapper.readValue(json, tipo);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(
                     "El payload guardado no corresponde a " + tipo.getSimpleName() + ": " + e.getOriginalMessage(), e);
         }

@@ -1,0 +1,15 @@
+# Vulnerabilidades que Trivy reporta y que aquí se dejan pasar, siempre con el
+# motivo y con fecha de caducidad. Una excepción sin caducidad se vuelve
+# permanente sin que nadie lo decida: cuando llega la fecha, la compuerta vuelve
+# a ponerse roja y hay que mirarla otra vez.
+#
+# Formato: <ID> exp:AAAA-MM-DD
+
+# Hoy no hay ninguna excepción.
+#
+# Hasta el 28-10-2026 estaban aquí CVE-2026-47884 y CVE-2026-47890, las dos
+# CRÍTICAS en org.springframework:spring-webmvc 6.2.19 (XsltView y Server-Sent
+# Events), con caducidad el 15-11-2026. Su única versión corregida era Spring
+# Framework 7.0.9, que no llega con Spring Boot 3.5. Se fueron con la migración
+# a Spring Boot 4.1.2 (ADR-014), que trae spring-webmvc 7.0.10: ya no hay nada
+# que dejar pasar.

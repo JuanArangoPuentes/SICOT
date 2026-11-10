@@ -4,6 +4,7 @@ import co.sena.sicot.entity.enums.EstadoContrato;
 import co.sena.sicot.service.Cronograma;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Todo lo que una regla de calendario necesita saber de un contrato, ya leído.
@@ -30,6 +31,8 @@ import java.time.LocalDate;
  *
  * @param subetapasTotales     las 27 de GCCON-P-010 en un contrato bien sembrado
  * @param subetapasCompletadas cuántas de ellas están cerradas
+ * @param entregas             las fechas de entrega acordadas con el contratista
+ *                             en el paso 2.4, en orden; vacía si no hay acuerdo
  */
 public record FotoDelContrato(
         Long contratoId,
@@ -43,8 +46,29 @@ public record FotoDelContrato(
         long subetapasTotales,
         long subetapasCompletadas,
         Integer etapaActual,
-        int totalEtapas
+        int totalEtapas,
+        List<Entrega> entregas
 ) {
+
+    /** Una entrega acordada, ya leída: ver {@code EntregaAcordada}. */
+    public record Entrega(int numero, LocalDate fecha, String descripcion) {
+    }
+
+    public FotoDelContrato {
+        entregas = entregas == null ? List.of() : List.copyOf(entregas);
+    }
+
+    /**
+     * La foto sin entregas acordadas: la de un contrato que todavía no pasó del
+     * paso 2.4, y la que arman las reglas que no las miran.
+     */
+    public FotoDelContrato(Long contratoId, String numeroContrato, String objeto, LocalDate fechaInicio,
+                           LocalDate fechaFin, EstadoContrato estado, String supervisorNombre,
+                           String supervisorEmail, long subetapasTotales, long subetapasCompletadas,
+                           Integer etapaActual, int totalEtapas) {
+        this(contratoId, numeroContrato, objeto, fechaInicio, fechaFin, estado, supervisorNombre, supervisorEmail,
+                subetapasTotales, subetapasCompletadas, etapaActual, totalEtapas, List.of());
+    }
 
     public boolean tieneSupervisorConCorreo() {
         return supervisorEmail != null && !supervisorEmail.isBlank();

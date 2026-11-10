@@ -56,13 +56,15 @@ public class LimitadorDeUsoIa {
     private static final int MAX_USUARIOS_VIGILADOS = 1_000;
 
     private final int peticionesPorMinuto;
+    private final int maxConcurrentes;
     private final Semaphore concurrencia;
     private final ConcurrentHashMap<Long, Ventana> ventanaPorUsuario = new ConcurrentHashMap<>();
 
     public LimitadorDeUsoIa(
             @Value("${sicot.ia.max-concurrentes:2}") int maxConcurrentes,
             @Value("${sicot.ia.peticiones-por-minuto:10}") int peticionesPorMinuto) {
-        this.concurrencia = new Semaphore(Math.max(1, maxConcurrentes), true);
+        this.maxConcurrentes = Math.max(1, maxConcurrentes);
+        this.concurrencia = new Semaphore(this.maxConcurrentes, true);
         this.peticionesPorMinuto = Math.max(1, peticionesPorMinuto);
     }
 
@@ -90,15 +92,56 @@ public class LimitadorDeUsoIa {
         }
         if (!adquirido) {
             log.warn("Capacidad de IA agotada: se rechaza '{}' con 429.", operacion);
-            throw new DemasiadasSolicitudesException(
-                    "El asistente de IA está atendiendo otras solicitudes en este momento. "
-                            + "Espere unos segundos y vuelva a intentarlo.", 15);
+            throw ocupada();
         }
         try {
             return tarea.get();
         } finally {
             concurrencia.release();
         }
+    }
+
+    /**
+     * Ejecuta {@code tarea} sin ninguna otra inferencia en curso: espera hasta
+     * {@code espera} a que se liberen <i>todos</i> los permisos y los retiene
+     * mientras dura. Lo que llegue entretanto (una pregunta, un precalentado)
+     * se rechaza con 429 como cuando no hay cupo.
+     *
+     * <p>Es para la redacción de observaciones de un documento, que el
+     * supervisor espera frente a la pantalla. En un portátil sin GPU, Ollama
+     * atiende casi en serie: con el precalentado que se lanza al abrir el
+     * contrato (~160 s) en curso, la redacción (~130 s) esperaba en Ollama o
+     * se repartía la CPU con él, pasaba de los 240 s y el supervisor recibía
+     * sus notas tal cual tras cuatro minutos (auditoría del 02-10-2026). Así
+     * espera a lo sumo {@code espera} antes de empezar, y una vez empezada no
+     * comparte el modelo. El precalentado que se rechaza solo se anota en el
+     * log: la primera pregunta del chat será lenta, como sin precalentado.
+     */
+    public <T> T ejecutarEnExclusiva(String operacion, Duration espera, Supplier<T> tarea) {
+        verificarFrecuencia(operacion);
+
+        boolean adquirido;
+        try {
+            adquirido = concurrencia.tryAcquire(maxConcurrentes, espera.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IaNoDisponibleException("La solicitud al asistente de IA fue interrumpida.", e);
+        }
+        if (!adquirido) {
+            log.warn("La IA siguió ocupada {} s: se rechaza '{}' con 429.", espera.toSeconds(), operacion);
+            throw ocupada();
+        }
+        try {
+            return tarea.get();
+        } finally {
+            concurrencia.release(maxConcurrentes);
+        }
+    }
+
+    private static IaOcupadaException ocupada() {
+        return new IaOcupadaException(
+                "El asistente de IA está atendiendo otras solicitudes en este momento. "
+                        + "Espere unos segundos y vuelva a intentarlo.", 15);
     }
 
     /**

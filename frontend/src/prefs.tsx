@@ -35,18 +35,19 @@ export interface Prefs {
   fontWeight: 400 | 600 | 700
   // Motion
   transitionMs: number
-  blinkAlerts: boolean
-  hoverEffects: boolean
-  // Notifications
-  alertDurationS: number
-  alertPosition: 'top-right' | 'top-center' | 'bottom-right'
-  sound: boolean
   // Copiloto / avatar
   avatarId: string
   avatarName: string
-  avatarTone: 'formal' | 'amable' | 'tecnico'
-  avatarMode: 'ghost' | 'follower' | 'guide'
+  avatarMode: ModoAvatar
 }
+
+/**
+ * Presencia del avatar fuera del panel del Copiloto. No hay modo «Guide»: el
+ * recorrido guiado se lanza con su propio botón en cualquier modo, así que
+ * elegirlo daba lo mismo que «Ghost».
+ */
+export const MODOS_AVATAR = ['ghost', 'follower'] as const
+export type ModoAvatar = (typeof MODOS_AVATAR)[number]
 
 /** Súbelo al cambiar la paleta base — invalida los colores ya guardados. */
 export const THEME_VERSION = 3
@@ -74,14 +75,8 @@ export const DEFAULT_PREFS: Prefs = {
   fontSize: 15,
   fontWeight: 400,
   transitionMs: 200,
-  blinkAlerts: true,
-  hoverEffects: true,
-  alertDurationS: 6,
-  alertPosition: 'top-right',
-  sound: false,
   avatarId: 'sena',
   avatarName: 'Copiloto SICOT',
-  avatarTone: 'amable',
   avatarMode: 'ghost',
 }
 
@@ -112,8 +107,6 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       fontSize: 15,
       fontWeight: 400,
       transitionMs: 200,
-      blinkAlerts: true,
-      hoverEffects: true,
     },
   },
   'oscuro-grafito': {
@@ -140,8 +133,6 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       fontSize: 15,
       fontWeight: 400,
       transitionMs: 200,
-      blinkAlerts: true,
-      hoverEffects: true,
     },
   },
   'claro-institucional': {
@@ -168,8 +159,6 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       fontSize: 15,
       fontWeight: 400,
       transitionMs: 200,
-      blinkAlerts: true,
-      hoverEffects: true,
     },
   },
   'alto-contraste': {
@@ -196,8 +185,6 @@ export const PRESETS: Record<PresetId, { label: string; desc: string; patch: The
       fontSize: 16,
       fontWeight: 600,
       transitionMs: 0,
-      blinkAlerts: true,
-      hoverEffects: true,
     },
   },
 }
@@ -208,7 +195,8 @@ export const AVATARS: Array<{ id: string; label: string; desc: string }> = [
   { id: 'bot', label: 'Bot Amigable', desc: 'Diseño futurista y cálido' },
   { id: 'gestor', label: 'Gestor Eficiente', desc: 'Estilo corporativo moderno' },
   { id: 'sena', label: 'Especialista SENA', desc: 'Con branding institucional' },
-  { id: 'custom', label: 'Avatar Personalizado', desc: 'Sube una imagen de 200×200 px' },
+  // No hay «Avatar personalizado»: prometía subir una imagen de 200×200 px y no
+  // había dónde subirla; elegirlo solo ponía el icono de carga como avatar.
 ]
 
 export const FONT_OPTIONS = ['IBM Plex Sans', 'Space Grotesk', 'IBM Plex Mono']
@@ -226,17 +214,7 @@ export const usePrefs = () => useContext(Ctx)
 const STORAGE_KEY = 'sicot.prefs'
 
 /** Preferencias que NO son de apariencia — sobreviven a un cambio de tema. */
-const CLAVES_NO_VISUALES = [
-  'avatarId',
-  'avatarName',
-  'avatarTone',
-  'avatarMode',
-  'sound',
-  'alertPosition',
-  'alertDurationS',
-  'blinkAlerts',
-  'hoverEffects',
-] as const
+const CLAVES_NO_VISUALES = ['avatarId', 'avatarName', 'avatarMode'] as const
 
 /**
  * Lee las preferencias guardadas.
@@ -247,8 +225,8 @@ const CLAVES_NO_VISUALES = [
  *
  * Si el tema guardado es de una versión anterior a THEME_VERSION, se descartan
  * los colores y la tipografía y se conservan solo las preferencias que no son
- * de apariencia (copiloto, notificaciones): así el rediseño se ve de verdad en
- * equipos donde ya había un tema guardado.
+ * de apariencia (las del copiloto): así el rediseño se ve de verdad en equipos
+ * donde ya había un tema guardado.
  *
  * Cualquier problema al leer (JSON corrupto, localStorage bloqueado por la
  * configuración del navegador) se ignora y se cae a los valores por defecto:
@@ -258,7 +236,7 @@ function cargarPrefs(): Prefs {
   try {
     const guardado = localStorage.getItem(STORAGE_KEY)
     if (!guardado) return DEFAULT_PREFS
-    const previo = JSON.parse(guardado) as Partial<Prefs>
+    const previo = vigentes(JSON.parse(guardado) as Record<string, unknown>)
     if (previo.themeVersion !== THEME_VERSION) {
       const conservadas: Partial<Prefs> = {}
       for (const clave of CLAVES_NO_VISUALES) {
@@ -270,6 +248,26 @@ function cargarPrefs(): Prefs {
   } catch {
     return DEFAULT_PREFS
   }
+}
+
+/**
+ * Lo guardado, sin las preferencias que ya no existen ni los valores que ya no
+ * se ofrecen.
+ *
+ * Sin este filtro, lo que se quitó de Configuración (sonido, posición y
+ * duración de las alertas, parpadeo, tono del copiloto) seguía viajando en el
+ * almacenamiento del equipo para siempre, porque cada cambio vuelve a guardar el
+ * objeto entero. Y un avatar o un modo que ya no se ofrecen dejaban la galería
+ * o el modo de presencia sin ninguno marcado.
+ */
+function vigentes(guardado: Record<string, unknown>): Partial<Prefs> {
+  const resultado: Record<string, unknown> = {}
+  for (const clave of Object.keys(DEFAULT_PREFS)) {
+    if (guardado[clave] !== undefined) resultado[clave] = guardado[clave]
+  }
+  if (!AVATARS.some((a) => a.id === resultado.avatarId)) delete resultado.avatarId
+  if (!MODOS_AVATAR.some((m) => m === resultado.avatarMode)) delete resultado.avatarMode
+  return resultado as Partial<Prefs>
 }
 
 /** rgba() a partir de un color hexadecimal (#RGB o #RRGGBB). */
@@ -355,7 +353,6 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
     r.setProperty('--accent-glow', toRgba(hex, 0.2))
     r.setProperty('--accent-soft', toRgba(hex, 0.1))
     r.setProperty('--accent-line', toRgba(hex, 0.26))
-    r.setProperty('--grid-line', toRgba(hex, 0.05))
     r.setProperty('--on-accent', textoSobre(hex))
 
     // Text — explicit per theme
@@ -385,8 +382,6 @@ export function PrefsProvider({ children }: { children: ReactNode }) {
 
     // Motion
     r.setProperty('--t', `${prefs.transitionMs}ms`)
-
-    document.body.classList.toggle('no-hover', !prefs.hoverEffects)
   }, [prefs])
 
   const patch = (p: Partial<Prefs>) => setPrefs((prev) => ({ ...prev, ...p }))

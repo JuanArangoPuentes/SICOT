@@ -72,6 +72,14 @@ public class RedaccionDeResumen implements AccionDeTarea {
     /** Extrae el «1.4» de «Subetapa 1.4 (Nombre) avanzó de …». */
     private static final Pattern NUMERO_DE_SUBETAPA = Pattern.compile("^Subetapa (\\d+\\.\\d+)");
 
+    /**
+     * Los dos estados de un ESTADO_CAMBIADO («Estado del contrato: BORRADOR → ACTIVO…»). Se
+     * sacan con un patrón y no reescribiendo la descripción entera: desde el 06-11-2026 la
+     * activación por el acta firmada añade el motivo («… (paso 2.1).»), y quitarle todos los
+     * puntos decía «(paso 21)» en el resumen que recibe el supervisor.
+     */
+    private static final Pattern CAMBIO_DE_ESTADO = Pattern.compile("Estado del contrato: (\\p{Lu}+) → (\\p{Lu}+)");
+
     private final LectorDeContratos lectorDeContratos;
     private final RegistroRepository registroRepository;
     private final AlertaService alertaService;
@@ -182,7 +190,15 @@ public class RedaccionDeResumen implements AccionDeTarea {
                     }
                 }
                 case "SUBETAPA_REVERTIDA" -> revertidas++;
-                case "DOCUMENTO_GENERADO" -> generados++;
+                // Solo los documentos nuevos. Cancelar la revisión o pulsar
+                // «Usar mis notas tal cual» rearma el mismo borrador y deja
+                // otro registro («… regenerado por SICOT …»): contarlos todos
+                // decía «se generaron 2 documentos» cuando había uno.
+                case "DOCUMENTO_GENERADO" -> {
+                    if (!descripcion.contains(" regenerado ")) {
+                        generados++;
+                    }
+                }
                 case "DOCUMENTO_FIRMADO" -> firmados++;
                 case "DOCUMENTO_CARGADO" -> cargados++;
                 case "ESTADO_CAMBIADO" -> ultimoEstado = descripcion;
@@ -199,10 +215,13 @@ public class RedaccionDeResumen implements AccionDeTarea {
         if (revertidas > 0) {
             frases.add(revertidas == 1 ? "se revirtió una subetapa" : "se revirtieron " + revertidas + " subetapas");
         }
+        // «En SICOT» y no «con el copiloto»: el documento lo arma SICOT con
+        // los datos del contrato (ADR-008); el modelo, cuando interviene, solo
+        // redacta las observaciones. Atribuírselo entero era teatro de IA.
         if (generados > 0) {
             frases.add(generados == 1
-                    ? "se generó un documento con el copiloto"
-                    : "se generaron " + generados + " documentos con el copiloto");
+                    ? "se generó un documento en SICOT"
+                    : "se generaron " + generados + " documentos en SICOT");
         }
         if (firmados > 0) {
             frases.add(firmados == 1 ? "se firmó un documento" : "se firmaron " + firmados + " documentos");
@@ -211,10 +230,12 @@ public class RedaccionDeResumen implements AccionDeTarea {
             frases.add(cargados == 1 ? "se cargó un documento" : "se cargaron " + cargados + " documentos");
         }
         if (ultimoEstado != null) {
-            // La descripción ya viene redactada por RegistroService como
-            // «Estado del contrato: BORRADOR → ACTIVO.»
-            frases.add(ultimoEstado.replace("Estado del contrato:", "el contrato pasó de")
-                    .replace("→", "a").replace(".", "").trim());
+            // La descripción la redacta ContratoService como «Estado del
+            // contrato: BORRADOR → ACTIVO.», a veces con el motivo detrás.
+            Matcher cambio = CAMBIO_DE_ESTADO.matcher(ultimoEstado);
+            if (cambio.find()) {
+                frases.add("el contrato pasó de " + cambio.group(1) + " a " + cambio.group(2));
+            }
         }
 
         if (frases.isEmpty()) {

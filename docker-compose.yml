@@ -13,7 +13,11 @@ name: sicot
 
 services:
   db:
-    image: postgres:18-alpine
+    # Versiones exactas en todas las imágenes: una nueva llega como PR de
+    # Dependabot (ecosistema docker-compose) en vez de cambiar sola en el
+    # siguiente `pull`. Las de una versión mayor de PostgreSQL además exigen
+    # migrar los datos (pg_upgrade); por eso Dependabot no las propone.
+    image: postgres:18.6-alpine
     container_name: sicot-db
     labels:
       org.opencontainers.image.title: "SICOT · PostgreSQL"
@@ -29,7 +33,14 @@ services:
     ports:
       # 5433 en el host para no chocar con un PostgreSQL nativo ya corriendo
       # en 5432 (como el que usa el flujo de desarrollo sin Docker).
-      - "5433:5432"
+      #
+      # Solo en 127.0.0.1: la base tiene aquí una contraseña de conveniencia
+      # publicada en este mismo archivo. Publicada en todas las interfaces,
+      # cualquier equipo de la red llegaba a ella saltándose el backend en
+      # cuanto el portátil se abría a otro equipo para una prueba
+      # (docs/operacion/PROBAR_EN_OTRO_DISPOSITIVO.md) — y en la wifi de un
+      # Centro eso es media red. Desde este equipo se sigue entrando igual.
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sicot -d sicot"]
       interval: 5s
@@ -43,7 +54,7 @@ services:
           memory: 1G
 
   adminer:
-    image: adminer:4
+    image: adminer:4.17.1
     container_name: sicot-adminer
     labels:
       org.opencontainers.image.title: "SICOT · Panel PostgreSQL"
@@ -56,7 +67,9 @@ services:
       # servicio de Docker (resuelto por la red interna de compose).
       ADMINER_DEFAULT_SERVER: db
     ports:
-      - "8081:8080"
+      # Solo en 127.0.0.1, por lo mismo que la base: Adminer no tiene
+      # autenticación propia más allá de la contraseña de la base.
+      - "127.0.0.1:8081:8080"
     restart: unless-stopped
     deploy:
       resources:
@@ -99,15 +112,20 @@ services:
       # variable pase lo que pase, el respaldo de Spring nunca se activaría, y
       # un despliegue de producción firmaría tokens con una clave publicada en
       # este repositorio. Tampoco sirve `${JWT_SECRET:-}`: una variable definida
-      # pero vacía también desactiva el respaldo. Si se define, se hereda del
-      # .env, que es lo correcto. Ver docker-compose.prod.yml, donde además pasa
-      # a ser obligatoria.
-      # Los dos ultimos origenes son la aplicacion de escritorio del supervisor,
-      # no un navegador: una app empaquetada con Tauri se sirve desde un origen
-      # propio del webview (http://tauri.localhost en Windows, tauri://localhost
-      # en macOS y Linux). Sin ellos el backend rechaza sus peticiones y la app
-      # solo puede decir "no se pudo conectar con el servidor".
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443,http://tauri.localhost,tauri://localhost}
+      # pero vacía también desactiva el respaldo.
+      #
+      # Ojo: el JWT_SECRET del .env NO llega al contenedor con este archivo.
+      # Compose usa el .env solo para resolver las ${…} de aquí; al contenedor
+      # le pasa únicamente lo que se nombra en este bloque. Quien se lo pasa es
+      # docker-compose.prod.yml, donde además es obligatorio. Por eso, en el
+      # servidor, todo comando tiene que cargar ese archivo (COMPOSE_FILE en el
+      # .env, ver .env.example): un `up` con solo este deja el backend sin
+      # secreto, o en "dev" con el secreto publicado.
+      # Solo los orígenes del navegador. Los de la aplicación de escritorio y del
+      # APK (http://tauri.localhost, tauri://localhost) los añade SecurityConfig
+      # siempre: no dependen del despliegue, y cuando vivían aquí un
+      # CORS_ALLOWED_ORIGINS del .env los borraba sin aviso.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8443,http://127.0.0.1:8443}
       # Administrador inicial — solo se usa en un despliegue con perfil distinto
       # de "dev" y solo si la tabla de usuarios está vacía. En desarrollo no
       # hacen falta: las cuentas de prueba las siembra DataInitializer. Ver
@@ -123,14 +141,33 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
-      # Ollama corre en el HOST (no en un contenedor propio — necesitaría GPU
-      # pasada al contenedor, mucho más complejo). "localhost" desde dentro
+      # En desarrollo, Ollama corre en el EQUIPO, que es donde cada uno ya lo
+      # tiene instalado y con el modelo descargado. "localhost" desde dentro
       # del contenedor apunta al contenedor mismo, así que se usa el nombre
-      # especial que Docker resuelve al host. extra_hosts de abajo es lo que
-      # hace que ese nombre funcione también en Docker nativo de Linux (en
-      # Docker Desktop de Windows/Mac ya funciona sin eso).
+      # especial que Docker resuelve al equipo. En Docker Desktop (Windows/Mac)
+      # eso llega al Ollama del equipo tal cual.
+      #
+      # En Docker nativo de Linux NO basta: extra_hosts de abajo hace que el
+      # nombre resuelva, pero a la IP del puente de Docker, y Ollama instalado
+      # como servicio escucha solo en 127.0.0.1, así que rechaza la conexión.
+      # Por eso el servidor no usa esto: docker-compose.prod.yml le da a Ollama
+      # su propio contenedor (que en un equipo sin GPU corre en CPU igual que
+      # fuera).
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:7b}
+      # Ajustes de la IA que dependen de la máquina (ver .env.example). Sin
+      # valor a propósito: así Compose los pasa solo si el .env los define, y si
+      # no, el backend usa los de application.properties. Antes no se pasaban, y
+      # un OLLAMA_TIMEOUT_SECONDS subido en el .env de un servidor lento se
+      # ignoraba sin aviso. Con un valor por defecto aquí habría dos sitios con
+      # el mismo número, que acabarían diciendo cosas distintas.
+      OLLAMA_TIMEOUT_SECONDS:
+      OLLAMA_KEEP_ALIVE:
+      OLLAMA_MAX_CONCURRENTES:
+      OLLAMA_PETICIONES_POR_MINUTO:
+      OLLAMA_TEMPERATURA:
+      OLLAMA_MAX_TOKENS:
+      OLLAMA_NUM_CTX:
       # Motor de automatizaciones. Sin estas líneas el motor solo era
       # configurable editando este archivo: application.properties las lee del
       # entorno, pero Compose no las pasaba, así que dentro del contenedor
@@ -164,9 +201,20 @@ services:
     build:
       context: ./frontend
       args:
-        # El navegador del usuario llama a esta URL directamente, por eso debe
-        # ser la URL alcanzable desde el host (no el nombre del servicio interno).
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+        # VACÍO = mismo origen: la aplicación llama a `/api/...` sobre la misma
+        # dirección por la que se abrió, y el nginx de la imagen lo reenvía al
+        # backend (ver frontend/nginx.conf.template). Es lo mismo que hace Caddy
+        # en producción.
+        #
+        # Antes aquí iba `http://localhost:8080`, y eso ataba la aplicación web
+        # a este equipo: el navegador de OTRO computador entendía «la API está
+        # en mi propia máquina», donde no hay nada. Poner la IP en su lugar lo
+        # arreglaba hasta que la IP cambiara — pasó el 03-11-2026 a media
+        # prueba. Con el mismo origen no hay ninguna dirección que acertar.
+        #
+        # Se puede seguir forzando desde el entorno si hace falta apuntar a un
+        # backend que no es el de esta pila.
+        VITE_API_URL: ${VITE_API_URL:-}
     container_name: sicot-frontend
     labels:
       org.opencontainers.image.title: "SICOT · Frontend"
@@ -174,21 +222,20 @@ services:
     environment:
       # Orígenes que se añaden a `connect-src` en la CSP que emite nginx.
       #
-      # Aquí, en desarrollo, la SPA vive en :8443 y llama al backend en :8080:
-      # son orígenes distintos, así que sin esta excepción el navegador bloquea
-      # todas las peticiones de la aplicación y la interfaz se queda vacía sin
-      # que nada falle del lado del servidor. La imagen trae el valor VACÍO por
-      # defecto (frontend/Dockerfile), que es el de producción — ver ADR-009 y
-      # la cabecera de frontend/nginx.conf.template.
+      # VACÍO, como en producción: desde que la API se sirve por el mismo
+      # origen (ver el `VITE_API_URL` de arriba y nginx.conf.template),
+      # `connect-src 'self'` ya la cubre y no hay ninguna excepción que
+      # mantener. Antes llevaba `http://localhost:8080` porque la SPA vivía en
+      # :8443 y llamaba al backend en :8080, y había que acordarse de añadir
+      # aquí cualquier origen nuevo —la IP de la máquina, por ejemplo— o el
+      # navegador bloqueaba todas las llamadas sin que nada fallara del lado
+      # del servidor.
       #
       # Se aplica al ARRANCAR el contenedor, no al construirlo (a diferencia de
       # VITE_API_URL, que Vite hornea en el build): cambiarlo solo necesita un
-      # `docker compose up -d frontend`, sin reconstruir la imagen.
-      #
-      # Si cambia VITE_API_URL de arriba —por ejemplo a la IP de la máquina para
-      # abrir SICOT desde otro equipo de la LAN— hay que añadir ESE mismo origen
-      # aquí, o la CSP bloqueará las llamadas.
-      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-http://localhost:8080 http://127.0.0.1:8080}
+      # `docker compose up -d frontend`, sin reconstruir la imagen. Sigue
+      # estando para quien apunte la aplicación a un backend de otro origen.
+      CSP_CONNECT_SRC_EXTRA: ${CSP_CONNECT_SRC_EXTRA:-}
     depends_on:
       backend:
         condition: service_healthy

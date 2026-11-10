@@ -1,8 +1,8 @@
 package co.sena.sicot;
 
 import co.sena.sicot.dto.auth.AuthResponse;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -47,6 +47,47 @@ class AuthIntegrationTest extends PruebaDeIntegracion {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.status").value(401))
                 .andExpect(jsonPath("$.message").value("Credenciales inválidas."));
+    }
+
+    /**
+     * 25-09-2026: la contraseña pegada desde un mensaje traía un espacio al
+     * final y el inicio de sesión la rechazaba, en el escritorio y en Android.
+     */
+    @Test
+    void unaContrasenaPegadaConEspaciosEnLosExtremosEntra() throws Exception {
+        for (String pegada : new String[] {"Admin123* ", " Admin123*", "Admin123*\t"}) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(java.util.Map.of(
+                                    "email", "administrador@soy.sena.edu.co", "password", pegada))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.token", not(blankString())));
+        }
+    }
+
+    @Test
+    void quitarLosEspaciosNoHaceValidaUnaContrasenaIncorrecta() throws Exception {
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"administrador@soy.sena.edu.co","password":"Admin123 "}
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void noSeCreaUnaContrasenaQueEmpieceOTermineEnEspacio() throws Exception {
+        String adminToken = login("administrador@soy.sena.edu.co", "Admin123*");
+
+        mockMvc.perform(post("/api/usuarios")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"nombre":"Clave Con Espacio","email":"claveespacio@soy.sena.edu.co",
+                                 "password":"ClaveTest123 ","telefono":"3000000000","rol":"SUPERVISOR"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.password", containsString("no puede empezar ni terminar con espacios")));
     }
 
     @Test

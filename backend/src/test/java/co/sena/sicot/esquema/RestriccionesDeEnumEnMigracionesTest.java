@@ -89,7 +89,8 @@ class RestriccionesDeEnumEnMigracionesTest {
             Map.entry("ck_formatos_estado", EstadoFormato.class),
             Map.entry("ck_tareas_automatizadas_tipo", TipoTareaAutomatizada.class),
             Map.entry("ck_tareas_automatizadas_estado", EstadoTareaAutomatizada.class),
-            Map.entry("ck_registros_origen", OrigenRegistro.class));
+            Map.entry("ck_registros_origen", OrigenRegistro.class),
+            Map.entry("ck_contactos_del_contrato_rol", co.sena.sicot.entity.enums.RolDeContacto.class));
 
     @Test
     void cadaCheckDeEnumListaExactamenteLosValoresDelEnumDeJava() {

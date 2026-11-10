@@ -2,6 +2,7 @@ package co.sena.ctma.sicot
 
 import android.os.Bundle
 import android.view.View
+import android.webkit.WebView
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
@@ -11,6 +12,19 @@ class MainActivity : TauriActivity() {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
     reservarEspacioParaElTeclado()
+  }
+
+  /**
+   * Los dos puentes que se exponen al JavaScript, ambos de un solo método y sin
+   * datos del usuario: la pantalla encendida mientras se espera a la IA (ver
+   * PantallaEncendida) y si este APK acepta `http://` (ver Compilacion), para
+   * no avisar de un bloqueo que el APK de pruebas no tiene.
+   */
+  // nosemgrep: kotlin.lang.security.webview-javascript-interface
+  override fun onWebViewCreate(webView: WebView) {
+    super.onWebViewCreate(webView)
+    webView.addJavascriptInterface(PantallaEncendida(this), "SicotPantalla")
+    webView.addJavascriptInterface(Compilacion(this), "SicotCompilacion")
   }
 
   /**

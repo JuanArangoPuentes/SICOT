@@ -4,7 +4,7 @@
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
 import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom'
 import { PrefsProvider } from '@/prefs'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
 import Settings from '@/components/Settings'
@@ -26,7 +26,11 @@ const GestionPanel = lazy(() => import('@/screens/GestionPanel'))
 const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
-import { clearSession, getSession } from '@/services/session'
+import { alRenovarSesion, clearSession, getSession } from '@/services/session'
+import { vigilarLaCola } from '@/services/colaDeCambios'
+import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
+import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
+import { useAlVolverALaVentana } from '@/hooks/useAlVolverALaVentana'
 import { onUnauthorized, setAuthToken } from '@/services/api/client'
 import { getContratos } from '@/services/contratoService'
 import { getRegistrosContrato } from '@/services/registroService'
@@ -53,7 +57,7 @@ const TOUR_SUPERVISOR: TourStep[] = [
   },
   {
     selector: '[data-tour="nav-documentos"]',
-    text: 'Los documentos formales: el Copiloto los redacta y usted los revisa y firma.',
+    text: 'Los documentos formales: SICOT los arma con los datos del contrato y usted los revisa y firma.',
   },
   {
     selector: '[data-tour="nav-registros"]',
@@ -81,13 +85,35 @@ const TOUR_GESTION: TourStep[] = [
 // sigue siendo el backend: una URL no es un control de acceso.
 const rutaDeRol = (u: AuthResponse): string => {
   if (u.rol === 'SUPERVISOR') return '/supervisor/bandeja'
-  if (u.rol === 'ADMINISTRADOR') return '/admin/dashboard'
+  if (u.rol === 'ADMINISTRADOR') return '/admin/seguimiento'
   if (u.rol === 'GESTION') return '/gestion'
   return '/login'
 }
 
 const VISTAS_SUPERVISOR: Tab[] = ['bandeja', 'contrato', 'alertas', 'documentos', 'registros']
-const VISTAS_ADMIN: AdminTab[] = ['dashboard', 'documentos', 'usuarios', 'firmas']
+
+// El contrato que el supervisor eligió en el selector, para volver a él al
+// recargar. Es una comodidad de este equipo: si el almacenamiento no está
+// disponible (ventana privada, datos borrados), se vuelve al contrato ACTIVO.
+const claveContratoElegido = (usuarioId: number) => `sicot.contratoElegido.${usuarioId}`
+
+function leerContratoElegido(usuarioId: number): number | null {
+  try {
+    const v = localStorage.getItem(claveContratoElegido(usuarioId))
+    return v ? Number(v) : null
+  } catch {
+    return null
+  }
+}
+
+function guardarContratoElegido(usuarioId: number, contratoId: number) {
+  try {
+    localStorage.setItem(claveContratoElegido(usuarioId), String(contratoId))
+  } catch {
+    // sin almacenamiento, el selector sigue funcionando en esta sesión
+  }
+}
+const VISTAS_ADMIN: AdminTab[] = ['seguimiento', 'usuarios', 'firmas']
 
 /** Una vista desconocida en la URL cae en la de por defecto en vez de romper. */
 function vistaValida<T extends string>(valor: string | undefined, permitidas: T[], porDefecto: T): T {
@@ -98,25 +124,58 @@ function AppInner() {
   const [session, setSession] = useState<AuthResponse | null>(() => getSession())
   const navigate = useNavigate()
   const location = useLocation()
+  const tipoDeNavegacion = useNavigationType()
   const enLogin = location.pathname === '/login'
   // Etapas del contrato real (autoridad: backend). Nunca se usan datos de
   // ejemplo como etapas reales: sin contrato el estado queda vacío y el panel
   // lo reemplaza al cargar las etapas del contrato asignado.
   const [steps, setSteps] = useState<Step[]>([])
   const [settingsOpen, setSettingsOpen] = useState(false)
+  // Desde la pantalla de acceso se abre en «Servidor»: es lo primero que hay
+  // que escribir en una instalación nueva del APK o del instalador.
+  const [seccionDeAjustes, setSeccionDeAjustes] = useState<'presets' | 'servidor'>('presets')
   const [tourActive, setTourActive] = useState(false)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [contrato, setContrato] = useState<ContratoResponse | null>(null)
+  // Todos los contratos del supervisor. Antes solo existía `contrato`, el
+  // primero ACTIVO de la lista: con un segundo contrato el primero quedaba
+  // inaccesible desde el panel. El supervisor real lleva varios lotes a la vez
+  // (Lote 4 y Lote 8, octubre de 2026), y el proceso pregunta qué pasa cuando
+  // al supervisor que ya tiene SICOT le llega un contrato nuevo: que se suma.
+  const [contratos, setContratos] = useState<ContratoResponse[]>([])
   // true mientras se consulta el contrato real del supervisor — evita que el
   // panel muestre "sin contrato asignado" por un instante antes de que la
   // respuesta real llegue.
   const [cargandoContrato, setCargandoContrato] = useState(false)
   const [errorContrato, setErrorContrato] = useState(false)
+  // Cuántas veces se pidió abrir el Copiloto desde el avatar flotante. Es un
+  // contador y no un booleano para que cada clic vuelva a abrirlo aunque el
+  // supervisor lo haya plegado después del anterior.
+  const [pedidosCopiloto, setPedidosCopiloto] = useState(0)
 
   const refreshRegistros = async () => {
     if (!contrato) return
     const lista = await getRegistrosContrato(contrato.id)
     setRegistros(mapRegistros(lista))
+  }
+
+  // Un contrato cambiado desde el panel (el teléfono del contratista traído del
+  // SECOP II en el paso 2.4) se pone al día aquí, en la lista y en el elegido,
+  // para que la ficha y los correos lo vean sin recargar.
+  const actualizarContratoDelPanel = (c: ContratoResponse) => {
+    setContratos((lista) => lista.map((x) => (x.id === c.id ? c : x)))
+    setContrato((actual) => (actual?.id === c.id ? c : actual))
+  }
+
+  const seleccionarContrato = (id: number) => {
+    const elegido = contratos.find((c) => c.id === id)
+    if (!elegido || !session) return
+    guardarContratoElegido(session.usuarioId, id)
+    // Las etapas son las del contrato anterior hasta que lleguen las nuevas:
+    // se vacían para no mostrar por un instante el avance de otro contrato.
+    setSteps([])
+    setRegistros([])
+    setContrato(elegido)
   }
 
   // Contrato asignado al supervisor (rol SUPERVISOR): el ACTIVO si existe.
@@ -132,7 +191,11 @@ function AppInner() {
     getContratos(session.usuarioId)
       .then((lista) => {
         if (cancelado) return
-        const activo = lista.find((c) => c.estado === 'ACTIVO') ?? lista[0] ?? null
+        setContratos(lista)
+        // El que eligió la última vez, si sigue siendo suyo; si no, el ACTIVO.
+        const elegido = leerContratoElegido(session.usuarioId)
+        const activo =
+          lista.find((c) => c.id === elegido) ?? lista.find((c) => c.estado === 'ACTIVO') ?? lista[0] ?? null
         setContrato(activo)
       })
       .catch((err) => {
@@ -154,6 +217,27 @@ function AppInner() {
     }
   }, [session])
 
+  // Al volver a la ventana, la LISTA de contratos del supervisor se pone al
+  // día: si Gestión lo designó para uno nuevo desde otro equipo, aparece en el
+  // selector sin recargar la página.
+  //
+  // Solo la lista, a propósito. Volver a ejecutar el efecto de arriba cambiaría
+  // también el contrato seleccionado y encendería su bandera de carga, así que
+  // la pantalla parpadearía «cargando» cada vez que alguien cambia de ventana.
+  useAlVolverALaVentana(() => {
+    if (!session || session.rol !== 'SUPERVISOR') return
+    getContratos(session.usuarioId)
+      .then((lista) => {
+        setContratos(lista)
+        // El contrato abierto, con la ficha nueva si Gestión la cambió desde
+        // otro equipo; si ya no está en la lista se deja como está, porque
+        // soltarlo a media pantalla sería peor que mostrarlo un momento más.
+        setContrato((actual) => lista.find((c) => c.id === actual?.id) ?? actual)
+      })
+      // Un fallo de fondo no borra lo que ya se ve: la lista buena sigue ahí.
+      .catch((err) => console.debug('No se pudo refrescar la lista de contratos:', err))
+  })
+
   // Registros de auditoría reales del contrato asignado (autoridad: backend)
   useEffect(() => {
     if (!contrato) {
@@ -173,21 +257,65 @@ function AppInner() {
 
   const handleLogin = (auth: AuthResponse) => {
     setSession(auth)
+    // La entrada a la sesión es la base de la pila: `replace` no mueve el
+    // índice del historial, así que desde aquí se cuentan las vistas que se
+    // apilen (ver services/pilaDeNavegacion.ts).
+    reiniciarProfundidad()
     navigate(rutaDeRol(auth), { replace: true })
   }
 
   const logout = () => {
     clearSession()
     setSession(null)
-    // `replace` a propósito: tras cerrar sesión, el botón atrás no debe devolver
-    // a una pantalla del panel que ya no se puede cargar.
-    navigate('/login', { replace: true })
     setTourActive(false)
+
+    // Cerrar sesión tiene que dejar el historial como estaba al entrar, no solo
+    // tapar la última entrada.
+    //
+    // Antes esto era un `navigate('/login', { replace: true })` a secas, y el
+    // comentario decía que `replace` evitaba que «atrás» volviera a una
+    // pantalla del panel. Reemplaza, sí, pero solo la entrada de arriba: las
+    // que se apilaron al cambiar de vista siguen debajo. En el teléfono eso se
+    // ve como que el botón «atrás» deja de funcionar —cada pulsación va a una
+    // ruta del panel, el guardia de sesión la devuelve a `/login` y la pantalla
+    // no cambia— hasta agotar tantas pulsaciones como vistas se visitaron. En
+    // un arranque limpio, sin nada apilado, sí salía de la aplicación: por eso
+    // el fallo solo aparecía DESPUÉS de cerrar sesión (punto 13 de
+    // docs/operacion/PRUEBA_MANUAL_APK.md, observado el 08-10-2026).
+    //
+    // El navegador no permite borrar entradas, así que se retrocede sobre ellas
+    // y es el guardia de sesión el que aterriza en `/login` con `replace` al no
+    // encontrar sesión. El resultado es una pila de un solo elemento: «atrás»
+    // vuelve a cerrar la aplicación, como en un arranque limpio.
+    const apiladas = profundidadDeNavegacion()
+    reiniciarProfundidad()
+    if (apiladas > 0) navigate(-apiladas)
+    else navigate('/login', { replace: true })
   }
 
   useEffect(() => {
     onUnauthorized(() => logout())
+    // Los reintentos de la cola de cambios: al volver la red y cada medio
+    // minuto mientras quede algo y haya sesión con el servidor (ADR-015).
+    vigilarLaCola()
+    // Y en una sesión abierta sin red, avisar cuando el servidor vuelva:
+    // sin token, nada más en ella se enteraría.
+    vigilarLaVueltaDelServidor()
   }, [])
+
+  // Lleva la cuenta de las entradas de historial que apila la sesión, que es lo
+  // que `logout` necesita para dejar el historial como estaba al entrar. Se
+  // apunta aquí, en un solo sitio, porque las vistas se cambian desde varios
+  // componentes (la barra lateral, las alertas, el avatar del Copiloto) y lo
+  // que importa no es quién navegó sino cuántas entradas hay.
+  //
+  // `location.key` identifica la entrada: sin él, StrictMode contaría dos veces
+  // la misma navegación en desarrollo. La primera carga llega como POP con la
+  // clave `default` y resta sobre una cuenta que ya está en cero, que es
+  // inofensivo (la cuenta no baja de cero).
+  useEffect(() => {
+    registrarNavegacion(tipoDeNavegacion, location.key)
+  }, [location.key, tipoDeNavegacion])
 
   // Mantiene el token del cliente sincronizado con la sesión activa.
   // Al recargar la página la sesión se restaura desde localStorage y este
@@ -196,10 +324,26 @@ function AppInner() {
     setAuthToken(session?.token ?? null)
   }, [session])
 
+  // Cambiar la contraseña propia revoca el token y trae otro sin cerrar la
+  // sesión (cuentaService). El estado de aquí tiene que quedarse con el nuevo:
+  // el efecto de arriba reaplica el de este estado, y el viejo ya no vale.
+  useEffect(() => alRenovarSesion(setSession), [])
+
   const tour = useMemo(
     () => (location.pathname.startsWith('/gestion') ? TOUR_GESTION : TOUR_SUPERVISOR),
     [location.pathname],
   )
+
+  // El avatar flotante abre el Copiloto del contrato. Solo hay uno que abrir en
+  // el panel del supervisor con contrato asignado; en Gestión, Administración o
+  // sin contrato el avatar flotante no se ofrece.
+  const abrirCopiloto =
+    session?.rol === 'SUPERVISOR' && contrato
+      ? () => {
+          setPedidosCopiloto((n) => n + 1)
+          navigate('/supervisor/contrato')
+        }
+      : undefined
 
   // Envoltura que protege una ruta.
   //
@@ -229,7 +373,13 @@ function AppInner() {
               session ? (
                 <Navigate to={rutaDeRol(session)} replace />
               ) : (
-                <LoginScreen onLogin={handleLogin} onOpenSettings={() => setSettingsOpen(true)} />
+                <LoginScreen
+                  onLogin={handleLogin}
+                  onOpenSettings={() => {
+                    setSeccionDeAjustes('servidor')
+                    setSettingsOpen(true)
+                  }}
+                />
               )
             }
           />
@@ -238,10 +388,16 @@ function AppInner() {
             path="/supervisor/:vista"
             element={conSesion(['SUPERVISOR'], (s) => (
               <PanelSupervisorEnRuta
+                // Un panel nuevo por contrato: el sub-paso abierto, los
+                // borradores y las cargas a medias son de un contrato y no deben
+                // pasar al siguiente.
+                key={contrato?.id ?? 'sin-contrato'}
                 usuario={s}
                 steps={steps}
                 setSteps={setSteps}
                 contrato={contrato}
+                contratos={contratos}
+                onSeleccionarContrato={seleccionarContrato}
                 cargandoContrato={cargandoContrato}
                 errorContrato={errorContrato}
                 onLogout={logout}
@@ -249,6 +405,8 @@ function AppInner() {
                 onStartTour={() => setTourActive(true)}
                 registros={registros}
                 onRefreshRegistros={refreshRegistros}
+                pedidosCopiloto={pedidosCopiloto}
+                onContratoActualizado={actualizarContratoDelPanel}
               />
             ))}
           />
@@ -272,21 +430,28 @@ function AppInner() {
               <PanelAdminEnRuta usuario={s} onLogout={logout} onOpenSettings={() => setSettingsOpen(true)} />
             ))}
           />
-          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="/admin" element={<Navigate to="/admin/seguimiento" replace />} />
 
           {/* Raíz y cualquier ruta desconocida: al panel del rol, o al login. */}
           <Route path="*" element={<Navigate to={session ? rutaDeRol(session) : '/login'} replace />} />
         </Routes>
       </Suspense>
 
-      <Settings open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <Settings
+        open={settingsOpen}
+        initialSection={seccionDeAjustes}
+        onClose={() => {
+          setSettingsOpen(false)
+          setSeccionDeAjustes('presets')
+        }}
+      />
 
       {!enLogin && session && (
         <AvatarLayer
           tour={tour}
           tourActive={tourActive}
           onTourEnd={() => setTourActive(false)}
-          onOpenChat={() => setSettingsOpen(false)}
+          onOpenChat={abrirCopiloto}
         />
       )}
     </>
@@ -315,13 +480,12 @@ function PanelSupervisorEnRuta(props: Omit<React.ComponentProps<typeof Superviso
 function PanelAdminEnRuta(props: Omit<React.ComponentProps<typeof AdminPanel>, 'vista' | 'onCambiarVista'>) {
   const { vista } = useParams()
   const navigate = useNavigate()
-  return (
-    <AdminPanel
-      {...props}
-      vista={vistaValida<AdminTab>(vista, VISTAS_ADMIN, 'dashboard')}
-      onCambiarVista={(t) => navigate(`/admin/${t}`)}
-    />
-  )
+  // Las vistas que salieron del panel (/admin/dashboard, /admin/documentos)
+  // siguen en marcadores y en la sesión que el navegador restaura: se
+  // reemplazan por la del avance, para que la barra de direcciones no diga una
+  // vista y la pantalla muestre otra.
+  if (!VISTAS_ADMIN.includes(vista as AdminTab)) return <Navigate to="/admin/seguimiento" replace />
+  return <AdminPanel {...props} vista={vista as AdminTab} onCambiarVista={(t) => navigate(`/admin/${t}`)} />
 }
 
 export default function App() {
