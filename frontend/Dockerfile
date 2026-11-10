@@ -97,8 +97,13 @@ USER root
 # montículo en gz_vacate). Alpine ya publicó 1.2.6-r3 y 1.3.2-r1. `musl-utils`
 # sale del mismo paquete fuente que `musl` y tiene que subir con él. El backend
 # no las necesita: su base ya va por Alpine 3.24.3, que las trae corregidas.
+#
+# libxslt, del CI del 10-11-2026: la base trae 1.1.43-r3, con CVE-2026-87636
+# (HIGH, confusión de tipos al procesar XML) y CVE-2026-9947 (HIGH, uso después
+# de liberar), y Alpine ya publicó 1.1.43-r4. El escaneo no lo encontró en el
+# backend, así que la línea va solo aquí.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
-    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1"
+    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
