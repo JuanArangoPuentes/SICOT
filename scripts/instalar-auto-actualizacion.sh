@@ -119,7 +119,11 @@ echo
 echo "Primera corrida ahora mismo (puede tardar: reconstruye las imágenes)…"
 systemctl start sicot-auto-actualizar.service || true
 echo
+# Con `sudo`, porque el registro queda en 0640 de root: quien acaba de instalar
+# esto es el usuario del Centro, y sin `sudo` lo que recibe es «Permiso
+# denegado» justo cuando va a comprobar si su despliegue salió bien. Pasó en el
+# servidor del Centro el 10-11-2026, con estas mismas líneas en pantalla.
 echo "Cómo se mira a partir de ahora:"
-echo "  tail -f $SICOT_LOG"
+echo "  sudo tail -f $SICOT_LOG"
 echo "  systemctl status sicot-auto-actualizar.service"
-echo "  journalctl -u sicot-auto-actualizar.service -n 50"
+echo "  sudo journalctl -u sicot-auto-actualizar.service -n 50"
