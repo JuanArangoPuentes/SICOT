@@ -59,12 +59,10 @@ jobs:
       ETIQUETA: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
 
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
-
       - name: Comprobar y limpiar el secreto de firma
-        # Dos cosas, antes de gastar media hora compilando.
+        # Tres cosas, antes incluso de descargar el repositorio: lo que este
+        # paso encuentra mal no se arregla compilando, así que no tiene sentido
+        # bajar nada hasta que la firma esté en condiciones.
         #
         # 1. Que la llave esté. Sin ella, Tauri produciría un instalador sin
         #    `.sig` y el `latest.json` quedaría sin firma: las instalaciones lo
@@ -82,6 +80,9 @@ jobs:
         #
         #    `add-mask` va antes de escribirla en el entorno para que el valor
         #    limpio quede tapado en el registro igual que el secreto original.
+        #
+        # 3. Decir si la contraseña está vacía. Es el otro borde que rompe la
+        #    firma, y el único que no se nota hasta el final de la compilación.
         shell: bash
         run: |
           set -eu
@@ -93,8 +94,27 @@ jobs:
           echo "::add-mask::$LIMPIA"
           echo "TAURI_SIGNING_PRIVATE_KEY=$LIMPIA" >> "$GITHUB_ENV"
           echo "La llave de firma está presente (${#LIMPIA} caracteres tras limpiar espacios)."
+          # La contraseña es el otro borde que rompe la firma, y rompe de una
+          # forma que no se adivina: con una contraseña que no sea la de la
+          # llave, `tauri build` falla con «incorrect updater private key
+          # password», que suena a llave mala y no a contraseña sobrante.
+          # Comprobado el 10-11-2026: la llave de SICOT se generó SIN
+          # contraseña, así que lo correcto aquí es vacío —o el secreto sin
+          # crear, que da lo mismo—. No se imprime su longitud ni se falla por
+          # ella: alguien puede rotar algún día a una llave con contraseña, y
+          # entonces esto tiene que seguir funcionando.
+          if [ -z "${CLAVE:-}" ]; then
+            echo "La contraseña de la llave está vacía, que es lo que esta llave espera."
+          else
+            echo "::warning::El secreto TAURI_SIGNING_PRIVATE_KEY_PASSWORD NO está vacío. Si la llave se generó sin contraseña, la firma fallará con «incorrect updater private key password»: deje ese secreto vacío o bórrelo. Ver ADR-017."
+          fi
         env:
           LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          CLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
 
       - name: Comprobar que la etiqueta es la versión de la aplicación
         # La misma compuerta que en `publicar-apk.yml`, y por el mismo motivo:
