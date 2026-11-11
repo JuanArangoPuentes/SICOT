@@ -67,11 +67,16 @@ class ZonaHorariaTest {
         }
 
         // Si el recorrido no encontrara ninguna, la prueba pasaría sin comprobar nada.
+        //
+        // `VigilanciaDelRespaldo` estuvo en esta lista hasta el 11-11-2026, con un
+        // cron a las 04:00. Dejó de tenerlo porque el servidor del Centro está
+        // apagado a esa hora y la comprobación no corría nunca: ahora va por
+        // intervalo (`fixedDelay`), que no tiene zona que declarar. Por eso ya no
+        // aparece aquí.
         assertThat(conCron).contains(
                 "PlanificadorDeAutomatizaciones.evaluarCalendario",
                 "PlanificadorDeAutomatizaciones.purgarLaCola",
-                "VigilanciaDeAlmacenamiento.medirCadaDia",
-                "VigilanciaDelRespaldo.comprobarCadaDia");
+                "VigilanciaDeAlmacenamiento.medirCadaDia");
         assertThat(sinZona).as("tareas con cron que no declaran la zona del Centro").isEmpty();
     }
 }

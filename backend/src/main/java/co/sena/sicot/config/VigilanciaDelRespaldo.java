@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -105,12 +106,28 @@ public class VigilanciaDelRespaldo {
     }
 
     /**
-     * Cada día a las 04:00: dos horas después del respaldo de las 02:00 que
-     * promete ADR-002, con margen de sobra para que un volcado lento haya
-     * terminado, y antes de las 06:00 en que corren las automatizaciones.
+     * Cada tres horas, y no a una hora fija.
+     *
+     * <p>Antes era {@code @Scheduled(cron = "0 0 4 * * *")}: las 04:00, dos
+     * horas después del respaldo de las 02:00 que promete ADR-002. Esa hora
+     * tenía el mismo defecto que el cron que vigila, y se vio en el servidor
+     * del Centro el 11-11-2026: <b>ese equipo está apagado a las 04:00</b>. Se
+     * prende por la mañana y se apaga por la noche, así que la comprobación
+     * diaria nunca llegaba a correr y la vigilancia se reducía a lo que
+     * avisaba al arrancar, una vez al día.
+     *
+     * <p>Un intervalo no depende de a qué hora esté encendido el equipo: en
+     * una jornada normal comprueba tres o cuatro veces, y en un servidor que
+     * sí se queda encendido, ocho. El respaldo se arregló de otra manera —un
+     * temporizador con {@code Persistent=true}, ver
+     * {@code scripts/systemd/sicot-respaldo.timer}— porque ahí sí importa la
+     * hora; aquí no importa cuándo se mire, solo que se mire.
+     *
+     * <p>El retraso inicial evita que esta comprobación coincida con la del
+     * arranque, que ya la hace {@link #comprobarAlArrancar()}.
      */
-    @Scheduled(cron = "0 0 4 * * *", zone = ZonaHoraria.PROPIEDAD)
-    public void comprobarCadaDia() {
+    @Scheduled(fixedDelay = 3, initialDelay = 3, timeUnit = TimeUnit.HOURS)
+    public void comprobarCadaTantasHoras() {
         comprobar();
     }
 
