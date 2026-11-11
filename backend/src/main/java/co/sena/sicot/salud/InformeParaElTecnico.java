@@ -206,8 +206,18 @@ public class InformeParaElTecnico {
             correo.getObject().enviar(destinatario, asunto, cuerpo);
             log.info("Informe para el técnico enviado a {}", destinatario);
         } catch (Exception e) {
-            // A propósito NO se registra como fallo de CORREO: eso dispararía
-            // otro informe, que intentaría otro correo. El log corta el ciclo.
+            // Aquí no se vuelve a registrar nada. Y conviene ser exacto con lo
+            // que eso significa, porque el fallo SÍ queda registrado: lo hace
+            // EmailService un nivel más abajo, antes de lanzar. Es correcto que
+            // lo haga —si los informes no salen, el correo está roto de verdad—
+            // y no se cicla, porque la cuenta termina:
+            //
+            //   informe de la IA -> el correo falla -> CORREO suma un fallo
+            //   ... al tercero, CORREO pasa a caído -> su propio informe
+            //   ... ese informe sale por el `return` de arriba, sin correo
+            //
+            // Lo que no se hace aquí es añadir un SEGUNDO registro por el mismo
+            // fallo, que adelantaría la cuenta sin que hubiera pasado nada más.
             log.warn("No se pudo enviar el informe a {}: {}", destinatario, e.getMessage());
         }
     }
