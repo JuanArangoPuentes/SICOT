@@ -30,16 +30,27 @@ estuviera avisado — porque nadie lo estaba.
 ### 1. Los componentes se lo cuentan entre ellos
 
 Cada pieza que puede fallar avisa por `AvisoDeSalud`, y `SaludDelSistema` lleva
-la cuenta. Hoy avisan `OllamaClient` (la IA) y `VigilanciaDelRespaldo`.
+la cuenta.
 
 Los estados son tres: **operativo**, **degradado** (falló, se está intentando) y
 **caído**. Cuántos fallos seguidos hacen falta para pasar a caído lo decide cada
 servicio, y no es el mismo número para todos:
 
-| Servicio | Fallos para darlo por caído | Por qué |
-|---|---|---|
-| IA | 3 | Una llamada lenta no es una caída. El equipo puede estar ocupado. |
-| Respaldo | 1 | «El más reciente tiene 136 h» se sabe de cierto a la primera mirada. |
+| Servicio | Quién avisa | Fallos para darlo por caído | Por qué ese número |
+|---|---|---|---|
+| IA | `OllamaClient` | 3 | Una llamada lenta no es una caída: el equipo puede estar ocupado. |
+| Correo | `EmailService` | 3 | Un rechazo suelto del servidor de correo puede ser pasajero. |
+| Respaldo | `VigilanciaDelRespaldo` | 1 | «El más reciente tiene 136 h» se sabe de cierto a la primera mirada. |
+| Almacenamiento | `VigilanciaDeAlmacenamiento` | 1 | El tamaño de una tabla no fluctúa: si pasó el umbral, pasó. |
+
+Dos cosas que **no** cuentan como caída, a propósito:
+
+- **El correo sin configurar.** Es una decisión del despliegue —en desarrollo no
+  se configura— y no una avería. Lo que cuenta es un envío que falla teniendo
+  configuración, como una contraseña de aplicación caducada.
+- **El almacenamiento al 80 % del umbral.** Eso es «conviene planificar», no
+  «algo está roto». Mandar un informe por eso le enseñaría al técnico que los
+  informes se pueden ignorar.
 
 ### 2. Se intenta arreglar antes de molestar a nadie
 

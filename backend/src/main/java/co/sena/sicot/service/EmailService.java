@@ -1,6 +1,9 @@
 package co.sena.sicot.service;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import jakarta.mail.internet.MimeMessage;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -26,14 +29,28 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
 
+    /**
+     * Para que un correo que dejó de salir se sepa. Lo nota el supervisor que no
+     * recibe el aviso de designación, y él no sabe que debía llegarle: es
+     * justamente el tipo de fallo que no se descubre solo.
+     */
+    private final AvisoDeSalud salud;
+
     @Value("${spring.mail.username:}")
     private String remitenteConfigurado;
 
     @Value("${sicot.mail.from:${spring.mail.username:}}")
     private String from;
 
+    /** Sin avisar de la salud a nadie: la forma que usan las pruebas. */
     public EmailService(JavaMailSender mailSender) {
+        this(mailSender, AvisoDeSalud.NINGUNO);
+    }
+
+    @Autowired
+    public EmailService(JavaMailSender mailSender, AvisoDeSalud salud) {
         this.mailSender = mailSender;
+        this.salud = salud;
     }
 
     /** @return si hay un remitente configurado con el que se pueda enviar algo. */
@@ -96,7 +113,19 @@ public class EmailService {
             helper.setSubject(asunto);
             helper.setText(cuerpo);
             mailSender.send(mensaje);
+            salud.exito(Servicio.CORREO);
         } catch (Exception e) {
+            // El fallo de envío sí cuenta como caída del servicio: una
+            // contraseña de aplicación caducada deja de enviar para siempre y
+            // nadie se enteraría, porque quien lo nota es el supervisor que no
+            // recibe el aviso de designación, y él no sabe que debía llegarle.
+            //
+            // Lo que NO se cuenta es el caso de arriba, el de «no está
+            // configurado»: eso es una decisión del despliegue —en desarrollo el
+            // correo no se configura a propósito— y no una avería. Tratarlo como
+            // caída llenaría el log de informes para el técnico en cada equipo de
+            // desarrollo.
+            salud.fallo(Servicio.CORREO, e.getClass().getSimpleName() + ": " + e.getMessage());
             throw new IllegalStateException("No se pudo enviar el correo: " + e.getMessage(), e);
         }
     }
