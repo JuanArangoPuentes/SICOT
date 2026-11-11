@@ -197,7 +197,7 @@ services:
   #   docker compose exec ollama ollama pull qwen2.5:7b
   # Sin el modelo, SICOT funciona y la IA responde 503 diciendo qué falta.
   ollama:
-    image: ollama/ollama:0.32.5
+    image: ollama/ollama:0.40.14
     container_name: sicot-ollama
     restart: unless-stopped
     volumes:
