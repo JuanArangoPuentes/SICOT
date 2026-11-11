@@ -1,0 +1,32 @@
+# Una corrida del respaldo de la base de SICOT.
+# Se instala con scripts/instalar-respaldo.sh, que escribe aquí las rutas
+# reales. Lo dispara el .timer, no el arranque: es una tarea que empieza,
+# vuelca y termina.
+#
+# POR QUÉ NO CORRE COMO ROOT
+# --------------------------
+# El volcado se hace con `docker exec sicot-db pg_dump`, y el dueño del clon ya
+# puede usar Docker sin sudo. Correrlo como él —y no como root— deja los
+# volcados con su propiedad, que es la que tenían los que se hicieron a mano, y
+# evita que el backend se encuentre una carpeta que no puede listar. El script
+# pone `umask 077`, así que el volcado solo lo lee quien lo escribió.
+[Unit]
+Description=SICOT — respaldo de la base de datos
+Documentation=https://github.com/JuanArangoPuentes/SICOT/blob/master/docs/operacion/BACKUP_Y_RESTAURACION.md
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# El volcado de una base pequeña tarda segundos, pero un disco lento o una base
+# crecida lo estiran. Sin tope, un `pg_dump` colgado dejaría la unidad activa
+# para siempre y el respaldo del día siguiente no llegaría a correr nunca.
+TimeoutStartSec=30min
+User=__SICOT_USUARIO__
+Environment=SICOT_BACKUPS_A_CONSERVAR=__SICOT_CONSERVAR__
+ExecStart=__SICOT_DIR__/scripts/respaldo-sicot.sh __SICOT_RESPALDOS__
+# El equivalente del `>> archivo 2>&1` que llevaba la línea del cron. El script
+# está escrito para fallar ruidosamente y con código distinto de cero, así que
+# systemd marca la unidad como fallida y `systemctl is-failed` lo delata.
+StandardOutput=append:__SICOT_LOG__
+StandardError=append:__SICOT_LOG__
