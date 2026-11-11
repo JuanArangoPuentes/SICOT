@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-11-05 contra el código: 17 controladores, 61 endpoints.**
+**Revisado el 2026-11-11 contra el código: 18 controladores, 62 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -82,6 +82,7 @@
 | 45 | AutomatizacionController | POST | /api/automatizaciones/evaluar | ADMINISTRADOR | @PreAuthorize + SecurityConfig | 200 | `{"tareasEncoladas": n}` |
 | 46 | IAController | GET | /api/ia/plantillas | (autenticado) | (ninguno — catálogo de solo lectura) | 200 | `List<PlantillaDocumentoResponse>`: los `campos` y las `tablas` (con sus columnas y si son del contrato) que pide cada formato |
 | 47 | SeguimientoController | GET | /api/seguimiento/supervisores | ADMINISTRADOR | @PreAuthorize en método | 200 | `SeguimientoResponse`: `supervisores` y `contratosSinSupervisor`. Reúne contratos de todos los supervisores, así que no hay control por contrato que aplicar: el rol es el control |
+| 62 | SaludController | GET | /api/salud | (autenticado) | `anyRequest().authenticated()`: no lleva regla propia en SecurityConfig. No hace falta más rol porque lo que devuelve no es información del sistema sino el aviso ya redactado para quien lo está usando — ni el error, ni la URL interna de Ollama, ni cuántas veces falló; eso va al informe del técnico | 200 | `List<AvisoDeServicioResponse>`: `servicio`, `mensaje` y `minutos` de cada servicio caído que afecta al usuario. **Lista vacía cuando todo funciona**, que es el caso normal |
 
 ---
 

@@ -42,7 +42,7 @@ class VigilanciaDelRespaldoTest {
         MeterRegistry registro = new SimpleMeterRegistry();
         VigilanciaDelRespaldo vigilancia = new VigilanciaDelRespaldo(registro, "", 24);
 
-        vigilancia.comprobarCadaDia();
+        vigilancia.comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro))
                 .as("-1 significa 'no se sabe', que es distinto de cualquier antigüedad real")
@@ -58,7 +58,7 @@ class VigilanciaDelRespaldoTest {
         MeterRegistry registro = new SimpleMeterRegistry();
         VigilanciaDelRespaldo vigilancia = new VigilanciaDelRespaldo(registro, vacio.toString(), 24);
 
-        vigilancia.comprobarCadaDia();
+        vigilancia.comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(-1);
     }
@@ -68,7 +68,7 @@ class VigilanciaDelRespaldoTest {
         crearRespaldoDeHace(directorio, "sicot-2026-09-08.dump", Duration.ofHours(3));
 
         MeterRegistry registro = new SimpleMeterRegistry();
-        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(3);
     }
@@ -78,7 +78,7 @@ class VigilanciaDelRespaldoTest {
         crearRespaldoDeHace(directorio, "sicot-viejo.dump", Duration.ofHours(50));
 
         MeterRegistry registro = new SimpleMeterRegistry();
-        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro))
                 .as("50 h con un RPO de 24 h: hay dos días de trabajo sin respaldar")
@@ -97,7 +97,7 @@ class VigilanciaDelRespaldoTest {
         crearRespaldoDeHace(directorio, "sicot-nuevo.dump", Duration.ofHours(2));
 
         MeterRegistry registro = new SimpleMeterRegistry();
-        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(2);
     }
@@ -115,7 +115,7 @@ class VigilanciaDelRespaldoTest {
         crearRespaldoDeHace(directorio, "sicot.dump", Duration.ofHours(6));
 
         MeterRegistry registro = new SimpleMeterRegistry();
-        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         System.gc();
         System.gc();
@@ -145,7 +145,7 @@ class VigilanciaDelRespaldoTest {
         VigilanciaDelRespaldo vigilancia =
                 new VigilanciaDelRespaldo(registro, "/ruta/que/no/existe/en/ninguna/maquina", 24);
 
-        vigilancia.comprobarCadaDia();
+        vigilancia.comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(-1);
     }
@@ -166,7 +166,7 @@ class VigilanciaDelRespaldoTest {
         Files.setLastModifiedTime(vacio, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
         MeterRegistry registro = new SimpleMeterRegistry();
 
-        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaDia();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(50);
     }

@@ -1,7 +1,10 @@
 package co.sena.sicot.config;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +21,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -77,9 +81,29 @@ public class VigilanciaDelRespaldo {
      */
     private final AtomicLong antiguedadEnHoras = new AtomicLong(DESCONOCIDA);
 
+    /**
+     * A quién se le cuenta lo que esta vigilancia descubre.
+     *
+     * <p>Es el arreglo de lo que pasó el 11-11-2026. Ese día esta clase llevaba
+     * días detectando el problema y escribiéndolo con todo detalle —«el más
+     * reciente tiene 119 h de antigüedad»— y no sirvió de nada, porque un
+     * {@code log.error} solo lo ve quien ya está mirando el log. Ahora el
+     * hallazgo entra en {@link co.sena.sicot.salud.SaludDelSistema} y de ahí
+     * sale un informe que va a buscar al técnico.
+     */
+    private final AvisoDeSalud salud;
+
+    /** Sin avisar a nadie: la forma que usan las pruebas de esta clase. */
+    public VigilanciaDelRespaldo(MeterRegistry registry, String directorio, int rpoHoras) {
+        this(registry, directorio, rpoHoras, AvisoDeSalud.NINGUNO);
+    }
+
+    @Autowired
     public VigilanciaDelRespaldo(MeterRegistry registry,
                                  @Value("${sicot.respaldo.directorio:}") String directorio,
-                                 @Value("${sicot.respaldo.rpo-horas:24}") int rpoHoras) {
+                                 @Value("${sicot.respaldo.rpo-horas:24}") int rpoHoras,
+                                 AvisoDeSalud salud) {
+        this.salud = salud;
         this.directorio = (directorio == null || directorio.isBlank()) ? null : Path.of(directorio);
         this.rpo = Duration.ofHours(rpoHoras);
 
@@ -105,12 +129,28 @@ public class VigilanciaDelRespaldo {
     }
 
     /**
-     * Cada día a las 04:00: dos horas después del respaldo de las 02:00 que
-     * promete ADR-002, con margen de sobra para que un volcado lento haya
-     * terminado, y antes de las 06:00 en que corren las automatizaciones.
+     * Cada tres horas, y no a una hora fija.
+     *
+     * <p>Antes era {@code @Scheduled(cron = "0 0 4 * * *")}: las 04:00, dos
+     * horas después del respaldo de las 02:00 que promete ADR-002. Esa hora
+     * tenía el mismo defecto que el cron que vigila, y se vio en el servidor
+     * del Centro el 11-11-2026: <b>ese equipo está apagado a las 04:00</b>. Se
+     * prende por la mañana y se apaga por la noche, así que la comprobación
+     * diaria nunca llegaba a correr y la vigilancia se reducía a lo que
+     * avisaba al arrancar, una vez al día.
+     *
+     * <p>Un intervalo no depende de a qué hora esté encendido el equipo: en
+     * una jornada normal comprueba tres o cuatro veces, y en un servidor que
+     * sí se queda encendido, ocho. El respaldo se arregló de otra manera —un
+     * temporizador con {@code Persistent=true}, ver
+     * {@code scripts/systemd/sicot-respaldo.timer}— porque ahí sí importa la
+     * hora; aquí no importa cuándo se mire, solo que se mire.
+     *
+     * <p>El retraso inicial evita que esta comprobación coincida con la del
+     * arranque, que ya la hace {@link #comprobarAlArrancar()}.
      */
-    @Scheduled(cron = "0 0 4 * * *", zone = ZonaHoraria.PROPIEDAD)
-    public void comprobarCadaDia() {
+    @Scheduled(fixedDelay = 3, initialDelay = 3, timeUnit = TimeUnit.HOURS)
+    public void comprobarCadaTantasHoras() {
         comprobar();
     }
 
@@ -141,6 +181,7 @@ public class VigilanciaDelRespaldo {
         Optional<Instant> ultimo = fechaDelRespaldoMasReciente();
         if (ultimo.isEmpty()) {
             antiguedadEnHoras.set(DESCONOCIDA);
+            salud.fallo(Servicio.RESPALDO, "no hay ningún respaldo en " + directorio);
             log.error("""
                     ═══════════════════════════════════════════════════════════════
                      RESPALDO: no hay NINGÚN respaldo en {}.
@@ -160,6 +201,8 @@ public class VigilanciaDelRespaldo {
         antiguedadEnHoras.set(antiguedad.toHours());
 
         if (antiguedad.compareTo(rpo) > 0) {
+            salud.fallo(Servicio.RESPALDO, "el respaldo más reciente tiene %d h y el RPO comprometido es de %d h"
+                    .formatted(antiguedad.toHours(), rpo.toHours()));
             log.error("""
                     ═══════════════════════════════════════════════════════════════
                      RESPALDO: el más reciente tiene {} h de antigüedad y el RPO
@@ -170,6 +213,7 @@ public class VigilanciaDelRespaldo {
                     ═══════════════════════════════════════════════════════════════""",
                     antiguedad.toHours(), rpo.toHours(), antiguedad.toHours());
         } else {
+            salud.exito(Servicio.RESPALDO);
             log.info("Respaldo verificado: el más reciente tiene {} h (RPO comprometido: {} h, ADR-002).",
                     antiguedad.toHours(), rpo.toHours());
         }

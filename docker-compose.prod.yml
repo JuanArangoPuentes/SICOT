@@ -101,6 +101,16 @@ services:
       # existe, y avisado de que no había NINGÚN respaldo.
       RESPALDO_DIRECTORIO: /respaldos
       RESPALDO_RPO_HORAS: ${RESPALDO_RPO_HORAS:-24}
+      # A quién avisar cuando algo se cae y el sistema no pudo arreglarlo solo.
+      # Sin esto, el informe se queda en el log y en el archivo —y el 11-11-2026
+      # quedó demostrado que un aviso que nadie va a leer no sirve de nada: la
+      # vigilancia del respaldo llevaba días gritando en el log.
+      SICOT_TECNICO_EMAIL: ${SICOT_TECNICO_EMAIL:-}
+      # Los informes, además, en un volumen. En el sistema de archivos del
+      # contenedor se perderían en cada despliegue, que aquí es cada vez que
+      # master avanza, y el historial de desde cuándo falla algo es justo lo que
+      # hace falta para diagnosticarlo.
+      SICOT_INFORMES_DIRECTORIO: /informes
       # La IA, en el contenedor `ollama` de abajo y por la red interna. El
       # archivo base apunta al Ollama del equipo (host.docker.internal), que en
       # Docker Desktop funciona y en un servidor Linux no: allí ese nombre lleva
@@ -133,6 +143,11 @@ services:
         source: ${RESPALDO_DIRECTORIO:?Defina RESPALDO_DIRECTORIO en el .env con la carpeta del servidor donde escribe scripts/respaldo-sicot.sh (créela antes de arrancar) — sin ella no se puede vigilar el RPO de ADR-002}
         target: /respaldos
         read_only: true
+      # Los informes para el técnico. Volumen con nombre y no bind: así no hace
+      # falta otra variable obligatoria en el .env, y sobrevive a que se recree
+      # el contenedor, que es lo único que se le pide. Para leerlos:
+      #   docker exec sicot-backend ls -lt /informes
+      - sicot_informes:/informes
     # Deja de publicar el 8080 al host: el único camino hacia la API pasa por el
     # proxy con TLS. Con el puerto publicado seguiría existiendo un acceso sin
     # cifrar a los mismos datos, que es exactamente lo que ADR-009 prohíbe.
@@ -259,6 +274,9 @@ services:
 volumes:
   sicot_caddy_data:
   sicot_caddy_config:
+  # Los informes para el técnico, uno por incidencia. Aquí y no en el
+  # contenedor porque el despliegue automático lo recrea en cada versión nueva.
+  sicot_informes:
   # Los modelos descargados (unos 5 GB). En un volumen para que una
   # actualización de la imagen no obligue a volver a descargarlos.
   sicot_ollama:

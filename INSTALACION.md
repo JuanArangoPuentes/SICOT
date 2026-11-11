@@ -134,32 +134,37 @@ CA para los teléfonos).
 
 ### 4. Programe el respaldo
 
-Esto no es opcional y el sistema no lo hace por usted. `scripts/respaldo-sicot.sh`
-está probado, pero alguien tiene que programarlo:
+Esto no es opcional. `scripts/respaldo-sicot.sh` está probado, y este paso lo
+deja corriendo solo:
 
 ```bash
-# Una vez: el log del respaldo, escribible por el usuario que corre el cron
-sudo touch /var/log/sicot-respaldo.log && sudo chown "$USER" /var/log/sicot-respaldo.log
-crontab -e
-# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos >> /var/log/sicot-respaldo.log 2>&1
+sudo ./scripts/instalar-respaldo.sh /ruta/a/respaldos
 ```
 
-La redirección al log no es opcional. Sin ella, lo que el script escribe al
-fallar va al correo local del cron, que nadie lee; con ella, el motivo de un
-respaldo fallido queda en un archivo que se puede mirar. Un respaldo que falla
-no deja nada en la carpeta (ni un volcado a medias), así que el backend sí lo
-nota: al día siguiente avisa de que el más reciente supera el RPO.
+Instala `sicot-respaldo.timer`, hace un respaldo en ese momento para no esperar
+a la primera cita, y avisa si el usuario dueño del clon no puede usar Docker o
+si quedó una línea vieja en el `crontab`.
 
-La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
-El cron se lee en la hora del servidor, y el backend comprueba el respaldo a
-las 04:00 de la zona del Centro (`SICOT_ZONA_HORARIA`, `America/Bogota` si no
-se define). Las dos tienen que coincidir. Si `timedatectl` dice que el
-servidor está en UTC, el respaldo de «las 2» corre a las 21:00 de Bogotá, y la
-vigilancia mira una copia de siete horas en vez de una de dos.
-El backend la ve en solo lectura y, al arrancar y una vez al día, avisa en el log
-si el respaldo más reciente supera las 24 horas comprometidas, o si no hay
-ninguno. Hasta que el cron haga el primero, ese aviso de «no hay NINGÚN
-respaldo» es correcto: describe exactamente lo que está pasando.
+**Por qué un temporizador y no la línea del `crontab` que pedía este manual
+hasta el 11-11-2026.** Ese día se revisó el servidor del Centro y llevaba
+**seis días sin un solo respaldo**, con el cron activo y la línea bien escrita.
+La causa no era el script: era que ese equipo **está apagado a las 02:00**. Se
+prende por la mañana y se apaga por la noche, y cron, cuando pierde una cita
+porque la máquina no estaba, no la recupera: la salta y espera al día
+siguiente, para siempre. `Persistent=true` sí la recupera: al encender, si la
+cita se perdió, el respaldo corre enseguida. Es el mismo mecanismo por el que
+la actualización automática del paso 5 sí funcionaba en ese servidor mientras
+el respaldo no.
+
+La carpeta tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1. La cita se
+lee en la hora del servidor, así que conviene que `timedatectl` diga la del
+Centro y no UTC: si no, el respaldo de «las 2» corre a las 21:00 de Bogotá.
+El backend ve esa carpeta en solo lectura y, al arrancar y **cada tres horas**,
+avisa en el log si el respaldo más reciente supera las 24 horas comprometidas,
+o si no hay ninguno. (Comprobaba a las 04:00 hasta el 11-11-2026, y resultó
+tener el mismo defecto que el cron: a esa hora el equipo está apagado.) Hasta
+que se haga el primero, ese aviso de «no hay NINGÚN respaldo» es correcto:
+describe exactamente lo que está pasando.
 
 Por eso `RESPALDO_DIRECTORIO` es obligatoria y el despliegue de producción no
 arranca sin ella. Antes era opcional y, además, Compose no se la pasaba al
