@@ -55,6 +55,9 @@ function MemoriaLibreGB {
   return [math]::Round($os.FreePhysicalMemory / 1MB, 1)
 }
 
+# La lectura del cortafuegos es la misma que usa estado-sicot.ps1.
+. (Join-Path $PSScriptRoot "cortafuegos.ps1")
+
 Clear-Host
 Write-Host ""
 Write-Host "  ╔════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
@@ -270,28 +273,36 @@ if ($ip) {
   Write-Host "   Si deja de servir, vuelva a prender y lea la nueva.)" -ForegroundColor DarkGray
 
   # El cortafuegos de Windows bloquea el puerto 8443 desde otros equipos
-  # mientras no exista una regla que lo permita. Se comprueba y se avisa
-  # aquí, en vez de descubrirlo en medio de la prueba con un navegador que
-  # solo dice «no se puede acceder al sitio». No se crea la regla sola:
-  # cambiar el cortafuegos es decisión del dueño del equipo y pide permisos
-  # de administrador.
-  $reglaPuesta = $false
-  try {
-    $reglas = Get-NetFirewallRule -Enabled True -Direction Inbound -ErrorAction Stop
-    foreach ($r in $reglas) {
-      $puertos = $r | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue
-      if ($puertos -and $puertos.LocalPort -contains "$puertoWeb") { $reglaPuesta = $true; break }
-    }
-  } catch { }
-
-  if (-not $reglaPuesta) {
+  # mientras no haya una regla que lo permita EN LA RED DE ESTE MOMENTO. Se
+  # comprueba y se avisa aquí, en vez de descubrirlo en medio de la prueba
+  # con un navegador que solo dice «no se puede acceder al sitio». No se
+  # crea la regla sola: cambiar el cortafuegos es decisión del dueño del
+  # equipo y pide permisos de administrador.
+  #
+  # Antes se buscaba solo una regla con el número del puerto, y eso fallaba
+  # en los dos sentidos (ver cortafuegos.ps1): avisaba de más donde la regla
+  # de Docker Desktop ya deja entrar, y proponía una regla «-Profile Private»
+  # que no abre nada si Windows tiene la red marcada como pública. Además
+  # tardaba unos 20 segundos. Ahora la línea que se propone lleva el perfil
+  # de la red en la que el equipo está de verdad.
+  $cf = LeerCortafuegos $puertoWeb
+  if (-not $cf.Leido) {
     Write-Host ""
-    Aviso "Falta abrir el puerto $puertoWeb en el cortafuegos: desde otro"
+    Paso "No se pudo leer el cortafuegos: si desde otro computador no carga,"
+    Paso "revise que el puerto $puertoWeb esté abierto."
+  } elseif (-not ($cf.Regla -is [string])) {
+    Write-Host ""
+    Aviso "En esta red, que Windows tiene marcada como $($cf.Red), ninguna"
+    Aviso "regla del cortafuegos deja entrar por el puerto ${puertoWeb}: desde otro"
     Aviso "computador la página no va a cargar. Para permitirlo, abra"
     Aviso "PowerShell COMO ADMINISTRADOR y pegue esta línea:"
     Write-Host ""
-    Write-Host "      New-NetFirewallRule -DisplayName `"SICOT web ($puertoWeb)`" -Direction Inbound -Protocol TCP -LocalPort $puertoWeb -Profile Private -Action Allow" -ForegroundColor Gray
+    Write-Host "      New-NetFirewallRule -DisplayName `"SICOT web ($puertoWeb)`" -Direction Inbound -Protocol TCP -LocalPort $puertoWeb -Profile $($cf.Perfil) -Action Allow" -ForegroundColor Gray
     Write-Host ""
+    if ($cf.Perfil -match "Public") {
+      Write-Host "  (Windows tiene esta red marcada como pública: ábralo solo si es" -ForegroundColor DarkGray
+      Write-Host "   una red de confianza.)" -ForegroundColor DarkGray
+    }
     Write-Host "  (Desde ESTE equipo se entra igual, sin tocar nada.)" -ForegroundColor DarkGray
   }
 } else {

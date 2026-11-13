@@ -38,6 +38,22 @@ La ventana hace tres cosas que importan y que un arranque a mano no hace:
 Al final muestra la dirección para entrar. Al terminar la prueba, doble clic en
 **`Apagar SICOT.bat`** (los datos no se borran).
 
+### Para saber si está prendido
+
+Doble clic en **`Estado de SICOT.bat`**. En unos segundos dice, pieza por
+pieza, si SICOT está prendido, apagado o a medias, y vuelve a mostrar la
+dirección para entrar. **Solo mira**: no prende ni apaga nada, no cierra
+programas y no carga la IA.
+
+Sirve para las tres dudas que aparecen en medio de una prueba, sin tener que
+volver a prender:
+
+- **«¿Quedó prendido?»**, al volver al equipo después de un rato.
+- **«¿Cuál era la dirección?»**, si el portátil cambió de red.
+- **«¿Por qué la IA va lenta?»**. Dice si el modelo sigue cargado en memoria o
+  si salió de ella, que es la causa más común y no se ve en ninguna pantalla
+  de SICOT. Si salió, `Prender SICOT.bat` lo vuelve a cargar.
+
 ### Si quiere probar desde otro computador
 
 La ventana muestra también una dirección con números, del tipo
@@ -46,13 +62,19 @@ La ventana muestra también una dirección con números, del tipo
 - Que los dos equipos estén en la **misma red**. Ojo con la wifi del Centro:
   suele aislar los equipos entre sí y entonces no se ven por mucho que todo
   esté bien. Una zona wifi compartida desde un teléfono es más confiable.
-- Que el **puerto 8443 esté abierto** en el cortafuegos de Windows. Hoy no lo
-  está. La ventana lo avisa y muestra la línea que hay que pegar en
-  PowerShell **como administrador**; es un cambio en la configuración del
-  equipo, así que lo hace su dueño, no el programa.
+- Que el cortafuegos de Windows **deje entrar por el puerto 8443 en esa red**.
+  No es igual en todas: depende de si Windows tiene la red marcada como
+  privada o como pública. En unas ya entra por la regla que Docker Desktop
+  dejó al instalarse, y en otras hace falta una regla propia. No hay que
+  adivinarlo: las dos ventanas (`Prender` y `Estado`) lo leen para la red del
+  momento y lo dicen. Si falta, `Prender SICOT.bat` muestra la línea que hay
+  que pegar en PowerShell **como administrador**, ya con el tipo de red que
+  corresponde; es un cambio en la configuración del equipo, así que lo hace su
+  dueño, no el programa.
 
 La dirección con números **cambia cada vez que el portátil se conecta a otra
-red**. No la escriba en un papel: léala de la ventana cada vez.
+red**, y con la red puede cambiar también lo que deja pasar el cortafuegos. No
+la escriba en un papel: léala de la ventana cada vez.
 
 ---
 
@@ -214,11 +236,12 @@ Dicho antes para que no parezca un fallo encontrado en medio de la prueba:
 | Lo que pasa | Qué hacer |
 |---|---|
 | La ventana negra dice que Docker no arrancó | Abra Docker Desktop desde el menú Inicio, espere a que diga «Engine running» y vuelva a dar doble clic en `Prender SICOT.bat` |
-| La página no carga en `localhost:8443` | Vuelva a prender; si sigue, es que el arranque no terminó |
+| No sabe si quedó prendido, o perdió la dirección para entrar | Doble clic en `Estado de SICOT.bat`: dice qué está corriendo y vuelve a mostrar la dirección, sin prender ni apagar nada |
+| La página no carga en `localhost:8443` | Doble clic en `Estado de SICOT.bat` para ver qué pieza falta, y vuelva a prender: `Prender SICOT.bat` levanta lo que falte sin tocar lo que ya corre |
 | Los botones de IA dicen que no está disponible | Ollama no está arrancado. Vuelva a prender: el script lo levanta |
 | La IA tarda muchísimo (más de dos minutos) | Falta memoria. Cierre pestañas del navegador y programas, y vuelva a prender diciendo **sí** a cerrar lo que no hace falta |
 | «La IA tardó más de 240 segundos y la petición se canceló» | Pasa cuando el modelo **no quedó precalentado** y el equipo está ocupado: cargarlo y responder a la vez no cabe en la memoria. **Vuelva a intentarlo**: la segunda vez el modelo ya está cargado y responde en unos 45 segundos. Si se repite, apague y vuelva a prender con `Prender SICOT.bat`, que lo deja cargado antes de empezar |
-| Desde otro computador no carga | Falta el puerto 8443 en el cortafuegos, o la red aísla los equipos (ver el final del punto 1) |
+| Desde otro computador no carga | `Estado de SICOT.bat` dice si el cortafuegos deja entrar por el 8443 en esa red. Si dice que sí y aun así no carga, es la red la que aísla los equipos (ver el final del punto 1) |
 
 Para mirar qué pasó por dentro, en una ventana de PowerShell dentro de la
 carpeta del proyecto:
