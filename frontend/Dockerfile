@@ -4,7 +4,7 @@
 # moverse sin que nadie lo note: así quedó esta imagen en nginx 1.27, una rama
 # cerrada que ya no recibía parches. Ahora una versión nueva llega como PR de
 # Dependabot (ecosistema docker) y el CI escanea la imagen resultante con Trivy.
-FROM node:22.23.3-alpine AS build
+FROM node:22.23.4-alpine AS build
 
 # Usuario no-root también aquí, no sólo en la imagen final. La etapa de build se
 # descarta, así que el riesgo no es lo que quede publicado: es que este es el
