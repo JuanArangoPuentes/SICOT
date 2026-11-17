@@ -39,6 +39,20 @@ WORKDIR /app
 RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" \
     && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
+
+# La carpeta de los informes para el técnico, creada aquí y con su dueño.
+#
+# docker-compose.prod.yml monta en /informes el volumen `sicot_informes`. Si la
+# carpeta no existe en la imagen, Docker la crea al montar, y la crea de root:
+# el backend, que corre como `sicot`, no puede escribir. Así estuvo el servidor
+# del Centro del 11 al 17-11-2026, con «No se pudo escribir el informe en
+# /informes» en cada informe y la carpeta vacía; solo llegaba el correo.
+#
+# Con la carpeta en la imagen, Docker copia su contenido y su dueño a un volumen
+# con nombre cuando lo monta vacío. El volumen que ya existe en ese servidor está
+# vacío, así que lo toma al recrearse el contenedor con esta imagen.
+RUN mkdir /informes && chown sicot:sicot /informes
+
 COPY --from=build /build/target/sicot-backend-*.jar app.jar
 RUN chown sicot:sicot app.jar
 USER sicot
