@@ -21,7 +21,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Stream;
 
@@ -120,12 +119,43 @@ public class VigilanciaDelRespaldo {
     }
 
     /**
-     * Al arrancar, para que el aviso aparezca en el log del despliegue — que es
-     * cuando alguien lo está mirando.
+     * Cuánto se espera después de arrancar antes de dar el respaldo por caído.
+     *
+     * <p>El temporizador {@code sicot-respaldo.timer} tiene {@code Persistent=true}:
+     * si el equipo estuvo apagado a la hora del respaldo, lo hace al encender, con
+     * hasta cinco minutos de espera al azar ({@code RandomizedDelaySec=300}) y unos
+     * segundos de {@code pg_dump}. Quince minutos cubren eso con margen y siguen
+     * siendo «el mismo rato» para quien prendió el equipo.
+     *
+     * <p>Constante y no propiedad: es un dato del temporizador, no del despliegue,
+     * y si cambia, cambia aquí junto con él.
+     */
+    static final String MARGEN_AL_ARRANCAR = "PT15M";
+
+    /**
+     * Al arrancar se mide y se escribe en el log del despliegue —que es cuando
+     * alguien lo está mirando—, pero un respaldo viejo <b>todavía no se cuenta
+     * como caída</b>.
+     *
+     * <h2>Por qué no se avisa ya</h2>
+     * Porque al arrancar la respuesta casi siempre es falsa. El 17-11-2026 llegó al
+     * técnico «falló el respaldo de la base de datos: 138 h» a las 08:59, y el
+     * respaldo se hizo solo a las 09:00:31: el equipo había estado apagado del 12
+     * al 16 y el temporizador se puso al día al encender, como está diseñado. El
+     * backend arranca en un minuto; el temporizador espera hasta cinco. Esta
+     * comprobación le ganaba la carrera cada vez, así que <b>cualquier encendido
+     * después de más de 24 h apagado mandaba una falsa alarma</b>: cada lunes y
+     * cada festivo. Un aviso que llega siempre enseña a no leerlo, y entonces no
+     * sirve el día que es verdad.
+     *
+     * <p>Además, el tiempo que el equipo pasa apagado no es trabajo sin respaldar:
+     * con SICOT apagado nadie escribe en la base. La pregunta que importa es si el
+     * temporizador consigue ponerse al día, y esa se contesta en
+     * {@link #comprobarCadaTantasHoras()}, {@value #MARGEN_AL_ARRANCAR} después.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void comprobarAlArrancar() {
-        comprobar();
+        comprobar(false);
     }
 
     /**
@@ -146,15 +176,23 @@ public class VigilanciaDelRespaldo {
      * {@code scripts/systemd/sicot-respaldo.timer}— porque ahí sí importa la
      * hora; aquí no importa cuándo se mire, solo que se mire.
      *
-     * <p>El retraso inicial evita que esta comprobación coincida con la del
-     * arranque, que ya la hace {@link #comprobarAlArrancar()}.
+     * <p>La primera vez corre {@value #MARGEN_AL_ARRANCAR} después de arrancar, no
+     * tres horas después: es la que confirma o descarta lo que se vio al arrancar
+     * (ver {@link #comprobarAlArrancar()}). Con tres horas, un respaldo que de
+     * verdad no se puso al día habría tardado eso en llegar al técnico.
      */
-    @Scheduled(fixedDelay = 3, initialDelay = 3, timeUnit = TimeUnit.HOURS)
+    @Scheduled(fixedDelayString = "PT3H", initialDelayString = MARGEN_AL_ARRANCAR)
     public void comprobarCadaTantasHoras() {
-        comprobar();
+        comprobar(true);
     }
 
-    private void comprobar() {
+    /**
+     * @param contarComoCaida si un respaldo ausente o viejo se le cuenta a
+     *                        {@link AvisoDeSalud} —y de ahí sale el informe para
+     *                        el técnico— o solo se deja en el log porque todavía
+     *                        se está dentro del margen del arranque.
+     */
+    private void comprobar(boolean contarComoCaida) {
         if (directorio == null) {
             // Sin configurar no se puede afirmar nada, y afirmar «todo bien»
             // sería peor que callar: la métrica queda en -1, que es distinguible
@@ -181,6 +219,10 @@ public class VigilanciaDelRespaldo {
         Optional<Instant> ultimo = fechaDelRespaldoMasReciente();
         if (ultimo.isEmpty()) {
             antiguedadEnHoras.set(DESCONOCIDA);
+            if (!contarComoCaida) {
+                avisarQueSeConfirmaDespues("no hay ningún respaldo en " + directorio);
+                return;
+            }
             salud.fallo(Servicio.RESPALDO, "no hay ningún respaldo en " + directorio);
             log.error("""
                     ═══════════════════════════════════════════════════════════════
@@ -189,11 +231,12 @@ public class VigilanciaDelRespaldo {
                      ADR-002 compromete un RPO de {} h. Ahora mismo, la pérdida
                      ante un fallo de disco sería TODA la base de datos.
 
-                     Revisar:
-                       1. Que el cron esté instalado:  crontab -l | grep respaldo-sicot
-                       2. Que se pueda ejecutar a mano: ./scripts/respaldo-sicot.sh {}
+                     Revisar en el servidor:
+                       systemctl list-timers sicot-respaldo.timer
+                       tail -30 /var/log/sicot-respaldo.log
+                       Si el temporizador no está: sudo ./scripts/instalar-respaldo.sh <carpeta>
                     ═══════════════════════════════════════════════════════════════""",
-                    directorio, rpo.toHours(), directorio);
+                    directorio, rpo.toHours());
             return;
         }
 
@@ -201,22 +244,41 @@ public class VigilanciaDelRespaldo {
         antiguedadEnHoras.set(antiguedad.toHours());
 
         if (antiguedad.compareTo(rpo) > 0) {
-            salud.fallo(Servicio.RESPALDO, "el respaldo más reciente tiene %d h y el RPO comprometido es de %d h"
-                    .formatted(antiguedad.toHours(), rpo.toHours()));
+            String detalle = "el respaldo más reciente tiene %d h y el RPO comprometido es de %d h"
+                    .formatted(antiguedad.toHours(), rpo.toHours());
+            if (!contarComoCaida) {
+                avisarQueSeConfirmaDespues(detalle);
+                return;
+            }
+            salud.fallo(Servicio.RESPALDO, detalle);
             log.error("""
                     ═══════════════════════════════════════════════════════════════
                      RESPALDO: el más reciente tiene {} h de antigüedad y el RPO
-                     comprometido en ADR-002 es de {} h.
+                     comprometido en ADR-002 es de {} h, y el temporizador no se
+                     puso al día después de arrancar.
 
-                     El trabajo de las últimas {} h no está respaldado. Revisar el
-                     cron en el servidor:  crontab -l | grep respaldo-sicot
+                     Revisar en el servidor:
+                       systemctl list-timers sicot-respaldo.timer
+                       systemctl is-failed sicot-respaldo.service
+                       tail -30 /var/log/sicot-respaldo.log
                     ═══════════════════════════════════════════════════════════════""",
-                    antiguedad.toHours(), rpo.toHours(), antiguedad.toHours());
+                    antiguedad.toHours(), rpo.toHours());
         } else {
             salud.exito(Servicio.RESPALDO);
             log.info("Respaldo verificado: el más reciente tiene {} h (RPO comprometido: {} h, ADR-002).",
                     antiguedad.toHours(), rpo.toHours());
         }
+    }
+
+    /**
+     * WARN y no ERROR: todavía no es una avería, y quien lea el log del arranque
+     * tiene que saber que hay una segunda mirada en camino y cuándo.
+     */
+    private void avisarQueSeConfirmaDespues(String detalle) {
+        log.warn("Respaldo al arrancar: {}. Todavía no se avisa al técnico: si el equipo estuvo "
+                        + "apagado, sicot-respaldo.timer se pone al día en los primeros minutos. "
+                        + "Se vuelve a mirar en {} min.",
+                detalle, Duration.parse(MARGEN_AL_ARRANCAR).toMinutes());
     }
 
     /**

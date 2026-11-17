@@ -1,9 +1,12 @@
 package co.sena.sicot.config;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.springframework.scheduling.annotation.Scheduled;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -11,6 +14,10 @@ import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -169,6 +176,111 @@ class VigilanciaDelRespaldoTest {
         new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
 
         assertThat(valorDe(registro)).isEqualTo(50);
+    }
+
+    /**
+     * Lo que pasó el 17-11-2026: el equipo estuvo apagado del 12 al 16, al
+     * prenderlo el último volcado tenía 138 h y el técnico recibió «falló el
+     * respaldo» a las 08:59. El temporizador hizo el volcado a las 09:00:31.
+     * Al arrancar se mide, pero todavía no se cuenta como caída.
+     */
+    @Test
+    void alArrancarUnRespaldoViejoTodaviaNoEsUnaCaida(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261111-140937.dump", Duration.ofHours(138));
+        AvisoAnotado aviso = new AvisoAnotado();
+        MeterRegistry registro = new SimpleMeterRegistry();
+
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24, aviso).comprobarAlArrancar();
+
+        assertThat(aviso.fallos)
+                .as("el temporizador tiene unos minutos para ponerse al día; avisar ya es una falsa alarma")
+                .isEmpty();
+        assertThat(valorDe(registro)).as("la medición sí se publica").isEqualTo(138);
+    }
+
+    /** Lo mismo con la carpeta vacía: al encender, el temporizador también puede llenarla. */
+    @Test
+    void alArrancarSinNingunRespaldoTampocoSeAvisaTodavia(@TempDir Path vacio) {
+        AvisoAnotado aviso = new AvisoAnotado();
+
+        new VigilanciaDelRespaldo(new SimpleMeterRegistry(), vacio.toString(), 24, aviso).comprobarAlArrancar();
+
+        assertThat(aviso.fallos).isEmpty();
+    }
+
+    /** El final feliz del 17-11: el temporizador se pone al día y no llega nada. */
+    @Test
+    void siElTemporizadorSePoneAlDiaNoLlegaNingunInforme(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261111-140937.dump", Duration.ofHours(138));
+        AvisoAnotado aviso = new AvisoAnotado();
+        VigilanciaDelRespaldo vigilancia =
+                new VigilanciaDelRespaldo(new SimpleMeterRegistry(), directorio.toString(), 24, aviso);
+
+        vigilancia.comprobarAlArrancar();
+        crearRespaldoDeHace(directorio, "sicot-20261117-090032.dump", Duration.ofMinutes(14));
+        vigilancia.comprobarCadaTantasHoras();
+
+        assertThat(aviso.fallos).isEmpty();
+    }
+
+    /**
+     * El margen no puede tapar una avería de verdad: si después de él el
+     * respaldo sigue viejo, el temporizador no funcionó y eso sí se informa.
+     */
+    @Test
+    void siElTemporizadorNoSePoneAlDiaLaSegundaMiradaSiAvisa(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261111-140937.dump", Duration.ofHours(138));
+        AvisoAnotado aviso = new AvisoAnotado();
+        VigilanciaDelRespaldo vigilancia =
+                new VigilanciaDelRespaldo(new SimpleMeterRegistry(), directorio.toString(), 24, aviso);
+
+        vigilancia.comprobarAlArrancar();
+        vigilancia.comprobarCadaTantasHoras();
+
+        assertThat(aviso.fallos).hasSize(1);
+        assertThat(aviso.fallos.get(0)).contains("138 h");
+    }
+
+    /**
+     * El margen vale lo que valga la espera del temporizador. Si alguien sube
+     * {@code RandomizedDelaySec} por encima del margen, o quita
+     * {@code Persistent=true}, la falsa alarma de cada encendido vuelve sin que
+     * nada lo diga: por eso se lee el archivo de verdad y no una copia del
+     * número.
+     */
+    @Test
+    void elMargenAlArrancarCubreLaEsperaDelTemporizador() throws Exception {
+        Scheduled programada = VigilanciaDelRespaldo.class
+                .getMethod("comprobarCadaTantasHoras").getAnnotation(Scheduled.class);
+        assertThat(programada.initialDelayString()).isEqualTo(VigilanciaDelRespaldo.MARGEN_AL_ARRANCAR);
+
+        String temporizador = Files.readString(Path.of("../scripts/systemd/sicot-respaldo.timer"));
+        assertThat(temporizador)
+                .as("sin Persistent=true el respaldo perdido no se recupera al encender y el margen no sirve")
+                .containsPattern("(?m)^Persistent=true\\s*$");
+        Matcher espera = Pattern.compile("(?m)^RandomizedDelaySec=(\\d+)\\s*$").matcher(temporizador);
+        assertThat(espera.find())
+                .as("RandomizedDelaySec en segundos, para poder compararlo con el margen")
+                .isTrue();
+
+        // Cinco minutos más que la espera al azar, para el pg_dump y el arranque de Docker.
+        assertThat(Duration.parse(VigilanciaDelRespaldo.MARGEN_AL_ARRANCAR))
+                .isGreaterThanOrEqualTo(Duration.ofSeconds(Long.parseLong(espera.group(1))).plusMinutes(5));
+    }
+
+    /** Anota lo que la vigilancia le cuenta a la salud del sistema. */
+    private static final class AvisoAnotado implements AvisoDeSalud {
+        private final List<String> fallos = new ArrayList<>();
+
+        @Override
+        public void exito(Servicio servicio) {
+            // En estas pruebas solo importa si hubo fallo.
+        }
+
+        @Override
+        public void fallo(Servicio servicio, String detalle) {
+            fallos.add(detalle);
+        }
     }
 
     private void crearRespaldoDeHace(Path directorio, String nombre, Duration antiguedad) throws IOException {
