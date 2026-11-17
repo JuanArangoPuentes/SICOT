@@ -57,6 +57,13 @@ import java.util.stream.Stream;
  * abierta hasta el 18-10-2026, cuando se midió que el modelo la contestaba
  * sobre el paso en curso: ahora la atiende {@link FichaDelInsumo}.
  *
+ * <h2>Qué dice de un paso o de un sub-paso</h2>
+ * Qué es, para qué sirve, de dónde sale su insumo, quién lo hace, cómo se
+ * registra en SICOT y —al final, porque no es lo que se pregunta— en qué estado
+ * va. La explicación la pone {@link ExplicacionDelSubpaso}; hasta el 17-11-2026
+ * aquí se contestaba con la descripción que la plantilla siembra en cada
+ * subetapa, que en los pasos 3 a 6 repite el título del sub-paso.
+ *
  * <h2>Cuando la pregunta nombra otro paso, un sub-paso o un documento</h2>
  * Hasta el 2-10-2026 la plantilla contestaba siempre el paso en curso:
  * «¿qué me falta en el paso 4?», «¿qué debo hacer en el 4.2?» o «¿ya puedo
@@ -367,9 +374,13 @@ public class GuiaDelPasoActual {
         if (deMas == 0) {
             return true;
         }
-        boolean pide = p.contieneAlguna(SENALES_CON_OBJETIVO) || p.contieneAlguna(PIDE_EXPLICACION)
+        return pideExplicacion(p) && deMas <= (nombraUnPasoPorNumero ? 2 : 1);
+    }
+
+    /** ¿La pregunta pide que le expliquen algo, dicho de cualquiera de las formas corrientes? */
+    private static boolean pideExplicacion(PreguntaNormalizada p) {
+        return p.contieneAlguna(SENALES_CON_OBJETIVO) || p.contieneAlguna(PIDE_EXPLICACION)
                 || p.contieneAlgunaFrase(PIDE_EXPLICACION_PALABRA);
-        return pide && deMas <= (nombraUnPasoPorNumero ? 2 : 1);
     }
 
     /**
@@ -449,8 +460,13 @@ public class GuiaDelPasoActual {
         }
         Optional<EtapaResponse> enCurso = enCurso(etapas);
         OptionalInt paso = pasoNombrado(p, porNombre);
-        if (paso.isPresent() && (enCurso.isEmpty() || enCurso.get().numero() != paso.getAsInt())) {
-            return Optional.of(sobreOtroPaso(paso.getAsInt(), etapas, enCurso));
+        // «Explícame el paso 2» con el contrato en el 2 pedía una explicación y
+        // recibía la lista de pendientes (17-11-2026): la misma queja que con
+        // los sub-pasos. Si la pregunta pide que le expliquen el paso, se le
+        // explica, vaya él ahí o no.
+        if (paso.isPresent()
+                && (enCurso.isEmpty() || enCurso.get().numero() != paso.getAsInt() || pideExplicacion(p))) {
+            return Optional.of(sobreElPaso(paso.getAsInt(), etapas, enCurso, pideExplicacion(p)));
         }
         return delPasoActual(etapas, enCurso);
     }
@@ -480,7 +496,9 @@ public class GuiaDelPasoActual {
         if (etapa.porcentaje() > 0) {
             sb.append(" (%d%% completado)".formatted(etapa.porcentaje()));
         }
-        sb.append(".\n\nLo que le falta aquí:\n");
+        sb.append(".");
+        paraQueEsElPaso(sb, etapa);
+        sb.append("\n\nLo que le falta aquí:\n");
         listar(sb, pendientes);
 
         SubetapaResponse siguiente = pendientes.get(0);
@@ -493,8 +511,13 @@ public class GuiaDelPasoActual {
                 AccionesDelCopiloto.abrirSubpaso(etapa.numero(), siguiente)));
     }
 
-    /** «¿Qué me falta en el paso 4?» con el contrato en el 2: los pendientes del 4, no los del 2. */
-    private ChatResponse sobreOtroPaso(int numero, List<EtapaResponse> etapas, Optional<EtapaResponse> enCurso) {
+    /**
+     * «¿Qué me falta en el paso 4?» con el contrato en el 2: los pendientes del
+     * 4, no los del 2. Y «explícame el paso 4»: para qué es ese paso, que es lo
+     * que pregunta quien no lo ha hecho nunca.
+     */
+    private ChatResponse sobreElPaso(int numero, List<EtapaResponse> etapas, Optional<EtapaResponse> enCurso,
+                                     boolean explicando) {
         Optional<EtapaResponse> encontrada = etapas.stream().filter(e -> e.numero() == numero).findFirst();
         if (encontrada.isEmpty()) {
             return ChatResponse.delSistema("Este contrato no tiene registrado el paso %d.".formatted(numero));
@@ -506,6 +529,7 @@ public class GuiaDelPasoActual {
         if (pendientes.isEmpty()) {
             sb.append("El paso %d: %s ya está completo: no le queda ningún sub-paso pendiente."
                     .formatted(etapa.numero(), etapa.nombre()));
+            paraQueEsElPaso(sb, etapa);
             // Lo que tuvo, para quien pregunta en qué consistía («explícame la
             // designación»).
             if (etapa.subEtapas() != null && !etapa.subEtapas().isEmpty()) {
@@ -518,15 +542,27 @@ public class GuiaDelPasoActual {
             if (etapa.porcentaje() > 0) {
                 sb.append(" (%d%% completado)".formatted(etapa.porcentaje()));
             }
-            sb.append(".\n\nLo que le falta ahí:\n");
-            listar(sb, pendientes);
+            sb.append(".");
+            paraQueEsElPaso(sb, etapa);
+            // Quien pide que le expliquen el paso quiere saber en qué consiste
+            // entero, con los sub-pasos que ya pasaron; quien pregunta qué le
+            // falta, solo lo que le falta.
+            if (explicando) {
+                sb.append("\n\nSus sub-pasos:\n");
+                listar(sb, etapa.subEtapas());
+            } else {
+                sb.append("\n\nLo que le falta ahí:\n");
+                listar(sb, pendientes);
+            }
             SubetapaResponse primero = pendientes.get(0);
-            sb.append("\n\nEl primero es %s: %s.".formatted(primero.codigo(), primero.nombre()));
+            sb.append("\n\nEl primero que le queda es %s: %s.".formatted(primero.codigo(), primero.nombre()));
             detalle(sb, primero);
             sb.append("\n\n").append(comoSeRegistra(primero));
             accion = AccionesDelCopiloto.abrirSubpaso(etapa.numero(), primero);
         }
-        enCurso.ifPresent(e -> sb.append("\n\nUsted va en el paso %d: %s.".formatted(e.numero(), e.nombre())));
+        // Si es el paso en el que va, decírselo sobraría: ya lo está leyendo.
+        enCurso.filter(e -> e.numero() != etapa.numero())
+                .ifPresent(e -> sb.append("\n\nUsted va en el paso %d: %s.".formatted(e.numero(), e.nombre())));
         return ChatResponse.delSistema(sb.toString(), accion);
     }
 
@@ -554,31 +590,73 @@ public class GuiaDelPasoActual {
         ChatResponse.Accion accion = AccionesDelCopiloto.abrirSubpaso(etapa.numero(), sub);
         StringBuilder sb = new StringBuilder("Sub-paso %s: %s, del paso %d: %s."
                 .formatted(sub.codigo(), sub.nombre(), etapa.numero(), etapa.nombre()));
-        if (sub.estado() == EstadoSubetapa.COMPLETADA) {
-            // Con lo que se hace en él: «explícame el 2.1» con el 2.1 cerrado
-            // pide la explicación igual, y hasta el 20-10-2026 solo recibía
-            // «Ya está completado».
-            sb.append(" Ya está completado.");
-            detalle(sb, sub);
-            return ChatResponse.delSistema(sb.toString(), accion);
+        explicar(sb, sub);
+        if (sub.responsable() != null && !sub.responsable().isBlank()) {
+            sb.append("\n\nResponsable: %s.".formatted(sub.responsable().strip()));
         }
-        sb.append(sub.estado() == EstadoSubetapa.EN_CURSO ? " Está en curso." : " Está pendiente.");
-        detalle(sb, sub);
-        List<SubetapaResponse> pendientesAntes = anteriores.stream()
-                .filter(s -> s.estado() != EstadoSubetapa.COMPLETADA)
-                .toList();
-        if (pendientesAntes.isEmpty()) {
-            sb.append("\n\nNo le queda nada pendiente antes de él en ese paso.");
-        } else {
-            sb.append(pendientesAntes.size() == 1
-                    ? "\n\nAntes de él, en ese mismo paso, sigue pendiente:\n"
-                    : "\n\nAntes de él, en ese mismo paso, siguen pendientes:\n");
-            listar(sb, pendientesAntes);
-        }
+        // También cuando ya está completado: quien pregunta por un sub-paso
+        // cerrado quiere saber cómo se hace, no solo que está hecho.
         sb.append("\n\n").append(comoSeRegistra(sub));
+        sb.append("\n\nCómo va: ").append(enQueVa(sub)).append('.');
+        if (sub.estado() != EstadoSubetapa.COMPLETADA) {
+            List<SubetapaResponse> pendientesAntes = anteriores.stream()
+                    .filter(s -> s.estado() != EstadoSubetapa.COMPLETADA)
+                    .toList();
+            if (pendientesAntes.isEmpty()) {
+                sb.append(" No le queda nada pendiente antes de él en ese paso.");
+            } else {
+                sb.append(pendientesAntes.size() == 1
+                        ? " Antes de él, en ese mismo paso, sigue pendiente:\n"
+                        : " Antes de él, en ese mismo paso, siguen pendientes:\n");
+                listar(sb, pendientesAntes);
+            }
+        }
         enCurso.filter(e -> e.numero() < etapa.numero())
                 .ifPresent(e -> sb.append("\n\nUsted va en el paso %d: %s.".formatted(e.numero(), e.nombre())));
         return ChatResponse.delSistema(sb.toString(), accion);
+    }
+
+    /**
+     * Qué es el sub-paso y para qué sirve, antes de cualquier otra cosa.
+     *
+     * <p>17-11-2026: a «explícame el paso 3.2» la respuesta empezaba por «Está
+     * pendiente» y seguía con la descripción del sub-paso, que en los pasos 3 a
+     * 6 repite el título («Evidencia fotográfica con georreferenciación activa»
+     * para «Carga de evidencia fotográfica georreferenciada»). El supervisor
+     * preguntaba qué se hace ahí y se le contestaba en qué estado está. Ahora
+     * el estado va al final, donde corresponde a una pregunta que no era por el
+     * estado, y la explicación la pone {@link ExplicacionDelSubpaso}.
+     *
+     * <p>Si el contrato trae un sub-paso que esa tabla no conoce —los de antes
+     * del proceso real—, queda su propia descripción, que es lo único cierto
+     * que SICOT tiene de él.
+     */
+    private static void explicar(StringBuilder sb, SubetapaResponse sub) {
+        Optional<ExplicacionDelSubpaso.Explicacion> explicacion = ExplicacionDelSubpaso.delSubpaso(sub);
+        if (explicacion.isEmpty()) {
+            if (sub.descripcion() != null && !sub.descripcion().isBlank()) {
+                sb.append("\n\nQué es: ").append(sub.descripcion().strip());
+            }
+            return;
+        }
+        ExplicacionDelSubpaso.Explicacion e = explicacion.get();
+        sb.append("\n\nQué es: ").append(e.queEs());
+        sb.append("\n\nPara qué sirve: ").append(e.paraQue());
+        if (e.deDondeSale() != null) {
+            sb.append("\n\nDe dónde sale: ").append(e.deDondeSale());
+        }
+    }
+
+    /** Para qué es el paso, cuando es uno de los seis del proceso. */
+    private static void paraQueEsElPaso(StringBuilder sb, EtapaResponse etapa) {
+        ExplicacionDelSubpaso.delPaso(etapa.nombre())
+                .ifPresent(e -> sb.append("\n\nPara qué es este paso: ").append(e));
+    }
+
+    /** El estado del sub-paso dicho en palabras, el mismo en toda respuesta de SICOT. */
+    static String enQueVa(SubetapaResponse sub) {
+        return sub.estado() == EstadoSubetapa.COMPLETADA ? "ya está completado"
+                : sub.estado() == EstadoSubetapa.EN_CURSO ? "está en curso" : "está pendiente";
     }
 
     /**
@@ -639,11 +717,23 @@ public class GuiaDelPasoActual {
                 .toList();
     }
 
+    /**
+     * Los sub-pasos, uno por línea, con la marca de los que no están
+     * pendientes.
+     *
+     * <p>«Completado» solo se marca en una lista mixta —la de un paso que se
+     * explica entero—, donde distingue lo hecho de lo que falta. En la de un
+     * paso ya cerrado sobraría: la línea de arriba acaba de decir que está
+     * completo, y marcarlo en los cinco sub-pasos no añade nada.
+     */
     private static void listar(StringBuilder sb, List<SubetapaResponse> subs) {
+        boolean mixta = subs.stream().anyMatch(s -> s.estado() != EstadoSubetapa.COMPLETADA);
         for (SubetapaResponse s : subs) {
             sb.append("\n%s %s".formatted(s.codigo(), s.nombre()));
             if (s.estado() == EstadoSubetapa.EN_CURSO) {
                 sb.append("  ← en curso");
+            } else if (mixta && s.estado() == EstadoSubetapa.COMPLETADA) {
+                sb.append("  ← completado");
             }
         }
     }
