@@ -405,3 +405,61 @@ sub-paso y su botón. «¿Qué hago si el
 contratista no contesta el correo del 2.4?» siguió yendo al modelo (59 s). El
 precalentado con el contexto en caché: «se renovó la carga del modelo en 312
 ms», y Ollama movió la expiración 30 minutos.
+
+---
+
+## Revisión — 17 de noviembre de 2026: explicar un sub-paso es explicarlo, no decir en qué estado está
+
+Esta revisión tampoco cambia el modelo. Corrige el contenido de una respuesta
+que el motor ya daba al instante, y que no contestaba lo que se le preguntaba.
+
+### Lo que pasó
+
+El supervisor escribió «explícame el paso 3.2» y recibió, en milisegundos:
+
+> Sub-paso 3.2: Carga de evidencia fotográfica georreferenciada, del paso 3:
+> INSPECCIÓN — Monitoreo y Ejecución. **Está pendiente.** Evidencia fotográfica
+> con georreferenciación activa. Responsable: Supervisor.
+
+Es decir: el estado primero —que no era lo preguntado— y, como explicación, el
+título del sub-paso dicho otra vez. La revisión del 20-10-2026 había llevado
+estas preguntas al motor, que era lo correcto, pero el motor explicaba con la
+`descripcion` que `GcconP010Plantilla` siembra en cada subetapa, y en los pasos
+3 a 6 esa descripción se escribió para rotular una lista, no para explicarle el
+proceso a nadie: «Evidencia fotográfica con georreferenciación activa» para
+«Carga de evidencia fotográfica georreferenciada», «Verificación de planillas
+PILA para recepción» para «Verificación de aportes a seguridad social (PILA)».
+Quien preguntaba qué se hace en un sub-paso se quedaba igual que antes de
+preguntar.
+
+### La decisión
+
+Lo que faltaba no era llamar al modelo —mide 158 s y se equivoca de paso—, era
+tener escrito lo que el proceso ya dice de cada sub-paso.
+
+- **`ExplicacionDelSubpaso`**: qué es, para qué sirve y de dónde sale el insumo
+  de los **21 sub-pasos** y los **6 pasos**. Cada línea sale de lo que el
+  proyecto ya tenía escrito: el proceso real del supervisor
+  (`PROCESO_REAL_EN_SICOT.md`) para los pasos 1 y 2; el GCCON-P-010 tal como lo
+  resume el prompt y las fichas de los documentos formales para los pasos 3 a 6;
+  y `FichaDelInsumo` para dónde se consigue la factura, la planilla PILA o las
+  pólizas —no se copia la frase, se le pregunta, para que no haya dos versiones
+  de la misma. No se afirman requisitos, plazos ni porcentajes que no estén en
+  esas fuentes.
+- **El estado va al final.** La respuesta de un sub-paso empieza por qué es y
+  para qué sirve, sigue por cómo se hace en SICOT y termina con «Cómo va: está
+  pendiente» y lo que queda antes de él. Un sub-paso ya completado también dice
+  cómo se hace: quien pregunta por uno cerrado quiere saber en qué consistió.
+- **Cada paso dice para qué es**, en la respuesta del paso en curso y en la de
+  cualquier paso que nombre la pregunta.
+- **«Explícame el paso 2» con el contrato en el paso 2 explica el paso**, en vez
+  de devolver la lista de pendientes. «¿Qué me falta en el paso 2?» sigue
+  devolviendo la lista: ahí sí es lo que se pregunta.
+- **Se reconocen por el nombre y no por el código**, como en `FichaDelInsumo`:
+  un contrato de antes del 15-10-2026 tiene otros sub-pasos con los mismos
+  códigos, y conserva su propia descripción en vez de recibir la explicación de
+  un sub-paso que no es el suyo.
+
+La guía del tutorial (`frontend/src/data/guiaSubPaso.ts`) sigue dando su versión
+corta al abrir un sub-paso, y termina como siempre: «Si necesita más detalle,
+pregúnteme abajo». Lo que cambia es que ahora esa invitación se cumple.
