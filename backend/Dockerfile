@@ -13,7 +13,7 @@ COPY src/ src/
 RUN mvn -B clean package -DskipTests
 
 # ── Runtime stage ────────────────────────────────────────────────────────────
-FROM eclipse-temurin:25.0.4.1_1-jre-alpine
+FROM eclipse-temurin:25.0.5_8-jre-alpine
 WORKDIR /app
 
 # wget se usa en el HEALTHCHECK de abajo; en la imagen alpine viene por
