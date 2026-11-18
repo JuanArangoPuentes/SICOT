@@ -51,7 +51,7 @@ RUN npm run build
 # (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
 # expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
 # imágenes del CI marcó, y la 1.30.6 las corrige.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+FROM nginxinc/nginx-unprivileged:1.31.7-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
