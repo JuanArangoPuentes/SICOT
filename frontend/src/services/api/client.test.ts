@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiFetch, onUnauthorized, setAuthToken } from './client'
+import { ApiError, apiFetch, onUnauthorized, renovandoElToken, setAuthToken } from './client'
 
 /**
  * El cliente HTTP es el único punto por donde pasa todo lo que el frontend le
@@ -88,6 +88,81 @@ describe('apiFetch', () => {
     fetchMock.mockResolvedValue(respuesta(401, { status: 401, message: 'No autenticado' }))
 
     await expect(apiFetch('/api/contratos')).rejects.toBeInstanceOf(ApiError)
+
+    expect(cerrarSesion).toHaveBeenCalledOnce()
+  })
+
+  /**
+   * Cambiar la contraseña propia revoca los tokens anteriores de la cuenta: una
+   * petición de fondo que salió un instante antes vuelve con 401 y no es que la
+   * sesión se haya terminado, es que su token quedó atrás. Tratarlo como lo
+   * segundo devolvía al login después de cambiar la contraseña con éxito.
+   */
+  it('repite con el token vigente —y no cierra la sesión— el 401 de una petición cuyo token quedó atrás', async () => {
+    const cerrarSesion = vi.fn()
+    onUnauthorized(cerrarSesion)
+    setAuthToken('token-revocado')
+    fetchMock
+      // Mientras el servidor contestaba a esta, la respuesta del cambio de
+      // contraseña llegó y puso el token nuevo.
+      .mockImplementationOnce(() => {
+        setAuthToken('token-nuevo')
+        return Promise.resolve(respuesta(401, { status: 401, message: 'No autenticado' }))
+      })
+      .mockResolvedValue(respuesta(200, { hayNovedades: false }))
+
+    await expect(apiFetch('/api/contratos/7/novedades')).resolves.toEqual({ hayNovedades: false })
+
+    expect(cerrarSesion).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const reintento = fetchMock.mock.calls[1][1].headers as Headers
+    expect(reintento.get('Authorization')).toBe('Bearer token-nuevo')
+  })
+
+  it('si el token vigente tampoco vale, la sesión sí se terminó y se cierra', async () => {
+    const cerrarSesion = vi.fn()
+    onUnauthorized(cerrarSesion)
+    setAuthToken('token-revocado')
+    fetchMock
+      .mockImplementationOnce(() => {
+        setAuthToken('token-nuevo')
+        return Promise.resolve(respuesta(401, { status: 401, message: 'No autenticado' }))
+      })
+      .mockResolvedValue(respuesta(401, { status: 401, message: 'No autenticado' }))
+
+    await expect(apiFetch('/api/contratos/7/novedades')).rejects.toBeInstanceOf(ApiError)
+
+    expect(cerrarSesion).toHaveBeenCalledOnce()
+  })
+
+  /**
+   * El tramo más estrecho del hueco: el 401 de la petición de fondo llega
+   * ANTES que la respuesta con el token nuevo, así que no hay con qué repetirla.
+   * Lo que no se puede hacer es cerrar la sesión: el token nuevo viene en camino.
+   */
+  it('no cierra la sesión por un 401 que llega mientras el token se está renovando', async () => {
+    const cerrarSesion = vi.fn()
+    onUnauthorized(cerrarSesion)
+    setAuthToken('token-revocado')
+    fetchMock.mockResolvedValue(respuesta(401, { status: 401, message: 'No autenticado' }))
+
+    await renovandoElToken(async () => {
+      await expect(apiFetch('/api/contratos/7/novedades')).rejects.toBeInstanceOf(ApiError)
+    })
+
+    expect(cerrarSesion).not.toHaveBeenCalled()
+    // Sin intentar repetirla: el token nuevo todavía no había llegado.
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('vuelve a cerrar la sesión por un 401 en cuanto la renovación termina', async () => {
+    const cerrarSesion = vi.fn()
+    onUnauthorized(cerrarSesion)
+    setAuthToken('token-revocado')
+    fetchMock.mockResolvedValue(respuesta(401, { status: 401, message: 'No autenticado' }))
+
+    await renovandoElToken(async () => undefined)
+    await expect(apiFetch('/api/contratos/7/novedades')).rejects.toBeInstanceOf(ApiError)
 
     expect(cerrarSesion).toHaveBeenCalledOnce()
   })

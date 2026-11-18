@@ -157,6 +157,92 @@ function esFalloDeSesion(path: string): boolean {
   return !path.startsWith('/api/auth/')
 }
 
+/** Cuántas renovaciones del token hay en curso. Ver {@link renovandoElToken}. */
+let renovacionesEnCurso = 0
+
+/**
+ * Envuelve una operación que sustituye el token de la sesión sin cerrarla
+ * —hoy, el cambio de la contraseña propia—, desde que sale la petición hasta
+ * que el token nuevo está puesto.
+ *
+ * <h2>Qué hueco tapa</h2>
+ * El servidor revoca los tokens anteriores de la cuenta mientras atiende esa
+ * petición ({@code Usuario.revocarSesiones}), y el cliente no se entera hasta
+ * que le llega la respuesta: durante ese viaje de red el token que llevan las
+ * demás peticiones ya no vale, y no hay forma de adelantarse. Cualquier
+ * petición de fondo que salga en ese instante —el sondeo de novedades de
+ * ADR-016, el refresco en vivo, el precalentado del Copiloto— vuelve con un
+ * 401 que NO significa «su sesión ya no vale».
+ *
+ * <p>Sin esto, ese 401 disparaba el cierre global y la contraseña se cambiaba
+ * con éxito para aterrizar en la pantalla de acceso, justo lo contrario de lo
+ * que promete la ventana: «En este equipo sigue trabajando sin volver a
+ * entrar». Pasaba de forma intermitente, porque depende de que una de esas
+ * peticiones caiga dentro del hueco (observado el 18-11-2026 con el sondeo
+ * activo en el panel de contrato).
+ *
+ * <p>El token nuevo se pone DENTRO de la operación envuelta, para que el hueco
+ * se cierre en cuanto llega la respuesta y no en un render posterior de React.
+ */
+export async function renovandoElToken<T>(renovar: () => Promise<T>): Promise<T> {
+  renovacionesEnCurso++
+  try {
+    return await renovar()
+  } finally {
+    renovacionesEnCurso--
+  }
+}
+
+/**
+ * ¿Salió esta petición con un token que la sesión ya sustituyó? Entonces su
+ * 401 es del token viejo y no de la cuenta: se repite con el vigente.
+ *
+ * <p>Repetirla es seguro aunque cambiara algo: un 401 se responde antes de
+ * tocar nada, así que el primer intento no llegó a hacer efecto.
+ */
+function tokenQuedoAtras(tokenUsado: string | null): boolean {
+  return tokenUsado !== null && authToken !== null && authToken !== tokenUsado
+}
+
+/**
+ * El viaje de ida y vuelta de toda petición al backend: le pone el token de la
+ * sesión y es el ÚNICO sitio desde donde se declara que la sesión se terminó.
+ *
+ * <p>Las cabeceras llegan ya armadas por quien llama (cada forma de pedir tiene
+ * su propio criterio sobre el Content-Type); de la de autorización se encarga
+ * esto, porque es lo que puede cambiar entre un intento y el siguiente.
+ */
+async function pedirConSesion(path: string, options: RequestInit, base: Headers): Promise<Response> {
+  const intentar = (token: string | null) => {
+    const headers = new Headers(base)
+    if (token) headers.set('Authorization', `Bearer ${token}`)
+    return fetch(`${apiBase()}${path}`, { ...options, headers })
+  }
+
+  const tokenUsado = authToken
+  const res = await intentar(tokenUsado)
+  if (res.status !== 401 || !esFalloDeSesion(path)) return res
+
+  if (tokenQuedoAtras(tokenUsado)) {
+    const tokenVigente = authToken
+    const reintento = await intentar(tokenVigente)
+    // Si el token vigente tampoco vale, la sesión sí se terminó. Salvo que haya
+    // vuelto a cambiar mientras tanto: entonces se deja estar, y quien vuelva a
+    // preguntar lo hará con el de ese momento.
+    if (reintento.status === 401 && !tokenQuedoAtras(tokenVigente)) unauthorizedHandler?.()
+    return reintento
+  }
+
+  // El token no ha cambiado todavía, pero está cambiando: esta petición salió
+  // con el anterior y aún no hay con qué repetirla. Falla para quien la pidió
+  // —el sondeo vuelve a preguntar en segundos, ya con el nuevo— sin cerrarle la
+  // sesión a nadie. Si de verdad se terminó, el siguiente 401 lo dirá.
+  if (renovacionesEnCurso > 0) return res
+
+  unauthorizedHandler?.()
+  return res
+}
+
 function segundosDeEspera(res: Response): number | undefined {
   const cabecera = res.headers.get('Retry-After')
   if (!cabecera) return undefined
@@ -204,15 +290,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
-  if (authToken) {
-    headers.set('Authorization', `Bearer ${authToken}`)
-  }
 
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
-
-  if (res.status === 401 && esFalloDeSesion(path)) {
-    unauthorizedHandler?.()
-  }
+  const res = await pedirConSesion(path, options, headers)
 
   if (!res.ok) {
     await lanzarError(res, path)
@@ -235,10 +314,8 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 export async function apiFetchRespuesta(path: string, options: RequestInit = {}): Promise<Response> {
   const headers = new Headers(options.headers)
   headers.set('Content-Type', 'application/json')
-  if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
 
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
-  if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
+  const res = await pedirConSesion(path, options, headers)
   if (!res.ok) {
     await lanzarError(res, path)
   }
@@ -247,10 +324,8 @@ export async function apiFetchRespuesta(path: string, options: RequestInit = {})
 
 export async function apiFetchBlob(path: string, options: RequestInit = {}): Promise<Blob> {
   const headers = new Headers(options.headers)
-  if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
 
-  const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
-  if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
+  const res = await pedirConSesion(path, options, headers)
 
   if (!res.ok) {
     await lanzarError(res, path)
