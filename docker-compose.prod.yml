@@ -222,7 +222,7 @@ services:
     # el límite de intentos fallidos (cabecera del Caddyfile: Caddy sustituye el
     # X-Forwarded-For del cliente). Con "2-alpine" un `up --build` podía traer
     # otro Caddy 2.x sin revisar. Al subirla, repetir esa comprobación.
-    image: caddy:2.11.4-alpine
+    image: caddy:2.11.7-alpine
     container_name: sicot-proxy
     restart: unless-stopped
     environment:
