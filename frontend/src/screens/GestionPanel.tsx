@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
-import { Chip, Modal, type ChipType } from '@/components/ui'
+import { Chip, Modal, propsDePulsable, type ChipType } from '@/components/ui'
 import {
   IconCheckCircle,
   IconClipboardList,
@@ -1133,7 +1133,7 @@ export default function GestionPanel({
                 }}
               />
               <div
-                onClick={handleFileSelect}
+                {...propsDePulsable(handleFileSelect)}
                 style={{
                   border: '2px dashed var(--border)',
                   borderRadius: 10,

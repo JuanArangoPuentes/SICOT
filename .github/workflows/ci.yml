@@ -152,6 +152,15 @@ jobs:
       - name: Chequeo de tipos
         run: npm run typecheck
 
+      - name: Linter y accesibilidad
+        # La compuerta de MDL-151. `eslint-plugin-jsx-a11y` es lo que convierte
+        # la accesibilidad que exige la Resolución 1519 de 2020 en algo que una
+        # máquina comprueba en cada PR, en vez de depender de que alguien se
+        # acuerde de revisarla. Corre con `--max-warnings=0`: un aviso nuevo
+        # también para el job, porque un aviso que nadie atiende es ruido y
+        # acaba enseñando al equipo a ignorar el linter.
+        run: npm run lint
+
       - name: Chequeo de formato
         # Después del chequeo de tipos a propósito: si un PR trae las dos cosas
         # mal, primero debe verse el error de tipos, que es un fallo real, y no
