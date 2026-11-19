@@ -128,6 +128,14 @@ export function CambiarContrasenaModal({ correo, onClose }: { correo: string; on
               style={{ width: '100%', padding: '9px 10px' }}
               value={actual}
               onChange={alEscribir(setActual)}
+              // El aviso de no usar autoFocus es para una página, donde roba el
+              // foco sin que nadie lo haya pedido. Aquí es lo contrario: el
+              // diálogo lo abre el sistema para obligar al cambio de
+              // contraseña, no hay nada más que hacer en pantalla, y las
+              // prácticas de diálogo del W3C piden justamente llevar el foco
+              // al primer campo. Sin esto, quien usa lector de pantalla tiene
+              // que ir a buscarlo.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
           </Field>

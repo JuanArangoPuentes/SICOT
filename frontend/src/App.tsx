@@ -3,7 +3,7 @@
 // Reestructurado a partir del App.tsx original de Figma Make: misma lógica,
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
+import { useEffect, useState, useMemo, useRef, lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom'
 import { PrefsProvider } from '@/prefs'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
@@ -293,8 +293,15 @@ function AppInner() {
     else navigate('/login', { replace: true })
   }
 
+  // `logout` se redefine en cada render, y el aviso de sesión caducada se
+  // registra una sola vez al montar: sin la referencia, el registro se queda
+  // con la versión del primer render para toda la vida de la aplicación. Es el
+  // mismo patrón de useRefrescoEnVivo y useNovedadesDelContrato.
+  const cerrarSesion = useRef(logout)
+  cerrarSesion.current = logout
+
   useEffect(() => {
-    onUnauthorized(() => logout())
+    onUnauthorized(() => cerrarSesion.current())
     // Los reintentos de la cola de cambios: al volver la red y cada medio
     // minuto mientras quede algo y haya sesión con el servidor (ADR-015).
     vigilarLaCola()

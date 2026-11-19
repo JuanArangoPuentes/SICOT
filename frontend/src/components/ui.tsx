@@ -499,6 +499,13 @@ export function Modal({
         padding: `calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px))`,
       }}
     >
+      {/* El `onClick` de la tarjeta no hace nada: solo evita que el clic siga
+          hasta el telón y cierre el diálogo. No necesita equivalente de
+          teclado porque no es una acción — el diálogo se cierra con Escape
+          (unas líneas más arriba), con el «×» y con Cancelar, y el foco está
+          atrapado dentro. Darle manejo de teclado sería una parada de
+          tabulación de más antes de llegar al contenido. */}
+      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="card"
         role="dialog"
@@ -592,6 +599,34 @@ export function Modal({
       </div>
     </div>
   )
+}
+
+/**
+ * Convierte en pulsable de verdad un elemento que no es un `<button>`.
+ *
+ * Existe por MDL-151. Dos zonas de la interfaz eran un `<div onClick>`: la
+ * zona para elegir documentos del alta de contratos y las filas de los pasos
+ * del expediente del supervisor. Quien no usa ratón no tenía ninguna forma de
+ * activarlas — ni tabulando, ni con Enter: para el teclado y para un lector de
+ * pantalla simplemente no existían.
+ *
+ * No se convirtieron en `<button>` porque su contenido son párrafos y bloques,
+ * y un `<button>` no puede contenerlos sin dejar el HTML inválido. Esto da lo
+ * que un botón nativo trae solo: el rol, la parada de tabulación y Enter y
+ * Espacio.
+ */
+export function propsDePulsable(accion: () => void) {
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: accion,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return
+      // Sin esto, Espacio además desplaza la página.
+      e.preventDefault()
+      accion()
+    },
+  }
 }
 
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {

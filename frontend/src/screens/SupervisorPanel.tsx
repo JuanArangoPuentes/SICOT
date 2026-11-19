@@ -33,7 +33,7 @@ import {
   EmptyContractState,
   ErrorContratoState,
 } from '@/components/supervisor/EstadosSinContrato'
-import { SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
+import { SectionHeader, StageJourney, StatCard, propsDePulsable, type LiveAlert, type Stage } from '@/components/ui'
 import {
   AvatarIcon,
   IconBell,
@@ -1727,7 +1727,7 @@ export default function SupervisorPanel({
                       borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--border)',
                     }}
                   >
-                    <div className="step-row" onClick={() => toggleStep(step.id)}>
+                    <div className="step-row" aria-expanded={isOpen} {...propsDePulsable(() => toggleStep(step.id))}>
                       <StepCircle n={step.id} status={step.status} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div

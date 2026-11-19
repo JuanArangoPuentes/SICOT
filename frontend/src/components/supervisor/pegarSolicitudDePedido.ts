@@ -40,7 +40,13 @@ export interface ResultadoDelPegado {
  * porque ninguna hoja escribe tres decimales en pesos).
  */
 export function leerNumero(texto: string): number | null {
-  const limpio = texto.replace(/\$/g, '').replace(/\s| /g, '').trim()
+  // El espacio duro va escrito como \u00A0 y no como el carácter: pegado de
+  // una hoja de cálculo es invisible en el código, y una regla de formato o un
+  // editor podrían «limpiarlo» sin que nadie lo note.
+  const limpio = texto
+    .replace(/\$/g, '')
+    .replace(/\s|\u00A0/g, '')
+    .trim()
   if (limpio === '' || limpio === '-') return null
   const negativo = /^\(.*\)$/.test(limpio) || limpio.startsWith('-')
   const soloCifras = limpio.replace(/[()\-+]/g, '')
