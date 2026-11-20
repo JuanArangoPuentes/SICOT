@@ -40,7 +40,14 @@ export interface ResultadoDelPegado {
  * porque ninguna hoja escribe tres decimales en pesos).
  */
 export function leerNumero(texto: string): number | null {
-  const limpio = texto.replace(/\$/g, '').replace(/\s| /g, '').trim()
+  // \u00A0 escrito con su código y no como el carácter: un espacio
+  // indivisible pegado desde Excel es INVISIBLE en el editor, así que una
+  // regular que lo lleva dentro parece tener un espacio normal de más y el
+  // siguiente que la toque lo «arregla» borrándolo. Con el escape se ve qué hace.
+  const limpio = texto
+    .replace(/\$/g, '')
+    .replace(/\s|\u00A0/g, '')
+    .trim()
   if (limpio === '' || limpio === '-') return null
   const negativo = /^\(.*\)$/.test(limpio) || limpio.startsWith('-')
   const soloCifras = limpio.replace(/[()\-+]/g, '')

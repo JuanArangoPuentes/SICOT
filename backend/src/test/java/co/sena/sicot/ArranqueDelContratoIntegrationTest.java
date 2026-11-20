@@ -464,9 +464,9 @@ class ArranqueDelContratoIntegrationTest extends PruebaDeIntegracion {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"nombre":"Supervisor Ajeno Arranque","email":"ajeno.arranque@soy.sena.edu.co",
-                         "password":"Ajeno123*","telefono":"3000000000","rol":"SUPERVISOR"}
+                         "password":"AjenoDelLote4*","telefono":"3000000000","rol":"SUPERVISOR"}
                         """));
-        return login("ajeno.arranque@soy.sena.edu.co", "Ajeno123*");
+        return login("ajeno.arranque@soy.sena.edu.co", "AjenoDelLote4*");
     }
 
     private long supervisorId() throws Exception {

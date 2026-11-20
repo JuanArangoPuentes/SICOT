@@ -13,11 +13,20 @@ public record RegistroResponse(
         String descripcion,
         Instant fecha,
         /**
-         * USUARIO o SISTEMA. Se expone para que la pantalla de auditoría pueda
-         * decir «Sistema» donde no hay nombre, en vez de dejar la celda en
-         * blanco — que es indistinguible de un dato que falta.
+         * USUARIO, SISTEMA o AGENTE. Se expone para que la pantalla de
+         * auditoría pueda decir «Sistema» donde no hay nombre, en vez de dejar
+         * la celda en blanco — que es indistinguible de un dato que falta— y
+         * para que una acción hecha por una herramienta automática con la
+         * cuenta de alguien no se lea como hecha por esa persona.
          */
         OrigenRegistro origen,
+        /**
+         * Qué herramienta automática lo hizo, cuando {@link #origen()} es
+         * {@code AGENTE}; nula en el resto. El {@code usuarioNombre} sigue
+         * siendo la cuenta responsable: lo que esto añade es de quién fue la
+         * mano. Ver {@code V26__quien_actuo_fue_un_agente.sql}.
+         */
+        String agente,
         /**
          * La hora que declaró el equipo si el cambio se hizo sin red y llegó
          * después (ADR-015); nula si se hizo con conexión. {@code fecha} es

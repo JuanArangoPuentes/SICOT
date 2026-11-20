@@ -31,15 +31,21 @@ export default function Settings({
 
   const colorField = (label: string, key: keyof Prefs) => (
     <Field label={label}>
+      {/* Dos controles para el mismo color, y la etiqueta del <Field> solo puede
+          nombrar a uno: para un lector de pantalla eran dos campos con el mismo
+          nombre y ninguna forma de saber en qué se diferencian. Cada uno dice
+          qué es con su propio `aria-label`. */}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <input
           type="color"
+          aria-label={`${label} — selector de color`}
           value={prefs[key] as string}
           onChange={(e) => patch({ [key]: e.target.value } as Partial<Prefs>)}
           style={{ width: 52 }}
         />
         <input
           type="text"
+          aria-label={`${label} — código hexadecimal`}
           value={prefs[key] as string}
           onChange={(e) => patch({ [key]: e.target.value } as Partial<Prefs>)}
           style={{ flex: 1, padding: '8px 10px', fontFamily: 'var(--font-mono)', fontSize: 12 }}

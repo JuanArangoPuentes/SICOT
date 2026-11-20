@@ -1018,8 +1018,6 @@ export default function GestionPanel({
                 transition: 'background 0.1s',
                 cursor: 'default',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-soft)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <span
                 data-col="Contrato"
@@ -1132,9 +1130,20 @@ export default function GestionPanel({
                   handleFilesChosen(f)
                 }}
               />
-              <div
+              {/* <button> y no <div onClick>: esta zona es la ÚNICA forma de
+                  cargar la ficha de un contrato, y con un div no se alcanza con
+                  el teclado — quien no usa ratón no podía registrar un
+                  contrato. El `<input type="file">` de arriba está oculto, así
+                  que tampoco servía de alternativa. */}
+              <button
+                type="button"
                 onClick={handleFileSelect}
                 style={{
+                  display: 'block',
+                  width: '100%',
+                  background: 'none',
+                  color: 'inherit',
+                  font: 'inherit',
                   border: '2px dashed var(--border)',
                   borderRadius: 10,
                   padding: '40px 20px',
@@ -1153,7 +1162,7 @@ export default function GestionPanel({
                     PDF o Word (.docx) — hasta 6 archivos y 20 MB entre todos
                   </span>
                 </p>
-              </div>
+              </button>
               <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
                 SICOT lee los documentos que cargue y combina lo que encuentre en todos para proponer los datos del
                 contrato — usted los revisa, corrige y confirma antes de crear el contrato. Los archivos quedan adjuntos

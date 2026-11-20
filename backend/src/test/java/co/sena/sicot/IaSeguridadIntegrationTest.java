@@ -220,7 +220,7 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
 
         long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
         asegurarSupervisorAjeno(admin);
-        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "Ajeno123*");
+        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "AjenoDelLote4*");
 
         long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-CHAT", supervisorAsignadoId);
 
@@ -281,7 +281,7 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
 
         long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
         asegurarSupervisorAjeno(admin);
-        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "Ajeno123*");
+        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "AjenoDelLote4*");
 
         long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-ATAJO", supervisorAsignadoId);
 
@@ -384,7 +384,7 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
         String admin = login("administrador@soy.sena.edu.co", "Admin123*");
         long supervisorAsignadoId = usuarioId("supervisor@soy.sena.edu.co", "Supervisor123*");
         asegurarSupervisorAjeno(admin);
-        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "Ajeno123*");
+        String tokenAjeno = login("supervisor.ajeno@soy.sena.edu.co", "AjenoDelLote4*");
         long contratoId = crearContrato(gestion, "CO1.PCCNTR.IA-SEC-PRECAL", supervisorAsignadoId);
 
         mockMvc.perform(post("/api/contratos/{id}/copiloto/precalentar", contratoId)
@@ -458,7 +458,7 @@ class IaSeguridadIntegrationTest extends PruebaDeIntegracion {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"nombre":"Supervisor Ajeno","email":"supervisor.ajeno@soy.sena.edu.co",
-                         "password":"Ajeno123*","telefono":"3000000000","rol":"SUPERVISOR"}
+                         "password":"AjenoDelLote4*","telefono":"3000000000","rol":"SUPERVISOR"}
                         """));
     }
 

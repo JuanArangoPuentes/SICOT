@@ -28,9 +28,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService, UsuarioRepository usuarioRepository) {
+    /**
+     * Los tokens cuya sesión se cerró. Ver {@link SesionesCerradas}: sin esta
+     * comprobación, «cerrar sesión» solo borraba el token en el cliente y
+     * seguía valiendo en el servidor hasta ocho horas más.
+     */
+    private final SesionesCerradas sesionesCerradas;
+
+    public JwtAuthenticationFilter(JwtService jwtService, UsuarioRepository usuarioRepository,
+                                   SesionesCerradas sesionesCerradas) {
         this.jwtService = jwtService;
         this.usuarioRepository = usuarioRepository;
+        this.sesionesCerradas = sesionesCerradas;
     }
 
     @Override
@@ -45,6 +54,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = header.substring(BEARER_PREFIX.length());
         try {
             String email = jwtService.extractEmail(token);
+            // La lista de sesiones cerradas se mira ANTES de cargar la cuenta:
+            // un token cerrado no merece una consulta más, y así el orden de las
+            // comprobaciones va de la más barata a la más cara.
+            if (sesionesCerradas.estaCerrada(jwtService.extraerJti(token))) {
+                log.debug("Token de una sesión ya cerrada en {} {}", request.getMethod(), request.getRequestURI());
+                SecurityContextHolder.clearContext();
+                filterChain.doFilter(request, response);
+                return;
+            }
             Usuario usuario = usuarioRepository.findByEmail(email)
                     .filter(Usuario::isActivo)
                     .orElse(null);

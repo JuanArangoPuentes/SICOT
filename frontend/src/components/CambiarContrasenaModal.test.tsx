@@ -39,16 +39,16 @@ describe('CambiarContrasenaModal', () => {
     })
     render(<CambiarContrasenaModal correo="a@sicot.test" onClose={vi.fn()} />)
 
-    llenar('Admin2026', 'OtraClave456*')
+    llenar('ClaveDelCentro2026', 'OtraClave456*')
 
     expect(await screen.findByText('Su contraseña nueva ya está activa')).toBeInTheDocument()
-    expect(cambiar).toHaveBeenCalledWith('a@sicot.test', 'Admin2026', 'OtraClave456*')
+    expect(cambiar).toHaveBeenCalledWith('a@sicot.test', 'ClaveDelCentro2026', 'OtraClave456*')
   })
 
   it('no envía si la confirmación no coincide, y el aviso se va al corregirla', () => {
     render(<CambiarContrasenaModal correo="a@sicot.test" onClose={vi.fn()} />)
 
-    llenar('Admin2026', 'OtraClave456*', 'OtraClave456')
+    llenar('ClaveDelCentro2026', 'OtraClave456*', 'OtraClave456')
     expect(screen.getByRole('alert')).toHaveTextContent('La confirmación no coincide')
     expect(cambiar).not.toHaveBeenCalled()
 
@@ -57,13 +57,13 @@ describe('CambiarContrasenaModal', () => {
   })
 
   it.each([
-    ['corta1*', 'entre 8 y 72 caracteres'],
+    ['corta1*', 'al menos 12 caracteres'],
     ['ClaveConEspacio ', 'no puede empezar ni terminar con espacios'],
-    ['Admin2026', 'distinta de la actual'],
+    ['ClaveDelCentro2026', 'distinta de la actual'],
   ])('avisa antes de enviar una nueva que el servidor rechazaría (%s)', (nueva, aviso) => {
     render(<CambiarContrasenaModal correo="a@sicot.test" onClose={vi.fn()} />)
 
-    llenar('Admin2026', nueva)
+    llenar('ClaveDelCentro2026', nueva)
 
     expect(screen.getByRole('alert')).toHaveTextContent(aviso)
     expect(cambiar).not.toHaveBeenCalled()
