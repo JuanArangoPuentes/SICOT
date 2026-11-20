@@ -5,8 +5,100 @@
 #
 # Formato: <ID> exp:AAAA-MM-DD
 
-# Hoy no hay ninguna excepción.
+# ── nginx 1.30.6-r1 en la imagen del frontend (CI del 20-11-2026) ──────────
 #
+# Seis CVE que nginx corrige en versiones que NO TIENEN IMAGEN PUBLICADA. Son
+# las de mayor severidad que han pasado por este archivo, así que conviene leer
+# los tres puntos antes de tocarlas.
+#
+# 1) QUÉ SON, y dónde está el arreglo
+#
+#    Las seis que PARAN el CI (CRITICAL o HIGH para Trivy):
+#
+#    CVE-2026-113425  mayor   uso después de liberar en el proxy de correo
+#    CVE-2026-123007  mayor   corrupción de memoria en el control de flujo HTTP/2
+#    CVE-2026-118899  mayor   bucle infinito leyendo el cuerpo sobre TLS 1.3
+#    CVE-2026-121810  media   uso después de liberar con HTTP/3
+#    CVE-2026-123633  media   uso después de liberar con HTTP/2
+#    CVE-2026-123634  media   uso después de liberar en el resolutor
+#
+#    Y tres más del MISMO paquete y el MISMO arreglo, que hoy no paran nada
+#    porque Trivy las da como MEDIUM y el escaneo filtra CRITICAL,HIGH:
+#
+#    CVE-2026-120967, CVE-2026-123640, CVE-2026-125283
+#
+#    Se listan igual, a propósito. La severidad de una CVE no es estable —el
+#    propio Trivy avisa de que toma severidades de otros proveedores cuando
+#    Alpine no las trae— y el día que una de esas tres pase a HIGH, el escaneo
+#    se pondría rojo otra vez y alguien tendría que repetir este análisis
+#    entero para llegar a la misma conclusión. Son nueve CVE con UNA sola
+#    versión corregida: la unidad de la excepción es el arreglo, no la
+#    severidad del momento.
+#
+#    Comprobado con trivy 0.74.0 —la misma versión del CI— escaneando
+#    nginxinc/nginx-unprivileged:1.30.6-alpine desde el registro: las nueve
+#    salen del paquete `nginx 1.30.6-r1` y las nueve dicen `1.30.7-r0`.
+#
+#    nginx.org/en/security_advisories.html dice lo mismo en las seis, literal:
+#      «Not vulnerable: 1.31.9+, 1.30.7+»  /  «Vulnerable: …-1.31.8»
+#
+#    Y nginxinc/nginx-unprivileged no publica nada desde el 19-10-2026: su
+#    máximo es 1.30.6-alpine en la rama estable y 1.31.7-alpine en mainline.
+#    Ninguna de las dos versiones corregidas se puede instalar hoy.
+#
+# 2) EL ATAJO QUE PARECE UN ARREGLO Y NO LO ES
+#
+#    NO subir la etiqueta a 1.31.7-alpine. Pone este escaneo en verde sin
+#    corregir nada: 1.31.7 está DENTRO del rango vulnerable de las seis, y
+#    Trivy la acepta solo porque compara «1.31.7-r1 >= 1.30.7-r0», que es el
+#    arreglo de la OTRA rama. Es un falso negativo de la comparación de
+#    versiones entre ramas, y encima movería el servidor que sirve la SPA de la
+#    rama estable a mainline sin ganar nada. Está dicho aquí porque es lo
+#    primero que a cualquiera se le ocurriría al ver esta lista.
+#
+# 3) POR QUÉ SE ACEPTA ESPERAR: ninguna es alcanzable en producción
+#
+#    Comprobado contra ADR-009 y frontend/nginx.conf.template, no supuesto:
+#
+#    - TLS 1.3 (CVE-2026-118899): nginx NO termina TLS. Lo hace Caddy, y nginx
+#      escucha `listen 8443` sin `ssl`.
+#    - HTTP/2 (CVE-2026-123007, -123633): el `listen` no lleva `http2`, así que
+#      HTTP/2 no está habilitado, y el `reverse_proxy` de Caddy habla HTTP/1.1
+#      con el upstream.
+#    - HTTP/3 (CVE-2026-121810): no hay ningún listener `quic`.
+#    - Proxy de correo (CVE-2026-113425): no hay bloque `mail {}` ni listener
+#      de correo; el módulo viene compilado en la imagen y no se usa.
+#    - Resolutor (CVE-2026-123634): el único `resolver` es 127.0.0.11, el DNS
+#      interno de Docker, y solo resuelve el nombre `backend`. Explotarlo
+#      exigiría poder responder a ese DNS, es decir estar ya dentro del host.
+#
+#    Y el contenedor del frontend no publica ningún puerto en producción
+#    (`ports: !reset []` en docker-compose.prod.yml): solo lo alcanza Caddy por
+#    la red interna de Docker.
+#
+# QUÉ HACER EL 19 DE DICIEMBRE, cuando esto vuelva a ponerse rojo:
+#
+#   a) Mirar si ya existe nginxinc/nginx-unprivileged:1.30.7-alpine o posterior
+#      de la rama estable. Si existe, es una línea en frontend/Dockerfile y
+#      estas seis entradas se borran. Es el camino bueno.
+#   b) Si no existe, el arreglo real es rehacer la imagen del frontend sobre
+#      alpine:3.24 con el `nginx` de Alpine, que SÍ va por 1.30.7-r0. Cuesta
+#      escribir el nginx.conf y el entrypoint que hoy vienen de la imagen
+#      oficial (el envsubst de las plantillas, el usuario 101,
+#      /docker-entrypoint.d/), así que es un cambio con su propia revisión.
+#   c) Lo que NO se hace es volver a extender la fecha sin mirar (a) y (b).
+#      Una excepción que se renueva por inercia es una excepción permanente con
+#      otro nombre, que es justo lo que la cabecera de este archivo prohíbe.
+CVE-2026-113425 exp:2026-12-19
+CVE-2026-118899 exp:2026-12-19
+CVE-2026-120967 exp:2026-12-19
+CVE-2026-121810 exp:2026-12-19
+CVE-2026-123007 exp:2026-12-19
+CVE-2026-123633 exp:2026-12-19
+CVE-2026-123634 exp:2026-12-19
+CVE-2026-123640 exp:2026-12-19
+CVE-2026-125283 exp:2026-12-19
+
 # Hasta el 28-10-2026 estaban aquí CVE-2026-47884 y CVE-2026-47890, las dos
 # CRÍTICAS en org.springframework:spring-webmvc 6.2.19 (XsltView y Server-Sent
 # Events), con caducidad el 15-11-2026. Su única versión corregida era Spring
