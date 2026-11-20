@@ -290,11 +290,12 @@ public class VigilanciaDelRespaldo {
      * que colaborar de ninguna forma. Un mecanismo de vigilancia que exige
      * modificar lo vigilado es un mecanismo que se desactiva al primer cambio.
      *
-     * <p>Pero solo cuentan los {@code .dump} con contenido, que es lo que deja
-     * un respaldo terminado (el script y el procedimiento manual de
-     * BACKUP_Y_RESTAURACION.md). Antes contaba cualquier archivo, y lo que deja
-     * un respaldo que FALLA —un volcado a medias, uno vacío, el log del cron—
-     * es siempre de esta noche: apagaba el aviso justo cuando hacía falta.
+     * <p>Pero solo cuentan los {@code .dump} y {@code .dump.gpg} con contenido,
+     * que es lo que deja un respaldo terminado (el script y el procedimiento
+     * manual de BACKUP_Y_RESTAURACION.md). Antes contaba cualquier archivo, y
+     * lo que deja un respaldo que FALLA —un volcado a medias, uno vacío, el log
+     * del cron— es siempre de esta noche: apagaba el aviso justo cuando hacía
+     * falta.
      */
     private Optional<Instant> fechaDelRespaldoMasReciente() {
         if (!Files.isDirectory(directorio)) {
@@ -312,8 +313,21 @@ public class VigilanciaDelRespaldo {
         }
     }
 
+    /**
+     * Las dos formas de un respaldo terminado.
+     *
+     * <p>{@code .dump.gpg} se añadió el 20-11-2026, al ganar el script la
+     * capacidad de cifrar. <b>Sin esto, encender el cifrado habría dejado ciega
+     * a esta vigilancia</b>: el directorio se llenaría de respaldos correctos y
+     * el sistema avisaría cada día de que no hay ninguno, hasta que alguien
+     * apagara el aviso por ruidoso. Exactamente el fallo que esta clase existe
+     * para evitar, provocado por el control que iba a mejorar el respaldo.
+     */
+    private static final java.util.List<String> SUFIJOS_DE_VOLCADO = java.util.List.of(".dump", ".dump.gpg");
+
     private static boolean esUnVolcadoTerminado(Path archivo) {
-        if (!archivo.getFileName().toString().endsWith(".dump")) {
+        String nombre = archivo.getFileName().toString();
+        if (SUFIJOS_DE_VOLCADO.stream().noneMatch(nombre::endsWith)) {
             return false;
         }
         try {

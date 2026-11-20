@@ -227,6 +227,34 @@ está acotado por lo que el centro alcanza a tramitar. De ahí dos decisiones:
 modifican ni se borran. `alertas.contrato_id` puede ser nulo (alerta del sistema,
 no de un contrato concreto).
 
+### `sesiones_cerradas`
+
+Los tokens cuya sesión se cerró, añadida en `V25`. Es lo que hace que «cerrar
+sesión» cierre la sesión **en el servidor**: hasta el 20-11-2026 era una
+operación solo del cliente —se borraba el token del equipo y seguía siendo
+válido ocho horas más— y no existía ningún endpoint de cierre.
+
+Es una lista de **negación**, no de sesiones válidas, y eso es la decisión de
+diseño: la autenticación sigue sin estado (el JWT se valida por su firma) y lo
+único que se guarda son las excepciones, que son pocas y se borran solas.
+
+- La clave primaria es el `jti` del token (RFC 7519), no un id propio: la
+  comprobación que corre en **cada petición autenticada** es exactamente
+  «¿existe esta clave?», y así es una búsqueda por índice único que además no
+  se puede duplicar. Cerrar sesión dos veces con el mismo token es idempotente
+  por construcción.
+- `expira_en` es la expiración del propio token. Pasada esa fecha la fila ya no
+  protege de nada y `SesionesCerradas.limpiarCaducadas` la borra a diario. Sin
+  esa columna habría que conservarlas para siempre o adivinar cuándo sobran.
+- `usuario_id` no hace falta para la comprobación y se guarda igual: sin él, una
+  revisión de seguridad no puede responder «¿de quién era la sesión que se cerró
+  a las 15:40?».
+
+Un token emitido **antes** de `V25` no lleva `jti`, así que no se puede anotar
+aquí: para esos, cerrar sesión recurre a `usuarios.version_credenciales` y
+cierra la cuenta entera. Es más de lo pedido pero nunca menos, y el caso
+desaparece solo en ocho horas.
+
 ### `tareas_automatizadas`
 
 La cola del motor de automatizaciones (ADR-008), añadida en `V15`. Es la
@@ -335,6 +363,8 @@ comportamiento correcto.
 | `V22__acuerdo_de_entregas_y_contactos.sql` | Fechas de entrega acordadas, contactos de SST y ambiental, teléfono del contratista |
 | `V23__entregas_acordadas_tambien_al_reabrir.sql` | La exigencia del 2.4 también para los cerrados antes de la `V22` |
 | `V24__hora_declarada_sin_conexion.sql` | `registros.hecho_sin_conexion_en`: la hora que declara el equipo para lo hecho sin red (ADR-015) |
+| `V25__cierre_de_sesion_real.sql` | Tabla `sesiones_cerradas`: cerrar sesión invalida el token en el servidor y no solo en el cliente |
+| `V26__quien_actuo_fue_un_agente.sql` | `registros.origen = AGENTE` y `registros.agente`: una acción del servidor MCP deja de ser indistinguible de una de la persona |
 
 El salto de `V1` a `V9` es intencional: las `V1`–`V8` originales se consolidaron
 en la `V1` actual y la `V9` se conservó porque ya estaba aplicada en bases

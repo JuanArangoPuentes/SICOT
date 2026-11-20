@@ -64,7 +64,8 @@ public class RegistroController {
     })
     @GetMapping("/contratos/{contratoId}/registros")
     public ResponseEntity<List<RegistroResponse>> listarPorContrato(@PathVariable Long contratoId) {
-        return ResponseEntity.ok(registroService.listarPorContrato(contratoId));
+        return ListadoTruncado.conAviso(registroService.listarPorContrato(contratoId),
+                RegistroService.MAX_REGISTROS_POR_CONTRATO);
     }
 
     @Operation(summary = "Novedades de un contrato desde la última vez que se preguntó",
@@ -110,6 +111,6 @@ public class RegistroController {
     @GetMapping("/registros")
     @PreAuthorize("hasRole('ADMINISTRADOR')")
     public ResponseEntity<List<RegistroResponse>> listarTodas() {
-        return ResponseEntity.ok(registroService.listarTodos());
+        return ListadoTruncado.conAviso(registroService.listarTodos(), RegistroService.MAX_REGISTROS_LISTADO);
     }
 }

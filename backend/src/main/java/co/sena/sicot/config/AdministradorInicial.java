@@ -4,6 +4,7 @@ import co.sena.sicot.entity.Usuario;
 import co.sena.sicot.entity.enums.Rol;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.LimiteDeBcrypt;
+import co.sena.sicot.security.PoliticaDeContrasena;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -148,6 +149,15 @@ public class AdministradorInicial {
                         + " bytes que admite BCrypt. `openssl rand -base64 24` genera una de 32 caracteres, "
                         + "que cabe con holgura.");
             }
+            // La misma lista de bloqueo que para cualquier cuenta creada desde
+            // la aplicación. Esta es la que más la necesita: es la llave del
+            // despliegue, se escribe deprisa en un .env para «probar» y se
+            // queda puesta. Un «SICOT_ADMIN_PASSWORD=Sicot2026Sena» cumplía los
+            // doce caracteres y era lo primero que alguien probaría.
+            PoliticaDeContrasena.porQueNoSirve(password, correoLimpio).ifPresent(motivo -> {
+                throw new IllegalStateException("SICOT_ADMIN_PASSWORD no sirve: " + motivo
+                        + " Genere una con `openssl rand -base64 24`.");
+            });
 
             Usuario admin = new Usuario();
             admin.setNombre(nombre == null || nombre.isBlank() ? "Administrador SICOT" : nombre.trim());

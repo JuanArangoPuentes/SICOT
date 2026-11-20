@@ -10,6 +10,7 @@ import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.JwtService;
 import co.sena.sicot.security.LimiteDeBcrypt;
 import co.sena.sicot.security.LoginAttemptService;
+import co.sena.sicot.security.PoliticaDeContrasena;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -138,6 +139,12 @@ public class AuthService {
         if (!LimiteDeBcrypt.cabe(nueva)) {
             throw new BusinessException(LimiteDeBcrypt.MENSAJE);
         }
+        // La parte de la política que necesita el correo de la cuenta, que una
+        // anotación de campo no ve. El resto lo aplicó ya @ContrasenaSegura
+        // sobre el cuerpo de la petición. Ver PoliticaDeContrasena.
+        PoliticaDeContrasena.porQueNoSirve(nueva, usuario.getEmail()).ifPresent(motivo -> {
+            throw new BusinessException(motivo);
+        });
 
         String correo = usuario.getEmail();
         loginAttemptService.reservarIntento(correo, origen);

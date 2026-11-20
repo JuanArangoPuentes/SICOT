@@ -198,9 +198,11 @@ class EsquemaPostgreSqlIntegrationTest {
     }
 
     /**
-     * Las tablas del modelo, más el historial de Flyway. Las tres últimas son
-     * del proceso real del supervisor: la solicitud de pedido (V21) y las
-     * fechas de entrega y los contactos de SST y ambiental (V22).
+     * Las tablas del modelo, más el historial de Flyway. Tres son del proceso
+     * real del supervisor —la solicitud de pedido (V21) y las fechas de entrega
+     * y los contactos de SST y ambiental (V22)— y la última,
+     * {@code sesiones_cerradas}, es la lista de negación que hace que cerrar
+     * sesión cierre la sesión en el servidor (V25).
      */
     @Test
     void elEsquemaTieneLasTablasDelModeloDeDatos() {
@@ -213,6 +215,7 @@ class EsquemaPostgreSqlIntegrationTest {
                 "alertas", "registros", "formatos_documentales", "firmas_electronicas",
                 "tareas_automatizadas",
                 "items_solicitud_pedido", "entregas_acordadas", "contactos_del_contrato",
+                "sesiones_cerradas",
                 "flyway_schema_history");
     }
 

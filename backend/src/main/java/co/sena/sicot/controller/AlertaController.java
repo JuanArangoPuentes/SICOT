@@ -51,7 +51,8 @@ public class AlertaController {
     })
     @GetMapping("/contratos/{contratoId}/alertas")
     public ResponseEntity<List<AlertaResponse>> listarPorContrato(@PathVariable Long contratoId) {
-        return ResponseEntity.ok(alertaService.listarPorContrato(contratoId));
+        return ListadoTruncado.conAviso(alertaService.listarPorContrato(contratoId),
+                AlertaService.MAX_ALERTAS_POR_CONTRATO);
     }
 
     @Operation(summary = "Listar todas las alertas")
@@ -68,7 +69,7 @@ public class AlertaController {
     @GetMapping("/alertas")
     @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<List<AlertaResponse>> listarTodas() {
-        return ResponseEntity.ok(alertaService.listarTodas());
+        return ListadoTruncado.conAviso(alertaService.listarTodas(), AlertaService.MAX_ALERTAS_LISTADO);
     }
 
     @Operation(summary = "Marcar alerta como leída")

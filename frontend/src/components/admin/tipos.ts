@@ -69,16 +69,30 @@ export const mapFirma = (f: FirmaResponse): FirmaRow => ({
 //
 // El alfabeto omite a propósito los caracteres ambiguos (I, l, 1, O, 0) porque
 // esta contraseña se dicta o se transcribe a mano al entregarla.
+/**
+ * Cuántos caracteres. Dieciséis, los mismos que genera el backend en
+ * `ClaveGenerada` para un supervisor invitado.
+ *
+ * Eran DOCE, y doce dejó de tener margen el 20-11-2026: ese día el servidor
+ * subió su mínimo a doce exactos (`PoliticaDeContrasena.MINIMO_CARACTERES`), de
+ * modo que esta contraseña quedaba justo en el límite y cualquier ajuste futuro
+ * del mínimo —o un recorte accidental— la habría vuelto inválida, con el
+ * síntoma de «no se puede crear ningún usuario» en la cara del administrador.
+ * Dieciséis le da holgura y la iguala con la del backend, que es la otra mitad
+ * del mismo mecanismo.
+ */
+export const LARGO_DE_CLAVE_TEMPORAL = 16
+
 export const randomPassword = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789#$%&'
   const limite = 256 - (256 % chars.length)
   const salida: string[] = []
   const buffer = new Uint8Array(32)
 
-  while (salida.length < 12) {
+  while (salida.length < LARGO_DE_CLAVE_TEMPORAL) {
     crypto.getRandomValues(buffer)
     for (const byte of buffer) {
-      if (salida.length === 12) break
+      if (salida.length === LARGO_DE_CLAVE_TEMPORAL) break
       if (byte < limite) salida.push(chars[byte % chars.length])
     }
   }

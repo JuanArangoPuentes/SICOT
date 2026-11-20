@@ -1,6 +1,7 @@
 package co.sena.sicot.service;
 
 import co.sena.sicot.automatizacion.EventoDeNegocio;
+import co.sena.sicot.config.AgenteQueActuaInterceptor;
 import co.sena.sicot.config.HechoSinConexionInterceptor;
 import co.sena.sicot.dto.registro.NovedadesResponse;
 import co.sena.sicot.dto.registro.RegistroResponse;
@@ -45,10 +46,10 @@ public class RegistroService {
 
     // Tope del listado global: la auditoría se acumula con cada acción del
     // sistema y sin límite terminaría cargando la tabla completa.
-    private static final int MAX_REGISTROS_LISTADO = 500;
+    public static final int MAX_REGISTROS_LISTADO = 500;
 
     /** Tope del listado por contrato. Mismo criterio que en {@code AlertaService}. */
-    private static final int MAX_REGISTROS_POR_CONTRATO = 200;
+    public static final int MAX_REGISTROS_POR_CONTRATO = 200;
 
     /**
      * Tope de una respuesta de novedades. Es bajo a propósito: si un equipo
@@ -140,10 +141,24 @@ public class RegistroService {
         // sistema lo hace el servidor, que no se desconecta de sí mismo.
         if (origen == OrigenRegistro.USUARIO) {
             HechoSinConexionInterceptor.enLaSolicitudActual().ifPresent(registro::setHechoSinConexionEn);
+            // Si la petición viene de una herramienta automática que actúa con
+            // esta cuenta, el origen deja de ser USUARIO: la cuenta responsable
+            // es la misma y queda en `usuario_id`, pero el expediente ya puede
+            // decir que la mano no fue de la persona. Ver
+            // AgenteQueActuaInterceptor y V26__quien_actuo_fue_un_agente.sql.
+            AgenteQueActuaInterceptor.enLaSolicitudActual().ifPresent(agente -> {
+                registro.setOrigen(OrigenRegistro.AGENTE);
+                registro.setAgente(agente);
+            });
         }
         registroRepository.save(registro);
 
-        if (origen == OrigenRegistro.USUARIO) {
+        // AGENTE también publica: una acción hecha por el MCP con la cuenta de
+        // una persona tiene los mismos efectos de negocio que si la hubiera
+        // hecho ella —el supervisor asignado espera su correo igual— y no
+        // publicar el evento habría convertido declararse agente en una forma
+        // de saltarse las automatizaciones.
+        if (origen != OrigenRegistro.SISTEMA) {
             // El número se lee aquí, con la sesión de Hibernate abierta. Después
             // del commit el contrato sería un proxy desatachado y pedirle
             // cualquier campo reventaría dentro del motor, lejos de la causa.

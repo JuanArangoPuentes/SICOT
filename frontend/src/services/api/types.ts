@@ -530,7 +530,7 @@ export interface AlertaResponse {
 
 // ─── Registros ───────────────────────────────────────────────────────────────
 
-export type OrigenRegistro = 'USUARIO' | 'SISTEMA'
+export type OrigenRegistro = 'USUARIO' | 'SISTEMA' | 'AGENTE'
 
 export interface RegistroResponse {
   id: number
@@ -545,6 +545,14 @@ export interface RegistroResponse {
   // es ON DELETE SET NULL. Sin este campo, el panel atribuía al "Sistema"
   // acciones de personas que ya no están en la organización.
   origen: OrigenRegistro
+  /**
+   * Qué herramienta automática lo hizo, cuando `origen` es `AGENTE`; null en el
+   * resto. El servidor MCP actúa con las credenciales de una cuenta real, así
+   * que `usuarioNombre` sigue siendo la cuenta responsable y esto dice de quién
+   * fue la mano (V26). Sin este campo, lo que hacía el MCP se leía en el
+   * expediente como hecho por la persona.
+   */
+  agente?: string | null
   /**
    * La hora que declaró el equipo si se hizo sin red y llegó por la cola de
    * cambios (ADR-015, V24); null si se hizo con conexión. `fecha` es cuándo lo

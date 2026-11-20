@@ -112,7 +112,7 @@ public class AutomatizacionController {
     @GetMapping("/tareas")
     public ResponseEntity<List<TareaAutomatizadaResponse>> tareas(
             @RequestParam(required = false) EstadoTareaAutomatizada estado) {
-        return ResponseEntity.ok(almacen.listar(estado));
+        return ListadoTruncado.conAviso(almacen.listar(estado), AlmacenDeTareas.MAX_TAREAS_LISTADO);
     }
 
     /**
