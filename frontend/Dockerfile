@@ -102,8 +102,33 @@ USER root
 # (HIGH, confusión de tipos al procesar XML) y CVE-2026-9947 (HIGH, uso después
 # de liberar), y Alpine ya publicó 1.1.43-r4. El escaneo no lo encontró en el
 # backend, así que la línea va solo aquí.
+#
+# libxml2, del CI del 20-11-2026: la base trae 2.13.9-r2, con CVE-2026-86144
+# (HIGH, divulgación de información, SSRF o denegación de servicio por un
+# manejo indebido), y Alpine ya publicó 2.13.9-r3 en la rama v3.24. El backend
+# no la necesita: su base va por Alpine 3.24.3, que la trae corregida.
+#
+# OJO — ESTA LÍNEA NO ARREGLA EL `nginx` DE ESTA IMAGEN. El mismo escaneo del
+# 20-11-2026 encontró SEIS CVE en nginx 1.30.6-r1 (cuatro CRÍTICAS:
+# CVE-2026-113425 en el proxy de correo, -121810 en HTTP/3, -123007 en el
+# control de flujo de HTTP/2 y -123633 en HTTP/2; más CVE-2026-118899, DoS por
+# TLS, y -123634 en el resolutor), corregidas en 1.30.7-r0. No se puede resolver
+# aquí ni subiendo la etiqueta:
+#
+#   - La rama 1.30 de la imagen SE AGOTÓ en 1.30.6-alpine; no existe una
+#     1.30.7-alpine. La corrección vive en la rama 1.31 (hay hasta
+#     1.31.7-alpine), y mover la rama estable del servidor que sirve la SPA es
+#     una decisión de despliegue, no un parche: ya hay un PR de Dependabot
+#     abierto justo para eso.
+#   - Fijar `nginx>=1.30.7-r0` por aquí traería el nginx de ALPINE en lugar del
+#     que compila la imagen oficial. No es lo mismo: cambia el juego de módulos
+#     y el nginx.conf que instala el paquete, y esta imagen depende del
+#     entrypoint de nginx (/etc/nginx/templates, /docker-entrypoint.d/, el
+#     usuario 101). Es exactamente lo que el párrafo de arriba dice que no se
+#     hace: sustituir piezas de la imagen que la etiqueta fijada promete.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
-    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4"
+    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4" \
+    "libxml2>=2.13.9-r3"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
