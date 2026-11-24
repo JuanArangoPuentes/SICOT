@@ -36,7 +36,13 @@ WORKDIR /app
 # de servicio (CVE-2026-113351, -117610 y -118370) y Alpine publicó 2.10.0-r0.
 # Hay que subir el mínimo y no basta con volver a construir: `apk add` con una
 # condición que lo instalado ya cumple no actualiza nada.
-RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" \
+#
+# libfontenc (CI del 24-11-2026): la base trae 1.1.9-r0, con CVE-2026-109908
+# (HIGH, fallo de validación al parsear archivos de fuentes), y Alpine 3.24 ya
+# publica 1.1.10-r0 — comprobado en su índice de paquetes. Llega con la JRE por
+# el soporte de fuentes de AWT; SICOT no dibuja nada, pero el escaneo mira lo
+# que la imagen trae, no lo que usa.
+RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" "libfontenc>=1.1.10-r0" \
     && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 
