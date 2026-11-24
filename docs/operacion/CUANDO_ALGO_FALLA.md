@@ -51,6 +51,14 @@ Dos cosas que **no** cuentan como caída, a propósito:
 - **El almacenamiento al 80 % del umbral.** Eso es «conviene planificar», no
   «algo está roto». Mandar un informe por eso le enseñaría al técnico que los
   informes se pueden ignorar.
+- **Un respaldo viejo en los primeros 15 minutos después de arrancar.** Si el
+  equipo estuvo apagado a la hora del respaldo, `sicot-respaldo.timer` lo hace
+  al encender (`Persistent=true`), con hasta cinco minutos de espera. Al
+  arrancar, el backend solo lo anota en el log como WARN; la comprobación que
+  cuenta es la de los 15 minutos. Antes avisaba al instante y perdía la carrera
+  con el temporizador: el 17-11-2026 llegó «falló el respaldo: 138 h» a las
+  08:59 y el respaldo se hizo a las 09:00:31. Pasaba en cada encendido después
+  de más de 24 h apagado, es decir, cada lunes.
 
 ### 2. Se intenta arreglar antes de molestar a nadie
 
