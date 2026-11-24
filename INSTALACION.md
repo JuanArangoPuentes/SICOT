@@ -134,32 +134,37 @@ CA para los teléfonos).
 
 ### 4. Programe el respaldo
 
-Esto no es opcional y el sistema no lo hace por usted. `scripts/respaldo-sicot.sh`
-está probado, pero alguien tiene que programarlo:
+Esto no es opcional. `scripts/respaldo-sicot.sh` está probado, y este paso lo
+deja corriendo solo:
 
 ```bash
-# Una vez: el log del respaldo, escribible por el usuario que corre el cron
-sudo touch /var/log/sicot-respaldo.log && sudo chown "$USER" /var/log/sicot-respaldo.log
-crontab -e
-# 0 2 * * *  /ruta/a/scripts/respaldo-sicot.sh /ruta/a/respaldos >> /var/log/sicot-respaldo.log 2>&1
+sudo ./scripts/instalar-respaldo.sh /ruta/a/respaldos
 ```
 
-La redirección al log no es opcional. Sin ella, lo que el script escribe al
-fallar va al correo local del cron, que nadie lee; con ella, el motivo de un
-respaldo fallido queda en un archivo que se puede mirar. Un respaldo que falla
-no deja nada en la carpeta (ni un volcado a medias), así que el backend sí lo
-nota: al día siguiente avisa de que el más reciente supera el RPO.
+Instala `sicot-respaldo.timer`, hace un respaldo en ese momento para no esperar
+a la primera cita, y avisa si el usuario dueño del clon no puede usar Docker o
+si quedó una línea vieja en el `crontab`.
 
-La carpeta del cron tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1.
-El cron se lee en la hora del servidor, y el backend comprueba el respaldo a
-las 04:00 de la zona del Centro (`SICOT_ZONA_HORARIA`, `America/Bogota` si no
-se define). Las dos tienen que coincidir. Si `timedatectl` dice que el
-servidor está en UTC, el respaldo de «las 2» corre a las 21:00 de Bogotá, y la
-vigilancia mira una copia de siete horas en vez de una de dos.
-El backend la ve en solo lectura y, al arrancar y una vez al día, avisa en el log
-si el respaldo más reciente supera las 24 horas comprometidas, o si no hay
-ninguno. Hasta que el cron haga el primero, ese aviso de «no hay NINGÚN
-respaldo» es correcto: describe exactamente lo que está pasando.
+**Por qué un temporizador y no la línea del `crontab` que pedía este manual
+hasta el 11-11-2026.** Ese día se revisó el servidor del Centro y llevaba
+**seis días sin un solo respaldo**, con el cron activo y la línea bien escrita.
+La causa no era el script: era que ese equipo **está apagado a las 02:00**. Se
+prende por la mañana y se apaga por la noche, y cron, cuando pierde una cita
+porque la máquina no estaba, no la recupera: la salta y espera al día
+siguiente, para siempre. `Persistent=true` sí la recupera: al encender, si la
+cita se perdió, el respaldo corre enseguida. Es el mismo mecanismo por el que
+la actualización automática del paso 5 sí funcionaba en ese servidor mientras
+el respaldo no.
+
+La carpeta tiene que ser la misma `RESPALDO_DIRECTORIO` del paso 1. La cita se
+lee en la hora del servidor, así que conviene que `timedatectl` diga la del
+Centro y no UTC: si no, el respaldo de «las 2» corre a las 21:00 de Bogotá.
+El backend ve esa carpeta en solo lectura y, al arrancar y **cada tres horas**,
+avisa en el log si el respaldo más reciente supera las 24 horas comprometidas,
+o si no hay ninguno. (Comprobaba a las 04:00 hasta el 11-11-2026, y resultó
+tener el mismo defecto que el cron: a esa hora el equipo está apagado.) Hasta
+que se haga el primero, ese aviso de «no hay NINGÚN respaldo» es correcto:
+describe exactamente lo que está pasando.
 
 Por eso `RESPALDO_DIRECTORIO` es obligatoria y el despliegue de producción no
 arranca sin ella. Antes era opcional y, además, Compose no se la pasaba al
@@ -172,6 +177,23 @@ Ahí está también lo que este respaldo **no** cubre y hay que guardar aparte, 
 vez y fuera del servidor: el `.env` y la autoridad de certificados de Caddy.
 Sin esa autoridad, un servidor reinstalado genera otra, y ningún teléfono ni
 equipo de escritorio vuelve a conectar hasta instalarle la nueva.
+
+### 5. Déjelo actualizarse solo
+
+```bash
+sudo ./scripts/instalar-auto-actualizacion.sh
+```
+
+Desde ese momento el servidor mira cada diez minutos si `master` avanzó y, si
+avanzó, respalda, reconstruye y comprueba que SICOT quedó sano; si no quedó
+sano, vuelve solo a la versión anterior. Nadie tiene que entrar a hacer
+`git pull`.
+
+Antes de esto, el servidor se quedaba atrás sin que nada lo dijera: el 10 de
+noviembre de 2026 servía la 0.8.0 con la 0.9.0 publicada tres días antes. El
+detalle, y cómo mirarlo o pararlo, está en
+[`docs/operacion/ACTUALIZACION_AUTOMATICA.md`](docs/operacion/ACTUALIZACION_AUTOMATICA.md)
+y el porqué en [ADR-017](docs/decisiones/ADR-017-actualizacion-automatica.md).
 
 ### Publicarlo por un túnel de Cloudflare (opcional)
 
@@ -229,6 +251,17 @@ falta la clave del túnel.
    el servidor, `curl -s https://<SICOT_DOMINIO>/actuator/health` responde
    `{"status":"UP"}`. En el APK y en la aplicación de escritorio, la dirección
    de *Configuración → Servidor* es esa misma.
+
+6. **Fuerce `https` en el borde.** En el panel: *SSL/TLS → Edge
+   Certificates → **Always Use HTTPS***. Sin esto, `http://<SICOT_DOMINIO>`
+   **sirve SICOT en texto claro** hasta Cloudflare: el proxy del servidor sí
+   redirige, pero el borde contesta antes y nadie llega a ese redirect.
+   Comprobado el 10-11-2026 contra el servidor real: `http://` devolvía 200 con
+   la aplicación entera, y la API respondía por el mismo camino. La cabecera
+   `Strict-Transport-Security` que emite Caddy solo protege a quien ya entró una
+   vez por `https`, así que no cubre la primera visita de un supervisor que
+   escriba el nombre a secas. Es la misma clase de fallo que ADR-009 vino a
+   cerrar, reaparecida un escalón más afuera.
 
 Dos cosas que conviene saber:
 

@@ -1,7 +1,10 @@
 package co.sena.sicot.config;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -77,9 +80,29 @@ public class VigilanciaDelRespaldo {
      */
     private final AtomicLong antiguedadEnHoras = new AtomicLong(DESCONOCIDA);
 
+    /**
+     * A quién se le cuenta lo que esta vigilancia descubre.
+     *
+     * <p>Es el arreglo de lo que pasó el 11-11-2026. Ese día esta clase llevaba
+     * días detectando el problema y escribiéndolo con todo detalle —«el más
+     * reciente tiene 119 h de antigüedad»— y no sirvió de nada, porque un
+     * {@code log.error} solo lo ve quien ya está mirando el log. Ahora el
+     * hallazgo entra en {@link co.sena.sicot.salud.SaludDelSistema} y de ahí
+     * sale un informe que va a buscar al técnico.
+     */
+    private final AvisoDeSalud salud;
+
+    /** Sin avisar a nadie: la forma que usan las pruebas de esta clase. */
+    public VigilanciaDelRespaldo(MeterRegistry registry, String directorio, int rpoHoras) {
+        this(registry, directorio, rpoHoras, AvisoDeSalud.NINGUNO);
+    }
+
+    @Autowired
     public VigilanciaDelRespaldo(MeterRegistry registry,
                                  @Value("${sicot.respaldo.directorio:}") String directorio,
-                                 @Value("${sicot.respaldo.rpo-horas:24}") int rpoHoras) {
+                                 @Value("${sicot.respaldo.rpo-horas:24}") int rpoHoras,
+                                 AvisoDeSalud salud) {
+        this.salud = salud;
         this.directorio = (directorio == null || directorio.isBlank()) ? null : Path.of(directorio);
         this.rpo = Duration.ofHours(rpoHoras);
 
@@ -96,25 +119,80 @@ public class VigilanciaDelRespaldo {
     }
 
     /**
-     * Al arrancar, para que el aviso aparezca en el log del despliegue — que es
-     * cuando alguien lo está mirando.
+     * Cuánto se espera después de arrancar antes de dar el respaldo por caído.
+     *
+     * <p>El temporizador {@code sicot-respaldo.timer} tiene {@code Persistent=true}:
+     * si el equipo estuvo apagado a la hora del respaldo, lo hace al encender, con
+     * hasta cinco minutos de espera al azar ({@code RandomizedDelaySec=300}) y unos
+     * segundos de {@code pg_dump}. Quince minutos cubren eso con margen y siguen
+     * siendo «el mismo rato» para quien prendió el equipo.
+     *
+     * <p>Constante y no propiedad: es un dato del temporizador, no del despliegue,
+     * y si cambia, cambia aquí junto con él.
+     */
+    static final String MARGEN_AL_ARRANCAR = "PT15M";
+
+    /**
+     * Al arrancar se mide y se escribe en el log del despliegue —que es cuando
+     * alguien lo está mirando—, pero un respaldo viejo <b>todavía no se cuenta
+     * como caída</b>.
+     *
+     * <h2>Por qué no se avisa ya</h2>
+     * Porque al arrancar la respuesta casi siempre es falsa. El 17-11-2026 llegó al
+     * técnico «falló el respaldo de la base de datos: 138 h» a las 08:59, y el
+     * respaldo se hizo solo a las 09:00:31: el equipo había estado apagado del 12
+     * al 16 y el temporizador se puso al día al encender, como está diseñado. El
+     * backend arranca en un minuto; el temporizador espera hasta cinco. Esta
+     * comprobación le ganaba la carrera cada vez, así que <b>cualquier encendido
+     * después de más de 24 h apagado mandaba una falsa alarma</b>: cada lunes y
+     * cada festivo. Un aviso que llega siempre enseña a no leerlo, y entonces no
+     * sirve el día que es verdad.
+     *
+     * <p>Además, el tiempo que el equipo pasa apagado no es trabajo sin respaldar:
+     * con SICOT apagado nadie escribe en la base. La pregunta que importa es si el
+     * temporizador consigue ponerse al día, y esa se contesta en
+     * {@link #comprobarCadaTantasHoras()}, {@value #MARGEN_AL_ARRANCAR} después.
      */
     @EventListener(ApplicationReadyEvent.class)
     public void comprobarAlArrancar() {
-        comprobar();
+        comprobar(false);
     }
 
     /**
-     * Cada día a las 04:00: dos horas después del respaldo de las 02:00 que
-     * promete ADR-002, con margen de sobra para que un volcado lento haya
-     * terminado, y antes de las 06:00 en que corren las automatizaciones.
+     * Cada tres horas, y no a una hora fija.
+     *
+     * <p>Antes era {@code @Scheduled(cron = "0 0 4 * * *")}: las 04:00, dos
+     * horas después del respaldo de las 02:00 que promete ADR-002. Esa hora
+     * tenía el mismo defecto que el cron que vigila, y se vio en el servidor
+     * del Centro el 11-11-2026: <b>ese equipo está apagado a las 04:00</b>. Se
+     * prende por la mañana y se apaga por la noche, así que la comprobación
+     * diaria nunca llegaba a correr y la vigilancia se reducía a lo que
+     * avisaba al arrancar, una vez al día.
+     *
+     * <p>Un intervalo no depende de a qué hora esté encendido el equipo: en
+     * una jornada normal comprueba tres o cuatro veces, y en un servidor que
+     * sí se queda encendido, ocho. El respaldo se arregló de otra manera —un
+     * temporizador con {@code Persistent=true}, ver
+     * {@code scripts/systemd/sicot-respaldo.timer}— porque ahí sí importa la
+     * hora; aquí no importa cuándo se mire, solo que se mire.
+     *
+     * <p>La primera vez corre {@value #MARGEN_AL_ARRANCAR} después de arrancar, no
+     * tres horas después: es la que confirma o descarta lo que se vio al arrancar
+     * (ver {@link #comprobarAlArrancar()}). Con tres horas, un respaldo que de
+     * verdad no se puso al día habría tardado eso en llegar al técnico.
      */
-    @Scheduled(cron = "0 0 4 * * *", zone = ZonaHoraria.PROPIEDAD)
-    public void comprobarCadaDia() {
-        comprobar();
+    @Scheduled(fixedDelayString = "PT3H", initialDelayString = MARGEN_AL_ARRANCAR)
+    public void comprobarCadaTantasHoras() {
+        comprobar(true);
     }
 
-    private void comprobar() {
+    /**
+     * @param contarComoCaida si un respaldo ausente o viejo se le cuenta a
+     *                        {@link AvisoDeSalud} —y de ahí sale el informe para
+     *                        el técnico— o solo se deja en el log porque todavía
+     *                        se está dentro del margen del arranque.
+     */
+    private void comprobar(boolean contarComoCaida) {
         if (directorio == null) {
             // Sin configurar no se puede afirmar nada, y afirmar «todo bien»
             // sería peor que callar: la métrica queda en -1, que es distinguible
@@ -141,6 +219,11 @@ public class VigilanciaDelRespaldo {
         Optional<Instant> ultimo = fechaDelRespaldoMasReciente();
         if (ultimo.isEmpty()) {
             antiguedadEnHoras.set(DESCONOCIDA);
+            if (!contarComoCaida) {
+                avisarQueSeConfirmaDespues("no hay ningún respaldo en " + directorio);
+                return;
+            }
+            salud.fallo(Servicio.RESPALDO, "no hay ningún respaldo en " + directorio);
             log.error("""
                     ═══════════════════════════════════════════════════════════════
                      RESPALDO: no hay NINGÚN respaldo en {}.
@@ -148,11 +231,12 @@ public class VigilanciaDelRespaldo {
                      ADR-002 compromete un RPO de {} h. Ahora mismo, la pérdida
                      ante un fallo de disco sería TODA la base de datos.
 
-                     Revisar:
-                       1. Que el cron esté instalado:  crontab -l | grep respaldo-sicot
-                       2. Que se pueda ejecutar a mano: ./scripts/respaldo-sicot.sh {}
+                     Revisar en el servidor:
+                       systemctl list-timers sicot-respaldo.timer
+                       tail -30 /var/log/sicot-respaldo.log
+                       Si el temporizador no está: sudo ./scripts/instalar-respaldo.sh <carpeta>
                     ═══════════════════════════════════════════════════════════════""",
-                    directorio, rpo.toHours(), directorio);
+                    directorio, rpo.toHours());
             return;
         }
 
@@ -160,19 +244,41 @@ public class VigilanciaDelRespaldo {
         antiguedadEnHoras.set(antiguedad.toHours());
 
         if (antiguedad.compareTo(rpo) > 0) {
+            String detalle = "el respaldo más reciente tiene %d h y el RPO comprometido es de %d h"
+                    .formatted(antiguedad.toHours(), rpo.toHours());
+            if (!contarComoCaida) {
+                avisarQueSeConfirmaDespues(detalle);
+                return;
+            }
+            salud.fallo(Servicio.RESPALDO, detalle);
             log.error("""
                     ═══════════════════════════════════════════════════════════════
                      RESPALDO: el más reciente tiene {} h de antigüedad y el RPO
-                     comprometido en ADR-002 es de {} h.
+                     comprometido en ADR-002 es de {} h, y el temporizador no se
+                     puso al día después de arrancar.
 
-                     El trabajo de las últimas {} h no está respaldado. Revisar el
-                     cron en el servidor:  crontab -l | grep respaldo-sicot
+                     Revisar en el servidor:
+                       systemctl list-timers sicot-respaldo.timer
+                       systemctl is-failed sicot-respaldo.service
+                       tail -30 /var/log/sicot-respaldo.log
                     ═══════════════════════════════════════════════════════════════""",
-                    antiguedad.toHours(), rpo.toHours(), antiguedad.toHours());
+                    antiguedad.toHours(), rpo.toHours());
         } else {
+            salud.exito(Servicio.RESPALDO);
             log.info("Respaldo verificado: el más reciente tiene {} h (RPO comprometido: {} h, ADR-002).",
                     antiguedad.toHours(), rpo.toHours());
         }
+    }
+
+    /**
+     * WARN y no ERROR: todavía no es una avería, y quien lea el log del arranque
+     * tiene que saber que hay una segunda mirada en camino y cuándo.
+     */
+    private void avisarQueSeConfirmaDespues(String detalle) {
+        log.warn("Respaldo al arrancar: {}. Todavía no se avisa al técnico: si el equipo estuvo "
+                        + "apagado, sicot-respaldo.timer se pone al día en los primeros minutos. "
+                        + "Se vuelve a mirar en {} min.",
+                detalle, Duration.parse(MARGEN_AL_ARRANCAR).toMinutes());
     }
 
     /**

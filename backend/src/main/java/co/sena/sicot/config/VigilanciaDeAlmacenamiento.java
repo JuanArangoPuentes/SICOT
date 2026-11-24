@@ -1,5 +1,7 @@
 package co.sena.sicot.config;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.slf4j.Logger;
@@ -11,6 +13,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -59,10 +62,15 @@ public class VigilanciaDeAlmacenamiento {
      */
     private final AtomicLong tamanoDocumentos = new AtomicLong(-1);
 
+    /** Para que pasarse del umbral llegue a una persona y no solo al log. */
+    private final AvisoDeSalud salud;
+
     public VigilanciaDeAlmacenamiento(JdbcTemplate jdbcTemplate,
                                       MeterRegistry registry,
-                                      @Value("${sicot.almacenamiento.umbral-gb:5}") int umbralGb) {
+                                      @Value("${sicot.almacenamiento.umbral-gb:5}") int umbralGb,
+                                      AvisoDeSalud salud) {
         this.jdbcTemplate = jdbcTemplate;
+        this.salud = salud;
         this.umbralBytes = (long) umbralGb * BYTES_POR_GB;
 
         // El gauge lee el valor ya medido; NO consulta la base en cada
@@ -84,12 +92,25 @@ public class VigilanciaDeAlmacenamiento {
     }
 
     /**
-     * Medición diaria a las 03:00 — una hora después del respaldo de
-     * {@code scripts/respaldo-sicot.sh}, para que el aviso caiga junto a las
-     * señales de la noche y no en mitad de la jornada.
+     * Cada seis horas, y no a una hora fija.
+     *
+     * <p>Era {@code cron = "0 0 3 * * *"}: las 03:00, para que el aviso cayera
+     * junto a las señales de la noche. El 11-11-2026 se descubrió que en el
+     * servidor del Centro esa idea no se sostiene: <b>el equipo está apagado de
+     * noche</b>. Se prende por la mañana y se apaga al terminar la jornada, así
+     * que la medición diaria no corría nunca y la vigilancia se quedaba en la
+     * del arranque.
+     *
+     * <p>Era el mismo defecto que tenían el cron del respaldo y
+     * {@code VigilanciaDelRespaldo}, y los tres se arreglaron el mismo día. La
+     * regla que queda: en ese servidor, lo que tenga que ocurrir cada día va
+     * por intervalo, o con {@code Persistent=true} si la hora importa de verdad.
+     *
+     * <p>Seis horas y no tres como el respaldo porque esto crece despacio: en
+     * noviembre de 2026 iban 27,6 MB de 5 GB.
      */
-    @Scheduled(cron = "0 0 3 * * *", zone = ZonaHoraria.PROPIEDAD)
-    public void medirCadaDia() {
+    @Scheduled(fixedDelay = 6, initialDelay = 6, timeUnit = TimeUnit.HOURS)
+    public void medirCadaTantasHoras() {
         medirYAvisar();
     }
 
@@ -101,17 +122,27 @@ public class VigilanciaDeAlmacenamiento {
         tamanoDocumentos.set(bytes);
 
         if (bytes >= umbralBytes) {
+            // Pasado el umbral sí es una incidencia: a partir de aquí las
+            // subidas empiezan a fallar y el respaldo se alarga. El aviso del
+            // 80% de abajo NO lo es —es «conviene planificar», no «algo está
+            // roto»— y mandar un informe por eso le enseñaría al técnico que
+            // los informes se pueden ignorar.
+            salud.fallo(Servicio.ALMACENAMIENTO,
+                    "la tabla 'documentos' ocupa " + legible(bytes) + " y el umbral de ADR-003 es "
+                            + legible(umbralBytes));
             log.warn("ALMACENAMIENTO: la tabla 'documentos' ocupa {} y superó el umbral de {} "
                             + "definido en ADR-003. Toca planificar la migración de los archivos a "
                             + "almacenamiento de objetos: cada respaldo y cada restauración ya son "
                             + "más lentos de lo previsto.",
                     legible(bytes), legible(umbralBytes));
         } else if (bytes >= (long) (umbralBytes * PROPORCION_DE_AVISO)) {
+            salud.exito(Servicio.ALMACENAMIENTO);
             log.warn("ALMACENAMIENTO: la tabla 'documentos' ocupa {} — por encima del {}% del "
                             + "umbral de {} (ADR-003). Conviene empezar a planificar la migración a "
                             + "almacenamiento de objetos con margen.",
                     legible(bytes), (int) (PROPORCION_DE_AVISO * 100), legible(umbralBytes));
         } else {
+            salud.exito(Servicio.ALMACENAMIENTO);
             log.info("Almacenamiento de documentos: {} de {} permitidos (ADR-003).",
                     legible(bytes), legible(umbralBytes));
         }

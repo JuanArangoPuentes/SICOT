@@ -1,0 +1,22 @@
+# Cada cuánto pregunta el servidor si hay versión nueva.
+#
+# Diez minutos es el equilibrio: un merge a `master` llega al Centro dentro del
+# mismo rato en que se hizo, y son seis consultas por hora a GitHub, que no
+# despiertan a nadie. La consulta cuando no hay nada nuevo es un `git fetch` de
+# unos kilobytes y no escribe ni una línea en el registro.
+#
+# RandomizedDelaySec evita que todos los servidores que algún día corran esto
+# consulten en el mismo segundo. Persistent recupera la corrida perdida si el
+# servidor estuvo apagado: al encenderlo se pone al día sin esperar el ciclo.
+[Unit]
+Description=SICOT — temporizador de la actualización automática
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=10min
+RandomizedDelaySec=60
+Persistent=true
+Unit=sicot-auto-actualizar.service
+
+[Install]
+WantedBy=timers.target

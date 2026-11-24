@@ -1,0 +1,311 @@
+name: Publicar escritorio
+
+# Compila el instalador de Windows FIRMADO para el actualizador, publica la
+# versión en GitHub y deja el `latest.json` del que se actualizan solas las
+# instalaciones de los supervisores (ADR-017).
+#
+# POR QUÉ EXISTE ESTE FLUJO
+# -------------------------
+# Hasta la 0.9.0, el `.exe` y el `.msi` de cada versión se compilaban en el
+# portátil de quien desarrolla y se subían a mano a la versión de GitHub (se ve
+# en quién adjuntó cada archivo: el APK lo sube `github-actions[bot]`, el
+# instalador no). Eso tenía dos consecuencias: publicar dependía de que ese
+# equipo estuviera disponible, y nadie podía comprobar con qué código se
+# compiló el instalador que se instala en el Centro. Aquí se compila desde la
+# etiqueta, a la vista, y el resultado queda firmado.
+#
+# CUÁNDO CORRE
+# ------------
+# De dos maneras, y las dos publican lo mismo:
+#
+#   - Al empujar una etiqueta `v*`.
+#   - A mano, desde Actions, indicando la versión. Si esa etiqueta todavía no
+#     existe, **este flujo la crea** sobre la cabeza de `master`.
+#
+# Lo segundo existe para que publicar no dependa de que alguien tenga un clon
+# del repositorio en el equipo correcto, con la etiqueta bien escrita. SICOT lo
+# mantiene una sola persona con relevos previstos a tres o cuatro años
+# (CONTRIBUTING.md): «acuérdese de anotar la etiqueta y empujarla» es
+# exactamente la clase de paso que se pierde en un relevo. Desde Actions, la
+# versión se publica con un campo y un botón.
+#
+# La etiqueta sigue siendo lo que se publica: se crea ANTES de compilar y desde
+# ella se saca todo, así que lo que queda en la versión de GitHub es
+# reproducible desde ese commit.
+#
+# LA FIRMA DEL ACTUALIZADOR NO ES LA FIRMA DEL APK
+# ------------------------------------------------
+# Son dos llaves distintas y no se pueden mezclar:
+#   - `SICOT_ANDROID_KEYSTORE_*` firma el APK, y Android la usa para decidir si
+#     una instalación puede reemplazar a otra (ADR-013).
+#   - `TAURI_SIGNING_PRIVATE_KEY` firma el instalador de escritorio, y la
+#     aplicación la usa para decidir si acepta una actualización. Su clave
+#     pública está escrita en `frontend/src-tauri/tauri.conf.json`: una
+#     instalación solo instala lo que esa llave firmó, así que un instalador
+#     subido por cualquier otro no se aplica ni interceptando la descarga.
+# Si la llave se pierde, las instalaciones existentes dejan de poder
+# actualizarse solas y hay que volver a instalarlas una vez a mano. Por eso el
+# flujo se detiene antes de compilar si el secreto no está.
+#
+# ACCIONES FIJADAS POR SHA, por el mismo motivo que en `ci.yml` y
+# `publicar-apk.yml`: una etiqueta como `@v4` es mutable, y este flujo tiene en
+# memoria la llave con que se firma lo que se instala en el Centro.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      etiqueta:
+        description: 'Versión a publicar (p. ej. v0.10.0). Si la etiqueta no existe, se crea sobre master'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  escritorio:
+    name: Instalador de Windows firmado (Tauri · x64)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      ETIQUETA: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
+      # De dónde sale la etiqueta cuando la crea este flujo. Es `master` porque
+      # es lo que el CI dejó en verde y lo que `develop → master` declara
+      # desplegable; publicar desde `develop` sacaría al Centro una integración
+      # intermedia.
+      RAMA_ESTABLE: master
+
+    steps:
+      - name: Comprobar y limpiar el secreto de firma
+        # Tres cosas, antes incluso de descargar el repositorio: lo que este
+        # paso encuentra mal no se arregla compilando, así que no tiene sentido
+        # bajar nada hasta que la firma esté en condiciones.
+        #
+        # 1. Que la llave esté. Sin ella, Tauri produciría un instalador sin
+        #    `.sig` y el `latest.json` quedaría sin firma: las instalaciones lo
+        #    rechazarían una por una, en silencio, y el síntoma —«a nadie le
+        #    llegó la actualización»— aparecería días después.
+        #
+        # 2. Quitarle los espacios y los saltos de línea. La llave es una sola
+        #    línea de base64, y un salto de línea al final NO se perdona:
+        #    comprobado el 10-11-2026 con la llave real, `tauri signer sign`
+        #    responde «failed to decode base64 secret key: Invalid symbol». Ese
+        #    salto aparece solo con copiar el archivo desde un editor de texto,
+        #    que es exactamente cómo se guarda este secreto la primera vez. Sin
+        #    esta limpieza, el error no se vería hasta la primera publicación, y
+        #    diría que la llave está mal en vez de que sobra un carácter.
+        #
+        #    `add-mask` va antes de escribirla en el entorno para que el valor
+        #    limpio quede tapado en el registro igual que el secreto original.
+        #
+        # 3. Decir si la contraseña está vacía. Es el otro borde que rompe la
+        #    firma, y el único que no se nota hasta el final de la compilación.
+        shell: bash
+        run: |
+          set -eu
+          if [ -z "${LLAVE:-}" ]; then
+            echo "::error::Falta el secreto TAURI_SIGNING_PRIVATE_KEY. Ver ADR-017."
+            exit 1
+          fi
+          LIMPIA=$(printf '%s' "$LLAVE" | tr -d '[:space:]')
+          echo "::add-mask::$LIMPIA"
+          echo "TAURI_SIGNING_PRIVATE_KEY=$LIMPIA" >> "$GITHUB_ENV"
+          echo "La llave de firma está presente (${#LIMPIA} caracteres tras limpiar espacios)."
+          # La contraseña es el otro borde que rompe la firma, y rompe de una
+          # forma que no se adivina: con una contraseña que no sea la de la
+          # llave, `tauri build` falla con «incorrect updater private key
+          # password», que suena a llave mala y no a contraseña sobrante.
+          # Comprobado el 10-11-2026: la llave de SICOT se generó SIN
+          # contraseña, así que lo correcto aquí es vacío —o el secreto sin
+          # crear, que da lo mismo—. No se imprime su longitud ni se falla por
+          # ella: alguien puede rotar algún día a una llave con contraseña, y
+          # entonces esto tiene que seguir funcionando.
+          if [ -z "${CLAVE:-}" ]; then
+            echo "La contraseña de la llave está vacía, que es lo que esta llave espera."
+          else
+            echo "::warning::El secreto TAURI_SIGNING_PRIVATE_KEY_PASSWORD NO está vacío. Si la llave se generó sin contraseña, la firma fallará con «incorrect updater private key password»: deje ese secreto vacío o bórrelo. Ver ADR-017."
+          fi
+        env:
+          LLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          CLAVE: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Crear la etiqueta si se pidió a mano y todavía no existe
+        # Solo cuando el flujo se dispara a mano: si llegó por un `push` de
+        # etiqueta, esa etiqueta ya existe y aquí no hay nada que hacer.
+        #
+        # LA COMPUERTA QUE HACE QUE ESTO SEA SEGURO
+        # -----------------------------------------
+        # Una etiqueta no se puede mover sin romper lo que ya la haya
+        # descargado, así que crear una equivocada es un error que se arrastra.
+        # Por eso NO se crea a ciegas: primero se lee la versión que declara
+        # `tauri.conf.json` en la cabeza de la rama estable y se compara con lo
+        # que se pidió. Si no coinciden, el flujo se detiene SIN crear nada y
+        # dice qué hay que subir antes. La comprobación posterior (la que mira
+        # también Cargo.toml, ya con el repositorio descargado) sigue en su
+        # sitio: esta es la que evita dejar basura en el repositorio, aquella es
+        # la que evita publicar un instalador que anuncia otra versión.
+        if: github.ref_type != 'tag'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$ETIQUETA" > /dev/null 2>&1; then
+            echo "La etiqueta $ETIQUETA ya existe: se publica desde ella y no se toca."
+            exit 0
+          fi
+          SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RAMA_ESTABLE" --jq .object.sha)
+          VERSION=$(gh api "repos/$GITHUB_REPOSITORY/contents/frontend/src-tauri/tauri.conf.json?ref=$SHA" \
+            -H "Accept: application/vnd.github.raw" | jq -r .version)
+          ESPERADA="${ETIQUETA#v}"
+          echo "$RAMA_ESTABLE está en ${SHA:0:8} y declara la versión $VERSION; se pidió $ETIQUETA."
+          if [ "$VERSION" != "$ESPERADA" ]; then
+            echo "::error::$RAMA_ESTABLE declara $VERSION y se pidió $ETIQUETA. Suba la versión en tauri.conf.json y Cargo.toml y mergéela a $RAMA_ESTABLE antes de publicar. No se creó ninguna etiqueta."
+            exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$ETIQUETA" -f sha="$SHA" --silent
+          echo "Etiqueta $ETIQUETA creada sobre $RAMA_ESTABLE (${SHA:0:8})."
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.ref_type == 'tag' && github.ref_name || inputs.etiqueta }}
+
+      - name: Comprobar que la etiqueta es la versión de la aplicación
+        # La misma compuerta que en `publicar-apk.yml`, y por el mismo motivo:
+        # el nombre del archivo sale de la etiqueta, pero la versión que la
+        # aplicación anuncia —y con la que el actualizador compara— sale de
+        # tauri.conf.json. Publicar v0.10.0 con la versión sin subir dejaría a
+        # las instalaciones intentando actualizarse a lo que ya tienen.
+        shell: bash
+        run: |
+          set -eu
+          ESPERADA="${ETIQUETA#v}"
+          CONF=$(node -p "require('./frontend/src-tauri/tauri.conf.json').version")
+          CARGO=$(sed -n 's/^version = "\(.*\)"$/\1/p' frontend/src-tauri/Cargo.toml | head -1)
+          echo "Etiqueta: $ETIQUETA · tauri.conf.json: $CONF · Cargo.toml: $CARGO"
+          for PAR in "tauri.conf.json:$CONF" "Cargo.toml:$CARGO"; do
+            [ "${PAR#*:}" = "$ESPERADA" ] || {
+              echo "::error::${PAR%%:*} dice ${PAR#*:} y la etiqueta es $ETIQUETA. Suba la versión antes de publicar."
+              exit 1
+            }
+          done
+
+      - name: Configurar Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Preparar Rust
+        # La imagen de Windows trae rustup pero puede venir sin toolchain por
+        # omisión; declararlo es más corto que diagnosticarlo.
+        shell: bash
+        run: |
+          set -eu
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustc --version
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: npm ci
+
+      - name: Compilar el instalador firmado
+        working-directory: frontend
+        # TAURI_SIGNING_PRIVATE_KEY la pone el paso de limpieza, en el entorno
+        # del job. La contraseña se declara aunque el secreto no exista: entonces
+        # vale cadena vacía, que es lo que espera una llave generada sin
+        # contraseña. Comprobado el 10-11-2026: con la variable vacía firma, y
+        # SIN la variable falla con «incorrect updater private key password».
+        env:
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npm run tauri build
+
+      - name: Reunir los archivos y armar el descriptor
+        # `latest.json` es lo que consulta cada instalación: la versión, la URL
+        # del instalador y su firma. Se arma aquí, con la firma que acaba de
+        # producir el bundler, y no a mano: una firma que no corresponda al
+        # archivo hace que la actualización se rechace sin decir por qué.
+        shell: bash
+        run: |
+          set -eu
+          VERSION="${ETIQUETA#v}"
+          BUNDLE=frontend/src-tauri/target/release/bundle
+          EXE=$(find "$BUNDLE/nsis" -name '*-setup.exe' | head -1)
+          FIRMA=$(find "$BUNDLE/nsis" -name '*-setup.exe.sig' | head -1)
+          MSI=$(find "$BUNDLE/msi" -name '*.msi' | head -1)
+          [ -n "$EXE" ] || { echo "::error::No se generó el instalador NSIS."; exit 1; }
+          [ -n "$FIRMA" ] || { echo "::error::El instalador salió sin firma: revise TAURI_SIGNING_PRIVATE_KEY."; exit 1; }
+          mkdir -p publicar
+          cp "$EXE" publicar/
+          cp "$FIRMA" publicar/
+          [ -z "$MSI" ] || cp "$MSI" publicar/
+          node --input-type=module -e "
+            import { readFileSync, writeFileSync } from 'node:fs'
+            const nombre = process.argv[1]
+            const firma = readFileSync(process.argv[2], 'utf8').trim()
+            const version = process.argv[3]
+            const etiqueta = process.argv[4]
+            writeFileSync('publicar/latest.json', JSON.stringify({
+              version,
+              notes: 'Novedades de esta versión: https://github.com/JuanArangoPuentes/SICOT/releases/tag/' + etiqueta,
+              pub_date: new Date().toISOString(),
+              platforms: {
+                'windows-x86_64': {
+                  signature: firma,
+                  url: 'https://github.com/JuanArangoPuentes/SICOT/releases/download/' + etiqueta + '/' + nombre,
+                },
+              },
+            }, null, 2) + '\n')
+          " "$(basename "$EXE")" "$FIRMA" "$VERSION" "$ETIQUETA"
+          cat publicar/latest.json
+          ls -lh publicar
+
+      - name: Publicar la versión y adjuntar lo compilado
+        # `gh release create` solo si no existe: cuando la versión se publica a
+        # mano desde GitHub, este flujo adjunta sobre la que ya está.
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          if ! gh release view "$ETIQUETA" > /dev/null 2>&1; then
+            # Las notas de la versión viven en el repositorio, en
+            # docs/versiones/<etiqueta>.md, y no se escriben a mano en GitHub
+            # después de publicar. Son lo único de una versión que lee alguien
+            # que no programa —el supervisor que va a decidir si instala, el
+            # área de sistemas que va a actualizar el servidor— y hasta la
+            # 0.9.0 se redactaban en la interfaz de GitHub: sin revisión, sin
+            # historial y sin posibilidad de corregirlas en el mismo PR que
+            # introduce lo que describen. Si el archivo no está, se publica un
+            # texto mínimo y la versión sale igual: quedarse sin publicar por
+            # no tener las notas sería peor.
+            NOTAS="docs/versiones/${ETIQUETA}.md"
+            if [ -f "$NOTAS" ]; then
+              echo "Notas tomadas de $NOTAS"
+              gh release create "$ETIQUETA" --title "$ETIQUETA" --notes-file "$NOTAS"
+            else
+              echo "::warning::No hay $NOTAS: la versión se publica con un texto mínimo."
+              gh release create "$ETIQUETA" \
+                --title "$ETIQUETA" \
+                --notes "Versión $ETIQUETA. El instalador de Windows y el descriptor del actualizador los adjunta este mismo flujo; el APK firmado lo adjunta «Publicar APK»."
+            fi
+          fi
+          gh release upload "$ETIQUETA" publicar/* --clobber
+
+      - name: Pedir el APK firmado
+        # El APK se compila en Linux con el SDK de Android, así que es otro
+        # flujo. GitHub no deja que un flujo lanzado con el token por omisión
+        # dispare otro —es la protección contra bucles—, así que esto puede no
+        # surtir efecto; cuando no lo surta, el APK se pide desde la pestaña
+        # Actions («Publicar APK» → Run workflow → la etiqueta). No se falla por
+        # eso: el instalador y el descriptor ya quedaron publicados.
+        shell: bash
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run publicar-apk.yml -f etiqueta="$ETIQUETA" \
+            || echo "::notice::Pida «Publicar APK» a mano para $ETIQUETA."

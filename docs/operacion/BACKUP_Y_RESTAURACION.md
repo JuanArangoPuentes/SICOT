@@ -3,11 +3,21 @@
 ## Respaldo automático (recomendado)
 
 `scripts/respaldo-sicot.sh` hace el volcado, **verifica que se pueda leer** y
-rota los antiguos. Programarlo a diario:
+rota los antiguos. Para programarlo, una sola orden:
 
 ```bash
-0 2 * * * /ruta/al/repo/scripts/respaldo-sicot.sh /var/backups/sicot >> /var/log/sicot-respaldo.log 2>&1
+sudo ./scripts/instalar-respaldo.sh /ruta/a/respaldos
 ```
+
+Deja `sicot-respaldo.timer` encendido y hace un respaldo en ese momento.
+
+**No use una línea de `crontab` para esto.** Es lo que decía este documento
+hasta el 11-11-2026, y falló en silencio: ese día el servidor del Centro
+llevaba **seis días sin respaldo**, con el cron activo y la línea bien escrita.
+El equipo está apagado a las 02:00 —se prende por la mañana— y cron no
+recupera las citas que se pierden por eso. El temporizador lleva
+`Persistent=true` y sí las recupera al encender. El detalle está en
+[`scripts/systemd/sicot-respaldo.timer`](../../scripts/systemd/sicot-respaldo.timer).
 
 La verificación no es un adorno: `pg_dump` puede terminar con código 0 y dejar
 un archivo truncado si el disco se llenó a mitad, y eso solo se descubre el día

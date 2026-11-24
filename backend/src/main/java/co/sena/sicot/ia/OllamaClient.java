@@ -1,5 +1,7 @@
 package co.sena.sicot.ia;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import tools.jackson.databind.ObjectMapper;
@@ -99,10 +101,31 @@ public class OllamaClient {
      */
     private volatile String ultimoPrompt;
 
+    /**
+     * A quién se le cuenta que Ollama respondió o falló, para que el resto del
+     * sistema pueda enterarse. Antes, un Ollama caído lo sabía solo la llamada
+     * que lo tropezó: lanzaba la excepción, el usuario veía un 503 y ahí moría
+     * la información. Ahora {@link co.sena.sicot.salud.SaludDelSistema} la
+     * recoge, el reparador intenta levantarlo y, si no se puede, sale un
+     * informe para el técnico.
+     */
+    private final AvisoDeSalud salud;
+
     /** Con las opciones por defecto de {@code application.properties}. */
     public OllamaClient(String ollamaUrl, String modelo, int timeoutSeconds, String keepAlive,
                         LimitadorDeUsoIa limitador) {
         this(ollamaUrl, modelo, timeoutSeconds, keepAlive, limitador, 0.2, 1024, 0);
+    }
+
+    /**
+     * Sin avisar de la salud a nadie. Es la forma que usan las pruebas de este
+     * cliente: lo que prueban es el trato con Ollama, no el registro de estado,
+     * y arrastrarlo las obligaría a construir media aplicación.
+     */
+    public OllamaClient(String ollamaUrl, String modelo, int timeoutSeconds, String keepAlive,
+                        LimitadorDeUsoIa limitador, double temperatura, int maxTokens, int numCtx) {
+        this(ollamaUrl, modelo, timeoutSeconds, keepAlive, limitador, temperatura, maxTokens, numCtx,
+                AvisoDeSalud.NINGUNO);
     }
 
     /**
@@ -118,7 +141,9 @@ public class OllamaClient {
                         LimitadorDeUsoIa limitador,
                         @Value("${sicot.ia.temperatura:0.2}") double temperatura,
                         @Value("${sicot.ia.max-tokens:1024}") int maxTokens,
-                        @Value("${sicot.ia.num-ctx:0}") int numCtx) {
+                        @Value("${sicot.ia.num-ctx:0}") int numCtx,
+                        AvisoDeSalud salud) {
+        this.salud = salud;
         this.ollamaUrl = ollamaUrl;
         this.modelo = modelo;
         this.keepAlive = keepAlive;
@@ -235,6 +260,9 @@ public class OllamaClient {
                                 }
                             }
                         }
+                        // Igual que en la llamada normal: si se leyó la
+                        // respuesta, el servicio está respondiendo.
+                        salud.exito(Servicio.IA);
                         if ("length".equals(razon)) {
                             log.warn("Ollama llegó al tope de {} tokens con el modelo '{}'; la respuesta quedó cortada.",
                                     opciones.maxTokens(), modelo);
@@ -304,6 +332,26 @@ public class OllamaClient {
      * distinto haría que Ollama recargara el modelo. Si falla, se anota y ya.
      */
     public void mantenerCargado() {
+        intentarLevantar();
+    }
+
+    /**
+     * Lo mismo que {@link #mantenerCargado()}, pero diciendo si lo consiguió.
+     *
+     * <p>Es la reparación que intenta
+     * {@link co.sena.sicot.salud.ReparadorDeServicios} cuando la IA se da por
+     * caída, y de paso la comprobación de que volvió: esta llamada hace que
+     * Ollama cargue el modelo si lo tenía descargado, que es la causa más común
+     * de que la primera pregunta del día falle por tiempo agotado.
+     *
+     * <p>Existe separada porque {@code mantenerCargado()} está pensado para
+     * llamarse en segundo plano mientras alguien usa el panel, y ahí el
+     * resultado no le importa a nadie; aquí sí, porque decide si se molesta al
+     * técnico. Una misma petición, dos usos distintos.
+     *
+     * @return {@code true} si Ollama aceptó la petición
+     */
+    public boolean intentarLevantar() {
         try {
             restClient.post()
                     .uri("/api/generate")
@@ -311,8 +359,10 @@ public class OllamaClient {
                     .body(new GenerateRequest(modelo, null, false, null, keepAlive, opcionesDeOllama(porDefecto)))
                     .retrieve()
                     .toBodilessEntity();
+            return true;
         } catch (Exception e) {
             log.info("No se pudo renovar el tiempo de carga del modelo '{}': {}", modelo, e.getMessage());
+            return false;
         }
     }
 
@@ -356,6 +406,10 @@ public class OllamaClient {
             // terminara. Un texto cortado a media frase no se entrega como si
             // fuera la respuesta completa; con el tope por defecto, casi
             // siempre es un bucle de repetición.
+            // Llegar aquí significa que Ollama respondió, aunque la respuesta
+            // venga cortada por el tope de tokens: el servicio funciona, y si
+            // venía de una caída esto es lo que la cierra.
+            salud.exito(Servicio.IA);
             if ("length".equals(respuesta.doneReason())) {
                 log.warn("Ollama llegó al tope de {} tokens con el modelo '{}'; la respuesta quedó cortada.",
                         opciones.maxTokens(), modelo);
@@ -373,6 +427,11 @@ public class OllamaClient {
 
     /** El fallo de una llamada a Ollama, dicho de forma honesta y sin detalles internos. */
     private IaNoDisponibleException comoFalloDeOllama(Exception e) {
+        // Aquí pasan los dos fallos que significan «el servicio no sirve ahora»
+        // —no contesta, o no contesta a tiempo—, y por eso es el único sitio
+        // donde se avisa. La respuesta CORTADA no pasa por aquí a propósito:
+        // esa significa que Ollama SÍ funcionó, solo que la respuesta no cupo.
+        salud.fallo(Servicio.IA, e.getClass().getSimpleName() + ": " + e.getMessage());
         if (esTiempoAgotado(e)) {
             // Distinto de «no disponible»: el modelo SÍ respondía, solo que
             // más despacio que el límite. Decir «el servicio no está

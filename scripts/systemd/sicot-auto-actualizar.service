@@ -1,0 +1,25 @@
+# Una corrida de la actualización automática de SICOT.
+# Se instala con scripts/instalar-auto-actualizacion.sh, que escribe la ruta
+# real del clon en ExecStart y en SICOT_DIR. Lo dispara el .timer, no el
+# arranque: aquí no hay nada que mantener vivo, es una tarea que empieza,
+# decide y termina.
+[Unit]
+Description=SICOT — comprobar y aplicar la versión nueva del servidor
+Documentation=https://github.com/JuanArangoPuentes/SICOT/blob/master/docs/operacion/ACTUALIZACION_AUTOMATICA.md
+After=docker.service network-online.target
+Wants=docker.service
+
+[Service]
+Type=oneshot
+# Reconstruir las imágenes y esperar a que los contenedores queden sanos puede
+# pasar de diez minutos en un servidor modesto. Sin este tope, un `docker build`
+# colgado dejaría el cerrojo tomado para siempre y la actualización no volvería
+# a correr nunca.
+TimeoutStartSec=45min
+Environment=SICOT_DIR=__SICOT_DIR__
+Environment=SICOT_RAMA=__SICOT_RAMA__
+Environment=SICOT_RESPALDOS=__SICOT_RESPALDOS__
+Environment=SICOT_LOG=__SICOT_LOG__
+ExecStart=__SICOT_DIR__/scripts/auto-actualizar-sicot.sh
+# Necesita hablar con el daemon de Docker y escribir el registro del sistema.
+User=root

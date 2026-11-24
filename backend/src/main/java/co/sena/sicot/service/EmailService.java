@@ -1,7 +1,14 @@
 package co.sena.sicot.service;
 
+import co.sena.sicot.salud.AvisoDeSalud;
+import co.sena.sicot.salud.Servicio;
 import jakarta.mail.internet.MimeMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -24,7 +31,16 @@ import org.springframework.stereotype.Service;
 @Service
 public class EmailService {
 
+    private static final Logger log = LoggerFactory.getLogger(EmailService.class);
+
     private final JavaMailSender mailSender;
+
+    /**
+     * Para que un correo que dejó de salir se sepa. Lo nota el supervisor que no
+     * recibe el aviso de designación, y él no sabe que debía llegarle: es
+     * justamente el tipo de fallo que no se descubre solo.
+     */
+    private final AvisoDeSalud salud;
 
     @Value("${spring.mail.username:}")
     private String remitenteConfigurado;
@@ -32,13 +48,82 @@ public class EmailService {
     @Value("${sicot.mail.from:${spring.mail.username:}}")
     private String from;
 
+    /** Sin avisar de la salud a nadie: la forma que usan las pruebas. */
     public EmailService(JavaMailSender mailSender) {
-        this.mailSender = mailSender;
+        this(mailSender, AvisoDeSalud.NINGUNO);
     }
 
-    /** @return si hay un remitente configurado con el que se pueda enviar algo. */
+    @Autowired
+    public EmailService(JavaMailSender mailSender, AvisoDeSalud salud) {
+        this.mailSender = mailSender;
+        this.salud = salud;
+    }
+
+    /**
+     * Lo que deja {@code .env.example} sin rellenar. No es un remitente, aunque
+     * lo parezca.
+     *
+     * <p>Esto se aprendió en el servidor del Centro el 11-11-2026: su {@code .env}
+     * tenía `MAIL_USERNAME=replace_me@gmail.com`, el marcador del ejemplo, y
+     * {@link #estaConfigurado()} lo daba por bueno porque no está en blanco. El
+     * sistema se creía con correo: en vez de descartar las tareas de correo con
+     * un motivo claro —que es lo que esta clase existe para hacer—, habría
+     * intentado autenticarse en Gmail con una contraseña falsa y fallado en el
+     * peor momento, al crear un usuario que espera sus credenciales.
+     *
+     * <p>Un marcador que pasa por configuración es peor que un campo vacío,
+     * porque el vacío sí se nota.
+     */
+    private static final String MARCADOR_SIN_RELLENAR = "replace_me";
+
+    /**
+     * @return si hay un remitente configurado con el que se pueda enviar algo.
+     *         El marcador del ejemplo no cuenta: ver {@link #MARCADOR_SIN_RELLENAR}.
+     */
     public boolean estaConfigurado() {
-        return remitenteConfigurado != null && !remitenteConfigurado.isBlank();
+        return remitenteConfigurado != null
+                && !remitenteConfigurado.isBlank()
+                && !remitenteConfigurado.startsWith(MARCADOR_SIN_RELLENAR);
+    }
+
+    /**
+     * Al arrancar, dice si el correo va a funcionar. En el log del despliegue,
+     * que es cuando alguien lo está mirando.
+     *
+     * <p>Mismo criterio que {@link co.sena.sicot.ia.VerificacionDelModeloIa} y
+     * {@link co.sena.sicot.config.VigilanciaDelRespaldo}: comprobar al arrancar
+     * y decir el comando o la variable que falta. Sin esto, que el correo no
+     * esté puesto solo se descubre el día que alguien crea un usuario y la
+     * persona del otro lado nunca recibe sus credenciales — y ahí nadie sabe si
+     * el correo se perdió, se fue a spam o nunca salió. En el servidor del
+     * Centro llevaba así desde el primer despliegue.
+     */
+    @EventListener(ApplicationReadyEvent.class)
+    public void comprobarAlArrancar() {
+        if (estaConfigurado()) {
+            log.info("Correo saliente configurado como {}.", remitenteConfigurado);
+            return;
+        }
+        log.warn("""
+                ═══════════════════════════════════════════════════════════════
+                 El correo NO está configurado: las credenciales de los usuarios
+                 nuevos NO se van a enviar, y tampoco los informes para el
+                 técnico.
+                {}
+                 Con Gmail: activar la verificación en dos pasos, crear una
+                 contraseña de aplicación en myaccount.google.com/apppasswords y
+                 ponerla SIN ESPACIOS. En el .env del despliegue:
+                   MAIL_HOST=smtp.gmail.com
+                   MAIL_PORT=587
+                   MAIL_USERNAME=la.cuenta@gmail.com
+                   MAIL_PASSWORD=<la contraseña de aplicación, sin espacios>
+                   MAIL_FROM=la.cuenta@gmail.com
+                 Y recrear el backend para que las lea.
+                ═══════════════════════════════════════════════════════════════""",
+                remitenteConfigurado == null || remitenteConfigurado.isBlank()
+                        ? " MAIL_USERNAME está vacío."
+                        : " MAIL_USERNAME vale '" + remitenteConfigurado
+                                + "', que es el marcador de .env.example sin rellenar.");
     }
 
     /**
@@ -96,7 +181,19 @@ public class EmailService {
             helper.setSubject(asunto);
             helper.setText(cuerpo);
             mailSender.send(mensaje);
+            salud.exito(Servicio.CORREO);
         } catch (Exception e) {
+            // El fallo de envío sí cuenta como caída del servicio: una
+            // contraseña de aplicación caducada deja de enviar para siempre y
+            // nadie se enteraría, porque quien lo nota es el supervisor que no
+            // recibe el aviso de designación, y él no sabe que debía llegarle.
+            //
+            // Lo que NO se cuenta es el caso de arriba, el de «no está
+            // configurado»: eso es una decisión del despliegue —en desarrollo el
+            // correo no se configura a propósito— y no una avería. Tratarlo como
+            // caída llenaría el log de informes para el técnico en cada equipo de
+            // desarrollo.
+            salud.fallo(Servicio.CORREO, e.getClass().getSimpleName() + ": " + e.getMessage());
             throw new IllegalStateException("No se pudo enviar el correo: " + e.getMessage(), e);
         }
     }

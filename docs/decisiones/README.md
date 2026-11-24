@@ -64,3 +64,4 @@ parte del valor.
 | [014](./ADR-014-salir-de-spring-boot-3-5.md) | Cuándo y cómo salir de Spring Boot 3.5 | Aceptada (ejecutada el 28-10-2026) |
 | [015](./ADR-015-trabajo-sin-conexion-del-supervisor.md) | Trabajo sin conexión del supervisor (sustituye la decisión de la 001) | Aceptada (puntos 1, 3, 4 y 5 ejecutados el 30-10-2026) |
 | [016](./ADR-016-propagacion-entre-equipos.md) | Que dos equipos se vean casi al instante | Aceptada (ejecutada el 03-11-2026) |
+| [017](./ADR-017-actualizacion-automatica.md) | Que el servidor y la aplicación se actualicen solos | Aceptada (ejecutada el 10-11-2026) |

@@ -1,0 +1,36 @@
+# Cuándo se respalda la base de SICOT.
+#
+# POR QUÉ ESTO EXISTE, Y NO BASTA LA LÍNEA DEL CRON
+# -------------------------------------------------
+# ADR-002 compromete un RPO de 24 h apoyado en «respaldo diario, cron 02:00».
+# El 11-11-2026 se revisó el servidor del Centro y llevaba **seis días sin un
+# solo respaldo**, con el cron bien puesto y activo. La causa no era el script
+# ni el cron: era que **ese equipo está apagado a las 02:00**. Se prende por la
+# mañana —08:01, 08:34, 10:18 fueron los últimos arranques— y se apaga por la
+# noche. Y cron, cuando se pierde una corrida porque la máquina no estaba, no
+# la recupera: la salta y espera al día siguiente, para siempre.
+#
+# `Persistent=true` es justo lo que arregla eso: systemd guarda cuándo corrió
+# por última vez y, si al encender descubre que la cita se perdió, la ejecuta
+# enseguida. Es el mismo mecanismo que hace que sicot-auto-actualizar.timer sí
+# funcione en este servidor mientras el respaldo no lo hacía.
+#
+# Se mantiene la cita a las 02:00 que promete el ADR, para el día en que el
+# servidor se quede encendido; `Persistent=true` cubre el caso real de hoy.
+#
+# RandomizedDelaySec evita que el respaldo arranque en el mismo instante que
+# todo lo demás que se dispara al encender el equipo —los contenedores, la
+# comprobación de versión nueva— y compita con ellos por el disco.
+#
+# La hora es la del sistema (America/Bogota en el servidor del Centro).
+[Unit]
+Description=SICOT — temporizador del respaldo diario
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=sicot-respaldo.service
+
+[Install]
+WantedBy=timers.target

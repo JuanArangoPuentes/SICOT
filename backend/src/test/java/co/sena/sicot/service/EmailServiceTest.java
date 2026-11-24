@@ -47,4 +47,37 @@ class EmailServiceTest {
                 .doesNotContain("tus datos")
                 .doesNotContain("cámbiala");
     }
+
+    /**
+     * El servidor del Centro llevaba desde el primer despliegue con
+     * {@code MAIL_USERNAME=replace_me@gmail.com}, el marcador de
+     * {@code .env.example}. No está en blanco, así que pasaba por configuración:
+     * el sistema se creía con correo y, en vez de descartar las tareas con un
+     * motivo claro, habría intentado autenticarse en Gmail con una contraseña
+     * falsa — y el primero en notarlo habría sido un supervisor esperando unas
+     * credenciales que nunca iban a llegar.
+     */
+    @Test
+    void elMarcadorDeEjemploSinRellenarNoCuentaComoCorreoConfigurado() {
+        EmailService servicio = new EmailService(mock(JavaMailSender.class));
+        ReflectionTestUtils.setField(servicio, "remitenteConfigurado", "replace_me@gmail.com");
+
+        assertThat(servicio.estaConfigurado()).isFalse();
+    }
+
+    @Test
+    void sinRemitenteTampocoCuenta() {
+        EmailService servicio = new EmailService(mock(JavaMailSender.class));
+        ReflectionTestUtils.setField(servicio, "remitenteConfigurado", "   ");
+
+        assertThat(servicio.estaConfigurado()).isFalse();
+    }
+
+    @Test
+    void unaCuentaDeVerdadSiCuenta() {
+        EmailService servicio = new EmailService(mock(JavaMailSender.class));
+        ReflectionTestUtils.setField(servicio, "remitenteConfigurado", "notificaciones@sena.edu.co");
+
+        assertThat(servicio.estaConfigurado()).isTrue();
+    }
 }
