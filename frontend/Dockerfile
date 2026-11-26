@@ -51,7 +51,36 @@ RUN npm run build
 # (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
 # expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
 # imágenes del CI marcó, y la 1.30.6 las corrige.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+#
+# ── OJO CON EL NOMBRE DE LA IMAGEN (26-11-2026) ────────────────────────────
+#
+# Hasta hoy esto decía `nginxinc/nginx-unprivileged`. Ese repositorio de Docker
+# Hub DEJÓ DE PUBLICAR el 19-10-2026: su última etiqueta estable es
+# 1.30.6-alpine, la que estaba aquí. Las imágenes se movieron a
+# `nginx/nginx-unprivileged`, que el 23-11-2026 ya publicaba 1.30.8 en estable
+# y 1.31.10 en mainline.
+#
+# Eso es lo que nos dejó clavados en una imagen sin parches sin que nada lo
+# dijera: Dependabot vigila la etiqueta del repositorio ANTIGUO, que ya no se
+# mueve, así que nunca iba a proponer la 1.30.7. Un repositorio congelado y un
+# repositorio al día se parecen mucho desde fuera — no hay aviso, solo deja de
+# haber etiquetas nuevas.
+#
+# 1.30.8 desde el 26-11-2026, y con ella se cierran las NUEVE CVE de nginx que
+# el escaneo del 20-11-2026 encontró en 1.30.6-r1, seis de ellas CRÍTICAS o
+# altas: uso después de liberar en el proxy de correo (CVE-2026-113425), en
+# HTTP/3 (-121810), en HTTP/2 (-123633) y en el resolutor (-123634); corrupción
+# de memoria en el control de flujo de HTTP/2 (-123007); bucle infinito leyendo
+# el cuerpo sobre TLS 1.3 (-118899); y -120967, -123640 y -125283. Las nueve
+# tienen el mismo arreglo, y nginx.org/en/security_advisories.html dice en
+# todas, literal: «Not vulnerable: 1.31.9+, 1.30.7+». Por eso la rama 1.31 NO
+# era la salida: su última imagen publicada en `nginxinc` era 1.31.7, dentro
+# del rango vulnerable («Vulnerable: …-1.31.8»).
+#
+# Se queda en la rama ESTABLE, que es lo que este servidor debe servir; la
+# excepción fechada que estas CVE tenían en .trivyignore se fue con este
+# cambio.
+FROM nginx/nginx-unprivileged:1.30.8-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
