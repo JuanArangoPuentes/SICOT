@@ -76,11 +76,10 @@ test.describe('el supervisor recorre el proceso GCCON-P-010', () => {
 
     // ── 1. El expediente es el de la plantilla GCCON-P-010, no una maqueta ──
     await page.locator('[data-tour="nav-contrato"]').click()
-    // Por el rol y no por la etiqueta: la fila es un div con role="button"
-    // (propsDePulsable), porque lleva bloques dentro y un <button> no puede
-    // contenerlos. Lo que importa a quien usa teclado o lector de pantalla
-    // es el rol, la parada de tabulación y que responda a Enter y Espacio.
-    const pasos = page.locator('.step-row[role="button"]')
+    // Por la etiqueta: la fila ES un <button> (ADR-018). Buscarla así es lo
+    // que impide que vuelva a ser un div, que es el defecto que esta prueba
+    // existe para que no vuelva.
+    const pasos = page.locator('button.step-row')
     await expect(pasos).toHaveCount(6, { timeout: 20_000 })
     await expect(pasos.nth(0)).toContainText('Designación de la supervisión')
     await expect(pasos.nth(1)).toContainText('Acta de Inicio')
@@ -154,15 +153,15 @@ test.describe('el supervisor recorre el proceso GCCON-P-010', () => {
     // si falla, lo que está roto es la accesibilidad, no el proceso.
     await loginComo(page, 'SUPERVISOR')
     await page.locator('[data-tour="nav-contrato"]').click()
-    const pasos = page.locator('.step-row[role="button"]')
+    const pasos = page.locator('button.step-row')
     await expect(pasos).toHaveCount(6, { timeout: 20_000 })
 
     for (let i = 0; i < 6; i++) {
       const paso = pasos.nth(i)
       const abiertoAlEntrar = (await paso.getAttribute('aria-expanded')) === 'true'
       await paso.focus()
-      // Espacio además de Enter: un botón responde a los dos, y un div sin
-      // manejo de teclado no responde a ninguno.
+      // Espacio además de Enter: un <button> responde a los dos de serie, y
+      // un div no responde a ninguno.
       await page.keyboard.press(abiertoAlEntrar ? 'Enter' : 'Space')
       await expect(paso).toHaveAttribute('aria-expanded', String(!abiertoAlEntrar))
     }

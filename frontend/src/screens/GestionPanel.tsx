@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import AppShell, { type NavGroup } from '@/components/AppShell'
-import { Chip, Modal, propsDePulsable, type ChipType } from '@/components/ui'
+import { Chip, Modal, type ChipType } from '@/components/ui'
 import {
   IconCheckCircle,
   IconClipboardList,
@@ -1130,9 +1130,19 @@ export default function GestionPanel({
                   handleFilesChosen(f)
                 }}
               />
-              <div
-                {...propsDePulsable(handleFileSelect)}
+              {/* Un <button>, por la regla de la ADR-018: abre el selector de
+                  archivos, y como <div> no había forma de cargar un documento
+                  sin ratón. Los estilos propios del botón se anulan aquí para
+                  que siga viéndose como la zona de arrastre que era. */}
+              <button
+                type="button"
+                onClick={handleFileSelect}
                 style={{
+                  display: 'block',
+                  width: '100%',
+                  background: 'none',
+                  font: 'inherit',
+                  color: 'inherit',
                   border: '2px dashed var(--border)',
                   borderRadius: 10,
                   padding: '40px 20px',
@@ -1144,14 +1154,16 @@ export default function GestionPanel({
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border)')}
               >
                 <IconFileText size={34} style={{ color: 'var(--text-muted)', margin: '0 auto 12px' }} />
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14, margin: 0 }}>
+                {/* <span> y no <p>: dentro de un botón, un párrafo deja el HTML
+                    inválido. `display: block` le da el mismo comportamiento. */}
+                <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: 14 }}>
                   Haga clic para seleccionar uno o varios documentos
                   <br />
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     PDF o Word (.docx) — hasta 6 archivos y 20 MB entre todos
                   </span>
-                </p>
-              </div>
+                </span>
+              </button>
               <p style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 12, textAlign: 'center' }}>
                 SICOT lee los documentos que cargue y combina lo que encuentre en todos para proponer los datos del
                 contrato — usted los revisa, corrige y confirma antes de crear el contrato. Los archivos quedan adjuntos

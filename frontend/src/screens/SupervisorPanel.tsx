@@ -47,7 +47,7 @@ import {
   EmptyContractState,
   ErrorContratoState,
 } from '@/components/supervisor/EstadosSinContrato'
-import { SectionHeader, StageJourney, StatCard, propsDePulsable, type LiveAlert, type Stage } from '@/components/ui'
+import { SectionHeader, StageJourney, StatCard, type LiveAlert, type Stage } from '@/components/ui'
 import {
   AvatarIcon,
   IconBell,
@@ -1741,7 +1741,20 @@ export default function SupervisorPanel({
                       borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--border)',
                     }}
                   >
-                    <div className="step-row" aria-expanded={isOpen} {...propsDePulsable(() => toggleStep(step.id))}>
+                    {/* Un <button>, por la regla de la ADR-018. Plegar y
+                        desplegar un paso es la navegación principal del panel
+                        del supervisor: con un <div onClick> no se alcanzaba
+                        con el teclado, y quien no usa ratón no podía abrir
+                        ningún paso del proceso. `aria-expanded` dice si está
+                        abierto. El aspecto de la fila lo devuelve .step-row en
+                        index.css; lo vigila la prueba de extremo a extremo
+                        «los seis pasos se pueden abrir y cerrar sin ratón». */}
+                    <button
+                      type="button"
+                      className="step-row"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleStep(step.id)}
+                    >
                       <StepCircle n={step.id} status={step.status} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
@@ -1794,7 +1807,7 @@ export default function SupervisorPanel({
                       >
                         ▼
                       </span>
-                    </div>
+                    </button>
 
                     {isOpen && (
                       <div style={{ borderTop: '1px solid var(--border)', padding: '8px 8px 12px' }}>

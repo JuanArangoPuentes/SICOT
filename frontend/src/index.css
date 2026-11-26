@@ -871,6 +871,16 @@ input[type='radio'] {
   cursor: pointer;
   border-radius: 8px;
   transition: background var(--t);
+  /* La fila es un <button> (ADR-018). Estas cinco líneas deshacen el aspecto
+     que el navegador le da por defecto a un botón —fondo gris, borde, texto
+     centrado y la fuente del sistema— y dejan la fila exactamente como se
+     veía. El anillo de foco NO se toca: es lo que hace que el cambio sirva. */
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 .step-row:hover {
   background: rgba(255, 255, 255, 0.035);

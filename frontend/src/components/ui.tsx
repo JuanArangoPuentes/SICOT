@@ -608,34 +608,6 @@ export function Modal({
   )
 }
 
-/**
- * Convierte en pulsable de verdad un elemento que no es un `<button>`.
- *
- * Existe por MDL-151. Dos zonas de la interfaz eran un `<div onClick>`: la
- * zona para elegir documentos del alta de contratos y las filas de los pasos
- * del expediente del supervisor. Quien no usa ratón no tenía ninguna forma de
- * activarlas — ni tabulando, ni con Enter: para el teclado y para un lector de
- * pantalla simplemente no existían.
- *
- * No se convirtieron en `<button>` porque su contenido son párrafos y bloques,
- * y un `<button>` no puede contenerlos sin dejar el HTML inválido. Esto da lo
- * que un botón nativo trae solo: el rol, la parada de tabulación y Enter y
- * Espacio.
- */
-export function propsDePulsable(accion: () => void) {
-  return {
-    role: 'button' as const,
-    tabIndex: 0,
-    onClick: accion,
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key !== 'Enter' && e.key !== ' ') return
-      // Sin esto, Espacio además desplaza la página.
-      e.preventDefault()
-      accion()
-    },
-  }
-}
-
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label style={{ display: 'block', marginBottom: 12 }}>
