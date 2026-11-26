@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 # ESTE ARCHIVO ES UNA PLANTILLA, NO UNA CONFIGURACIÓN LISTA
 #
-# La imagen `nginxinc/nginx-unprivileged` procesa al arrancar todo lo que
+# La imagen `nginx/nginx-unprivileged` procesa al arrancar todo lo que
 # encuentre en /etc/nginx/templates/*.template: sustituye las variables de
 # entorno con `envsubst` y escribe el resultado en /etc/nginx/conf.d/. Por eso
 # frontend/Dockerfile copia este archivo a
