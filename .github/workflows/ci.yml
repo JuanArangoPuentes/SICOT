@@ -168,8 +168,26 @@ jobs:
         # `npm run format`.
         run: npm run format:check
 
-      - name: Pruebas
-        run: npm run test:run
+      - name: Pruebas con cobertura
+        # `test:coverage` y no `test:run`. El script existía desde el principio
+        # y NO lo corría ningún workflow: se podía medir y nadie medía, así que
+        # nada detectaba un archivo que entrara sin una sola prueba. Había dos,
+        # al 0 %: `NewUserModal.tsx` y `ResetPasswordModal.tsx`, justo las dos
+        # pantallas que deciden quién entra al sistema.
+        #
+        # Los umbrales viven en `vite.config.ts`, unos puntos por debajo de lo
+        # medido, igual que el de JaCoCo en el backend: el objetivo no es empujar
+        # la cifra hacia arriba, es impedir que baje sin que nadie se entere.
+        run: npm run test:coverage
+
+      - name: Publicar informe de cobertura del frontend
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cobertura-frontend
+          path: frontend/coverage/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Compilar
         run: npm run build

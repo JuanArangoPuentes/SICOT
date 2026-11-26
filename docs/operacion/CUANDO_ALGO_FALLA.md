@@ -153,3 +153,96 @@ que contarle a quien la usa. Devuelve lista vacía cuando todo va bien.
 - `sicot.respaldo.antiguedad.horas` — −1 si no se pudo determinar.
 
 La señal tiene que existir también donde no la lee una persona.
+
+## Cuando lo que se cae es el acceso: nadie puede entrar como administrador
+
+Esto no lo detecta ninguna vigilancia, porque no es un fallo del sistema: el
+sistema funciona y simplemente nadie tiene la llave. Se documenta aquí porque
+**es el único fallo de SICOT del que no se puede salir desde SICOT**, y hasta el
+20-11-2026 no estaba escrito en ninguna parte.
+
+### Por qué puede pasar
+
+- `AdministradorInicial` crea la cuenta inicial **solo si la tabla `usuarios`
+  está vacía**. En cuanto existe un usuario, poner otra vez
+  `SICOT_ADMIN_EMAIL` y `SICOT_ADMIN_PASSWORD` en el `.env` no hace nada: el
+  componente comprueba `count() > 0` y se calla. Es lo correcto —si no, cada
+  arranque podría inyectar una cuenta— y significa que no es una vía de
+  recuperación.
+- No hay «olvidé mi contraseña». Es deliberado: un restablecimiento por correo
+  convierte la bandeja de entrada en la llave del expediente, y además el
+  correo del Centro no siempre está configurado. Los restablecimientos los hace
+  un administrador desde `PUT /api/usuarios/{id}`.
+- Conclusión: **con un solo administrador, perder esa contraseña deja el
+  sistema sin administrar.** Nadie puede crear cuentas, ni restablecer claves,
+  ni asignar firmas electrónicas.
+
+### Lo primero: que no pase
+
+**Cree una segunda cuenta de ADMINISTRADOR al montar el Centro**, de otra
+persona, y guarde las dos contraseñas donde se guardan los secretos del
+despliegue (ver `GESTION_DE_SECRETOS.md`). Es un minuto de trabajo y es la
+diferencia entre un problema y un incidente.
+
+El sistema ya impide quedarse sin ninguno: `UsuarioService` rechaza desactivar
+al último administrador o cambiarle el rol. Lo que no puede impedir es que su
+dueño olvide la contraseña.
+
+### Si ya pasó: restablecerla contra la base
+
+Hace falta acceso al servidor. El hash hay que generarlo con BCrypt, porque la
+columna guarda un hash y no una contraseña: escribir texto plano ahí deja la
+cuenta inservible (ningún inicio de sesión coincidiría) y además no da ningún
+aviso.
+
+**1. Genere el hash** de la contraseña nueva, con el mismo coste que usa SICOT
+(10). Desde el propio servidor, sin instalar nada —Python3 con `bcrypt` o, si
+no está, el contenedor del backend ya trae Java y Spring Security:
+
+```bash
+docker compose exec backend java -e 'System.out.println(new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder(10).encode("LA-CONTRASEÑA-NUEVA"))'
+```
+
+Si esa forma no está disponible en su versión de Java, sirve igual cualquier
+equipo con Python:
+
+```bash
+python3 -c 'import bcrypt,getpass; print(bcrypt.hashpw(getpass.getpass().encode(), bcrypt.gensalt(10, prefix=b"2a")).decode())'
+```
+
+El hash empieza por `$2a$10$` y tiene 60 caracteres. La contraseña tiene que
+cumplir la política de SICOT (12 caracteres como mínimo, y que no sea una de las
+comunes — ver `PoliticaDeContrasena`); nada la valida por este camino, así que
+el cuidado lo pone usted.
+
+**2. Póngalo en la fila, y cierre las sesiones viejas.** Lo segundo es tan
+importante como lo primero: `version_credenciales` es lo que invalida los tokens
+emitidos antes (V19). Sin incrementarlo, cualquier token robado de esa cuenta
+sigue valiendo hasta ocho horas.
+
+```bash
+docker compose exec db psql -U sicot -d sicot -c \
+  "UPDATE usuarios SET password = '\$2a\$10\$EL-HASH-GENERADO', version_credenciales = version_credenciales + 1 WHERE email = 'nombre.apellido@sena.edu.co';"
+```
+
+Ojo con el `$` en el shell: van escapados (`\$`), o use `psql` interactivo y
+pegue el hash tal cual.
+
+**3. Compruebe que la fila es la que cree**, antes y después. Un `UPDATE` sin
+`WHERE` correcto cambia la contraseña de todo el mundo:
+
+```bash
+docker compose exec db psql -U sicot -d sicot -c \
+  "SELECT id, email, rol, activo, version_credenciales FROM usuarios WHERE rol = 'ADMINISTRADOR';"
+```
+
+**4. Entre y cree la segunda cuenta de administrador**, para no repetir esto.
+
+### Lo que NO hay que hacer
+
+- **No vacíe la tabla `usuarios`** para que `AdministradorInicial` vuelva a
+  sembrar. `registros.usuario_id` es `ON DELETE SET NULL`: borrar las cuentas
+  deja la bitácora entera sin autor, y es irreversible. El expediente pierde
+  justo lo que lo hace un expediente.
+- **No use `docker compose down -v`.** Borra el volumen de Postgres: la base
+  completa, no solo los usuarios.

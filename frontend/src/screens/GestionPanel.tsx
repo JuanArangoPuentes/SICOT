@@ -1018,8 +1018,6 @@ export default function GestionPanel({
                 transition: 'background 0.1s',
                 cursor: 'default',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--accent-soft)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
             >
               <span
                 data-col="Contrato"

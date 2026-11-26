@@ -20,6 +20,25 @@
 #   3. FALLA RUIDOSAMENTE. `set -euo pipefail` y códigos de salida distintos
 #      de cero para que cron/systemd puedan avisar. Un script de respaldo que
 #      falla en silencio es peor que no tenerlo, porque además da confianza.
+#   4. CIFRA el volcado, si se configura una clave. El `.dump` es la base
+#      ENTERA: nombres, correos, teléfonos, NIT, representantes legales y las
+#      coordenadas GPS de las fotos de evidencia (V17). Son datos personales
+#      bajo la Ley 1581 de 2012 y hasta el 20-11-2026 quedaban en claro en el
+#      disco del servidor. Los SECRETOS del despliegue ya tenían procedimiento
+#      —`gpg --symmetric`, copia fuera del servidor, borrar el original: ver
+#      docs/operacion/BACKUP_Y_RESTAURACION.md— y la base, que es el dato
+#      sensible de verdad, no lo tenía.
+#   5. COPIA FUERA DEL SERVIDOR, si se configura un destino. Un respaldo en el
+#      mismo disco que la base cubre el borrado accidental y la migración mal
+#      hecha, que son los casos frecuentes, y NO cubre el único irreversible:
+#      que el disco no vuelva. ADR-002 acepta explícitamente perder el trabajo
+#      del día; no decía qué pasa si no hay disco al que volver.
+#
+# Las dos son OPCIONALES y están apagadas si no se configuran, a propósito: el
+# script tiene que seguir corriendo tal cual en el servidor del Centro mientras
+# alguien decide dónde guardar la clave y a dónde copiar. Lo que no hace es
+# callarse: sin cifrado y sin copia remota lo DICE en cada ejecución, porque un
+# control que falta en silencio es el que nadie añade nunca.
 #
 # Uso:
 #   ./scripts/respaldo-sicot.sh [directorio-destino]
@@ -47,6 +66,30 @@ DESTINO="${1:-./respaldos}"
 # Cuántos respaldos conservar. 14 diarios ≈ dos semanas, suficiente para
 # detectar un problema que se descubre tarde sin que el disco crezca sin fin.
 CONSERVAR="${SICOT_BACKUPS_A_CONSERVAR:-14}"
+
+# ── Cifrado (opcional) ─────────────────────────────────────────────────────
+# Dos formas, y se prefiere la primera:
+#
+#   SICOT_RESPALDO_GPG_DESTINATARIO  — clave PÚBLICA (id o correo de una clave
+#       ya importada). Es la mejor: en el servidor solo queda la pública, así
+#       que quien se lleve el disco NO puede descifrar nada. La privada vive
+#       donde viva el técnico.
+#   SICOT_RESPALDO_GPG_CLAVE_ARCHIVO — archivo con una frase de paso, para
+#       cifrado simétrico. Más fácil de montar y peor: la frase está en el
+#       mismo equipo que el respaldo. Sirve cuando el destino remoto es lo que
+#       se quiere proteger y el servidor ya es de confianza.
+#
+# Sin ninguna de las dos no se cifra y se avisa.
+GPG_DESTINATARIO="${SICOT_RESPALDO_GPG_DESTINATARIO:-}"
+GPG_CLAVE_ARCHIVO="${SICOT_RESPALDO_GPG_CLAVE_ARCHIVO:-}"
+
+# ── Copia fuera del servidor (opcional) ────────────────────────────────────
+# Destino de `rsync`: una ruta local en OTRO disco montado
+# (/mnt/respaldos/sicot/) o un destino remoto por SSH
+# (respaldos@otro-equipo:/srv/sicot/). Con SSH hace falta una clave sin frase
+# de paso para el usuario que corre el cron; el procedimiento está en
+# docs/operacion/BACKUP_Y_RESTAURACION.md.
+DESTINO_REMOTO="${SICOT_RESPALDO_DESTINO_REMOTO:-}"
 
 marca() { date '+%Y-%m-%d %H:%M:%S'; }
 log()   { echo "[$(marca)] $*"; }
@@ -163,8 +206,99 @@ mv "$PARCIAL" "$ARCHIVO"
 TAMANIO="$(du -h "$ARCHIVO" | cut -f1)"
 log "Respaldo verificado: $ARCHIVO ($TAMANIO)"
 
+# ── Cifrado ────────────────────────────────────────────────────────────────
+#
+# AQUÍ Y NO ANTES, y el orden no es un detalle: la verificación necesita LEER
+# el volcado con `pg_restore`, y un archivo cifrado no se puede leer. Cifrar
+# primero habría dejado el script "verificando" un archivo que ningún
+# pg_restore puede abrir — es decir, sin verificar nada y sin que se notara.
+#
+# El archivo en claro se borra en cuanto el cifrado termina bien. Si algo falla,
+# NO se borra: perder el respaldo por un fallo del cifrado sería cambiar un
+# problema de confidencialidad por uno de disponibilidad, que es peor.
+if [[ -n "$GPG_DESTINATARIO" || -n "$GPG_CLAVE_ARCHIVO" ]]; then
+    if ! command -v gpg >/dev/null 2>&1; then
+        error "Se pidió cifrar el respaldo pero no hay gpg instalado (apt-get install -y gnupg)."
+        error "El respaldo quedó SIN CIFRAR en $ARCHIVO."
+        exit 5
+    fi
+    CIFRADO="$ARCHIVO.gpg"
+    log "Cifrando el respaldo…"
+    if [[ -n "$GPG_DESTINATARIO" ]]; then
+        # --trust-model always: la clave la importó a mano quien montó el
+        # servidor, así que su validez ya está decidida fuera de aquí; sin esto
+        # gpg pide confirmación por consola y en un cron se queda colgado.
+        cifrar() {
+            gpg --batch --yes --quiet --trust-model always \
+                --recipient "$GPG_DESTINATARIO" --encrypt --output "$CIFRADO" "$ARCHIVO"
+        }
+    else
+        if [[ ! -r "$GPG_CLAVE_ARCHIVO" ]]; then
+            error "No se puede leer la frase de paso en $GPG_CLAVE_ARCHIVO."
+            error "El respaldo quedó SIN CIFRAR en $ARCHIVO."
+            exit 5
+        fi
+        cifrar() {
+            gpg --batch --yes --quiet --symmetric --cipher-algo AES256 \
+                --passphrase-file "$GPG_CLAVE_ARCHIVO" --output "$CIFRADO" "$ARCHIVO"
+        }
+    fi
+    if ! cifrar; then
+        error "El cifrado falló. El respaldo queda SIN CIFRAR en $ARCHIVO (no se borra: vale más que su secreto)."
+        rm -f "$CIFRADO"
+        exit 5
+    fi
+    if [[ ! -s "$CIFRADO" ]]; then
+        error "El cifrado produjo un archivo vacío. Se conserva el original SIN CIFRAR en $ARCHIVO."
+        rm -f "$CIFRADO"
+        exit 5
+    fi
+    rm -f "$ARCHIVO"
+    ARCHIVO="$CIFRADO"
+    log "Respaldo cifrado: $ARCHIVO"
+else
+    log "AVISO: el respaldo NO está cifrado. Contiene la base entera, con datos personales."
+    log "       Defina SICOT_RESPALDO_GPG_DESTINATARIO (clave pública, recomendado) o"
+    log "       SICOT_RESPALDO_GPG_CLAVE_ARCHIVO. Ver docs/operacion/BACKUP_Y_RESTAURACION.md."
+fi
+
+# ── Copia fuera del servidor ───────────────────────────────────────────────
+#
+# Se copia el archivo final —cifrado si se cifró— y se hace ANTES de rotar: así
+# el destino remoto recibe el respaldo del día aunque la rotación falle después.
+#
+# Un fallo aquí sale con código distinto de cero y por tanto systemd marca la
+# unidad como fallida, que es lo que hace que alguien se entere. El respaldo
+# local SÍ se conservó, y el mensaje lo dice para que nadie piense que hay que
+# volver a lanzarlo a mano.
+if [[ -n "$DESTINO_REMOTO" ]]; then
+    if ! command -v rsync >/dev/null 2>&1; then
+        error "Se pidió copiar el respaldo fuera del servidor pero no hay rsync (apt-get install -y rsync)."
+        error "El respaldo local está bien, en $ARCHIVO; lo que falta es la copia remota."
+        exit 6
+    fi
+    log "Copiando a $DESTINO_REMOTO…"
+    # --partial para que una copia cortada se reanude en vez de empezar de cero;
+    # --chmod para que el archivo llegue con los mismos permisos restrictivos
+    # que el umask 077 le dio aquí, sea cual sea el umask del destino.
+    if ! rsync --archive --partial --chmod=F600 "$ARCHIVO" "$DESTINO_REMOTO"; then
+        error "La copia a $DESTINO_REMOTO falló. El respaldo local está bien, en $ARCHIVO."
+        error "Mientras esto no funcione, un disco perdido se lleva todo: revise la ruta, la red y la clave SSH."
+        exit 6
+    fi
+    log "Copia fuera del servidor: hecha."
+else
+    log "AVISO: no hay copia fuera del servidor. Un respaldo en el mismo disco que la base no"
+    log "       cubre el único fallo irreversible: que ese disco no vuelva. Defina"
+    log "       SICOT_RESPALDO_DESTINO_REMOTO (otro disco montado o un destino SSH)."
+fi
+
 # Rotación: se conservan los N más recientes por fecha de nombre.
-sobrantes="$(ls -1t "$DESTINO"/sicot-*.dump 2>/dev/null | tail -n "+$((CONSERVAR + 1))" || true)"
+# Se listan los dos patrones: los `.dump` de antes del cifrado y los `.dump.gpg`
+# de después. Sin `.dump.gpg` en la rotación, los cifrados se acumularían para
+# siempre y el disco se llenaría en silencio — justo lo que la rotación evita.
+sobrantes="$(ls -1t "$DESTINO"/sicot-*.dump "$DESTINO"/sicot-*.dump.gpg 2>/dev/null \
+    | tail -n "+$((CONSERVAR + 1))" || true)"
 if [[ -n "$sobrantes" ]]; then
     echo "$sobrantes" | while read -r viejo; do
         log "Rotando (eliminando) respaldo antiguo: $viejo"
@@ -172,4 +306,4 @@ if [[ -n "$sobrantes" ]]; then
     done
 fi
 
-log "Listo. Respaldos conservados: $(ls -1 "$DESTINO"/sicot-*.dump 2>/dev/null | wc -l)"
+log "Listo. Respaldos conservados: $(ls -1 "$DESTINO"/sicot-*.dump "$DESTINO"/sicot-*.dump.gpg 2>/dev/null | wc -l)"

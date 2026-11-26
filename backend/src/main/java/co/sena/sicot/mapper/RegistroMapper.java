@@ -20,6 +20,7 @@ public final class RegistroMapper {
                 r.getDescripcion(),
                 r.getFecha(),
                 r.getOrigen(),
+                r.getAgente(),
                 r.getHechoSinConexionEn());
     }
 }

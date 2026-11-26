@@ -481,7 +481,22 @@ export function Modal({
   return (
     <div
       role="presentation"
-      onClick={cerrarAlTocarFuera ? onClose : undefined}
+      // Solo cierra si el clic fue en el TELÓN y no dentro del diálogo.
+      //
+      // Antes el telón cerraba con cualquier clic y el diálogo paraba la
+      // propagación con un onClick propio. Funcionaba, y convertía la tarjeta
+      // del diálogo en un elemento «con manejador de clic» que no es
+      // interactivo: las reglas de accesibilidad lo señalan con razón, porque
+      // un lector de pantalla no tiene forma de saber que ese clic no hace
+      // nada. Comparar el origen del evento hace lo mismo sin inventar un
+      // elemento pulsable.
+      onClick={
+        cerrarAlTocarFuera
+          ? (e) => {
+              if (e.target === e.currentTarget) onClose()
+            }
+          : undefined
+      }
       style={{
         position: 'fixed',
         inset: 0,
@@ -499,13 +514,6 @@ export function Modal({
         padding: `calc(16px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) calc(16px + env(safe-area-inset-left, 0px))`,
       }}
     >
-      {/* El `onClick` de la tarjeta no hace nada: solo evita que el clic siga
-          hasta el telón y cierre el diálogo. No necesita equivalente de
-          teclado porque no es una acción — el diálogo se cierra con Escape
-          (unas líneas más arriba), con el «×» y con Cancelar, y el foco está
-          atrapado dentro. Darle manejo de teclado sería una parada de
-          tabulación de más antes de llegar al contenido. */}
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions */}
       <div
         className="card"
         role="dialog"
@@ -513,7 +521,6 @@ export function Modal({
         aria-labelledby="modal-title"
         ref={dialogoRef}
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
         style={{
           // El foco llega al diálogo por programa, no porque se pueda pulsar:
           // el anillo de foco alrededor de toda la tarjeta solo confundía.

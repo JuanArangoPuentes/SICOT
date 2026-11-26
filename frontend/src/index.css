@@ -1396,3 +1396,21 @@ input[type='radio'] {
     transform: rotate(360deg);
   }
 }
+
+/* Resaltado de la fila de la tabla de contratos al pasar por encima.
+ *
+ * Estaba en JavaScript, como onMouseEnter/onMouseLeave que escribían
+ * `style.background` a mano (GestionPanel.tsx). Dos motivos para traerlo aquí:
+ *
+ *  - Un resaltado es presentación, y ponerlo con manejadores de ratón convierte
+ *    la fila en un elemento «con interacción» que no es interactivo; las reglas
+ *    de accesibilidad lo señalan con razón, porque nada le dice a un lector de
+ *    pantalla que esos eventos no hacen nada.
+ *  - En CSS se puede añadir `:focus-within` gratis, y eso sí es una mejora
+ *    real: quien recorre la tabla con el teclado ve resaltada la fila en la que
+ *    está. Con JavaScript solo se resaltaba para quien usa ratón.
+ */
+.tabla-fila:hover,
+.tabla-fila:focus-within {
+  background: var(--accent-soft);
+}

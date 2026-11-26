@@ -27,6 +27,7 @@ const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { alRenovarSesion, clearSession, getSession } from '@/services/session'
+import { cerrarSesionEnElServidor } from '@/services/cuentaService'
 import { vigilarLaCola } from '@/services/colaDeCambios'
 import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
 import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
@@ -265,6 +266,12 @@ function AppInner() {
   }
 
   const logout = () => {
+    // Primero se avisa al servidor y después se limpia el equipo: `clearSession`
+    // borra el token del cliente HTTP, así que en el orden inverso la petición
+    // saldría sin credenciales y el servidor no sabría qué sesión cerrar. No se
+    // espera la respuesta: la pantalla sale ya, y el aviso viaja en paralelo
+    // (ver cerrarSesionEnElServidor, que nunca lanza).
+    void cerrarSesionEnElServidor()
     clearSession()
     setSession(null)
     setTourActive(false)

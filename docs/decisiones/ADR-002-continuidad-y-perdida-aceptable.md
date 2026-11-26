@@ -55,13 +55,37 @@ insuficiente, estas son las opciones **en el orden en que conviene tomarlas**:
 
 | Si el RPO debe bajar a… | Qué hacer | Costo operativo |
 | --- | --- | --- |
-| **1 hora** | Cambiar el cron a cada hora (`0 * * * *`) | Ninguno — la base son megabytes |
+| **1 hora** | Cambiar el cron a cada hora (`0 * * * *`) | Bajo HOY, y depende del tamaño — ver la nota de abajo |
 | **Minutos** | Archivado continuo de WAL (pgBackRest) | Medio: un componente más que aprender y vigilar |
 | **Casi cero** | Réplica en caliente en un segundo host | Alto: un segundo servidor y sus procedimientos |
 
 Se elige el escalón más bajo a propósito. Un equipo de tres personas sostiene
 mejor un respaldo diario que **sí se verifica** que un archivado continuo que
 nadie sabe restaurar bajo presión.
+
+**Sobre el «coste ninguno» de la primera fila.** Aquí decía «Ninguno — la base
+son megabytes», y eso era cierto y dejará de serlo. Los documentos del
+expediente viven **dentro** de la base (`documentos.contenido`, `bytea`), con un
+tope de 20 MB por archivo, y [ADR-003](./ADR-003-umbral-de-migracion-de-documentos.md)
+fija el umbral de migración de esa tabla en **5 GB**. Con la base en 27,6 MB
+(noviembre de 2026) un volcado por hora no cuesta nada; con la tabla cerca de su
+umbral, cada volcado son varios GB y la verificación los lee **enteros**
+(`pg_restore -f -`), así que una pasada horaria deja de ser gratis y empieza a
+competir con el trabajo del día.
+
+Las dos decisiones son correctas por separado y se contradicen juntas, así que
+conviene leerlas juntas: **antes de bajar el RPO, mire
+`sicot.almacenamiento.umbral-gb` y lo que mide
+`VigilanciaDeAlmacenamiento`.** Si la tabla ya está crecida, el escalón correcto
+no es «más veces el mismo volcado», es sacar los documentos de la fila (ADR-003)
+y entonces volver a mirar.
+
+**Desde el 20-11-2026 el respaldo puede además cifrarse y copiarse fuera del
+servidor** (`SICOT_RESPALDO_GPG_DESTINATARIO`, `SICOT_RESPALDO_DESTINO_REMOTO`).
+Eso no cambia el RPO, cambia a qué fallo sobrevive: hasta entonces el único
+respaldo vivía en el mismo disco que la base, de modo que este ADR aceptaba
+perder el trabajo del día y no decía nada sobre perder el disco. Ver
+`docs/operacion/BACKUP_Y_RESTAURACION.md`.
 
 ## Cuándo revisar
 

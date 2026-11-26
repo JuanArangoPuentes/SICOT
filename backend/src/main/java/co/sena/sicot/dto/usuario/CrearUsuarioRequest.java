@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import co.sena.sicot.security.PoliticaDeContrasena;
 
 public record CrearUsuarioRequest(
         @NotBlank(message = "El nombre es obligatorio.")
@@ -19,7 +20,16 @@ public record CrearUsuarioRequest(
 
         @NotBlank(message = "La contraseña es obligatoria.")
         // 72: el tope de BCrypt, que además se cuenta en bytes (ver LimiteDeBcrypt).
-        @Size(min = 8, max = 72, message = "La contraseña debe tener entre 8 y 72 caracteres.")
+        // Solo el tope: el MÍNIMO lo exige @ContrasenaSegura, y no los dos a la
+        // vez. Con ambos, una contraseña corta producía dos violaciones para el
+        // mismo campo y el mapa `fieldErrors` se queda con la primera que
+        // llegue, que no es un orden garantizado: el mensaje que veía la
+        // persona cambiaba de una petición a otra.
+        @Size(max = 72, message = "La contraseña no puede superar 72 caracteres.")
+        // Largo mínimo, lista de bloqueo y secuencias: ver PoliticaDeContrasena.
+        // Hasta el 20-11-2026 el mínimo eran 8 y no había lista, así que
+        // «Password123» era una contraseña válida en este sistema.
+        @ContrasenaSegura
         // Se envía por correo y se pega en el inicio de sesión, que quita los
         // espacios de los extremos (AuthService): una contraseña que empezara o
         // terminara en espacio no se podría distinguir de un pegado descuidado.

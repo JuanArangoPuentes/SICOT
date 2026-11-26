@@ -4,6 +4,7 @@ import co.sena.sicot.dto.ia.ExtraccionContratoResponse;
 import co.sena.sicot.dto.ia.PlantillaDocumentoResponse;
 import co.sena.sicot.ia.ExtraccionContratoService;
 import co.sena.sicot.ia.PlantillaDocumentoIA;
+import co.sena.sicot.service.LimitadorDeArchivos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,7 +31,16 @@ public class IAController {
 
     private final ExtraccionContratoService extraccionContratoService;
 
-    public IAController(ExtraccionContratoService extraccionContratoService) {
+    /**
+     * Un solo permiso para toda la petición, aunque traiga varios archivos:
+     * entre todos no pueden pasar de {@code max-request-size}. Ver
+     * {@link LimitadorDeArchivos}.
+     */
+    private final LimitadorDeArchivos limitadorDeArchivos;
+
+    public IAController(ExtraccionContratoService extraccionContratoService,
+                        LimitadorDeArchivos limitadorDeArchivos) {
+        this.limitadorDeArchivos = limitadorDeArchivos;
         this.extraccionContratoService = extraccionContratoService;
     }
 
@@ -55,7 +65,8 @@ public class IAController {
     @PostMapping(value = "/extraer-contrato", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyRole('GESTION', 'ADMINISTRADOR')")
     public ResponseEntity<ExtraccionContratoResponse> extraerContrato(@RequestParam("archivos") List<MultipartFile> archivos) {
-        return ResponseEntity.ok(extraccionContratoService.extraer(archivos));
+        return ResponseEntity.ok(limitadorDeArchivos.ejecutar("extraer datos de la ficha",
+                () -> extraccionContratoService.extraer(archivos)));
     }
 
     @Operation(summary = "Documentos formales que SICOT arma y los datos que pide cada uno",

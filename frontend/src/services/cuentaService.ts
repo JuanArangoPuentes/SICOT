@@ -1,6 +1,6 @@
 // La cuenta de quien tiene la sesión abierta, sea cual sea su rol.
 
-import { apiFetch } from './api/client'
+import { apiFetch, hayTokenDeSesion } from './api/client'
 import { olvidarAccesoSinRed, recordarAcceso } from './accesoSinRed'
 import { renovarSesion } from './session'
 import type { AuthResponse } from './api/types'
@@ -35,4 +35,33 @@ export async function cambiarMiContrasena(
   // hacer esperar.
   void recordarAcceso(correo, contrasenaNueva, auth).catch(() => {})
   return auth
+}
+
+/**
+ * Cierra la sesión **en el servidor**: `POST /api/cuenta/cerrar-sesion`.
+ *
+ * Hasta el 20-11-2026 cerrar sesión era solo del cliente: se borraba el token
+ * de este equipo y seguía siendo válido en el servidor hasta ocho horas más
+ * (la duración del JWT). Quien lo hubiera copiado antes —de un equipo
+ * compartido del Centro, de un portátil que cambió de manos— seguía entrando
+ * con él, y quien pulsó «Cerrar sesión» tenía todos los motivos para creer que
+ * no.
+ *
+ * No lanza nunca. Es a propósito, y es la única decisión de peso de esta
+ * función: cerrar sesión en la pantalla tiene que ocurrir **siempre**, haya red
+ * o no. Si el aviso al servidor falla, el token se queda sin invalidar hasta
+ * que caduque —exactamente como antes— pero la persona sale de todos modos;
+ * negarle la salida porque el servidor no contesta sería peor que el problema
+ * que esto arregla.
+ *
+ * Una sesión abierta sin red (ADR-015, punto 4) no lleva token, así que no hay
+ * nada que cerrar allá y se omite la llamada.
+ */
+export async function cerrarSesionEnElServidor(): Promise<void> {
+  if (!hayTokenDeSesion()) return
+  try {
+    await apiFetch<void>('/api/cuenta/cerrar-sesion', { method: 'POST' })
+  } catch {
+    // Sin red, o el servidor rechazó: ver arriba. El cierre local sigue.
+  }
 }
