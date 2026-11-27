@@ -7,6 +7,19 @@
 
 # Hoy no hay ninguna excepción.
 #
+# Hasta el 26-11-2026 estaban aquí las NUEVE CVE de nginx 1.30.6-r1 que el
+# escaneo del 20-11-2026 encontró en la imagen del frontend (CVE-2026-113425,
+# -118899, -120967, -121810, -123007, -123633, -123634, -123640 y -125283),
+# con caducidad el 19-12-2026. Se fueron por el camino que esta misma entrada
+# señalaba como el bueno: subir la imagen de la rama estable.
+#
+# Lo que faltaba para poder hacerlo: `nginxinc/nginx-unprivileged` había
+# DEJADO DE PUBLICAR el 19-10-2026 —de ahí que no se encontrara ninguna
+# 1.30.7— y las imágenes se habían movido a `nginx/nginx-unprivileged`, que ya
+# tenía 1.30.8. El Dockerfile del frontend lo cuenta entero, porque el mismo
+# despiste puede repetirse con cualquier imagen base cuyo repositorio se
+# congele sin avisar.
+#
 # Hasta el 28-10-2026 estaban aquí CVE-2026-47884 y CVE-2026-47890, las dos
 # CRÍTICAS en org.springframework:spring-webmvc 6.2.19 (XsltView y Server-Sent
 # Events), con caducidad el 15-11-2026. Su única versión corregida era Spring
