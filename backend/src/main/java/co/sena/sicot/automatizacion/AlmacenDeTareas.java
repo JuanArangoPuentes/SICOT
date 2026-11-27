@@ -44,7 +44,7 @@ public class AlmacenDeTareas {
      * {@code RegistroService}: una cola sana acumula filas COMPLETADA sin
      * límite, y «ver las tareas» no puede significar cargar la tabla entera.
      */
-    private static final int MAX_TAREAS_LISTADO = 200;
+    public static final int MAX_TAREAS_LISTADO = 200;
 
     private final TareaAutomatizadaRepository tareaRepository;
     private final ContratoRepository contratoRepository;

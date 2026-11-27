@@ -40,7 +40,7 @@ public class ContratoService {
      * el día que se alcance el sistema siga respondiendo en lugar de degradarse
      * sin que nadie sepa por qué.
      */
-    private static final int MAX_CONTRATOS_LISTADO = 500;
+    public static final int MAX_CONTRATOS_LISTADO = 500;
 
     private final ContratoRepository contratoRepository;
     private final UsuarioRepository usuarioRepository;

@@ -12,6 +12,10 @@ logs/
 .claude-replay.*
 .tmp-*
 /test-results/
+# Informe de cobertura de vitest. Se genera en cada `npm run test:coverage`, que
+# desde el 20-11-2026 corre también en el CI: lo que se conserva es el artefacto
+# del job, no una copia en el repositorio.
+/coverage/
 /playwright-report/
 /blob-report/
 /playwright/.cache/

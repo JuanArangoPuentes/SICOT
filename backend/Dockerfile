@@ -36,7 +36,14 @@ WORKDIR /app
 # de servicio (CVE-2026-113351, -117610 y -118370) y Alpine publicó 2.10.0-r0.
 # Hay que subir el mínimo y no basta con volver a construir: `apk add` con una
 # condición que lo instalado ya cumple no actualiza nada.
-RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" \
+#
+# libfontenc (CI del 20-11-2026): la base trae 1.1.9-r0, con CVE-2026-109908
+# (HIGH, fallo de validación al parsear un archivo de fuentes), y Alpine
+# publicó 1.1.10-r0 en la rama v3.24. Viene con la pila de fuentes de la JRE,
+# que SICOT usa de verdad: PDFBox mide y dibuja texto al armar los documentos
+# formales y POI al generar el XLSX de la solicitud de pedido, así que no es un
+# paquete que se pueda quitar en vez de parchear.
+RUN apk add --no-cache "libexpat>=2.10.0-r0" "brotli-libs>=1.2.1-r0" "libfontenc>=1.1.10-r0" \
     && apk add --no-cache wget \
     && addgroup -S sicot && adduser -S sicot -G sicot
 
@@ -77,7 +84,21 @@ EXPOSE 8080
 #
 # UseContainerSupport está activo por defecto desde hace varias versiones; se
 # escribe igual porque es la premisa de la que depende MaxRAMPercentage.
-ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
+#
+# stdout.encoding / stderr.encoding — sin esto los logs PIERDEN LOS ACENTOS.
+# Desde el JDK 19 esas dos propiedades se derivan de la codificación nativa, y
+# en Alpine, que no trae locales, `LANG` viene vacío: la JVM resuelve
+# `native.encoding = ANSI_X3.4-1968` (ASCII) y cada tilde y cada eñe sale como
+# «?». Se ve en la salida de la propia suite:
+#     Extracci?n de 'acta.pdf' completada
+#     El modelo no respondi? para 'notificacion.pdf'
+# Todos los mensajes de SICOT están en español y están escritos uno por uno
+# para que el técnico del Centro entienda qué pasó sin leer el código; servirlos
+# mutilados tira a la basura justo ese trabajo. No se arregla con `ENV LANG`:
+# musl ignora los locales que no tiene instalados, así que se fija la propiedad
+# de la JVM, que es la que de verdad decide. `file.encoding` ya es UTF-8 por
+# defecto desde el JDK 18 (JEP 400) y no hace falta tocarlo.
+ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
 
 # El healthcheck vive también aquí, no solo en docker-compose.yml: así la
 # imagen se comporta igual cuando se despliega con otra herramienta

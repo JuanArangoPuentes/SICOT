@@ -8,6 +8,7 @@ import co.sena.sicot.entity.Documento;
 import co.sena.sicot.ia.GeneracionDocumentoService;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.DocumentoService;
+import co.sena.sicot.service.LimitadorDeArchivos;
 import co.sena.sicot.service.NombreDeDescarga;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,9 +46,20 @@ public class DocumentoController {
     private final DocumentoService documentoService;
     private final GeneracionDocumentoService generacionDocumentoService;
 
-    public DocumentoController(DocumentoService documentoService, GeneracionDocumentoService generacionDocumentoService) {
+    /**
+     * Acota cuántos archivos se mueven a la vez. Va en el controlador y no en
+     * el servicio a propósito: el permiso tiene que tomarse ANTES de que
+     * cualquier byte entre al heap, y el servicio recibe un {@code
+     * MultipartFile} que ya está leído. Ver {@link LimitadorDeArchivos}.
+     */
+    private final LimitadorDeArchivos limitadorDeArchivos;
+
+    public DocumentoController(DocumentoService documentoService,
+                               GeneracionDocumentoService generacionDocumentoService,
+                               LimitadorDeArchivos limitadorDeArchivos) {
         this.documentoService = documentoService;
         this.generacionDocumentoService = generacionDocumentoService;
+        this.limitadorDeArchivos = limitadorDeArchivos;
     }
 
     @Operation(summary = "Listar documentos de un contrato")
@@ -102,7 +114,8 @@ public class DocumentoController {
             String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(documentoService.subir(contratoId, subetapaId, formatoId, nombre, archivo));
+                .body(limitadorDeArchivos.ejecutar("subir documento",
+                        () -> documentoService.subir(contratoId, subetapaId, formatoId, nombre, archivo)));
     }
 
     @Operation(summary = "Descargar el archivo de un documento")
@@ -120,6 +133,11 @@ public class DocumentoController {
     })
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long contratoId, @PathVariable Long id) {
+        return limitadorDeArchivos.ejecutar("descargar documento", () -> entregar(id));
+    }
+
+    /** El cuerpo de la descarga, ya con el cupo de memoria concedido. */
+    private ResponseEntity<byte[]> entregar(Long id) {
         Documento documento = documentoService.buscarConContenido(id);
         // Un documento sin contenido se servía como 200 con cero bytes, y el
         // navegador guardaba un «.pdf» vacío que el lector daba por dañado
@@ -261,6 +279,9 @@ public class DocumentoController {
     @PreAuthorize("hasRole('SUPERVISOR')")
     public ResponseEntity<DocumentoResponse> firmar(@PathVariable Long contratoId, @PathVariable Long id,
                                                     @RequestParam(required = false) String huellaRevisada) {
-        return ResponseEntity.ok(documentoService.firmar(id, huellaRevisada));
+        // Firmar es la operación más cara en memoria de las tres: estampar la
+        // firma visible produce un segundo PDF completo junto al original.
+        return ResponseEntity.ok(limitadorDeArchivos.ejecutar("firmar documento",
+                () -> documentoService.firmar(id, huellaRevisada)));
     }
 }

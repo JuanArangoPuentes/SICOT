@@ -40,6 +40,120 @@ Los volcados se crean con permisos `600` (el script fija `umask 077`): llevan la
 base entera, contraseñas cifradas incluidas, y con el umask habitual quedaban
 legibles por cualquier cuenta del servidor.
 
+## Cifrar el volcado y sacarlo del servidor
+
+Las dos cosas están **apagadas si no se configuran**, y el script lo avisa en
+cada ejecución mientras falten. Lo avisa a propósito: un control que falta en
+silencio es el que nadie añade nunca.
+
+### Por qué hacen falta
+
+El `.dump` es la base **entera**: nombres, correos, teléfonos, NIT,
+representantes legales y las **coordenadas GPS** de las fotos de evidencia
+(V17). Son datos personales bajo la **Ley 1581 de 2012**. Hasta el 20-11-2026
+los secretos del despliegue sí tenían procedimiento de cifrado y copia fuera
+—está en la sección siguiente, y es correcto— y la base, que es el dato
+sensible de verdad, se quedaba en claro en el disco del servidor.
+
+Y un respaldo guardado en el mismo disco que la base cubre el borrado
+accidental y la migración mal hecha, que son los casos frecuentes, pero **no
+cubre el único irreversible**: que ese disco no vuelva. ADR-002 acepta
+explícitamente perder el trabajo del día; no decía qué pasa si no hay disco al
+que volver.
+
+### Cifrado: con clave pública (recomendado)
+
+En el servidor queda solo la clave **pública**, así que quien se lleve el disco
+no puede descifrar nada. La privada vive donde viva el técnico.
+
+```bash
+gpg --import clave-publica-del-tecnico.asc
+```
+
+Y en el `.env` del servidor:
+
+```
+SICOT_RESPALDO_GPG_DESTINATARIO=quien.lo.arregla@ejemplo.co
+```
+
+### Cifrado: con frase de paso (más fácil, peor)
+
+Cifrado simétrico AES-256 con la frase leída de un archivo. La frase queda en el
+**mismo equipo** que el respaldo, así que esto protege el destino remoto y no el
+servidor. Sirve cuando el servidor ya se considera de confianza.
+
+```bash
+sudo install -d -m 700 /etc/sicot
+sudo sh -c 'openssl rand -base64 32 > /etc/sicot/respaldo.pass'
+sudo chmod 600 /etc/sicot/respaldo.pass
+sudo chown "$USER" /etc/sicot/respaldo.pass   # quien corre el cron
+```
+
+```
+SICOT_RESPALDO_GPG_CLAVE_ARCHIVO=/etc/sicot/respaldo.pass
+```
+
+> **Guarde una copia de esa frase fuera del servidor.** Sin ella el respaldo no
+> se puede restaurar, y entonces no es un respaldo: es un archivo.
+
+### Copia fuera del servidor
+
+Destino de `rsync`: otro disco montado, o un destino por SSH.
+
+```
+SICOT_RESPALDO_DESTINO_REMOTO=/mnt/respaldos/sicot/
+SICOT_RESPALDO_DESTINO_REMOTO=respaldos@otro-equipo:/srv/sicot/
+```
+
+Con SSH hace falta una clave **sin frase de paso** para el usuario que corre el
+temporizador, porque nadie va a teclearla a las 2 de la mañana:
+
+```bash
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/sicot-respaldo
+ssh-copy-id -i ~/.ssh/sicot-respaldo.pub respaldos@otro-equipo
+printf 'Host otro-equipo
+  IdentityFile ~/.ssh/sicot-respaldo
+' >> ~/.ssh/config
+```
+
+La cuenta del otro equipo debería poder **solo** escribir en esa carpeta: si
+alguien compromete el servidor de SICOT, esa clave es lo que le abre el destino
+de los respaldos.
+
+### El orden importa
+
+El script cifra **después** de verificar el volcado, y no antes. La verificación
+necesita *leer* el archivo con `pg_restore`, y un archivo cifrado no se puede
+leer: cifrar primero dejaría el script «verificando» algo que ningún
+`pg_restore` puede abrir, es decir sin verificar nada y sin que se notara.
+
+Si el cifrado falla, el volcado **en claro se conserva** y el script sale con
+error. Perder el respaldo por un fallo del cifrado sería cambiar un problema de
+confidencialidad por uno de disponibilidad, que es peor.
+
+### Restaurar un respaldo cifrado
+
+Se descifra a un archivo temporal y se restaura como cualquier otro (ver
+«Restauración» más abajo):
+
+```bash
+gpg -d /var/backups/sicot/sicot-20261120-020000.dump.gpg > /tmp/sicot.dump
+# ...restaurar desde /tmp/sicot.dump...
+shred -u /tmp/sicot.dump     # o rm, si shred no está
+```
+
+El archivo descifrado tiene todo lo que el cifrado protegía: bórrelo en cuanto
+termine.
+
+### La vigilancia del backend ya los reconoce
+
+`VigilanciaDelRespaldo` cuenta los `.dump` **y los `.dump.gpg`** con contenido.
+Importa decirlo: si no los contara, encender el cifrado habría dejado el
+directorio lleno de respaldos correctos y al sistema avisando cada día de que no
+hay ninguno, hasta que alguien apagara el aviso por ruidoso — el fallo que esa
+clase existe para evitar, provocado por el control que iba a mejorar el
+respaldo.
+
 ## Lo que el respaldo de la base no cubre
 
 Dos cosas viven fuera de PostgreSQL y no se pueden volver a generar iguales. Se

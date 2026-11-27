@@ -119,9 +119,9 @@ class VerificacionSecopIntegrationTest extends PruebaDeIntegracion {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"nombre":"Supervisor Ajeno Secop","email":"ajeno.secop@soy.sena.edu.co",
-                         "password":"Ajeno123*","telefono":"3000000000","rol":"SUPERVISOR"}
+                         "password":"AjenoDelLote4*","telefono":"3000000000","rol":"SUPERVISOR"}
                         """));
-        String ajeno = login("ajeno.secop@soy.sena.edu.co", "Ajeno123*");
+        String ajeno = login("ajeno.secop@soy.sena.edu.co", "AjenoDelLote4*");
 
         mockMvc.perform(get("/api/contratos/{id}/secop", contratoId).header("Authorization", "Bearer " + ajeno))
                 .andExpect(status().isNotFound());

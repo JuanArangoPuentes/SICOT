@@ -134,6 +134,27 @@ services:
       SICOT_ADMIN_EMAIL: ${SICOT_ADMIN_EMAIL:-}
       SICOT_ADMIN_PASSWORD: ${SICOT_ADMIN_PASSWORD:-}
       SICOT_ADMIN_NOMBRE: ${SICOT_ADMIN_NOMBRE:-Administrador SICOT}
+      # Vigilancia del respaldo (ADR-002): en desarrollo NO se vigila, a
+      # propósito. Aquí no hay ni RESPALDO_DIRECTORIO ni montaje de respaldos,
+      # y por eso el backend escribe al arrancar el aviso «No hay vigilancia
+      # del respaldo: falta RESPALDO_DIRECTORIO». En este archivo ese aviso es
+      # correcto y esperado — no es un despliegue mal configurado.
+      #
+      # El motivo: el RPO de 24 h de ADR-002 es un compromiso sobre los datos
+      # del Centro, no sobre la base de un equipo de desarrollo, que se tira y
+      # se vuelve a sembrar con `docker compose down -v`. La vigilancia vive
+      # donde vive el dato que hay que no perder: docker-compose.prod.yml, que
+      # pasa RESPALDO_DIRECTORIO=/respaldos, monta la carpeta del servidor en
+      # solo lectura y se NIEGA a arrancar sin ella.
+      #
+      # Tampoco se encienden a medias: pasar la variable sin el montaje haría
+      # que el backend buscara una ruta del servidor dentro del contenedor y
+      # avisara de que no hay NINGÚN respaldo —un error, no un aviso, que
+      # además se le cuenta al técnico (AvisoDeSalud)—. Sería cambiar una falsa
+      # alarma por otra peor.
+      #
+      # Para probar la vigilancia misma se usa el despliegue de producción, que
+      # es donde está cableada. MDL-195.
       # Correo real (entrega de credenciales) — sin esto configurado en el .env
       # de la raíz, el envío falla honestamente en vez de fingir éxito.
       MAIL_HOST: ${MAIL_HOST:-smtp.gmail.com}

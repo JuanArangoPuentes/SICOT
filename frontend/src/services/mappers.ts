@@ -75,6 +75,24 @@ function humanizarAccion(accion: string): string {
  * quien la recibió. Ambos se eliminaron: aquí solo se muestra lo que el backend
  * realmente sabe.
  */
+/**
+ * Quién aparece en la columna «Actor».
+ *
+ * Tres casos y no dos. `AGENTE` es una herramienta automática actuando con las
+ * credenciales de una persona (hoy el servidor MCP): la cuenta responsable es
+ * la suya y se dice, pero la mano no fue la suya y el expediente no puede
+ * presentarlo como si lo hubiera hecho ella (V26). Hasta el 20-11-2026 esto se
+ * leía exactamente igual que una acción hecha en la pantalla.
+ */
+function actorDelRegistro(r: RegistroResponse): string {
+  if (r.origen === 'SISTEMA') return 'Sistema'
+  const persona = r.usuarioNombre ?? 'Usuario eliminado'
+  if (r.origen === 'AGENTE') {
+    return `${persona} (vía ${r.agente ?? 'herramienta automática'})`
+  }
+  return persona
+}
+
 export function mapRegistros(registros: RegistroResponse[]): Registro[] {
   return registros.map((r) => ({
     id: 'r' + r.id,
@@ -83,7 +101,7 @@ export function mapRegistros(registros: RegistroResponse[]): Registro[] {
     // `origen` y no "¿hay nombre?": usuario_id es ON DELETE SET NULL, así que
     // borrar una cuenta dejaba sus acciones atribuidas al "Sistema" en el
     // registro que existe precisamente para saber quién hizo qué.
-    actor: r.origen === 'SISTEMA' ? 'Sistema' : (r.usuarioNombre ?? 'Usuario eliminado'),
+    actor: actorDelRegistro(r),
     fecha: formatFechaYHoraDelCentro(r.fecha),
     // Lo hecho sin red llega con dos horas (V24): `fecha` es cuándo lo recibió
     // el servidor, que es la que vale, y esta la que declaró el equipo. Se

@@ -68,7 +68,8 @@ public class ContratoController {
             @RequestParam(required = false) Long supervisorId,
             @Parameter(description = "Estado del contrato")
             @RequestParam(required = false) EstadoContrato estado) {
-        return ResponseEntity.ok(contratoService.listar(supervisorId, estado));
+        return ListadoTruncado.conAviso(contratoService.listar(supervisorId, estado),
+                ContratoService.MAX_CONTRATOS_LISTADO);
     }
 
     @Operation(summary = "Obtener contrato por id")
