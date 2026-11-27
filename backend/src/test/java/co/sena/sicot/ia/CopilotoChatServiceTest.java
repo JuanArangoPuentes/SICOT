@@ -294,6 +294,9 @@ class CopilotoChatServiceTest {
         assertThat(respuesta.respuesta()).isEqualTo("""
                 Está en el paso 4: Recepción (50% completado).
 
+                Para qué es este paso: recibe formalmente lo entregado: usted verifica los aportes a seguridad \
+                social y la factura electrónica, y firma el Acta de Recibo a Satisfacción (GIL-F-010).
+
                 Lo que le falta aquí:
 
                 4.2 Verificar factura electrónica

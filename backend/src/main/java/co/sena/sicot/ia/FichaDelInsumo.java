@@ -3,7 +3,6 @@ package co.sena.sicot.ia;
 import co.sena.sicot.dto.etapa.EtapaResponse;
 import co.sena.sicot.dto.etapa.SubetapaResponse;
 import co.sena.sicot.dto.ia.ChatResponse;
-import co.sena.sicot.entity.enums.EstadoSubetapa;
 
 import java.util.List;
 import java.util.Optional;
@@ -112,6 +111,24 @@ final class FichaDelInsumo {
         return Optional.empty();
     }
 
+    /**
+     * Dónde se consigue el insumo de un sub-paso, reconocido por su nombre.
+     *
+     * <p>Lo usa {@link ExplicacionDelSubpaso} para que la explicación del
+     * sub-paso y la respuesta a «¿de dónde saco la planilla PILA?» digan la
+     * misma frase: la fuente es esta tabla, y no se copia a ningún otro sitio.
+     *
+     * @param nombreDelSubpaso el nombre del sub-paso, o el trozo de nombre con
+     *     el que esta tabla lo reconoce
+     */
+    static Optional<String> dondeSeConsigue(String nombreDelSubpaso) {
+        String nombre = PreguntaNormalizada.normalizar(nombreDelSubpaso);
+        return INSUMOS.stream()
+                .filter(i -> nombre.contains(i.enElNombreDelSubpaso()))
+                .map(Insumo::dondeSeConsigue)
+                .findFirst();
+    }
+
     /** ¿Este trozo de una pregunta compuesta ya lo contesta la ficha? */
     static boolean cubre(String trozo) {
         return reconocer(trozo).isPresent() || PreguntaNormalizada.de(trozo).contieneAlguna(EN_SICOT);
@@ -135,8 +152,7 @@ final class FichaDelInsumo {
     }
 
     private static String componer(Insumo insumo, EtapaResponse etapa, SubetapaResponse sub) {
-        String estado = sub.estado() == EstadoSubetapa.COMPLETADA ? "ya está completado"
-                : sub.estado() == EstadoSubetapa.EN_CURSO ? "está en curso" : "está pendiente";
+        String estado = GuiaDelPasoActual.enQueVa(sub);
         return insumo.dondeSeConsigue()
                 + "\n\nEs el sub-paso %s: %s, del paso %d: %s, que en este contrato %s."
                         .formatted(sub.codigo(), sub.nombre(), etapa.numero(), etapa.nombre(), estado)

@@ -242,6 +242,10 @@ class GuiaDelPasoActualTest {
         assertThat(guia.responder(etapas).orElseThrow()).isEqualTo("""
                 Está en el paso 3: INSPECCIÓN — Monitoreo y Ejecución (25% completado).
 
+                Para qué es este paso: vigila la ejecución: usted verifica la entrega en la bodega, deja la \
+                evidencia fotográfica, la compara con la ficha técnica y firma el Informe de Supervisión \
+                (GCCON-F-031).
+
                 Lo que le falta aquí:
 
                 3.2 Carga de evidencia fotográfica georreferenciada  ← en curso
@@ -328,12 +332,15 @@ class GuiaDelPasoActualTest {
         assertThat(r.respuesta()).isEqualTo("""
                 Paso 4: RECEPCIÓN — Acta de Recibo.
 
+                Para qué es este paso: recibe formalmente lo entregado: usted verifica los aportes a seguridad \
+                social y la factura electrónica, y firma el Acta de Recibo a Satisfacción (GIL-F-010).
+
                 Lo que le falta ahí:
 
                 4.1 Verificar la entrega
                 4.2 Verificar factura electrónica
 
-                El primero es 4.1: Verificar la entrega. Responsable: Supervisor.
+                El primero que le queda es 4.1: Verificar la entrega. Responsable: Supervisor.
 
                 En SICOT: cuando lo haya hecho, márquelo como completado.
 
@@ -361,14 +368,23 @@ class GuiaDelPasoActualTest {
         ChatResponse r = respuesta("¿qué debo hacer en el sub-paso 4.2?");
 
         assertThat(r.respuesta()).isEqualTo("""
-                Sub-paso 4.2: Verificar factura electrónica, del paso 4: RECEPCIÓN — Acta de Recibo. Está pendiente. \
-                Factura electrónica validada en la DIAN. Responsable: Supervisor.
+                Sub-paso 4.2: Verificar factura electrónica, del paso 4: RECEPCIÓN — Acta de Recibo.
 
-                Antes de él, en ese mismo paso, sigue pendiente:
+                Qué es: Revisar la factura electrónica de venta del contratista y comprobar que está validada en \
+                la DIAN.
 
-                4.1 Verificar la entrega
+                Para qué sirve: Va antes del Acta de Recibo a Satisfacción (4.3) y del trámite de pago del paso 5: \
+                es la factura que respalda lo que se recibe.
+
+                De dónde sale: La factura electrónica se verifica en el portal de la DIAN.
+
+                Responsable: Supervisor.
 
                 En SICOT: cuando lo haya hecho, márquelo como completado.
+
+                Cómo va: está pendiente. Antes de él, en ese mismo paso, sigue pendiente:
+
+                4.1 Verificar la entrega
 
                 Usted va en el paso 2: INICIO — Acta de Inicio.""");
         assertThat(r.accion().subpaso()).isEqualTo("4.2");
@@ -505,17 +521,24 @@ class GuiaDelPasoActualTest {
 
         assertThat(r.respuesta()).isEqualTo("""
                 Sub-paso 2.3: Verificación de especificaciones en SECOP II, del paso 2: INICIO — Acta de Inicio y \
-                arranque (GCCON-F-018). Está pendiente. Con el enlace del proceso, verifique en el SECOP II las \
-                cantidades, especificaciones y valores del contrato. Responsable: Supervisor.
+                arranque (GCCON-F-018).
 
-                Antes de él, en ese mismo paso, sigue pendiente:
+                Qué es: Con el enlace del proceso, verificar en el SECOP II las cantidades, las especificaciones y \
+                los valores del contrato, y compararlos con lo que está registrado en SICOT.
 
-                2.2 Aviso a los profesionales SST y ambiental
+                Para qué sirve: Es lo que le deja empezar a supervisar sobre datos ciertos: lo que reciba después \
+                se compara contra esto. SICOT le muestra lo que publica el SECOP y le señala lo que no coincide.
+
+                Responsable: Supervisor.
 
                 En SICOT: debajo de este sub-paso verá lo que el SECOP II publica del contrato y lo que no coincide \
                 con lo registrado en SICOT. Las cantidades y las especificaciones no vienen en esos datos: abra el \
                 proceso en el SECOP II con el enlace del sub-paso y revíselas en la oferta económica y el estudio \
-                previo del expediente; cuando esté todo revisado, márquelo como completado.""");
+                previo del expediente; cuando esté todo revisado, márquelo como completado.
+
+                Cómo va: está pendiente. Antes de él, en ese mismo paso, sigue pendiente:
+
+                2.2 Aviso a los profesionales SST y ambiental""");
         assertThat(r.accion().subpaso()).isEqualTo("2.3");
     }
 
@@ -540,11 +563,13 @@ class GuiaDelPasoActualTest {
         assertThat(delProcesoReal("dime qué hay que hacer en el 2.2").respuesta()).startsWith("Sub-paso 2.2:");
         assertThat(delProcesoReal("háblame del 6.2").respuesta()).startsWith("Sub-paso 6.2:");
         assertThat(delProcesoReal("info del 3.1").respuesta()).startsWith("Sub-paso 3.1:");
-        // Un sub-paso cerrado se explica igual, con quién lo hace.
+        // Un sub-paso cerrado se explica igual, con quién lo hace y cómo se hace.
         assertThat(delProcesoReal("¿quién hace el 1.2?").respuesta())
                 .startsWith("Sub-paso 1.2: Designación del supervisor")
-                .contains("Ya está completado. El ordenador del gasto designa por escrito")
-                .endsWith("Responsable: Ordenador del gasto.");
+                .contains("Qué es: El ordenador del gasto designa por escrito")
+                .contains("Responsable: Ordenador del gasto.")
+                .contains("En SICOT: este sub-paso lo realiza Ordenador del gasto")
+                .endsWith("Cómo va: ya está completado.");
     }
 
     @Test
@@ -563,6 +588,106 @@ class GuiaDelPasoActualTest {
         assertThat(delProcesoReal("explícame la designación").respuesta())
                 .startsWith("El paso 1: INICIO — Designación de la supervisión (GCCON-F-032) ya está completo")
                 .contains("Sus sub-pasos:\n\n1.1 Suscripción y publicación del contrato en SECOP II\n1.2 Designación");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 17-11-2026: explicar un sub-paso es explicarlo, no decir en qué estado está
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * La queja, con el texto que se recibía: «explícame el paso 3.2» contestaba
+     * «Está pendiente» y, como explicación, el título del sub-paso dicho otra
+     * vez («Evidencia fotográfica con georreferenciación activa»). Quien
+     * preguntaba qué se hace ahí se quedaba igual.
+     *
+     * <p>Ahora la respuesta empieza por qué es y para qué sirve, sigue por cómo
+     * se hace en SICOT y deja el estado para el final, que es lo que no se
+     * había preguntado. La sigue componiendo el motor: ni una palabra de esto
+     * pasa por el modelo.
+     */
+    @Test
+    @DisplayName("«explícame el paso 3.2» explica el sub-paso, y el estado va al final")
+    void explicarUnSubpasoEsExplicarlo() {
+        ChatResponse r = delProcesoReal("explícame el paso 3.2");
+
+        assertThat(r.respuesta()).isEqualTo("""
+                Sub-paso 3.2: Carga de evidencia fotográfica georreferenciada, del paso 3: INSPECCIÓN — Monitoreo \
+                y Ejecución.
+
+                Qué es: Las fotos de la entrega, tomadas en el sitio. Tomadas con la cámara desde SICOT, cada foto \
+                queda con la fecha y el lugar de la toma; una foto elegida de la galería puede no traer el lugar.
+
+                Para qué sirve: Son la prueba que queda en el expediente de qué se entregó, cuándo y dónde, y el \
+                soporte de lo que usted firma después en el Informe de Supervisión (GCCON-F-031).
+
+                Responsable: Supervisor.
+
+                En SICOT: tome la foto con «Tomar foto de la entrega» o elija una con «Elegir una foto», pulse \
+                «Cargar evidencia» y, cuando aparezca como cargada, marque el sub-paso como completado.
+
+                Cómo va: está pendiente. Antes de él, en ese mismo paso, sigue pendiente:
+
+                3.1 Verificación física de la entrega en bodega
+
+                Usted va en el paso 2: INICIO — Acta de Inicio y arranque (GCCON-F-018).""");
+        assertThat(r.accion().subpaso()).isEqualTo("3.2");
+        assertThat(r.fuente()).isEqualTo(ChatResponse.Fuente.SISTEMA);
+    }
+
+    /**
+     * Pedir que le expliquen el paso en el que va recibía la lista de
+     * pendientes, que es la respuesta a otra pregunta. «¿Qué me falta en el
+     * paso 2?» sigue recibiendo esa lista: ahí sí es lo que se pregunta.
+     */
+    @Test
+    @DisplayName("«explícame el paso 2» explica el paso aunque sea el paso en curso")
+    void explicarElPasoEnElQueVaTambienLoExplica() {
+        String r = delProcesoReal("explícame el paso 2").respuesta();
+
+        assertThat(r)
+                .startsWith("Paso 2: INICIO — Acta de Inicio y arranque (GCCON-F-018)")
+                .contains("Para qué es este paso: arranca la ejecución: usted firma y devuelve el Acta de Inicio")
+                // El paso entero, no solo lo que falta: en qué consiste es la
+                // pregunta, y el 2.1 ya hecho es parte de la respuesta.
+                .contains("""
+                        Sus sub-pasos:
+
+                        2.1 Firma y devolución del Acta de Inicio (GCCON-F-018)  ← completado
+                        2.2 Aviso a los profesionales SST y ambiental
+                        2.3 Verificación de especificaciones en SECOP II
+                        2.4 Contacto con el contratista y acuerdo de entregas""")
+                .contains("El primero que le queda es 2.2: Aviso a los profesionales SST y ambiental.")
+                // Decirle que va en el paso que está leyendo sobraría.
+                .doesNotContain("Usted va en el paso 2");
+        // La pregunta por lo que falta sigue siendo la de siempre: solo lo que falta.
+        assertThat(delProcesoReal("¿qué me falta en el paso 2?").respuesta())
+                .startsWith("Está en el paso 2")
+                .doesNotContain("2.1 Firma y devolución");
+    }
+
+    /**
+     * Un contrato de antes del proceso real tiene sub-pasos que la tabla de
+     * explicaciones no conoce. Ahí no se inventa nada: queda su descripción,
+     * que es lo único cierto que SICOT tiene de ese sub-paso.
+     */
+    @Test
+    @DisplayName("un sub-paso que la tabla no conoce conserva su propia descripción")
+    void unSubpasoDesconocidoConservaSuDescripcion() {
+        List<EtapaResponse> etapas = List.of(
+                etapa(2, "INICIO — Acta de Inicio", EstadoEtapa.EN_CURSO, 0, List.of(
+                        sub("2.5", "Verificación de afiliaciones", "Afiliaciones a seguridad social del personal.",
+                                EstadoSubetapa.PENDIENTE, "Supervisor"))));
+
+        assertThat(guia.responder("¿qué es el 2.5?", etapas).orElseThrow().respuesta()).isEqualTo("""
+                Sub-paso 2.5: Verificación de afiliaciones, del paso 2: INICIO — Acta de Inicio.
+
+                Qué es: Afiliaciones a seguridad social del personal.
+
+                Responsable: Supervisor.
+
+                En SICOT: cuando lo haya hecho, márquelo como completado.
+
+                Cómo va: está pendiente. No le queda nada pendiente antes de él en ese paso.""");
     }
 
     @Test
