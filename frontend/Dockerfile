@@ -108,6 +108,14 @@ USER root
 # manejo indebido), y Alpine ya publicó 2.13.9-r3 en la rama v3.24. El backend
 # no la necesita: su base va por Alpine 3.24.3, que la trae corregida.
 #
+# libxml2 otra vez (CI del 27-11-2026): la r3 que fijaba la línea de abajo trae
+# SEIS CVE altas publicadas después —CVE-2026-86138, -86139, -86140, -86142 y
+# -86143, corregidas en 2.13.9-r4, y CVE-2026-11979, en la r5—, entre ellas
+# ejecución de código por desbordamiento de montículo y de pila. Alpine publicó
+# la r5 el 26-11-2026 en la rama v3.24, así que se sube el mínimo a r5: con el
+# de la r3 ya cumplido, `apk add` no habría actualizado nada. El backend sigue
+# sin necesitarla: en el mismo escaneo su imagen salió sin hallazgos.
+#
 # OJO — ESTA LÍNEA NO ARREGLA EL `nginx` DE ESTA IMAGEN. El mismo escaneo del
 # 20-11-2026 encontró SEIS CVE en nginx 1.30.6-r1 (cuatro CRÍTICAS:
 # CVE-2026-113425 en el proxy de correo, -121810 en HTTP/3, -123007 en el
@@ -128,7 +136,7 @@ USER root
 #     hace: sustituir piezas de la imagen que la etiqueta fijada promete.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
     "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4" \
-    "libxml2>=2.13.9-r3"
+    "libxml2>=2.13.9-r5"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
