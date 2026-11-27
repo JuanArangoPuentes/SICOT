@@ -274,9 +274,8 @@
                     </execution>
                     <!--
                         Umbral mínimo, fijado con datos reales y no con una cifra
-                        inventada: al medirlo, la cobertura era 85 % de línea y
-                        63 % de rama. El mínimo se pone deliberadamente UNOS
-                        PUNTOS POR DEBAJO de lo alcanzado.
+                        inventada. El mínimo se pone deliberadamente UNOS PUNTOS
+                        POR DEBAJO de lo alcanzado.
 
                         El objetivo no es empujar la cifra hacia arriba, es
                         impedir que baje sin que nadie se entere. Un umbral
@@ -285,9 +284,25 @@
                         desactiva — que es como mueren estos controles.
 
                         La rama es la métrica que se vigila; la de línea sube
-                        sola y engaña. Subir estos números es una decisión
-                        consciente cuando el equipo tenga margen, no un efecto
-                        secundario de haber escrito pruebas.
+                        sola y engaña.
+
+                        HISTORIAL DE LA MEDICIÓN — y por qué hay que releerlo.
+                        Se fijó en 0,80/0,58 cuando lo medido era 85 % y 63 %.
+                        Para el 20-11-2026 lo medido eran 91,8 % y 81,5 %, y el
+                        umbral seguía en los números de entonces: permitía caer
+                        DOCE puntos de línea y VEINTITRÉS de rama sin romper el
+                        build. Es decir, el control ya no hacía lo único que
+                        decía hacer — impedir que baje sin que nadie se entere —
+                        y nadie se había enterado precisamente porque un umbral
+                        holgado nunca falla y por tanto nunca recuerda que
+                        existe.
+
+                        Por eso ahora está en 0,88/0,76: unos tres y unos cinco
+                        puntos por debajo de lo medido, margen para refactorizar
+                        sin dejar sitio a una regresión silenciosa. SUBIR ESTE
+                        TRINQUETE ES PARTE DE SUBIR LA COBERTURA: quien añada
+                        pruebas y mueva la cifra varios puntos, mueve también
+                        estas dos líneas, o el control vuelve a quedarse atrás.
                     -->
                     <execution>
                         <id>umbral-minimo</id>
@@ -303,12 +318,12 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.80</minimum>
+                                            <minimum>0.88</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <minimum>0.58</minimum>
+                                            <minimum>0.76</minimum>
                                         </limit>
                                     </limits>
                                 </rule>

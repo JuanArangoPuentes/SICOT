@@ -1,0 +1,203 @@
+# Contraseñas que SICOT no acepta, una por línea.
+#
+# QUÉ ES ESTO. Las que más aparecen en las filtraciones públicas, más las que
+# un atacante probaría primero CONTRA ESTE SISTEMA en concreto: el nombre de la
+# entidad, el del producto, el del Centro y la ciudad.
+#
+# POR QUÉ HACE FALTA. LoginAttemptService documenta con precisión el ataque de
+# «rociado de contraseñas» —probar UNA contraseña común contra MUCHAS cuentas,
+# que es lo habitual contra un directorio institucional de correos predecibles—
+# y añade el contador por IP justamente para eso. Pero el freno de frecuencia no
+# sirve de nada si la contraseña que el atacante va a probar es una que el
+# sistema permite: hasta el 20-11-2026 «Password123» era válida aquí. Un límite
+# de intentos protege de probar muchas; una lista de bloqueo protege de que la
+# primera acierte.
+#
+# CÓMO SE COMPARA. Ver PoliticaDeContrasena: en minúsculas, sin acentos y
+# quitando los dígitos y signos del final, así que «Password123!» se compara
+# como «password» y no hace falta listar cada variante. Por eso las entradas van
+# en minúsculas y sin números de relleno.
+#
+# QUÉ NO ES. No es la lista completa de nada: las filtraciones reales tienen
+# cientos de millones de entradas. Es el primer puñado, el que cubre la mayor
+# parte de los intentos reales con un archivo que se puede leer y auditar. Si
+# algún día hace falta más, el paso siguiente es consultar la API de
+# «Have I Been Pwned» por prefijo de hash (k-anonimato), que no exige descargar
+# nada; se dejó fuera porque añade una dependencia de red a un camino —crear una
+# cuenta— que tiene que funcionar en un servidor sin salida a internet.
+#
+# Las líneas que empiezan por # y las vacías se ignoran.
+
+# ── Las más usadas del mundo ────────────────────────────────────────────────
+password
+passwort
+contrasena
+contraseña
+clave
+claveclave
+secret
+secreto
+qwerty
+qwertyuiop
+qwertz
+azerty
+asdf
+asdfgh
+asdfghjkl
+zxcvbn
+zxcvbnm
+abc
+abcd
+abcdef
+abcdefg
+abcdefgh
+letmein
+welcome
+bienvenido
+monkey
+dragon
+master
+maestro
+shadow
+sunshine
+princess
+princesa
+football
+futbol
+baseball
+basketball
+iloveyou
+teamo
+tequiero
+trustno
+whatever
+superman
+batman
+pokemon
+starwars
+computer
+computadora
+internet
+samsung
+google
+facebook
+instagram
+whatsapp
+michael
+jennifer
+jordan
+hunter
+ranger
+buster
+soccer
+harley
+thomas
+robert
+daniel
+andrea
+carlos
+alejandro
+fernando
+santiago
+sebastian
+valentina
+mariana
+camila
+sofia
+maria
+jose
+juan
+luis
+ana
+pedro
+andres
+diego
+david
+jorge
+miguel
+ricardo
+roberto
+patricia
+claudia
+monica
+adriana
+natalia
+paola
+johnny
+charlie
+jessica
+amanda
+ashley
+nicole
+matthew
+joshua
+anthony
+william
+nothing
+freedom
+libertad
+whatsup
+loveme
+qazwsx
+qazwsxedc
+1qaz2wsx
+zaq12wsx
+password1
+passw0rd
+p@ssword
+p@ssw0rd
+admin
+administrador
+administrator
+usuario
+user
+root
+guest
+invitado
+test
+prueba
+demo
+default
+cambiame
+changeme
+temporal
+temporary
+nueva
+nuevaclave
+claveprovisional
+provisional
+
+# ── Secuencias y repeticiones ──────────────────────────────────────────────
+# El normalizador quita los dígitos finales, así que una contraseña que sea
+# SOLO dígitos («123456789012») queda vacía al normalizarla y la rechaza la
+# regla de secuencias, no esta lista. Estas cubren las mezclas.
+qwe
+rty
+asd
+zxc
+poiuytrewq
+mnbvcxz
+lkjhgfdsa
+
+# ── Contexto de SICOT: lo primero que probaría alguien del Centro ──────────
+sena
+senasena
+senacolombia
+senavirtual
+sicot
+sicotsena
+sicotclave
+contratos
+contratacion
+supervision
+supervisor
+gestion
+mobiliario
+tecnologicodelmobiliario
+centrodelmobiliario
+antioquia
+medellin
+itagui
+colombia
+bogota
+gccon

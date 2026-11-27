@@ -269,7 +269,7 @@ export default function LoginScreen({
               fontStyle: 'italic',
             }}
           >
-            "Precisión en cada etapa del contrato"
+            «Precisión en cada etapa del contrato»
           </p>
 
           {/* Separador decorativo */}

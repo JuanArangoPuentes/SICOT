@@ -366,7 +366,7 @@ export default function AdminPanel({
                     Aún no hay firmas asignadas
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Utilice "+ Asignar firma" o el botón "Asignar firma" en Gestión de Usuarios.
+                    Utilice «+ Asignar firma» o el botón «Asignar firma» en Gestión de Usuarios.
                   </div>
                 </div>
               )}

@@ -1,6 +1,6 @@
 # Inventario completo de endpoints SICOT
 
-**Revisado el 2026-11-11 contra el código: 18 controladores, 62 endpoints.**
+**Revisado el 2026-11-20 contra el código: 18 controladores, 63 endpoints.**
 
 > Que la tabla esté completa ya no depende de que alguien se acuerde de contar.
 > `InventarioDeEndpointsTest` compara los `@*Mapping` de
@@ -23,6 +23,7 @@
 |---|-------------|--------|------|------------------------|------------------------|-------|-------------------|
 | 1 | AuthController | POST | /api/auth/login | (público) | público | 200 | `AuthResponse` |
 | 61 | CuentaController | PUT | /api/cuenta/contrasena (cuerpo: `contrasenaActual`, `contrasenaNueva`) — desde el 05-11-2026, cualquier rol cambia SU contraseña; cierra sus demás sesiones | (autenticado) | `anyRequest().authenticated()` + la cuenta es siempre la de la sesión (no hay `id` en la ruta); la actual se exige y sus fallos cuentan en `LoginAttemptService` | 200 | `AuthResponse` con token nuevo |
+| 63 | CuentaController | POST | /api/cuenta/cerrar-sesion — desde el 20-11-2026, cierra la sesión EN EL SERVIDOR: anota el `jti` del token en `sesiones_cerradas` y el filtro JWT lo rechaza desde la siguiente petición. Solo esa sesión; el teléfono y los demás equipos siguen abiertos. Idempotente. Un token anterior a V25 (sin `jti`) recurre a `revocarSesiones()` y cierra la cuenta entera | (autenticado) | `anyRequest().authenticated()` + se cierra siempre el token con el que llega la petición, no uno indicado por el cliente | **204** | sin cuerpo |
 | 2 | UsuarioController | GET | /api/usuarios | ADMINISTRADOR, GESTION (lectura) | @PreAuthorize en clase + método | 200 | `List<UsuarioResponse>` |
 | 3 | UsuarioController | GET | /api/usuarios/{id} | ADMINISTRADOR | @PreAuthorize en clase | 200 | `UsuarioResponse` |
 | 4 | UsuarioController | POST | /api/usuarios | ADMINISTRADOR | @PreAuthorize en clase | **201** | `UsuarioResponse` |

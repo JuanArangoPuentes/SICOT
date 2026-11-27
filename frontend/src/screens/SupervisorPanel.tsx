@@ -12,7 +12,22 @@
 // pendiente" cuando en realidad falló una consulta sería el peor error de
 // esta pantalla.
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
+
+// Las gráficas se cargan bajo demanda, y con ellas Recharts.
+//
+// POR QUÉ. El troceado por rol de App.tsx separó los tres paneles para que
+// nadie descargara los otros dos, y el razonamiento era bueno — pero dejó fuera
+// justo a quien se citaba como beneficiario. Medido el 20-11-2026: `index`
+// 349 kB + `SupervisorPanel` 488 kB = 837 kB para el supervisor, MÁS que los
+// 755 kB del paquete único de antes. Gestión y Administración sí ganaron
+// (387 y 386 kB); el supervisor, que trabaja desde un teléfono en bodega y es
+// el usuario cuya red peor está, pagaba más que antes.
+//
+// Casi todo ese peso es Recharts, y vive en una sola pestaña del panel. Sacarlo
+// a su propio trozo le quita al supervisor unos 300 kB de la primera carga sin
+// cambiar nada de lo que ve: las gráficas llegan cuando abre esa pestaña.
+const ContratoGraficas = lazy(() => import('@/components/supervisor/ContratoGraficas'))
 
 // Referencia estable: pasar `[]` en línea crearía un array nuevo en cada render
 // y el hook volvería a fijar el estado sin parar.
@@ -23,7 +38,6 @@ import AppShell, { type NavGroup } from '@/components/AppShell'
 import Registros, { type Registro } from '@/components/Registros'
 import Bandeja, { type ItemBandeja } from '@/components/supervisor/Bandeja'
 import ContratoInfo from '@/components/supervisor/ContratoInfo'
-import ContratoGraficas from '@/components/supervisor/ContratoGraficas'
 import VistaDocumentos from '@/components/supervisor/VistaDocumentos'
 import VistaAlertas from '@/components/supervisor/VistaAlertas'
 import { destinoDeAlerta, type DestinoDeAlerta } from '@/components/supervisor/destinoDeAlerta'
@@ -1727,7 +1741,20 @@ export default function SupervisorPanel({
                       borderColor: step.status === 'active' ? 'var(--accent)' : 'var(--border)',
                     }}
                   >
-                    <div className="step-row" onClick={() => toggleStep(step.id)}>
+                    {/* Un <button>, por la regla de la ADR-018. Plegar y
+                        desplegar un paso es la navegación principal del panel
+                        del supervisor: con un <div onClick> no se alcanzaba
+                        con el teclado, y quien no usa ratón no podía abrir
+                        ningún paso del proceso. `aria-expanded` dice si está
+                        abierto. El aspecto de la fila lo devuelve .step-row en
+                        index.css; lo vigila la prueba de extremo a extremo
+                        «los seis pasos se pueden abrir y cerrar sin ratón». */}
+                    <button
+                      type="button"
+                      className="step-row"
+                      aria-expanded={isOpen}
+                      onClick={() => toggleStep(step.id)}
+                    >
                       <StepCircle n={step.id} status={step.status} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div
@@ -1780,7 +1807,7 @@ export default function SupervisorPanel({
                       >
                         ▼
                       </span>
-                    </div>
+                    </button>
 
                     {isOpen && (
                       <div style={{ borderTop: '1px solid var(--border)', padding: '8px 8px 12px' }}>
@@ -2042,7 +2069,13 @@ export default function SupervisorPanel({
               title="Tablero del contrato"
               desc="Cifras calculadas con el estado real del contrato: subetapas cerradas en el servidor, documentos efectivamente generados y las fechas registradas."
             />
-            <ContratoGraficas steps={steps} docs={docsContrato} contrato={contrato} />
+            {/* Sin texto de «cargando»: el trozo pesa poco y llega en un
+                instante en la red del Centro; un cartel que aparece y
+                desaparece molesta más que el hueco. El `fallback` reserva el
+                alto para que la página no salte al llegar. */}
+            <Suspense fallback={<div style={{ minHeight: 260 }} />}>
+              <ContratoGraficas steps={steps} docs={docsContrato} contrato={contrato} />
+            </Suspense>
           </div>
 
           {/* ── Copiloto ── */}

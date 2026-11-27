@@ -23,6 +23,14 @@ export interface Registro {
 
 const TIPOS = ['Todos', 'Contrato', 'Etapa', 'Documento', 'Firma', 'Otro'] as const
 
+/** El estilo que tenían los rótulos cuando eran <div>: la pantalla no cambia. */
+const ETIQUETA: React.CSSProperties = {
+  display: 'block',
+  fontSize: 11,
+  color: 'var(--text-muted)',
+  marginBottom: 4,
+}
+
 export default function Registros({ extra }: { extra: Registro[] }) {
   const [tipo, setTipo] = useState<(typeof TIPOS)[number]>('Todos')
   const [actor, setActor] = useState('')
@@ -125,8 +133,15 @@ export default function Registros({ extra }: { extra: Registro[] }) {
         }}
       >
         <div style={{ minWidth: 150 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Tipo</div>
-          <select value={tipo} onChange={(e) => setTipo(e.target.value as typeof tipo)}>
+          {/* <label htmlFor> y no un <div> con el texto. El <div> se VE igual y
+              no existe para quien usa un lector de pantalla: el control quedaba
+              anunciado como «cuadro combinado» a secas, sin decir de qué. Son
+              los filtros de la bitácora, así que sin esto no hay forma de saber
+              qué se está filtrando. */}
+          <label htmlFor="registros-tipo" style={ETIQUETA}>
+            Tipo
+          </label>
+          <select id="registros-tipo" value={tipo} onChange={(e) => setTipo(e.target.value as typeof tipo)}>
             {TIPOS.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -135,8 +150,11 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           </select>
         </div>
         <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Responsable</div>
+          <label htmlFor="registros-responsable" style={ETIQUETA}>
+            Responsable
+          </label>
           <input
+            id="registros-responsable"
             type="text"
             value={actor}
             onChange={(e) => setActor(e.target.value)}
@@ -145,8 +163,11 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Desde</div>
+          <label htmlFor="registros-desde" style={ETIQUETA}>
+            Desde
+          </label>
           <input
+            id="registros-desde"
             type="date"
             value={desde}
             onChange={(e) => setDesde(e.target.value)}
@@ -163,8 +184,11 @@ export default function Registros({ extra }: { extra: Registro[] }) {
           />
         </div>
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Hasta</div>
+          <label htmlFor="registros-hasta" style={ETIQUETA}>
+            Hasta
+          </label>
           <input
+            id="registros-hasta"
             type="date"
             value={hasta}
             onChange={(e) => setHasta(e.target.value)}
