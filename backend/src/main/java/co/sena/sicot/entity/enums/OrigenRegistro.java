@@ -15,5 +15,23 @@ public enum OrigenRegistro {
     USUARIO,
 
     /** Una automatización del motor. No hay usuario asociado, y es correcto que no lo haya. */
-    SISTEMA
+    SISTEMA,
+
+    /**
+     * Una herramienta automática que actúa <b>con las credenciales de una
+     * persona</b>: hoy, el servidor MCP de {@code mcp/}, que inicia sesión con
+     * {@code SICOT_EMAIL} y opera como esa cuenta.
+     *
+     * <p>{@code usuario_id} sigue puesto —la cuenta responsable es la misma y
+     * eso no cambia— y {@code agente} dice qué herramienta fue. Lo que este
+     * valor añade es la única distinción que faltaba: «esto lo decidió una
+     * persona» frente a «esto lo propuso un modelo actuando con su cuenta».
+     *
+     * <p>En un expediente de contratación pública esa diferencia es el punto.
+     * El proyecto ya tiene la regla —la IA es asesora, nunca autoridad— y hasta
+     * el 20-11-2026 la auditoría no podía sostenerla: todo lo que hacía el MCP
+     * quedaba registrado exactamente igual que lo que el funcionario hacía con
+     * sus manos. Ver {@code V26__quien_actuo_fue_un_agente.sql}.
+     */
+    AGENTE
 }

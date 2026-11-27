@@ -481,7 +481,22 @@ export function Modal({
   return (
     <div
       role="presentation"
-      onClick={cerrarAlTocarFuera ? onClose : undefined}
+      // Solo cierra si el clic fue en el TELÓN y no dentro del diálogo.
+      //
+      // Antes el telón cerraba con cualquier clic y el diálogo paraba la
+      // propagación con un onClick propio. Funcionaba, y convertía la tarjeta
+      // del diálogo en un elemento «con manejador de clic» que no es
+      // interactivo: las reglas de accesibilidad lo señalan con razón, porque
+      // un lector de pantalla no tiene forma de saber que ese clic no hace
+      // nada. Comparar el origen del evento hace lo mismo sin inventar un
+      // elemento pulsable.
+      onClick={
+        cerrarAlTocarFuera
+          ? (e) => {
+              if (e.target === e.currentTarget) onClose()
+            }
+          : undefined
+      }
       style={{
         position: 'fixed',
         inset: 0,
@@ -506,7 +521,6 @@ export function Modal({
         aria-labelledby="modal-title"
         ref={dialogoRef}
         tabIndex={-1}
-        onClick={(e) => e.stopPropagation()}
         style={{
           // El foco llega al diálogo por programa, no porque se pueda pulsar:
           // el anillo de foco alrededor de toda la tarjeta solo confundía.

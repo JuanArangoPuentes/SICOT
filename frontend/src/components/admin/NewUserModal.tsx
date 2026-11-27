@@ -10,7 +10,7 @@ import { IconCheckCircle } from '@/components/icons'
 import type { Rol, UsuarioResponse } from '@/services/api/types'
 import { crearUsuario, enviarCredenciales } from '@/services/usuarioService'
 import { ApiError } from '@/services/api/client'
-import { mapUser, randomPassword, type UserRow } from './tipos'
+import { LARGO_DE_CLAVE_TEMPORAL, mapUser, randomPassword, type UserRow } from './tipos'
 
 export function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCreate: (u: UserRow) => void }) {
   const [nombre, setNombre] = useState('')
@@ -190,7 +190,8 @@ export function NewUserModal({ onClose, onCreate }: { onClose: () => void; onCre
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, letterSpacing: '0.06em' }}>{pw}</div>
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-          Generada automáticamente · 12 caracteres · almacenada (cifrada) · se envía por correo institucional al crear
+          Generada automáticamente · {LARGO_DE_CLAVE_TEMPORAL} caracteres · almacenada (cifrada) · se envía por correo
+          institucional al crear
         </div>
       </div>
 

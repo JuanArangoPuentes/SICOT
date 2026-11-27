@@ -20,7 +20,7 @@ public class AlertaService {
 
     // Tope del listado global: sin esto, "todas las alertas" crecería sin
     // límite con el uso normal del sistema hasta cargar la tabla entera.
-    private static final int MAX_ALERTAS_LISTADO = 500;
+    public static final int MAX_ALERTAS_LISTADO = 500;
 
     /**
      * Tope del listado por contrato. Más bajo que el global a propósito: aquí lo
@@ -28,7 +28,7 @@ public class AlertaService {
      * lee nadie. Ver el javadoc del repositorio para por qué apareció este tope
      * justo ahora.
      */
-    private static final int MAX_ALERTAS_POR_CONTRATO = 200;
+    public static final int MAX_ALERTAS_POR_CONTRATO = 200;
 
     private final AlertaRepository alertaRepository;
     private final ContratoService contratoService;

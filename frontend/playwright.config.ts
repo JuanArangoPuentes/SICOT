@@ -4,7 +4,14 @@ import { defineConfig, devices } from '@playwright/test'
 // PostgreSQL corriendo aparte (con los usuarios de perfil "dev" ya sembrados
 // — ver backend/README.md) porque Playwright solo levanta el frontend; no
 // hay nada que mockear salvo lo que explícitamente se intercepte con
-// page.route() (los specs bajo e2e/specs/ai/, que no dependen de Ollama).
+// page.route().
+//
+// Esta nota citaba «los specs bajo e2e/specs/ai/», un directorio que no existe
+// y que, por lo que se puede reconstruir, nunca llegó a crearse. Es la clase de
+// deriva que no rompe nada y desorienta a quien llega: pasa media hora buscando
+// unas pruebas que no están. Las carpetas reales son auth/, escritorio/ y
+// movil/; el recorrido del proceso completo vive en escritorio/proceso-gccon.spec.ts
+// y mockea la IA con page.route() desde ahí mismo.
 export default defineConfig({
   // Toda la carpeta y no solo `specs/`, porque el proyecto de siembra vive en
   // `setup/` y tiene que poder ejecutarse antes que las pruebas.

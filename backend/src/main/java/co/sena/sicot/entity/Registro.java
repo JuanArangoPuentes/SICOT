@@ -50,6 +50,14 @@ public class Registro {
     @Column(name = "hecho_sin_conexion_en", updatable = false)
     private Instant hechoSinConexionEn;
 
+    /**
+     * Qué herramienta automática declaró haber hecho esto, cuando
+     * {@link #origen} es {@code AGENTE}. Nula en lo que hace una persona y en
+     * lo que hace el motor. Ver {@code V26__quien_actuo_fue_un_agente.sql}.
+     */
+    @Column(length = 60)
+    private String agente;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -69,6 +77,9 @@ public class Registro {
     public void setOrigen(OrigenRegistro origen) { this.origen = origen; }
 
     public Instant getFecha() { return fecha; }
+
+    public String getAgente() { return agente; }
+    public void setAgente(String agente) { this.agente = agente; }
 
     public Instant getHechoSinConexionEn() { return hechoSinConexionEn; }
     public void setHechoSinConexionEn(Instant hechoSinConexionEn) { this.hechoSinConexionEn = hechoSinConexionEn; }

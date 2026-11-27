@@ -15,12 +15,33 @@ if (!EMAIL || !PASSWORD) {
   );
 }
 
+/**
+ * Cómo se identifica este servidor en la auditoría de SICOT.
+ *
+ * Va en la cabecera `X-SICOT-Agente` de CADA petición, y el backend la usa para
+ * registrar la acción con `origen = AGENTE` en vez de `USUARIO` (ver
+ * V26__quien_actuo_fue_un_agente.sql).
+ *
+ * POR QUÉ. Este servidor inicia sesión con las credenciales de una cuenta real
+ * y actúa como esa persona: crea contratos, asigna supervisores, cambia
+ * estados. Hasta el 20-11-2026 todo eso quedaba en el expediente exactamente
+ * igual que lo que el funcionario hacía con sus manos en la pantalla, es decir
+ * indistinguible. En un expediente de contratación pública «lo decidió una
+ * persona» frente a «lo propuso un modelo con sus credenciales» es justo la
+ * distinción que hay que conservar, y SICOT ya tiene la regla escrita: la IA es
+ * asesora, nunca autoridad.
+ *
+ * Se declara aquí, en el cliente, y no en cada herramienta: así una herramienta
+ * nueva no puede olvidarse de hacerlo.
+ */
+const AGENTE = "servidor MCP de SICOT";
+
 let token: string | null = null;
 
 async function login(): Promise<string> {
   const res = await fetch(`${API_URL}/api/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-SICOT-Agente": AGENTE },
     body: JSON.stringify({ email: EMAIL, password: PASSWORD }),
   });
   if (!res.ok) {
@@ -60,6 +81,10 @@ export async function sicotFetch<T>(path: string, options: RequestOptions = {}, 
     method: options.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
+      // En todas, no solo en las de escritura: una lectura declarada mantiene
+      // el rastro completo de lo que miró el agente, y olvidarla en algunas
+      // haría que la auditoría pareciera inconsistente.
+      "X-SICOT-Agente": AGENTE,
       ...(options.body ? { "Content-Type": "application/json" } : {}),
     },
     body: options.body ? JSON.stringify(options.body) : undefined,

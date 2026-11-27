@@ -179,6 +179,40 @@ class VigilanciaDelRespaldoTest {
     }
 
     /**
+     * Un respaldo cifrado sigue siendo un respaldo.
+     *
+     * <p>Desde el 20-11-2026 el script puede cifrar el volcado, y el archivo
+     * resultante se llama {@code .dump.gpg}. Sin contarlo aquí, encender el
+     * cifrado habría dejado CIEGA a esta vigilancia: el directorio se llenaría
+     * de respaldos correctos y el sistema avisaría cada día de que no hay
+     * ninguno, hasta que alguien apagara el aviso por ruidoso. Es decir, el
+     * control que iba a mejorar el respaldo habría provocado exactamente el
+     * fallo que esta clase existe para evitar.
+     */
+    @Test
+    void unRespaldoCifradoCuentaIgual(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261120-020000.dump.gpg", Duration.ofHours(4));
+
+        MeterRegistry registro = new SimpleMeterRegistry();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
+
+        assertThat(valorDe(registro)).isEqualTo(4);
+    }
+
+    @Test
+    void unCifradoVacioNoCuentaComoRespaldo(@TempDir Path directorio) throws IOException {
+        crearRespaldoDeHace(directorio, "sicot-20261001-020000.dump", Duration.ofHours(50));
+        // Lo que deja un cifrado que falló a mitad: reciente y sin contenido.
+        Path vacio = Files.createFile(directorio.resolve("sicot-20261120-020000.dump.gpg"));
+        Files.setLastModifiedTime(vacio, FileTime.from(Instant.now().minus(Duration.ofHours(1))));
+
+        MeterRegistry registro = new SimpleMeterRegistry();
+        new VigilanciaDelRespaldo(registro, directorio.toString(), 24).comprobarCadaTantasHoras();
+
+        assertThat(valorDe(registro)).isEqualTo(50);
+    }
+
+    /**
      * Lo que pasó el 17-11-2026: el equipo estuvo apagado del 12 al 16, al
      * prenderlo el último volcado tenía 138 h y el técnico recibió «falló el
      * respaldo» a las 08:59. El temporizador hizo el volcado a las 09:00:31.

@@ -5,6 +5,7 @@ import co.sena.sicot.entity.FormatoDocumental;
 import co.sena.sicot.exception.ResourceNotFoundException;
 import co.sena.sicot.service.ArchivoValidator;
 import co.sena.sicot.service.FormatoDocumentalService;
+import co.sena.sicot.service.LimitadorDeArchivos;
 import co.sena.sicot.service.NombreDeDescarga;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -33,8 +34,13 @@ public class FormatoDocumentalController {
 
     private final FormatoDocumentalService formatoService;
 
-    public FormatoDocumentalController(FormatoDocumentalService formatoService) {
+    /** Ver {@link LimitadorDeArchivos}: el catálogo mueve los mismos 20 MB por archivo. */
+    private final LimitadorDeArchivos limitadorDeArchivos;
+
+    public FormatoDocumentalController(FormatoDocumentalService formatoService,
+                                       LimitadorDeArchivos limitadorDeArchivos) {
         this.formatoService = formatoService;
+        this.limitadorDeArchivos = limitadorDeArchivos;
     }
 
     @Operation(summary = "Listar el catálogo de formatos documentales")
@@ -78,7 +84,8 @@ public class FormatoDocumentalController {
             @Size(max = 255, message = "El nombre del formato no puede superar 255 caracteres.")
             String nombre,
             @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(formatoService.subir(codigo, nombre, archivo));
+        return ResponseEntity.status(HttpStatus.CREATED).body(limitadorDeArchivos.ejecutar(
+                "subir formato al catálogo", () -> formatoService.subir(codigo, nombre, archivo)));
     }
 
     @Operation(summary = "Descargar el archivo de un formato documental")
@@ -94,6 +101,11 @@ public class FormatoDocumentalController {
     })
     @GetMapping("/{id}/archivo")
     public ResponseEntity<byte[]> descargar(@PathVariable Long id) {
+        return limitadorDeArchivos.ejecutar("descargar formato", () -> entregar(id));
+    }
+
+    /** El cuerpo de la descarga, ya con el cupo de memoria concedido. */
+    private ResponseEntity<byte[]> entregar(Long id) {
         FormatoDocumental formato = formatoService.buscarConContenido(id);
         // Las mismas dos redes que la descarga de un documento del expediente
         // (ver DocumentoController.descargar): el catálogo se llenó antes de
