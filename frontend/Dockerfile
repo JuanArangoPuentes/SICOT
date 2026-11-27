@@ -132,32 +132,39 @@ USER root
 # de liberar), y Alpine ya publicó 1.1.43-r4. El escaneo no lo encontró en el
 # backend, así que la línea va solo aquí.
 #
-# libxml2, del CI del 20-11-2026: la base trae 2.13.9-r2, con CVE-2026-86144
+# libxml2, del CI del 20-11-2026: la base traía 2.13.9-r2, con CVE-2026-86144
 # (HIGH, divulgación de información, SSRF o denegación de servicio por un
-# manejo indebido), y Alpine ya publicó 2.13.9-r3 en la rama v3.24. El backend
-# no la necesita: su base va por Alpine 3.24.3, que la trae corregida.
+# manejo indebido), y Alpine publicó 2.13.9-r3 en la rama v3.24.
 #
-# OJO — ESTA LÍNEA NO ARREGLA EL `nginx` DE ESTA IMAGEN. El mismo escaneo del
-# 20-11-2026 encontró SEIS CVE en nginx 1.30.6-r1 (cuatro CRÍTICAS:
-# CVE-2026-113425 en el proxy de correo, -121810 en HTTP/3, -123007 en el
-# control de flujo de HTTP/2 y -123633 en HTTP/2; más CVE-2026-118899, DoS por
-# TLS, y -123634 en el resolutor), corregidas en 1.30.7-r0. No se puede resolver
-# aquí ni subiendo la etiqueta:
+# Y VUELVE A SUBIR, del CI del 27-11-2026. Con el mínimo en r3 la imagen se
+# quedaba en r3, y ahí aparecieron SEIS CVE altas más: ejecución de código
+# arbitrario por desbordamiento de búfer en el montículo (CVE-2026-86138), en
+# la pila al formatear elementos (-86140) y en xmlXPtrEval (-86142);
+# desbordamiento de entero en xmlURIEscapeStr (-86139); problemas de integridad
+# por desbordamiento de entero en las retrollamadas de escritura (-86143); y
+# desbordamiento de búfer en la utilidad xmlcatalog (CVE-2026-11979). Alpine
+# corrige cinco en 2.13.9-r4 y la de xmlcatalog en r5, así que el mínimo va a
+# r5 — comprobado contra el APKINDEX de v3.24/main, que hoy publica 2.13.9-r5.
 #
-#   - La rama 1.30 de la imagen SE AGOTÓ en 1.30.6-alpine; no existe una
-#     1.30.7-alpine. La corrección vive en la rama 1.31 (hay hasta
-#     1.31.7-alpine), y mover la rama estable del servidor que sirve la SPA es
-#     una decisión de despliegue, no un parche: ya hay un PR de Dependabot
-#     abierto justo para eso.
-#   - Fijar `nginx>=1.30.7-r0` por aquí traería el nginx de ALPINE en lugar del
-#     que compila la imagen oficial. No es lo mismo: cambia el juego de módulos
-#     y el nginx.conf que instala el paquete, y esta imagen depende del
-#     entrypoint de nginx (/etc/nginx/templates, /docker-entrypoint.d/, el
-#     usuario 101). Es exactamente lo que el párrafo de arriba dice que no se
-#     hace: sustituir piezas de la imagen que la etiqueta fijada promete.
+# Y subir el mínimo es imprescindible, no basta con volver a construir: `apk
+# add` con una condición que lo instalado YA CUMPLE no actualiza nada, que es
+# exactamente por lo que r3 seguía ahí después del cambio de imagen base.
+#
+# El backend no la necesita: el bucle de Trivy recorre su imagen primero y la
+# pasó, así que lo que tenga instalado ya está corregido.
+#
+# El `nginx` de esta imagen NO se parchea desde aquí, y ya no hace falta: las
+# nueve CVE que tenía en 1.30.6-r1 se cerraron subiendo la imagen base a
+# 1.30.8-alpine (el bloque del FROM, más arriba, cuenta por qué no se
+# encontraba). Lo que sigue valiendo es que fijar `nginx>=…` por apk sería un
+# error: traería el nginx de ALPINE en lugar del que compila la imagen oficial,
+# con otro juego de módulos y otro nginx.conf, y esta imagen depende del
+# entrypoint de nginx (/etc/nginx/templates, /docker-entrypoint.d/, el usuario
+# 101). Sustituir piezas que la etiqueta fijada promete es justo lo que el
+# párrafo de arriba dice que no se hace.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
     "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4" \
-    "libxml2>=2.13.9-r3"
+    "libxml2>=2.13.9-r5"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
