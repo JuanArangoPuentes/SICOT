@@ -4,7 +4,7 @@
 # moverse sin que nadie lo note: así quedó esta imagen en nginx 1.27, una rama
 # cerrada que ya no recibía parches. Ahora una versión nueva llega como PR de
 # Dependabot (ecosistema docker) y el CI escanea la imagen resultante con Trivy.
-FROM node:22.23.3-alpine AS build
+FROM node:22.23.4-alpine AS build
 
 # Usuario no-root también aquí, no sólo en la imagen final. La etapa de build se
 # descarta, así que el riesgo no es lo que quede publicado: es que este es el
@@ -51,7 +51,36 @@ RUN npm run build
 # (CVE-2026-15176, desbordamiento de montículo; CVE-2026-93479, map con
 # expresiones regulares; CVE-2026-97205, ngx_http_core_module) que el escaneo de
 # imágenes del CI marcó, y la 1.30.6 las corrige.
-FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+#
+# ── OJO CON EL NOMBRE DE LA IMAGEN (26-11-2026) ────────────────────────────
+#
+# Hasta hoy esto decía `nginxinc/nginx-unprivileged`. Ese repositorio de Docker
+# Hub DEJÓ DE PUBLICAR el 19-10-2026: su última etiqueta estable es
+# 1.30.6-alpine, la que estaba aquí. Las imágenes se movieron a
+# `nginx/nginx-unprivileged`, que el 23-11-2026 ya publicaba 1.30.8 en estable
+# y 1.31.10 en mainline.
+#
+# Eso es lo que nos dejó clavados en una imagen sin parches sin que nada lo
+# dijera: Dependabot vigila la etiqueta del repositorio ANTIGUO, que ya no se
+# mueve, así que nunca iba a proponer la 1.30.7. Un repositorio congelado y un
+# repositorio al día se parecen mucho desde fuera — no hay aviso, solo deja de
+# haber etiquetas nuevas.
+#
+# 1.30.8 desde el 26-11-2026, y con ella se cierran las NUEVE CVE de nginx que
+# el escaneo del 20-11-2026 encontró en 1.30.6-r1, seis de ellas CRÍTICAS o
+# altas: uso después de liberar en el proxy de correo (CVE-2026-113425), en
+# HTTP/3 (-121810), en HTTP/2 (-123633) y en el resolutor (-123634); corrupción
+# de memoria en el control de flujo de HTTP/2 (-123007); bucle infinito leyendo
+# el cuerpo sobre TLS 1.3 (-118899); y -120967, -123640 y -125283. Las nueve
+# tienen el mismo arreglo, y nginx.org/en/security_advisories.html dice en
+# todas, literal: «Not vulnerable: 1.31.9+, 1.30.7+». Por eso la rama 1.31 NO
+# era la salida: su última imagen publicada en `nginxinc` era 1.31.7, dentro
+# del rango vulnerable («Vulnerable: …-1.31.8»).
+#
+# Se queda en la rama ESTABLE, que es lo que este servidor debe servir; la
+# excepción fechada que estas CVE tenían en .trivyignore se fue con este
+# cambio.
+FROM nginx/nginx-unprivileged:1.30.8-alpine
 
 # Los COPY necesitan escribir en rutas del sistema, así que se hacen como root y
 # después se vuelve al usuario sin privilegios (101, el mismo que trae la imagen
@@ -102,8 +131,40 @@ USER root
 # (HIGH, confusión de tipos al procesar XML) y CVE-2026-9947 (HIGH, uso después
 # de liberar), y Alpine ya publicó 1.1.43-r4. El escaneo no lo encontró en el
 # backend, así que la línea va solo aquí.
+#
+# libxml2, del CI del 20-11-2026: la base traía 2.13.9-r2, con CVE-2026-86144
+# (HIGH, divulgación de información, SSRF o denegación de servicio por un
+# manejo indebido), y Alpine publicó 2.13.9-r3 en la rama v3.24.
+#
+# Y VUELVE A SUBIR, del CI del 27-11-2026. Con el mínimo en r3 la imagen se
+# quedaba en r3, y ahí aparecieron SEIS CVE altas más: ejecución de código
+# arbitrario por desbordamiento de búfer en el montículo (CVE-2026-86138), en
+# la pila al formatear elementos (-86140) y en xmlXPtrEval (-86142);
+# desbordamiento de entero en xmlURIEscapeStr (-86139); problemas de integridad
+# por desbordamiento de entero en las retrollamadas de escritura (-86143); y
+# desbordamiento de búfer en la utilidad xmlcatalog (CVE-2026-11979). Alpine
+# corrige cinco en 2.13.9-r4 y la de xmlcatalog en r5, así que el mínimo va a
+# r5 — comprobado contra el APKINDEX de v3.24/main, que hoy publica 2.13.9-r5.
+#
+# Y subir el mínimo es imprescindible, no basta con volver a construir: `apk
+# add` con una condición que lo instalado YA CUMPLE no actualiza nada, que es
+# exactamente por lo que r3 seguía ahí después del cambio de imagen base.
+#
+# El backend no la necesita: el bucle de Trivy recorre su imagen primero y la
+# pasó, así que lo que tenga instalado ya está corregido.
+#
+# El `nginx` de esta imagen NO se parchea desde aquí, y ya no hace falta: las
+# nueve CVE que tenía en 1.30.6-r1 se cerraron subiendo la imagen base a
+# 1.30.8-alpine (el bloque del FROM, más arriba, cuenta por qué no se
+# encontraba). Lo que sigue valiendo es que fijar `nginx>=…` por apk sería un
+# error: traería el nginx de ALPINE en lugar del que compila la imagen oficial,
+# con otro juego de módulos y otro nginx.conf, y esta imagen depende del
+# entrypoint de nginx (/etc/nginx/templates, /docker-entrypoint.d/, el usuario
+# 101). Sustituir piezas que la etiqueta fijada promete es justo lo que el
+# párrafo de arriba dice que no se hace.
 RUN apk add --no-cache "tiff>=4.7.2-r0" "libexpat>=2.10.0-r0" "libx11>=1.8.14-r0" "brotli-libs>=1.2.1-r0" \
-    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4"
+    "curl>=8.23.0-r0" "musl>=1.2.6-r3" "musl-utils>=1.2.6-r3" "zlib>=1.3.2-r1" "libxslt>=1.1.43-r4" \
+    "libxml2>=2.13.9-r5"
 
 COPY --from=build /build/dist /usr/share/nginx/html
 # A /etc/nginx/templates y NO a conf.d: el entrypoint de la imagen pasa por
