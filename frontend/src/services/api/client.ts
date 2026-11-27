@@ -182,7 +182,7 @@ export function esCorteDelCamino(e: unknown): boolean {
   return e instanceof ApiError && CODIGOS_DE_PASARELA.has(e.status) && e.detail === undefined
 }
 
-async function lanzarError(res: Response, path: string): Promise<never> {
+async function lanzarError(res: Response): Promise<never> {
   let detail: ErrorResponse | undefined
   try {
     detail = (await res.json()) as ErrorResponse
@@ -215,7 +215,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   if (!res.ok) {
-    await lanzarError(res, path)
+    await lanzarError(res)
   }
 
   if (authToken) oyenteDeContacto?.()
@@ -240,7 +240,7 @@ export async function apiFetchRespuesta(path: string, options: RequestInit = {})
   const res = await fetch(`${apiBase()}${path}`, { ...options, headers })
   if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
   if (!res.ok) {
-    await lanzarError(res, path)
+    await lanzarError(res)
   }
   return res
 }
@@ -253,7 +253,7 @@ export async function apiFetchBlob(path: string, options: RequestInit = {}): Pro
   if (res.status === 401 && esFalloDeSesion(path)) unauthorizedHandler?.()
 
   if (!res.ok) {
-    await lanzarError(res, path)
+    await lanzarError(res)
   }
   return res.blob()
 }

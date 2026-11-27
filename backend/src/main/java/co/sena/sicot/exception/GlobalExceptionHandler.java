@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.web.firewall.RequestRejectedException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.validation.FieldError;
 import org.springframework.validation.method.ParameterValidationResult;
@@ -229,6 +230,36 @@ public class GlobalExceptionHandler {
                                                             WebRequest request) {
         return build("Método HTTP no soportado para esta ruta: " + ex.getMethod(),
                 HttpStatus.METHOD_NOT_ALLOWED, request);
+    }
+
+    /**
+     * Peticiones que el cortafuegos de Spring Security rechaza antes de que
+     * exista un controlador: una ruta con caracteres codificados de forma
+     * sospechosa, una cabecera con un salto de línea dentro, un nombre de
+     * cabecera inválido.
+     *
+     * <p><b>Salía como 500.</b> Sin este manejador caía en el {@code catch-all}
+     * y SICOT respondía «Ocurrió un error interno del servidor» a una petición
+     * que estaba mal formada: el código de estado mentía sobre de quién era la
+     * culpa, el cliente no tenía nada que corregir porque no se le decía qué
+     * pasaba, y cada intento ensuciaba el log con una traza de error de
+     * servidor. Se descubrió el 20-11-2026 probando una cabecera
+     * {@code X-SICOT-Agente} con un salto de línea.
+     *
+     * <p>400 y no 403: no es un problema de permisos, es una petición que no se
+     * puede interpretar. El mensaje no dice QUÉ parte se rechazó, a propósito:
+     * el cortafuegos está para frenar intentos de contrabando de peticiones
+     * (inyección de cabeceras, división de respuestas) y detallar cuál de sus
+     * reglas saltó le ahorraría trabajo a quien esté buscando el hueco. El
+     * detalle queda en el log del servidor, donde lo ve el técnico.
+     */
+    @ExceptionHandler(RequestRejectedException.class)
+    public ResponseEntity<ErrorResponse> peticionRechazadaPorElCortafuegos(RequestRejectedException ex,
+                                                                           WebRequest request) {
+        log.warn("Petición rechazada por el cortafuegos de seguridad: {}", ex.getMessage());
+        return build("La petición está mal formada y no se pudo procesar: alguna de sus cabeceras o su ruta "
+                        + "contiene caracteres que no se admiten.",
+                HttpStatus.BAD_REQUEST, request);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

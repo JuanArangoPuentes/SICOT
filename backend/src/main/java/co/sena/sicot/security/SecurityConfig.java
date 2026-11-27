@@ -259,7 +259,14 @@ public class SecurityConfig {
         // escritorio, el APK y el entorno de desarrollo llaman a la API desde
         // otro origen, y sin esto el navegador le ocultaba al frontend el
         // nombre real del archivo y el estado de integridad de la descarga.
-        config.setExposedHeaders(List.of("Authorization", "Retry-After", "Content-Disposition", "X-SICOT-Integridad"));
+        // X-SICOT-Listado-Truncado y -Tope: avisan de que un listado llegó a su
+        // techo y puede faltar algo (ver ListadoTruncado). Sin exponerlas, la
+        // app de escritorio y el APK —que siempre llaman entre orígenes— no las
+        // verían, y justo ahí el aviso importa más: son los clientes que no se
+        // actualizan a la vez que el servidor.
+        config.setExposedHeaders(List.of("Authorization", "Retry-After", "Content-Disposition", "X-SICOT-Integridad",
+                co.sena.sicot.controller.ListadoTruncado.CABECERA_TRUNCADO,
+                co.sena.sicot.controller.ListadoTruncado.CABECERA_TOPE));
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 

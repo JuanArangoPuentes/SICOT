@@ -15,6 +15,7 @@ import co.sena.sicot.mapper.UsuarioMapper;
 import co.sena.sicot.repository.ContratoRepository;
 import co.sena.sicot.repository.UsuarioRepository;
 import co.sena.sicot.security.LimiteDeBcrypt;
+import co.sena.sicot.security.PoliticaDeContrasena;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -138,6 +139,7 @@ public class UsuarioService {
             throw new BusinessException("Ya existe un usuario con el email " + email + ".");
         }
         verificarQueCabeEnBcrypt(request.password());
+        verificarQueNoLlevaElCorreo(request.password(), email);
         Usuario usuario = new Usuario();
         usuario.setNombre(request.nombre().trim());
         usuario.setEmail(email);
@@ -156,6 +158,7 @@ public class UsuarioService {
             throw new BusinessException("Ya existe un usuario con el email " + email + ".");
         }
         verificarQueCabeEnBcrypt(request.password());
+        verificarQueNoLlevaElCorreo(request.password(), email);
         // Cambiar el rol del último administrador lo deja fuera de /api/usuarios,
         // que es el único camino para volver a crear o promover a alguien: el
         // sistema quedaría sin forma de recuperarse por la API.
@@ -207,6 +210,25 @@ public class UsuarioService {
         if (!LimiteDeBcrypt.cabe(password)) {
             throw new BusinessException(LimiteDeBcrypt.MENSAJE);
         }
+    }
+
+    /**
+     * La parte de {@link PoliticaDeContrasena} que una anotación de campo no
+     * puede comprobar, porque necesita dos campos a la vez: que la contraseña
+     * no lleve dentro el correo de su dueño. El resto de la política —largo,
+     * lista de bloqueo, secuencias— lo aplica {@code @ContrasenaSegura} sobre
+     * el DTO, y por eso aquí no se repite.
+     *
+     * <p>Una contraseña nula o en blanco no es asunto de este método: en
+     * {@code actualizar} significa «no la cambies».
+     */
+    private void verificarQueNoLlevaElCorreo(String password, String email) {
+        if (password == null || password.isBlank()) {
+            return;
+        }
+        PoliticaDeContrasena.porQueNoSirve(password, email).ifPresent(motivo -> {
+            throw new BusinessException(motivo);
+        });
     }
 
     /**

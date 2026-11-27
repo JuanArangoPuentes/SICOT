@@ -97,27 +97,46 @@ class CambioDeContrasenaIntegrationTest extends PruebaDeIntegracion {
 
         cambiar(token, CLAVE_ADMIN, "corta1*")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.fieldErrors.contrasenaNueva", containsString("entre 8 y 72")));
+                .andExpect(jsonPath("$.fieldErrors.contrasenaNueva", containsString("al menos 12")));
+        // Desde el 20-11-2026 el largo no basta: la contraseña no puede ser una
+        // de las más usadas, ni nombrar al SENA o a SICOT (PoliticaDeContrasena).
+        cambiar(token, CLAVE_ADMIN, "Password123!")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.contrasenaNueva", containsString("más usadas del mundo")));
+        cambiar(token, CLAVE_ADMIN, "SenaColombia1")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.contrasenaNueva", containsString("más usadas del mundo")));
         cambiar(token, CLAVE_ADMIN, "ClaveTest123 ")
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.contrasenaNueva",
                         containsString("no puede empezar ni terminar con espacios")));
         // 36 eñes son 36 caracteres pero 72 bytes... más uno: no cabe en BCrypt.
+        // Desde que la política vive en @ContrasenaSegura, el tope de BCrypt
+        // sale como error DEL CAMPO y no como mensaje general: así la pantalla
+        // lo pinta debajo de la contraseña, que es donde hay que corregirlo.
         cambiar(token, CLAVE_ADMIN, "ñ".repeat(36) + "a")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message", containsString("72 bytes")));
+                .andExpect(jsonPath("$.fieldErrors.contrasenaNueva", containsString("72 bytes")));
 
         intentarLogin(ADMIN, CLAVE_ADMIN).andExpect(status().isOk());
     }
 
     @Test
     void laNuevaTieneQueSerDistintaDeLaActual() throws Exception {
+        // Se cambia primero a NUEVA y se reintenta con NUEVA como ambas. No se
+        // usa CLAVE_ADMIN para las dos porque la contraseña semilla del perfil
+        // de pruebas tiene nueve caracteres y la política pide doce: el rechazo
+        // llegaría por el largo y esta prueba no comprobaría lo que dice.
         String token = login(ADMIN, CLAVE_ADMIN);
+        String nuevo = objectMapper.readValue(
+                cambiar(token, CLAVE_ADMIN, NUEVA).andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString(),
+                AuthResponse.class).token();
 
-        cambiar(token, CLAVE_ADMIN, CLAVE_ADMIN)
+        cambiar(nuevo, NUEVA, NUEVA)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("La contraseña nueva tiene que ser distinta de la actual."));
-        listarUsuarios(token).andExpect(status().isOk());
+        listarUsuarios(nuevo).andExpect(status().isOk());
     }
 
     @Test

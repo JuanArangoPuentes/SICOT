@@ -152,6 +152,26 @@ jobs:
       - name: Chequeo de tipos
         run: npm run typecheck
 
+      - name: Linter (ESLint · reglas de hooks y accesibilidad)
+        # Desde el 20-11-2026. Antes del formato y después de los tipos, por el
+        # mismo criterio: de los tres, el que señala defectos reales va primero.
+        #
+        # QUÉ VE ESTO QUE NO VEÍA NADIE. `oxfmt` es un FORMATEADOR y `tsc`
+        # comprueba tipos; ninguno de los dos mira las dependencias de un
+        # `useEffect` (un cierre obsoleto no es un error de tipos: no revienta,
+        # simplemente la pantalla muestra el contrato anterior) ni la
+        # accesibilidad, que para una entidad del Estado colombiano es exigible
+        # por la Resolución 1519 de 2020 del MinTIC. Semgrep, que ya corre en
+        # `analisis-estatico`, mira seguridad: es otra cosa.
+        #
+        # SIN `--max-warnings` A PROPÓSITO. Las reglas que rompen algo de verdad
+        # están en `error` (ver frontend/eslint.config.js); las que señalan deuda
+        # que se paga pantalla por pantalla están en `warn` y quedan a la vista
+        # sin tumbar el build. Un linter que se añade a 29 000 líneas y falla con
+        # mil avisos el primer día no se arregla: se desactiva — la lección de
+        # MDL-145, aplicada por delante.
+        run: npm run lint
+
       - name: Chequeo de formato
         # Después del chequeo de tipos a propósito: si un PR trae las dos cosas
         # mal, primero debe verse el error de tipos, que es un fallo real, y no
@@ -159,8 +179,26 @@ jobs:
         # `npm run format`.
         run: npm run format:check
 
-      - name: Pruebas
-        run: npm run test:run
+      - name: Pruebas con cobertura
+        # `test:coverage` y no `test:run`. El script existía desde el principio
+        # y NO lo corría ningún workflow: se podía medir y nadie medía, así que
+        # nada detectaba un archivo que entrara sin una sola prueba. Había dos,
+        # al 0 %: `NewUserModal.tsx` y `ResetPasswordModal.tsx`, justo las dos
+        # pantallas que deciden quién entra al sistema.
+        #
+        # Los umbrales viven en `vite.config.ts`, unos puntos por debajo de lo
+        # medido, igual que el de JaCoCo en el backend: el objetivo no es empujar
+        # la cifra hacia arriba, es impedir que baje sin que nadie se entere.
+        run: npm run test:coverage
+
+      - name: Publicar informe de cobertura del frontend
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cobertura-frontend
+          path: frontend/coverage/
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Compilar
         run: npm run build

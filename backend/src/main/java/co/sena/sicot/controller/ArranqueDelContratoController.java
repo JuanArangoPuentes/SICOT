@@ -10,6 +10,7 @@ import co.sena.sicot.exception.ErrorResponse;
 import co.sena.sicot.service.AcuerdoDeEntregasService;
 import co.sena.sicot.service.ContactoDelContratistaService;
 import co.sena.sicot.service.ContactosDelContratoService;
+import co.sena.sicot.service.LimitadorDeArchivos;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -51,12 +52,17 @@ public class ArranqueDelContratoController {
     private final ContactosDelContratoService contactos;
     private final ContactoDelContratistaService contactoDelContratista;
 
+    /** Ver {@link LimitadorDeArchivos}: el estudio previo entra entero en memoria para leerlo. */
+    private final LimitadorDeArchivos limitadorDeArchivos;
+
     public ArranqueDelContratoController(AcuerdoDeEntregasService acuerdoDeEntregas,
                                          ContactosDelContratoService contactos,
-                                         ContactoDelContratistaService contactoDelContratista) {
+                                         ContactoDelContratistaService contactoDelContratista,
+                                         LimitadorDeArchivos limitadorDeArchivos) {
         this.acuerdoDeEntregas = acuerdoDeEntregas;
         this.contactos = contactos;
         this.contactoDelContratista = contactoDelContratista;
+        this.limitadorDeArchivos = limitadorDeArchivos;
     }
 
     @Operation(summary = "Fechas de entrega acordadas con el contratista (paso 2.4), con el plazo del contrato")
@@ -128,7 +134,8 @@ public class ArranqueDelContratoController {
     @PostMapping(value = "/contactos-sst-ambiental/lectura", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<LecturaDeContactosResponse> leerContactos(
             @PathVariable Long id, @RequestParam("archivo") MultipartFile archivo) {
-        return ResponseEntity.ok(contactos.leerDelDocumento(id, archivo));
+        return ResponseEntity.ok(limitadorDeArchivos.ejecutar("leer contactos del estudio previo",
+                () -> contactos.leerDelDocumento(id, archivo)));
     }
 
     @Operation(summary = "Completar el teléfono y el correo del contratista desde el registro de proveedores del SECOP II",

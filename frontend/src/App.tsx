@@ -3,7 +3,7 @@
 // Reestructurado a partir del App.tsx original de Figma Make: misma lógica,
 // mismo JSX, mismos estilos — solo dividido en módulos para mantenibilidad.
 
-import { useEffect, useState, useMemo, lazy, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation, useNavigate, useNavigationType, useParams } from 'react-router-dom'
 import { PrefsProvider } from '@/prefs'
 import AvatarLayer, { type TourStep } from '@/components/AvatarLayer'
@@ -27,6 +27,7 @@ const AdminPanel = lazy(() => import('@/screens/AdminPanel'))
 import type { AdminTab, Step, Tab } from '@/types/domain'
 import type { AuthResponse, ContratoResponse, Rol } from '@/services/api/types'
 import { alRenovarSesion, clearSession, getSession } from '@/services/session'
+import { cerrarSesionEnElServidor } from '@/services/cuentaService'
 import { vigilarLaCola } from '@/services/colaDeCambios'
 import { vigilarLaVueltaDelServidor } from '@/services/vueltaDelServidor'
 import { profundidadDeNavegacion, registrarNavegacion, reiniciarProfundidad } from '@/services/pilaDeNavegacion'
@@ -265,6 +266,12 @@ function AppInner() {
   }
 
   const logout = () => {
+    // Primero se avisa al servidor y después se limpia el equipo: `clearSession`
+    // borra el token del cliente HTTP, así que en el orden inverso la petición
+    // saldría sin credenciales y el servidor no sabría qué sesión cerrar. No se
+    // espera la respuesta: la pantalla sale ya, y el aviso viaja en paralelo
+    // (ver cerrarSesionEnElServidor, que nunca lanza).
+    void cerrarSesionEnElServidor()
     clearSession()
     setSession(null)
     setTourActive(false)
@@ -293,8 +300,23 @@ function AppInner() {
     else navigate('/login', { replace: true })
   }
 
+  // La última versión de `logout`, para que el manejador global del 401 llame
+  // a esa y no a la que existía en el primer render.
+  //
+  // `onUnauthorized` se registra UNA vez (el efecto de abajo corre con `[]`) y
+  // guardaba el `logout` de ese momento. `logout` se recrea en cada render y
+  // cierra sobre `navigate`, `setSession` y `setTourActive`, así que el que
+  // quedaba registrado era un cierre obsoleto: funcionaba porque esas tres
+  // referencias resultan ser estables hoy, no porque el código lo garantice.
+  // Es el defecto que `react-hooks/exhaustive-deps` señala y que ninguna
+  // prueba habría atrapado — no falla, simplemente un día llama a la versión
+  // equivocada. Con la referencia, el efecto sigue corriendo una sola vez y
+  // siempre se invoca la actual.
+  const logoutRef = useRef(logout)
+  logoutRef.current = logout
+
   useEffect(() => {
-    onUnauthorized(() => logout())
+    onUnauthorized(() => logoutRef.current())
     // Los reintentos de la cola de cambios: al volver la red y cada medio
     // minuto mientras quede algo y haya sesión con el servidor (ADR-015).
     vigilarLaCola()

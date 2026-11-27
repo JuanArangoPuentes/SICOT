@@ -88,6 +88,49 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       exclude: ['e2e/**', 'node_modules/**'],
       css: false,
+      // Cobertura CON UMBRAL, y en el CI.
+      //
+      // El script `test:coverage` existía desde el principio y no lo corría
+      // ningún workflow: el job de frontend usa `test:run`. Es decir, se podía
+      // medir y nadie medía, así que nada detectaba un archivo que entrara sin
+      // una sola prueba. Y había dos: `NewUserModal.tsx` y
+      // `ResetPasswordModal.tsx`, al 0 %, que son justo las dos pantallas que
+      // deciden quién entra al sistema.
+      //
+      // Los números van UNOS PUNTOS POR DEBAJO de lo medido el 20-11-2026
+      // tras añadir las pruebas que faltaban (80,7 % de línea, 71,1 % de rama;
+      // antes de ellas eran 79,2 % y 69,3 %), por el mismo criterio que el umbral
+      // de JaCoCo en el backend: el objetivo no es empujar la cifra hacia
+      // arriba, es impedir que baje sin que nadie se entere. Un umbral pegado
+      // al valor actual rompe el build en cualquier refactor legítimo y a la
+      // semana alguien lo desactiva.
+      //
+      // SUBIRLOS ES PARTE DE SUBIR LA COBERTURA: quien añada pruebas y mueva
+      // la cifra varios puntos, mueve también estas líneas.
+      coverage: {
+        provider: 'v8',
+        reporter: ['text-summary', 'json-summary', 'html'],
+        // Solo lo que es lógica de la aplicación. Se excluyen los archivos que
+        // son datos o declaraciones: medirlos sube la cifra sin que nadie haya
+        // probado nada, que es la forma habitual de que un umbral mienta.
+        include: ['src/**/*.{ts,tsx}'],
+        exclude: [
+          'src/**/*.test.{ts,tsx}',
+          'src/test/**',
+          'src/main.tsx',
+          'src/vite-env.d.ts',
+          'src/types/**',
+          'src/data/**',
+          'src/components/icons.tsx',
+          'src/services/api/types.ts',
+        ],
+        thresholds: {
+          lines: 78,
+          branches: 69,
+          functions: 67,
+          statements: 76,
+        },
+      },
     },
   }
 })

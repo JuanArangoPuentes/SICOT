@@ -871,6 +871,17 @@ input[type='radio'] {
   cursor: pointer;
   border-radius: 8px;
   transition: background var(--t);
+  /* Desde el 20-11-2026 la fila del paso es un <button> y no un <div>, para
+     que se alcance con el teclado. Estas cinco líneas deshacen el aspecto que
+     el navegador le da por defecto a un botón —fondo gris, borde, texto
+     centrado y la fuente del sistema— y dejan la fila exactamente como se
+     veía. El anillo de foco NO se toca: es lo que hace que el cambio sirva. */
+  width: 100%;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 .step-row:hover {
   background: rgba(255, 255, 255, 0.035);
@@ -1395,4 +1406,22 @@ input[type='radio'] {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* Resaltado de la fila de la tabla de contratos al pasar por encima.
+ *
+ * Estaba en JavaScript, como onMouseEnter/onMouseLeave que escribían
+ * `style.background` a mano (GestionPanel.tsx). Dos motivos para traerlo aquí:
+ *
+ *  - Un resaltado es presentación, y ponerlo con manejadores de ratón convierte
+ *    la fila en un elemento «con interacción» que no es interactivo; las reglas
+ *    de accesibilidad lo señalan con razón, porque nada le dice a un lector de
+ *    pantalla que esos eventos no hacen nada.
+ *  - En CSS se puede añadir `:focus-within` gratis, y eso sí es una mejora
+ *    real: quien recorre la tabla con el teclado ve resaltada la fila en la que
+ *    está. Con JavaScript solo se resaltaba para quien usa ratón.
+ */
+.tabla-fila:hover,
+.tabla-fila:focus-within {
+  background: var(--accent-soft);
 }

@@ -12,11 +12,27 @@ import { ApiError } from '@/services/api/client'
 import { cambiarMiContrasena } from '@/services/cuentaService'
 import { leerSesionGuardada } from '@/services/session'
 
+/**
+ * Mínimo de caracteres, el mismo que `PoliticaDeContrasena.MINIMO_CARACTERES`
+ * en el backend. Eran 8 hasta el 20-11-2026, cuando el servidor subió el listón
+ * a 12 y añadió una lista de contraseñas prohibidas.
+ *
+ * Esta comprobación es una COMODIDAD, no un control: avisa antes de gastar una
+ * petición. La autoridad es el backend, y la parte que aquí no se replica —la
+ * lista de bloqueo, las secuencias, que la contraseña no contenga el correo—
+ * llega como mensaje del servidor y se muestra tal cual. Replicarla aquí sería
+ * mantener la misma regla en dos sitios, que es como se acaban contradiciendo.
+ */
+const MINIMO_CARACTERES = 12
+
 /** Las mismas reglas que aplica el servidor (CambiarContrasenaRequest), para avisar antes de enviar. */
 function problemaDeLaNueva(actual: string, nueva: string, confirmacion: string): string {
   if (!actual) return 'Escriba su contraseña actual.'
   if (!nueva) return 'Escriba la contraseña nueva.'
-  if (nueva.length < 8 || nueva.length > 72) return 'La contraseña debe tener entre 8 y 72 caracteres.'
+  if (nueva.length < MINIMO_CARACTERES) {
+    return `La contraseña debe tener al menos ${MINIMO_CARACTERES} caracteres. Una frase fácil de recordar y difícil de adivinar sirve mejor que una palabra corta con símbolos.`
+  }
+  if (nueva.length > 72) return 'La contraseña no puede superar 72 caracteres.'
   if (nueva !== nueva.trim()) return 'La contraseña no puede empezar ni terminar con espacios.'
   if (nueva === actual) return 'La contraseña nueva tiene que ser distinta de la actual.'
   if (nueva !== confirmacion) return 'La confirmación no coincide con la contraseña nueva.'
@@ -128,10 +144,20 @@ export function CambiarContrasenaModal({ correo, onClose }: { correo: string; on
               style={{ width: '100%', padding: '9px 10px' }}
               value={actual}
               onChange={alEscribir(setActual)}
+              /* La regla desaconseja `autoFocus` y tiene razón EN UNA PÁGINA: mover el
+                 foco sin que nadie lo pida desorienta a quien usa lector de pantalla.
+                 En un DIÁLOGO que la persona acaba de abrir a propósito es lo
+                 contrario: el foco tiene que entrar en el diálogo, o quien navega con
+                 teclado se queda detrás de él (y Modal ya lo lleva al contenedor por
+                 programa, con `dialogoRef`). Llevarlo directamente al primer campo
+                 ahorra un tabulador y no sorprende a nadie. Se deja la excepción
+                 marcada en vez de apagar la regla: en la siguiente pantalla que la
+                 use, la regla volverá a preguntar. */
+              // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
           </Field>
-          <Field label="Contraseña nueva (entre 8 y 72 caracteres)">
+          <Field label="Contraseña nueva (al menos 12 caracteres)">
             <input
               type="password"
               autoComplete="new-password"

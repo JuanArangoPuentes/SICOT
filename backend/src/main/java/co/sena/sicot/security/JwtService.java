@@ -9,7 +9,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 public class JwtService {
@@ -81,6 +83,12 @@ public class JwtService {
         Date now = new Date();
         Date exp = new Date(now.getTime() + expirationMs);
         return Jwts.builder()
+                // Identificador único del token (`jti`, RFC 7519 §4.1.7). Es lo
+                // que permite invalidar UNA sesión y no la cuenta entera: ver
+                // SesionesCerradas y V25__cierre_de_sesion_real.sql. Sin él,
+                // «cerrar sesión» solo podía borrar el token del cliente y
+                // dejarlo válido en el servidor ocho horas más.
+                .id(UUID.randomUUID().toString())
                 .subject(usuario.getEmail())
                 .claim("usuarioId", usuario.getId())
                 .claim("nombre", usuario.getNombre())
@@ -94,6 +102,24 @@ public class JwtService {
 
     public String extractEmail(String token) {
         return claims(token).getSubject();
+    }
+
+    /**
+     * Identificador de este token, o {@code null} si no lo trae.
+     *
+     * <p>Devuelven {@code null} los tokens emitidos antes de V25, que no
+     * llevaban `jti`. Es deliberado que no sea un error: rechazarlos al
+     * desplegar habría cerrado la sesión de todo el Centro a mitad de la tarde.
+     * Quien cierra sesión con uno de esos recurre a revocar la cuenta entera —
+     * ver {@code SesionesCerradas.cerrar}.
+     */
+    public String extraerJti(String token) {
+        return claims(token).getId();
+    }
+
+    /** Cuándo caduca este token. La necesita la lista de sesiones cerradas para saber cuándo olvidar la fila. */
+    public Instant extraerExpiracion(String token) {
+        return claims(token).getExpiration().toInstant();
     }
 
     /**
