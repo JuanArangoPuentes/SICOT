@@ -88,6 +88,14 @@ export default defineConfig(({ mode }) => {
       include: ['src/**/*.{test,spec}.{ts,tsx}'],
       exclude: ['e2e/**', 'node_modules/**'],
       css: false,
+      // El tope de 5 s que trae Vitest no alcanza para las pruebas que montan
+      // el panel del Supervisor entero cuando la CPU está ocupada (el backend
+      // compilando al lado, o un runner del CI compartido): la primera de cada
+      // archivo paga el render en frío y caía por «Test timed out in 5000ms»
+      // sin que la lógica fallara. Con la CPU libre esas pruebas tardan menos
+      // de un segundo, así que 20 s no esconde nada lento: solo deja de dar
+      // rojos falsos. Una prueba colgada de verdad sigue fallando, 15 s después.
+      testTimeout: 20_000,
     },
   }
 })
